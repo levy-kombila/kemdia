@@ -9,7 +9,7 @@ export function SortSelect({ value, options }: { value: string; options: Record<
 
   return (
     <label className="flex items-center gap-2 text-sm">
-      <span className="text-ink-500">Trier par</span>
+      <span className="text-ink-500 sr-only sm:not-sr-only">Trier par</span>
       <select
         value={value}
         onChange={(e) => {
@@ -20,7 +20,7 @@ export function SortSelect({ value, options }: { value: string; options: Record<
           const qs = sp.toString();
           router.push(qs ? `${pathname}?${qs}` : pathname);
         }}
-        className="border-ink-200 focus:border-brand-500 h-10 rounded-full border bg-white px-4 font-medium focus:outline-none"
+        className="border-ink-200 focus:border-brand-500 h-10 rounded-full border bg-white px-3 font-medium focus:outline-none sm:px-4"
       >
         {Object.entries(options).map(([k, label]) => (
           <option key={k} value={k}>

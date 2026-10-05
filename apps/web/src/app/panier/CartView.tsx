@@ -1,14 +1,60 @@
 "use client";
 
-import { Info, Lock, MapPin, ShoppingCart, Trash2 } from "lucide-react";
+import { BadgeCheck, Lock, MapPin, ShoppingCart, Smartphone, Trash2, Truck } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCart } from "@/components/providers/CartProvider";
 import { useDeliveryLocation } from "@/components/providers/LocationProvider";
 import { QuantityInput } from "@/components/product/QuantityInput";
+import { Price } from "@/components/ui/Price";
 import { MAX_QTY_PER_LINE } from "@/lib/cart";
 import { estimateDelivery, formatDelay } from "@/lib/delivery";
 import { formatFCFA } from "@/lib/format";
+
+/** Barre « livraison offerte » : montre ce qu'il reste à ajouter (incite à compléter le panier). */
+function FreeShippingMeter({ subtotal }: { subtotal: number }) {
+  const { city, openModal } = useDeliveryLocation();
+  const estimate = city ? estimateDelivery(city.id, subtotal) : null;
+  if (!city || !estimate) {
+    return (
+      <button
+        type="button"
+        onClick={openModal}
+        className="flex w-full items-center gap-3 rounded-xl bg-white px-5 py-3.5 text-left text-sm"
+      >
+        <MapPin className="text-brand-600 size-5 shrink-0" aria-hidden />
+        <span className="flex-1">
+          Choisissez votre ville pour connaître les frais et la date de livraison.
+        </span>
+        <span className="text-brand-700 font-semibold">Choisir</span>
+      </button>
+    );
+  }
+  const ratio = Math.min(1, subtotal / estimate.freeThreshold);
+  return (
+    <div className="rounded-xl bg-white px-5 py-3.5 text-sm">
+      <p className="flex items-center gap-2">
+        <Truck className="text-forest-600 size-5 shrink-0" aria-hidden />
+        {estimate.remainingForFree > 0 ? (
+          <span>
+            Plus que <strong>{formatFCFA(estimate.remainingForFree)}</strong> pour la livraison
+            offerte à {city.name}
+          </span>
+        ) : (
+          <span>
+            <strong className="text-forest-700">Livraison offerte</strong> à {city.name}
+          </span>
+        )}
+      </p>
+      <div className="bg-ink-100 mt-2 h-2 overflow-hidden rounded-full" aria-hidden>
+        <div
+          className="bg-forest-600 h-full rounded-full transition-[width]"
+          style={{ width: `${ratio * 100}%` }}
+        />
+      </div>
+    </div>
+  );
+}
 
 export function CartView() {
   const { state, hydrated, subtotal, count, setQuantity, remove, clear } = useCart();
@@ -28,149 +74,196 @@ export function CartView() {
 
   if (state.lines.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-4 rounded-xl bg-white px-6 py-16 text-center">
-        <ShoppingCart className="text-ink-200 size-14" aria-hidden />
-        <h2 className="text-xl font-bold">Votre panier est vide</h2>
+      <div className="flex flex-col items-center gap-3 rounded-xl bg-white px-6 py-14 text-center">
+        <span className="bg-ink-50 grid size-24 place-items-center rounded-full">
+          <ShoppingCart className="text-ink-400 size-11" aria-hidden />
+        </span>
+        <h2 className="text-xl font-extrabold">Votre panier est vide</h2>
         <p className="text-ink-500 max-w-sm text-sm">
-          Parcourez nos catégories et ajoutez vos coups de cœur.
+          Les ventes flash du jour vous attendent, et la livraison est offerte à Libreville dès 25
+          000 FCFA.
         </p>
-        <Link
-          href="/"
-          className="bg-brand-600 hover:bg-brand-700 rounded-full px-6 py-3 font-semibold text-white"
-        >
-          Continuer mes achats
-        </Link>
+        <div className="mt-2 flex flex-wrap justify-center gap-2">
+          <Link
+            href="/promotions"
+            className="bg-brand-600 hover:bg-brand-700 rounded-full px-6 py-3 font-semibold text-white"
+          >
+            Voir les ventes flash
+          </Link>
+          <Link
+            href="/"
+            className="border-ink-200 hover:border-ink-900 rounded-full border px-6 py-3 font-semibold"
+          >
+            Retour à l&apos;accueil
+          </Link>
+        </div>
       </div>
     );
   }
 
+  const checkout = (
+    <button
+      type="button"
+      disabled
+      className="bg-ink-200 text-ink-500 flex h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-full font-semibold"
+    >
+      <Lock className="size-4" aria-hidden /> Bientôt disponible
+    </button>
+  );
+
   return (
-    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_22rem]">
-      <section aria-label="Articles du panier" className="rounded-xl bg-white">
-        <div className="border-ink-100 flex items-center justify-between border-b px-5 py-4">
-          <h2 className="font-bold">
-            {count} article{count > 1 ? "s" : ""}
-          </h2>
-          <button
-            type="button"
-            onClick={clear}
-            className="text-ink-500 hover:text-brand-600 text-sm"
-          >
-            Vider le panier
-          </button>
-        </div>
-        <ul className="divide-ink-100 divide-y">
-          {state.lines.map((l) => (
-            <li key={l.productId} className="flex gap-4 p-5">
-              <Link
-                href={`/produit/${l.slug}`}
-                className="bg-ink-100 relative size-24 shrink-0 overflow-hidden rounded-2xl"
-                tabIndex={-1}
-                aria-hidden
-              >
-                {l.image && (
-                  <Image src={l.image} alt="" fill sizes="96px" className="object-cover" />
-                )}
-              </Link>
-              <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
-                <div className="min-w-0 flex-1">
-                  <Link
-                    href={`/produit/${l.slug}`}
-                    className="hover:text-brand-600 line-clamp-2 font-semibold"
-                  >
-                    {l.title}
-                  </Link>
-                  <p className="text-ink-500 text-sm">{formatFCFA(l.price)} / unité</p>
-                </div>
-                <QuantityInput
-                  value={l.quantity}
-                  max={Math.min(l.maxQuantity, MAX_QTY_PER_LINE)}
-                  onChange={(n) => setQuantity(l.productId, n)}
-                  label={`Quantité pour ${l.title}`}
-                />
-                <p className="font-display w-32 font-bold sm:text-right">
-                  {formatFCFA(l.price * l.quantity)}
-                </p>
-              </div>
+    <>
+      <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-[1fr_21rem]">
+        <div className="space-y-3">
+          <FreeShippingMeter subtotal={subtotal} />
+          <section aria-labelledby="articles" className="rounded-xl bg-white">
+            <div className="border-ink-100 flex items-center justify-between border-b px-5 py-3.5">
+              <h2 id="articles" className="text-lg font-bold">
+                Panier ({count} article{count > 1 ? "s" : ""})
+              </h2>
               <button
                 type="button"
-                onClick={() => remove(l.productId)}
-                className="text-ink-400 hover:bg-brand-50 hover:text-brand-600 h-fit rounded-lg p-2"
-                aria-label={`Retirer « ${l.title} »`}
+                onClick={clear}
+                className="text-ink-500 hover:text-brand-700 text-sm underline"
               >
-                <Trash2 className="size-5" />
+                Vider le panier
               </button>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <aside className="space-y-4 lg:sticky lg:top-40" aria-label="Récapitulatif">
-        <div className="rounded-xl bg-white p-5">
-          <h2 className="mb-4 text-lg font-bold">Récapitulatif</h2>
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <dt>Sous-total</dt>
-              <dd className="font-semibold">{formatFCFA(subtotal)}</dd>
             </div>
-            <div className="flex justify-between">
-              <dt>Livraison {city && <span className="text-ink-500">({city.name})</span>}</dt>
-              <dd className="font-semibold">
-                {estimate ? (
-                  estimate.isFree ? (
-                    <span className="text-success-600">Gratuite</span>
-                  ) : (
-                    formatFCFA(estimate.fee)
-                  )
-                ) : (
-                  "—"
-                )}
-              </dd>
-            </div>
-            {estimate && (
-              <p className="text-ink-500 text-xs">
-                Délai estimé : {formatDelay(estimate.daysMin, estimate.daysMax)}
-              </p>
-            )}
-            {estimate && estimate.remainingForFree > 0 && (
-              <p className="bg-success-600/10 text-success-600 rounded-lg px-3 py-2 text-xs">
-                Plus que <strong>{formatFCFA(estimate.remainingForFree)}</strong> pour la livraison
-                gratuite !
-              </p>
-            )}
-            <div className="border-ink-100 flex justify-between border-t pt-3 text-base">
-              <dt className="font-bold">Total estimé</dt>
-              <dd className="font-display text-brand-600 text-xl font-extrabold">
-                {formatFCFA(total)}
-              </dd>
-            </div>
-          </dl>
-
-          {!city && (
-            <button
-              type="button"
-              onClick={openModal}
-              className="border-brand-600 text-brand-600 hover:bg-brand-50 mt-4 flex w-full items-center justify-center gap-2 rounded-full border py-2.5 text-sm font-semibold"
-            >
-              <MapPin className="size-4" aria-hidden /> Choisir ma ville de livraison
-            </button>
-          )}
-
-          <button
-            type="button"
-            disabled
-            className="bg-ink-200 text-ink-500 mt-3 flex h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-full font-semibold"
-            title="Le tunnel de commande arrive dans une prochaine version"
-          >
-            <Lock className="size-4" aria-hidden /> Commander — bientôt disponible
-          </button>
+            <ul className="divide-ink-100 divide-y">
+              {state.lines.map((l) => (
+                <li
+                  key={l.productId}
+                  className="grid grid-cols-[5.5rem_1fr] gap-x-4 gap-y-3 p-4 sm:grid-cols-[6.5rem_1fr_auto] sm:p-5"
+                >
+                  <Link
+                    href={`/produit/${l.slug}`}
+                    className="border-ink-100 relative row-span-2 aspect-square overflow-hidden rounded-lg border bg-white sm:row-span-1"
+                    tabIndex={-1}
+                    aria-hidden
+                  >
+                    {l.image && (
+                      <Image
+                        src={l.image}
+                        alt=""
+                        fill
+                        sizes="104px"
+                        className="object-contain p-1.5"
+                      />
+                    )}
+                  </Link>
+                  <div className="min-w-0">
+                    <Link
+                      href={`/produit/${l.slug}`}
+                      className="hover:text-brand-700 line-clamp-2 font-medium leading-snug"
+                    >
+                      {l.title}
+                    </Link>
+                    <p className="text-ink-500 mt-1 flex items-center gap-1 text-xs">
+                      <BadgeCheck className="text-brand-600 size-3.5" aria-hidden /> Vendu par
+                      Kemdia
+                    </p>
+                    {l.maxQuantity <= 5 && (
+                      <p className="text-brand-700 mt-0.5 text-xs font-semibold">
+                        Plus que {l.maxQuantity} en stock
+                      </p>
+                    )}
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <QuantityInput
+                        value={l.quantity}
+                        max={Math.min(l.maxQuantity, MAX_QTY_PER_LINE)}
+                        onChange={(n) => setQuantity(l.productId, n)}
+                        label={`Quantité pour ${l.title}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => remove(l.productId)}
+                        className="text-ink-500 hover:text-brand-700 inline-flex items-center gap-1 text-sm"
+                        aria-label={`Supprimer « ${l.title} » du panier`}
+                      >
+                        <Trash2 className="size-4" aria-hidden /> Supprimer
+                      </button>
+                    </div>
+                  </div>
+                  <div className="col-start-2 sm:col-start-3 sm:text-right">
+                    <Price price={l.price * l.quantity} size="md" className="sm:items-end" />
+                    {l.quantity > 1 && (
+                      <p className="text-ink-500 mt-1 text-xs">
+                        {formatFCFA(l.price)} l&apos;unité
+                      </p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
         </div>
-        <p className="text-ink-500 flex gap-2 px-2 text-xs">
-          <Info className="size-4 shrink-0" aria-hidden />
-          Les prix et frais affichés sont indicatifs : ils seront vérifiés et recalculés par nos
-          serveurs au moment de la commande.
-        </p>
-      </aside>
-    </div>
+
+        <aside className="space-y-3 lg:sticky lg:top-40" aria-labelledby="recap">
+          <div className="rounded-xl bg-white p-5">
+            <h2 id="recap" className="mb-4 text-lg font-bold">
+              Récapitulatif
+            </h2>
+            <dl className="space-y-2.5 text-sm">
+              <div className="flex justify-between">
+                <dt>Articles ({count})</dt>
+                <dd className="font-semibold">{formatFCFA(subtotal)}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt>
+                  Livraison
+                  {city && <span className="text-ink-500"> à {city.name}</span>}
+                </dt>
+                <dd className="font-semibold">
+                  {estimate ? (
+                    estimate.isFree ? (
+                      <span className="text-forest-700">Offerte</span>
+                    ) : (
+                      formatFCFA(estimate.fee)
+                    )
+                  ) : (
+                    <button type="button" onClick={openModal} className="text-brand-700 underline">
+                      Choisir la ville
+                    </button>
+                  )}
+                </dd>
+              </div>
+              {estimate && (
+                <p className="text-ink-500 text-xs">
+                  Livré en {formatDelay(estimate.daysMin, estimate.daysMax)}
+                </p>
+              )}
+              <div className="border-ink-100 flex items-baseline justify-between border-t pt-3">
+                <dt className="text-base font-bold">Total</dt>
+                <dd>
+                  <Price price={total} size="md" />
+                </dd>
+              </div>
+            </dl>
+            <div className="mt-4">{checkout}</div>
+            <p className="text-ink-500 mt-3 text-center text-xs">
+              Montants vérifiés et recalculés par nos serveurs au moment de la commande.
+            </p>
+          </div>
+          <ul className="space-y-2 rounded-xl bg-white p-4 text-sm">
+            <li className="flex items-center gap-2.5">
+              <Smartphone className="text-brand-600 size-4 shrink-0" aria-hidden /> Airtel Money,
+              Moov Money ou à la livraison
+            </li>
+            <li className="flex items-center gap-2.5">
+              <Lock className="text-brand-600 size-4 shrink-0" aria-hidden /> Paiement sécurisé
+            </li>
+          </ul>
+        </aside>
+      </div>
+
+      {/* Mobile : total et bouton toujours visibles, au-dessus de la barre d'onglets */}
+      <div className="border-ink-100 fixed inset-x-0 bottom-14 z-30 flex items-center gap-3 border-t bg-white px-4 py-2.5 shadow-[0_-4px_16px_rgb(20_24_30/0.08)] lg:hidden">
+        <div>
+          <p className="text-ink-500 text-xs">Total</p>
+          <Price price={total} size="sm" />
+        </div>
+        <div className="ml-auto w-48">{checkout}</div>
+      </div>
+    </>
   );
 }

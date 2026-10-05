@@ -1,11 +1,9 @@
 import { ChevronLeft, ChevronRight, PackageSearch } from "lucide-react";
 import Link from "next/link";
-import { Suspense } from "react";
 import { ProductCard } from "@/components/product/ProductCard";
 import { cn } from "@/lib/cn";
-import { SORT_OPTIONS, type SortKey } from "@/lib/search-params";
+import type { SortKey } from "@/lib/search-params";
 import type { Paginated, Product } from "@/lib/types";
-import { SortSelect } from "./SortSelect";
 
 type Props = {
   result: Paginated<Product>;
@@ -15,7 +13,7 @@ type Props = {
   params?: Record<string, string>;
 };
 
-function buildHref(
+export function buildHref(
   basePath: string,
   params: Record<string, string>,
   overrides: Record<string, string | number>,
@@ -29,26 +27,17 @@ function buildHref(
 }
 
 export function ProductListing({ result, sort, basePath, params = {} }: Props) {
-  const { items, page, totalPages, total } = result;
+  const { items, page, totalPages } = result;
   const keep = { ...params, ...(sort !== "pertinence" ? { tri: sort } : {}) };
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-ink-500 text-sm">
-          <strong className="text-ink-900">{total}</strong> produit{total > 1 ? "s" : ""}
-        </p>
-        <Suspense>
-          <SortSelect value={sort} options={SORT_OPTIONS} />
-        </Suspense>
-      </div>
-
       {items.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-xl bg-white px-6 py-16 text-center">
           <PackageSearch className="text-ink-200 size-12" aria-hidden />
-          <p className="font-display text-lg font-bold">Aucun produit trouvé</p>
+          <p className="font-display text-lg font-bold">Aucun produit ne correspond</p>
           <p className="text-ink-500 max-w-sm text-sm">
-            Essayez un autre mot-clé ou parcourez nos catégories.
+            Retirez un filtre, essayez un autre mot-clé ou parcourez nos rayons.
           </p>
           <Link
             href="/categories"
@@ -58,7 +47,7 @@ export function ProductListing({ result, sort, basePath, params = {} }: Props) {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-4">
           {items.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
