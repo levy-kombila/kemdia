@@ -6,6 +6,7 @@
 | **0.2** | 2026-10-05 | S1     | §7 pipeline CD complet, §8 architecture de déploiement (ADR-0005)                                                                          |
 | **0.3** | 2026-10-05 | S1     | §8 environnement de démonstration gratuit (Render), version inscrite dans l'image                                                          |
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués |
+| **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests     |
 
 > Document vivant : chaque rapport de sprint (`docs/rapports/`) indique quelles sections il a modifiées.
 > Les sections marquées 🔜 seront rédigées au sprint indiqué.
@@ -179,6 +180,7 @@ apps/web/src
 │   ├── categorie/[slug]/    Liste par catégorie (rendu à la demande : tri/pagination)
 │   ├── produit/[slug]/      Fiche produit (pré-générée au build)
 │   ├── recherche/           Résultats de recherche (non indexés)
+│   ├── connexion/  inscription/  mot-de-passe-oublie/   Parcours d'identité (S2)
 │   ├── promotions/  categories/  panier/  compte/  infos/[slug]/
 │   ├── sitemap.ts  robots.ts  icon.svg  not-found.tsx  error.tsx
 │   └── layout.tsx           Gabarit commun : en-tête, pied de page, fournisseurs
@@ -187,6 +189,7 @@ apps/web/src
 │   ├── home/                Hero, PromoTiles, Countdown, CategoryShowcase, Newsletter
 │   ├── catalog/             ProductListing (tri + pagination), Breadcrumbs, SortSelect
 │   ├── product/             ProductCard, ProductRail, ProductGallery, BuyBox, AddToCartButton
+│   ├── auth/                Formulaires d'identité, saisie du code OTP, champs accessibles
 │   ├── cart/                MiniCart
 │   ├── location/            LocationModal (Gabon)
 │   ├── providers/           Panier, ville de livraison, notifications
@@ -195,7 +198,8 @@ apps/web/src
 │   ├── catalog.ts           Accès catalogue (server-only) — futur client API
 │   ├── cart.ts              Réducteur du panier + validation du stockage
 │   ├── delivery.ts          Villes, zones, calcul des frais
-│   ├── search-params.ts     Validation des paramètres d'URL (liste blanche)
+│   ├── auth/                Validation (téléphone gabonais, e-mail, mot de passe) + port AuthClient
+│   ├── search-params.ts     Validation des paramètres d'URL (liste blanche, adresse de retour)
 │   └── format.ts  site.ts  types.ts  cn.ts
 └── data/catalog.seed.json   Données de démonstration (S1 → remplacé par l'API en S3)
 ```
@@ -223,7 +227,28 @@ Composants **serveur** par défaut ; seuls les éléments interactifs sont des c
 | 18 fichiers CSS + Bootstrap + Font Awesome + AOS + Swiper (CDN) | Tailwind + tokens `@theme`, lucide, défilement natif          | Aucun CDN tiers, ~36 Ko HTML compressé |
 | Géolocalisation par IP via service externe                      | Choix explicite ville/quartier                                | Pas de fuite d'IP, pas de SSRF         |
 
-### 5.4 Charte graphique (tokens `globals.css`)
+### 5.4 Parcours d'identité (S2-T01)
+
+Interface complète, branchée sur un **adaptateur de démonstration** : aucun serveur contacté, aucune donnée conservée.
+Au Sprint 4, seul l'adaptateur change (module `identity` de l'API) ; les formulaires restent identiques.
+
+```mermaid
+flowchart LR
+    form[Formulaires<br/>connexion · inscription · oubli] --> port{{Port AuthClient<br/>lib/auth/client.ts}}
+    port -->|S2| demo[Adaptateur démo<br/>code 123456, rien n'est stocké]
+    port -.->|S4| api[Adaptateur API<br/>NestJS · module identity]
+```
+
+| Parcours            | Étapes                                                                                 | Règles / exigences |
+| ------------------- | -------------------------------------------------------------------------------------- | ------------------ |
+| Inscription         | Prénom, nom, **SMS ou e-mail**, mot de passe, CGV → code à 6 chiffres → compte vérifié | FR-001, BR-041     |
+| Connexion           | **Un seul champ** e-mail ou téléphone + mot de passe ; `?retour=` validé               | FR-004, MED-01     |
+| Mot de passe oublié | Identifiant → code → nouveau mot de passe                                              | FR-012             |
+
+Numéros acceptés : mobiles gabonais à 9 chiffres `06…` (Moov) et `07…` (Airtel), avec ou sans `+241` ;
+forme enregistrée `+241077123456` (à confirmer avec le fournisseur SMS au S4).
+
+### 5.5 Charte graphique (tokens `globals.css`)
 
 | Token                     | Valeur                             | Usage                        |
 | ------------------------- | ---------------------------------- | ---------------------------- |
@@ -245,19 +270,24 @@ Composants **serveur** par défaut ; seuls les éléments interactifs sont des c
 
 ### 6.2 Mesures en place (S1)
 
-| Mesure                                                                                       | Où                                | Faille(s) de l'ancien projet évitée(s) |
-| -------------------------------------------------------------------------------------------- | --------------------------------- | -------------------------------------- |
-| Content-Security-Policy, X-Frame-Options, HSTS, Referrer-Policy, Permissions-Policy, nosniff | `next.config.ts`                  | LOW-03                                 |
-| En-tête `X-Powered-By` supprimé                                                              | `next.config.ts`                  | Empreinte technologique                |
-| React échappe tout texte ; aucun `innerHTML` sur des données                                 | Tous les composants               | CRIT-04 (XSS)                          |
-| Tri/page/recherche validés par liste blanche et bornes                                       | `lib/search-params.ts`            | MED-13                                 |
-| Optimiseur d'images limité à `/images/**` (URL externes refusées : 400)                      | `next.config.ts`                  | HIGH-03 (SSRF)                         |
-| `localStorage` validé champ par champ                                                        | `lib/cart.ts`, `LocationProvider` | Altération du panier                   |
-| Ville choisie dans une liste fermée, aucune redirection construite depuis l'URL              | `LocationModal`                   | MED-01, MED-06, MED-14                 |
-| Code catalogue `server-only`                                                                 | `lib/catalog.ts`                  | Fuite de logique côté client           |
-| `.gitignore` : `.env*`, `*.sqlite3`, dumps                                                   | racine                            | CRIT-02, CRIT-03, CRIT-05, LOW-02      |
-| Gitleaks (historique complet), pnpm audit, CodeQL, Dependabot, Trivy                         | CI                                | CRIT-02, HIGH-07                       |
-| Pages d'erreur sans détail technique                                                         | `error.tsx`                       | Fuite d'informations                   |
+| Mesure                                                                                                                                     | Où                                | Faille(s) de l'ancien projet évitée(s) |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------- | -------------------------------------- |
+| Content-Security-Policy, X-Frame-Options, HSTS, Referrer-Policy, Permissions-Policy, nosniff                                               | `next.config.ts`                  | LOW-03                                 |
+| En-tête `X-Powered-By` supprimé                                                                                                            | `next.config.ts`                  | Empreinte technologique                |
+| React échappe tout texte ; aucun `innerHTML` sur des données                                                                               | Tous les composants               | CRIT-04 (XSS)                          |
+| Tri/page/recherche validés par liste blanche et bornes                                                                                     | `lib/search-params.ts`            | MED-13                                 |
+| Optimiseur d'images limité à `/images/**` (URL externes refusées : 400)                                                                    | `next.config.ts`                  | HIGH-03 (SSRF)                         |
+| `localStorage` validé champ par champ                                                                                                      | `lib/cart.ts`, `LocationProvider` | Altération du panier                   |
+| Ville choisie dans une liste fermée, aucune redirection construite depuis l'URL                                                            | `LocationModal`                   | MED-01, MED-06, MED-14                 |
+| Code catalogue `server-only`                                                                                                               | `lib/catalog.ts`                  | Fuite de logique côté client           |
+| `.gitignore` : `.env*`, `*.sqlite3`, dumps                                                                                                 | racine                            | CRIT-02, CRIT-03, CRIT-05, LOW-02      |
+| Gitleaks (historique complet), pnpm audit, CodeQL, Dependabot, Trivy                                                                       | CI                                | CRIT-02, HIGH-07                       |
+| Pages d'erreur sans détail technique                                                                                                       | `error.tsx`                       | Fuite d'informations                   |
+| Adresse de retour après connexion limitée aux chemins internes (`parseReturnTo`)                                                           | `lib/search-params.ts`            | MED-01 (redirection ouverte)           |
+| Messages identiques que le compte existe ou non (connexion, mot de passe oublié)                                                           | `components/auth/`                | Énumération des comptes                |
+| Mot de passe : 8 caractères min., lettre + chiffre, liste des plus courants refusée ; jamais stocké dans le navigateur, effacé après envoi | `lib/auth/validation.ts`          | Mots de passe faibles                  |
+| Code OTP : 5 essais max. puis nouveau code obligatoire, renvoi après 60 s (simulé, appliqué par le serveur au S4)                          | `lib/auth/client.ts`              | MED-05, MED-10 (préparation)           |
+| Attributs `autocomplete` corrects (gestionnaires de mots de passe, code SMS auto-rempli)                                                   | Formulaires                       | Mots de passe réutilisés               |
 
 Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-django.md`](../securite/heritage-audit-django.md).
 
@@ -334,12 +364,12 @@ flowchart TB
 
 ## 9. Qualité et tests
 
-| Niveau              | Outil                                                 | État S1                                                                     |
-| ------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------- |
-| Unitaires (logique) | Vitest                                                | 34 tests : formatage, livraison, panier, catalogue, paramètres d'URL        |
-| Composants          | Testing Library                                       | 3 tests : carte produit (affichage, échappement XSS, ajout panier, rupture) |
-| Bout en bout        | Playwright                                            | 🔜 S2                                                                       |
-| Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                          |
+| Niveau              | Outil                                                 | État S1                                                                             |
+| ------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Unitaires (logique) | Vitest                                                | 76 tests : formatage, livraison, panier, catalogue, paramètres d'URL, identité (S2) |
+| Composants          | Testing Library                                       | 12 tests : carte produit, saisie OTP, parcours inscription / connexion / oubli (S2) |
+| Bout en bout        | Playwright                                            | 🔜 S2                                                                               |
+| Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                                  |
 
 ## 10. Glossaire
 

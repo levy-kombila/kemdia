@@ -38,7 +38,7 @@ Légende : ✅ traité par conception (S1) · 🛡️ mesure prévue au sprint i
 | HIGH-14 | Collision d'e-mail dans le profil       | E-mail unique en base + reconfirmation lors d'un changement                                             | 🛡️ S4                          |
 | HIGH-15 | Jetons d'activation forgeables          | Jetons aléatoires 256 bits, hachés en base, expirables, usage unique                                    | 🛡️ S4                          |
 | HIGH-16 | CSRF sur le stock vendeur               | Cookies `SameSite` + jeton CSRF sur toute mutation                                                      | 🛡️ S4                          |
-| MED-01  | Redirection ouverte                     | Aucune redirection construite depuis l'URL (S1) ; liste blanche de chemins internes au login            | ✅ · 🛡️ S4                     |
+| MED-01  | Redirection ouverte                     | Aucune redirection construite depuis l'URL (S1) ; `parseReturnTo` : chemins internes seulement (S2)     | ✅                             |
 | MED-02  | CSRF désactivé (panier)                 | Panier S1 local au navigateur ; mutations serveur protégées                                             | ✅ · 🛡️ S5                     |
 | MED-03  | Changements d'état en GET               | Idem HIGH-12                                                                                            | 🛡️ S3                          |
 | MED-04  | Usurpation d'IP via X-Forwarded-For     | IP lue uniquement depuis le proxy de confiance configuré                                                | 🛡️ S3                          |

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { MAX_QUERY_LENGTH, first, parsePage, parseQuery, parseSort } from "./search-params";
+import {
+  MAX_QUERY_LENGTH,
+  first,
+  parsePage,
+  parseQuery,
+  parseReturnTo,
+  parseSort,
+} from "./search-params";
 
 describe("parseSort (liste blanche — leçon MED-13)", () => {
   it("accepte les valeurs connues", () => {
@@ -36,4 +43,20 @@ describe("parseQuery / first", () => {
     expect(first("a")).toBe("a");
     expect(first(undefined)).toBeUndefined();
   });
+});
+
+describe("parseReturnTo", () => {
+  it("garde un chemin interne", () => {
+    expect(parseReturnTo("/panier")).toBe("/panier");
+    expect(parseReturnTo("/produit/casque?x=1")).toBe("/produit/casque?x=1");
+  });
+  it.each([
+    undefined,
+    "",
+    "https://pirate.com",
+    "//pirate.com",
+    "/\\pirate.com",
+    "javascript:alert(1)",
+    "/a\nb",
+  ])("refuse %s (redirection ouverte)", (value) => expect(parseReturnTo(value)).toBe("/compte"));
 });
