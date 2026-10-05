@@ -1,0 +1,18 @@
+# Lancer le site comme en production : docker compose up --build
+# (PostgreSQL et l'API seront ajoutés ici aux sprints backend)
+services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/apps/web/.next/cache
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped

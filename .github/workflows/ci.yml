@@ -1,0 +1,84 @@
+# Intégration continue : chaque push / Pull Request doit passer ces contrôles
+# avant de pouvoir être fusionné dans main (règle de protection de branche).
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint · Types · Tests · Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Installer les dépendances (lockfile figé)
+        run: pnpm install --frozen-lockfile
+
+      - name: Format (Prettier)
+        run: pnpm format:check
+
+      - name: Lint (ESLint)
+        run: pnpm lint
+
+      - name: Vérification des types (TypeScript)
+        run: pnpm typecheck
+
+      - name: Tests unitaires et composants (Vitest)
+        run: pnpm --filter @kemdia/web exec vitest run --coverage
+
+      - name: Build de production
+        run: pnpm build
+
+      - name: Publier la couverture de tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: apps/web/coverage
+          retention-days: 7
+
+  docker:
+    name: Image Docker
+    runs-on: ubuntu-latest
+    needs: quality
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Construire l'image (sans publier)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: false
+          tags: kemdia-web:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Scanner l'image (Trivy — vulnérabilités OS et paquets)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: kemdia-web:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"

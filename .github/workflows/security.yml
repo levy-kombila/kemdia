@@ -1,0 +1,64 @@
+# Sécurité continue (DevSecOps) — répond directement aux catégories de failles
+# de l'ancien projet : secrets dans Git (CRIT-02/05), dépendances vulnérables (HIGH-07),
+# injections / XSS (CRIT-04) détectées par analyse statique.
+name: Sécurité
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1" # chaque lundi 06:17 heure de Libreville
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Détection de secrets (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tout l'historique : un secret supprimé reste un secret fuité
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependencies:
+    name: Audit des dépendances (pnpm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Échec si vulnérabilité haute ou critique
+        run: pnpm audit --audit-level high --prod
+
+  dependency-review:
+    name: Revue des nouvelles dépendances
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  codeql:
+    name: Analyse statique (CodeQL)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+      - uses: github/codeql-action/analyze@v3

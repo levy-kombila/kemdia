@@ -1,0 +1,65 @@
+# Héritage de l'audit Django — suivi des 45 failles
+
+Source : `security-reports/changelog.json` de l'ancien projet (itération v4, 11/09/2026).
+Ce tableau indique, pour chaque faille, **comment la nouvelle architecture l'empêche** et à quel sprint la mesure est vérifiée.
+
+Légende : ✅ traité par conception (S1) · 🛡️ mesure prévue au sprint indiqué · ⚠️ action humaine requise
+
+## Actions immédiates ⚠️
+
+| ID               | Action                                                                                                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| CRIT-02, CRIT-05 | Changer **tous** les secrets de l'ancien projet (mot de passe PostgreSQL codé en dur dans `settings.py`, `SECRET_KEY`, identifiants SMTP, clés Stripe / Mobile Money). Ne pas réutiliser ce mot de passe ailleurs. |
+| CRIT-03          | Rendre privé ou archiver l'ancien dépôt : il contient `db_dump.json` et `db_backup.sqlite3`. Si des données réelles de clients y figurent, évaluer l'obligation de notification.                                   |
+
+## Tableau de suivi
+
+| ID      | Faille (résumé)                         | Réponse dans Kemdia                                                                                     | État                           |
+| ------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| CRIT-01 | Paiement contournable                   | Statut « payé » uniquement sur webhook signé + vérification serveur                                     | 🛡️ S5                          |
+| CRIT-02 | Secrets dans l'historique Git           | `.env*` ignorés, Gitleaks en CI sur tout l'historique                                                   | ✅                             |
+| CRIT-03 | Dumps de base dans Git                  | `*.sqlite3`, `db_dump*.json` ignorés ; données de démo sans données personnelles                        | ✅                             |
+| CRIT-04 | XSS stocké (admin)                      | Rendu React échappé, pas d'`innerHTML`, CSP ; test automatisé                                           | ✅ (front) · 🛡️ S6 (admin)     |
+| CRIT-05 | Mot de passe BDD codé en dur            | Configuration exclusivement par variables d'environnement                                               | ✅                             |
+| CRIT-06 | Élévation vers superutilisateur         | RBAC : un rôle ne peut accorder que des droits inférieurs aux siens                                     | 🛡️ S6                          |
+| HIGH-01 | IDOR factures invités                   | Accès par propriétaire + jeton aléatoire non devinable                                                  | 🛡️ S5                          |
+| HIGH-02 | Données personnelles sur page de succès | Page de confirmation sans données personnelles complètes                                                | 🛡️ S5                          |
+| HIGH-03 | SSRF importateur d'images               | Optimiseur d'images limité aux chemins locaux (URL externe → 400, vérifié) ; téléversement direct en S6 | ✅                             |
+| HIGH-04 | Fichiers cache pickle dans Git          | Aucun cache sérialisé versionné ; `.turbo`, `.next` ignorés                                             | ✅                             |
+| HIGH-05 | Coupon déduit deux fois                 | Calcul du total en une seule fonction serveur testée                                                    | 🛡️ S5                          |
+| HIGH-06 | Coupon réutilisable à l'infini          | Incrément atomique en transaction SQL                                                                   | 🛡️ S5                          |
+| HIGH-07 | 108 CVE dépendances                     | `pnpm audit` bloquant + Dependabot hebdomadaire ; 0 vulnérabilité au 05/10/2026                         | ✅                             |
+| HIGH-08 | Téléversement non restreint             | Type MIME + taille + ré-encodage des images, stockage hors racine web                                   | 🛡️ S6                          |
+| HIGH-09 | Avis modifiés après modération          | Toute modification repasse en modération                                                                | 🛡️ S6                          |
+| HIGH-10 | SITE_URL absent → e-mails cassés        | Variables validées au démarrage (échec explicite)                                                       | 🛡️ S3                          |
+| HIGH-11 | Connexion avant vérification e-mail     | Connexion impossible avant vérification                                                                 | 🛡️ S4                          |
+| HIGH-12 | Changements d'état en GET               | Aucune écriture en GET (règle de revue + tests)                                                         | 🛡️ S3                          |
+| HIGH-13 | Suppression via GET                     | Idem HIGH-12                                                                                            | 🛡️ S6                          |
+| HIGH-14 | Collision d'e-mail dans le profil       | E-mail unique en base + reconfirmation lors d'un changement                                             | 🛡️ S4                          |
+| HIGH-15 | Jetons d'activation forgeables          | Jetons aléatoires 256 bits, hachés en base, expirables, usage unique                                    | 🛡️ S4                          |
+| HIGH-16 | CSRF sur le stock vendeur               | Cookies `SameSite` + jeton CSRF sur toute mutation                                                      | 🛡️ S4                          |
+| MED-01  | Redirection ouverte                     | Aucune redirection construite depuis l'URL (S1) ; liste blanche de chemins internes au login            | ✅ · 🛡️ S4                     |
+| MED-02  | CSRF désactivé (panier)                 | Panier S1 local au navigateur ; mutations serveur protégées                                             | ✅ · 🛡️ S5                     |
+| MED-03  | Changements d'état en GET               | Idem HIGH-12                                                                                            | 🛡️ S3                          |
+| MED-04  | Usurpation d'IP via X-Forwarded-For     | IP lue uniquement depuis le proxy de confiance configuré                                                | 🛡️ S3                          |
+| MED-05  | Pas de limitation de débit              | Limitation par IP + compte (Redis)                                                                      | 🛡️ S4                          |
+| MED-06  | Appel externe bloquant (géocodage)      | Supprimé : choix de ville dans une liste fermée                                                         | ✅                             |
+| MED-07  | Pas de hiérarchie staff                 | Idem CRIT-06                                                                                            | 🛡️ S6                          |
+| MED-08  | Fuite de géolocalisation (suivi)        | Suivi public sans adresse ni coordonnées précises                                                       | 🛡️ S5                          |
+| MED-09  | Note moyenne corrompue                  | Note recalculée en base (agrégat), testée                                                               | 🛡️ S6                          |
+| MED-10  | Pas de verrouillage de compte           | Verrouillage progressif                                                                                 | 🛡️ S4                          |
+| MED-11  | IDOR calcul de livraison                | Calcul sans identifiant de commande d'autrui ; contrôle de propriété                                    | ✅ (S1 : calcul local) · 🛡️ S5 |
+| MED-12  | Faux avis                               | Avis réservés aux acheteurs vérifiés                                                                    | 🛡️ S6                          |
+| MED-13  | Paramètre de tri non assaini            | Liste blanche `parseSort` + tests                                                                       | ✅                             |
+| MED-14  | X-Forwarded-For vers service externe    | Supprimé (MED-06)                                                                                       | ✅                             |
+| MED-15  | 2FA de façade + redirection             | 2FA réelle (TOTP) pour l'administration                                                                 | 🛡️ S6                          |
+| MED-16  | Panier / livraison modifiés en GET      | Idem HIGH-12                                                                                            | 🛡️ S5                          |
+| MED-17  | Injection d'en-têtes (contact)          | Validation stricte des champs, bibliothèque e-mail sûre                                                 | 🛡️ S4                          |
+| MED-18  | Saturation par le middleware d'audit    | Journalisation structurée, rotation, sans corps de requête                                              | 🛡️ S3                          |
+| LOW-01  | Secret 2FA en clair                     | Chiffré au repos                                                                                        | 🛡️ S6                          |
+| LOW-02  | Inventaire du projet versionné          | Non repris                                                                                              | ✅                             |
+| LOW-03  | Pas de CSP                              | CSP + en-têtes de sécurité (vérifiés par `curl -I`)                                                     | ✅                             |
+| LOW-04  | Condition DEBUG erronée                 | Pas de mode debug en production (`NODE_ENV=production` dans l'image)                                    | ✅                             |
+| LOW-05  | Pipeline social auth instable           | Connexion sociale réévaluée en S4                                                                       | 🛡️ S4                          |
+
+**Bilan S1** : sur 45 failles, 12 sont neutralisées par conception, 4 le sont côté site public et seront complétées côté serveur, 29 sont couvertes par des mesures planifiées (S3–S6). 2 actions humaines sont à faire immédiatement.

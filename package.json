@@ -1,0 +1,29 @@
+{
+  "name": "kemdia",
+  "private": true,
+  "description": "Kemdia — plateforme e-commerce (Gabon)",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "prettier": "^3.6.2",
+    "prettier-plugin-tailwindcss": "^0.6.14",
+    "turbo": "^2.5.8"
+  },
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,json,md,css,yml,yaml}": "prettier --write"
+  }
+}

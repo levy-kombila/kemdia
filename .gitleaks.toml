@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fichiers d'exemple sans vrais secrets"
+paths = ['''\.env\.example$''']

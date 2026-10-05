@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+/*
+ * Charte Kemdia — reprise de l'identité de l'ancien site (rouge / jaune / anthracite),
+ * centralisée en « design tokens » au lieu de 18 fichiers CSS et de styles inline.
+ */
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Montserrat Variable", "Inter Variable", ui-sans-serif, sans-serif;
+
+  --color-brand-50: #fff1f2;
+  --color-brand-100: #ffe1e3;
+  --color-brand-200: #ffc7cc;
+  --color-brand-500: #ef3340;
+  --color-brand-600: #d61f2c;
+  --color-brand-700: #b31622;
+  --color-brand-800: #94151f;
+
+  --color-accent-300: #ffd75e;
+  --color-accent-400: #ffc629;
+  --color-accent-500: #f5a700;
+
+  --color-ink-50: #f6f7f9;
+  --color-ink-100: #eceef2;
+  --color-ink-200: #d9dde4;
+  --color-ink-400: #8b93a1;
+  --color-ink-500: #636b78;
+  --color-ink-700: #333a45;
+  --color-ink-800: #1f242c;
+  --color-ink-900: #14181e;
+
+  --color-success-600: #0f9d58;
+  --color-gabon-green: #009e60;
+  --color-gabon-yellow: #fcd116;
+  --color-gabon-blue: #3a75c4;
+
+  --radius-card: 1rem;
+  --shadow-card: 0 1px 2px rgb(20 24 30 / 0.06), 0 4px 16px rgb(20 24 30 / 0.06);
+  --shadow-card-hover: 0 2px 4px rgb(20 24 30 / 0.08), 0 12px 28px rgb(20 24 30 / 0.12);
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-ink-50 text-ink-900 font-sans antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-tight;
+  }
+  :focus-visible {
+    @apply outline-brand-600 outline-2 outline-offset-2;
+  }
+}
+
+@utility container-page {
+  @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

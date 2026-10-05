@@ -1,0 +1,32 @@
+# Dépendances
+node_modules/
+.pnpm-store/
+
+# Builds
+.next/
+out/
+dist/
+build/
+.turbo/
+coverage/
+playwright-report/
+test-results/
+
+# Secrets — ne JAMAIS committer (leçon CRIT-02 / CRIT-05)
+.env
+.env.*
+!.env.example
+
+# Données — jamais de dump de base dans Git (leçon CRIT-03)
+*.sqlite3
+*.db
+*.dump
+db_dump*.json
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log
