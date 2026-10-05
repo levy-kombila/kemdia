@@ -17,12 +17,12 @@
 
 ### Commandes
 
-| ID     | Règle                                                                                                                                       | Module           | Sprint |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ------ |
-| BR-010 | Une commande au statut « livrée » ne peut plus être annulée par le client.                                                                  | orders           | S5     |
-| BR-011 | Le **paiement à la livraison** n'est proposé que dans certaines zones et sous un **plafond** de panier (valeurs : voir questions ouvertes). | orders, payments | S5     |
-| BR-012 | Le stock est réservé **dans la même transaction** que la création de la commande (pas de survente).                                         | orders, catalog  | S5     |
-| BR-013 | Le vendeur accepte ou refuse chaque commande qui le concerne.                                                                               | orders, vendors  | S6     |
+| ID     | Règle                                                                                                                                                                                                                                  | Module           | Sprint |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ------ |
+| BR-010 | Une commande au statut « livrée » ne peut plus être annulée par le client.                                                                                                                                                             | orders           | S5     |
+| BR-011 | Le **paiement à la livraison** n'est proposé que dans certaines zones et sous un **plafond** de panier. Valeurs **provisoires** dans l'interface (S2) : Grand Libreville, 100 000 FCFA (`lib/checkout.ts`) — à confirmer (question 1). | orders, payments | S5     |
+| BR-012 | Le stock est réservé **dans la même transaction** que la création de la commande (pas de survente).                                                                                                                                    | orders, catalog  | S5     |
+| BR-013 | Le vendeur accepte ou refuse chaque commande qui le concerne.                                                                                                                                                                          | orders, vendors  | S6     |
 
 ### Finances et commissions
 

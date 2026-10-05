@@ -1,7 +1,14 @@
 "use client";
 
 import { Eye, EyeOff, LoaderCircle } from "lucide-react";
-import { useId, useState, type InputHTMLAttributes, type ReactNode, type Ref } from "react";
+import {
+  useId,
+  useState,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type Ref,
+  type SelectHTMLAttributes,
+} from "react";
 import { cn } from "@/lib/cn";
 
 const inputClass =
@@ -105,10 +112,64 @@ export function FormAlert({
       role={tone === "error" ? "alert" : "status"}
       className={cn(
         "rounded-xl px-4 py-3 text-sm",
-        tone === "error" ? "bg-brand-50 text-brand-800" : "bg-ink-50 text-ink-700",
+        tone === "error" ? "bg-brand-50 text-brand-800" : "bg-accent-400/15 text-ink-800",
       )}
     >
       {children}
+    </div>
+  );
+}
+
+type SelectFieldProps = SelectHTMLAttributes<HTMLSelectElement> & {
+  label: string;
+  error?: string | null;
+  hint?: ReactNode;
+};
+
+/** Liste déroulante avec le même rendu et la même accessibilité que <Field>. */
+export function SelectField({
+  label,
+  error,
+  hint,
+  className,
+  children,
+  ...props
+}: SelectFieldProps) {
+  const id = useId();
+  const describedBy = [error ? `${id}-error` : null, hint ? `${id}-hint` : null]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <div className={className}>
+      <label htmlFor={id} className="text-ink-800 mb-1.5 block text-sm font-semibold">
+        {label}
+      </label>
+      <select
+        id={id}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy || undefined}
+        className={cn(
+          inputClass,
+          "appearance-none bg-[length:1rem] bg-[right_1rem_center] bg-no-repeat pr-10",
+        )}
+        style={{
+          backgroundImage:
+            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23636b78' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")",
+        }}
+        {...props}
+      >
+        {children}
+      </select>
+      {hint && (
+        <div id={`${id}-hint`} className="text-ink-500 mt-1.5 text-sm">
+          {hint}
+        </div>
+      )}
+      {error && (
+        <p id={`${id}-error`} className="text-brand-700 mt-1.5 text-sm font-medium">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

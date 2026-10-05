@@ -37,11 +37,11 @@ const TABS = [
   },
 ];
 
-/** Barre d'onglets en bas de l'écran (mobile), comme dans une application. Masquée sur la fiche produit (barre d'achat). */
+/** Barre d'onglets en bas de l'écran (mobile), comme dans une application. Masquée sur la fiche produit (barre d'achat) et pendant la commande. */
 export function MobileTabBar() {
   const pathname = usePathname();
   const { count } = useCart();
-  if (pathname.startsWith("/produit/")) return null;
+  if (pathname.startsWith("/produit/") || pathname.startsWith("/commande")) return null;
 
   return (
     <nav

@@ -12,7 +12,7 @@ import {
   type Identifier,
 } from "@/lib/auth/validation";
 import { cn } from "@/lib/cn";
-import { Field, FormAlert, PasswordField, SubmitButton } from "./Field";
+import { Field, FormAlert, PasswordField, SubmitButton } from "@/components/ui/Field";
 import { OtpStep } from "./OtpStep";
 import { PasswordRules, passwordError } from "./PasswordRules";
 

@@ -13,6 +13,7 @@ export default function robots(): MetadataRoute.Robots {
         "/connexion",
         "/inscription",
         "/mot-de-passe-oublie",
+        "/commande",
       ],
     },
     sitemap: `${SITE.url}/sitemap.xml`,

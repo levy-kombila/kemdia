@@ -91,7 +91,7 @@ Ces démarches prennent souvent plusieurs mois et **bloquent** des sprints si el
 | ------ | ---------------------------------------------------------------------------------------------------------------------- | ------ |
 | S2-T00 | Intégrer le KSAD : synthèse, règles métier numérotées, ADR-0006 (7 modules), concepts expliqués, cahier v0.4, planning | ✅     |
 | S2-T01 | Pages connexion / inscription par **e-mail ou téléphone**, écran de code OTP, mot de passe oublié (interface)          | ✅     |
-| S2-T02 | Tunnel de commande (maquette) : adresse → livraison → paiement Moov / Airtel / à la livraison → confirmation           | ⏳     |
+| S2-T02 | Tunnel de commande (maquette) : adresse → livraison → paiement Moov / Airtel / à la livraison → confirmation           | ✅     |
 | S2-T03 | Filtres catégorie et recherche : prix, marque, disponibilité (FR-005)                                                  | ✅     |
 | S2-T04 | Favoris (liste de souhaits) dans le navigateur (FR-014)                                                                | ⏳     |
 | S2-T05 | Partage **WhatsApp** + aperçus OpenGraph soignés par produit                                                           | ⏳     |

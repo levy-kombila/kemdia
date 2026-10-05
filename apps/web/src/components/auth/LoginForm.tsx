@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRef, useState, type FormEvent } from "react";
 import { authClient } from "@/lib/auth/client";
 import { parseIdentifier } from "@/lib/auth/validation";
-import { Field, FormAlert, PasswordField, SubmitButton } from "./Field";
+import { Field, FormAlert, PasswordField, SubmitButton } from "@/components/ui/Field";
 
 type Errors = { identifier?: string; password?: string };
 
