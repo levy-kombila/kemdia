@@ -187,3 +187,28 @@ export function getAllProductSlugs(): string[] {
 export function getAllCategorySlugs(): string[] {
   return categories.map((c) => c.slug);
 }
+
+export type CategoryHighlight = { category: Category; image: string; count: number };
+
+/** Sous-catégories qui ont des produits, illustrées par leur produit le plus consulté (ronds de l'accueil). */
+export function getCategoryHighlights(limit = 12): CategoryHighlight[] {
+  const result: CategoryHighlight[] = [];
+  for (const root of getRootCategories()) {
+    for (const child of getChildren(root.id)) {
+      const { items, total } = queryProducts({ categoryId: child.id, pageSize: 1 });
+      const image = items[0]?.images[0];
+      if (total > 0 && image) result.push({ category: child, image, count: total });
+    }
+  }
+  return result.sort((a, b) => b.count - a.count).slice(0, limit);
+}
+
+/** Pour chaque grande catégorie : ses 4 produits phares (tuiles « 4 vignettes » de l'accueil). */
+export function getCategoryTiles(): { category: Category; products: Product[] }[] {
+  return getRootCategories()
+    .map((category) => ({
+      category,
+      products: queryProducts({ categoryId: category.id, pageSize: 4 }).items,
+    }))
+    .filter((t) => t.products.length === 4);
+}

@@ -55,7 +55,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
     <div className="container-page py-6">
       <Breadcrumbs items={path.map((c) => ({ label: c.name, href: `/categorie/${c.slug}` }))} />
 
-      <header className="mb-6 flex items-center gap-4 rounded-3xl bg-white p-5 shadow-[var(--shadow-card)]">
+      <header className="mb-6 flex items-center gap-4 rounded-xl bg-white p-5">
         <span className="bg-brand-50 grid size-14 shrink-0 place-items-center rounded-2xl">
           <CategoryIcon name={category.icon} className="text-brand-600 size-7" />
         </span>
@@ -70,8 +70,8 @@ export default async function CategoryPage({ params, searchParams }: Props) {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[15rem_1fr]">
         <aside aria-label="Sous-catégories" className="min-w-0">
           {navItems.length > 0 && (
-            <div className="rounded-2xl bg-white p-4 shadow-[var(--shadow-card)] lg:sticky lg:top-40">
-              <h2 className="text-ink-500 mb-3 text-sm font-bold uppercase tracking-wide">
+            <div className="rounded-2xl bg-white p-4 lg:sticky lg:top-40">
+              <h2 className="mb-3 text-base font-bold">
                 {children.length > 0 ? "Sous-catégories" : `Dans ${parent?.name ?? ""}`}
               </h2>
               <ul className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto lg:flex-col lg:gap-0.5">

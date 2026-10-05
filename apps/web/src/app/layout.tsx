@@ -1,10 +1,11 @@
-import "@fontsource-variable/inter";
-import "@fontsource-variable/montserrat";
+// Archivo à largeur variable : texte en largeur normale, titres élargis, prix condensés (étiquette de marché)
+import "@fontsource-variable/archivo/wdth.css";
 import "./globals.css";
 
 import type { Metadata, Viewport } from "next";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
+import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { Providers } from "@/components/providers/Providers";
 import { SITE } from "@/lib/site";
 
@@ -52,10 +53,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         </a>
         <Providers>
           <Header />
-          <main id="contenu" className="flex-1">
+          <main id="contenu" className="flex-1 pb-16 lg:pb-0">
             {children}
           </main>
           <Footer />
+          <MobileTabBar />
         </Providers>
       </body>
     </html>

@@ -62,9 +62,7 @@ export function Footer() {
 
         {COLUMNS.map((col) => (
           <div key={col.title}>
-            <h2 className="font-display mb-4 text-sm font-bold uppercase tracking-wide text-white">
-              {col.title}
-            </h2>
+            <h2 className="font-display mb-4 text-base font-bold text-white">{col.title}</h2>
             <ul className="space-y-2.5 text-sm">
               {col.links.map((slug) => (
                 <li key={slug}>

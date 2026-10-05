@@ -19,7 +19,7 @@ export function CartView() {
   if (!hydrated) {
     return (
       <div
-        className="h-64 animate-pulse rounded-3xl bg-white"
+        className="h-64 animate-pulse rounded-xl bg-white"
         aria-busy="true"
         aria-label="Chargement du panier"
       />
@@ -28,7 +28,7 @@ export function CartView() {
 
   if (state.lines.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-4 rounded-3xl bg-white px-6 py-16 text-center shadow-[var(--shadow-card)]">
+      <div className="flex flex-col items-center gap-4 rounded-xl bg-white px-6 py-16 text-center">
         <ShoppingCart className="text-ink-200 size-14" aria-hidden />
         <h2 className="text-xl font-bold">Votre panier est vide</h2>
         <p className="text-ink-500 max-w-sm text-sm">
@@ -46,10 +46,7 @@ export function CartView() {
 
   return (
     <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_22rem]">
-      <section
-        aria-label="Articles du panier"
-        className="rounded-3xl bg-white shadow-[var(--shadow-card)]"
-      >
+      <section aria-label="Articles du panier" className="rounded-xl bg-white">
         <div className="border-ink-100 flex items-center justify-between border-b px-5 py-4">
           <h2 className="font-bold">
             {count} article{count > 1 ? "s" : ""}
@@ -109,7 +106,7 @@ export function CartView() {
       </section>
 
       <aside className="space-y-4 lg:sticky lg:top-40" aria-label="Récapitulatif">
-        <div className="rounded-3xl bg-white p-5 shadow-[var(--shadow-card)]">
+        <div className="rounded-xl bg-white p-5">
           <h2 className="mb-4 text-lg font-bold">Récapitulatif</h2>
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between">

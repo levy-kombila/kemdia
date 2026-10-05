@@ -1,13 +1,16 @@
-import { CategoryShowcase } from "@/components/home/CategoryShowcase";
+import { CategoryBubbles } from "@/components/home/CategoryBubbles";
+import { CategoryTiles } from "@/components/home/CategoryTiles";
+import { FlashSales } from "@/components/home/FlashSales";
 import { Hero } from "@/components/home/Hero";
 import { Newsletter } from "@/components/home/Newsletter";
-import { PromoTiles } from "@/components/home/PromoTiles";
 import { SectionHeader } from "@/components/home/SectionHeader";
 import { ProductCard } from "@/components/product/ProductCard";
 import { ProductRail, RailItem } from "@/components/product/ProductRail";
 import {
-  countProducts,
   getBestsellers,
+  getCategoryBySlug,
+  getCategoryHighlights,
+  getCategoryTiles,
   getDeals,
   getFeaturedProducts,
   getNewProducts,
@@ -15,74 +18,84 @@ import {
   queryProducts,
 } from "@/lib/catalog";
 
+function railSection(id: string, title: string, href: string, children: React.ReactNode) {
+  return (
+    <section aria-labelledby={id} className="rounded-xl bg-white px-3 pb-3 pt-4 sm:px-5">
+      <SectionHeader id={id} title={title} href={href} />
+      {children}
+    </section>
+  );
+}
+
 export default function HomePage() {
-  const featured = getFeaturedProducts(10);
-  const news = getNewProducts(10);
-  const bestsellers = getBestsellers(10);
-  const deals = getDeals(6);
-  const popular = getRootCategories().map((c) => ({ ...c, count: countProducts(c.id) }));
-  const all = queryProducts({ pageSize: 12 }).items;
+  const tech = getCategoryBySlug("high-tech");
+  const mode = getCategoryBySlug("mode");
+  const techItems = tech
+    ? queryProducts({ categoryId: tech.id, sort: "prix-asc", pageSize: 50 }).items
+    : [];
+  const fashion = mode ? queryProducts({ categoryId: mode.id, pageSize: 1 }).items : [];
+  const techShowcase = tech ? queryProducts({ categoryId: tech.id, pageSize: 2 }).items : [];
+
+  const featured = getFeaturedProducts(12);
+  const news = getNewProducts(12);
+  const bestsellers = getBestsellers(12);
+  const more = queryProducts({ pageSize: 18, sort: "nouveautes" }).items;
 
   return (
-    <div className="container-page space-y-12 py-6 lg:py-8">
-      <Hero showcase={[...featured, ...bestsellers]} />
-      <PromoTiles deals={deals} news={news} />
-      <CategoryShowcase categories={popular} />
+    <div className="container-page space-y-3 py-3 sm:space-y-4 lg:py-4">
+      <Hero
+        categories={getRootCategories()}
+        techDeals={techShowcase}
+        cheapestTech={techItems[0]?.price ?? 0}
+        fashion={fashion}
+      />
+      <CategoryBubbles items={getCategoryHighlights(12)} />
+      <FlashSales deals={getDeals(12)} />
+      <CategoryTiles tiles={getCategoryTiles()} />
 
-      <section aria-labelledby="vedette">
-        <SectionHeader
-          id="vedette"
-          title="Produits"
-          highlight="en vedette"
-          subtitle="Les articles les plus populaires du moment"
-          href="/recherche"
-        />
-        <ProductRail label="Produits en vedette">
-          {featured.map((p) => (
+      {railSection(
+        "meilleures-ventes",
+        "Les plus vendus",
+        "/recherche?tri=note",
+        <ProductRail label="Les plus vendus">
+          {bestsellers.map((p, i) => (
             <RailItem key={p.id}>
-              <ProductCard product={p} badge="featured" />
+              <ProductCard product={p} badge="bestseller" rank={i < 3 ? i + 1 : undefined} />
             </RailItem>
           ))}
-        </ProductRail>
-      </section>
+        </ProductRail>,
+      )}
 
-      <section aria-labelledby="nouveautes">
-        <SectionHeader
-          id="nouveautes"
-          title="Les derniers"
-          highlight="arrivages"
-          subtitle="Nos nouveaux produits fraîchement arrivés"
-          href="/recherche?tri=nouveautes"
-        />
+      {railSection(
+        "vedette",
+        "Choisis pour vous",
+        "/recherche",
+        <ProductRail label="Choisis pour vous">
+          {featured.map((p) => (
+            <RailItem key={p.id}>
+              <ProductCard product={p} />
+            </RailItem>
+          ))}
+        </ProductRail>,
+      )}
+
+      {railSection(
+        "nouveautes",
+        "Nouveautés de la semaine",
+        "/recherche?tri=nouveautes",
         <ProductRail label="Nouveautés">
           {news.map((p) => (
             <RailItem key={p.id}>
               <ProductCard product={p} badge="new" />
             </RailItem>
           ))}
-        </ProductRail>
-      </section>
+        </ProductRail>,
+      )}
 
-      <section aria-labelledby="meilleures-ventes">
-        <SectionHeader
-          id="meilleures-ventes"
-          title="Meilleures"
-          highlight="ventes"
-          href="/recherche?tri=note"
-        />
-        <ProductRail label="Meilleures ventes">
-          {bestsellers.map((p, i) => (
-            <RailItem key={p.id}>
-              <ProductCard product={p} badge="bestseller" rank={i < 3 ? i + 1 : undefined} />
-            </RailItem>
-          ))}
-        </ProductRail>
-      </section>
-
-      <section aria-labelledby="tous-produits">
-        <SectionHeader id="tous-produits" title="Tous nos" highlight="produits" href="/recherche" />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-          {all.map((p) => (
+      <section aria-labelledby="tous-produits" className="pt-2">
+        <SectionHeader id="tous-produits" title="Encore plus de produits" href="/recherche" />
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5 xl:grid-cols-6">
+          {more.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
         </div>

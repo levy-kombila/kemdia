@@ -25,7 +25,7 @@ export default async function PromotionsPage({ searchParams }: Props) {
       <Breadcrumbs items={[{ label: "Promotions" }]} />
       <header
         id="ventes-flash"
-        className="from-brand-600 via-brand-500 to-accent-500 mb-6 flex flex-col justify-between gap-4 rounded-3xl bg-gradient-to-br p-6 text-white sm:flex-row sm:items-center"
+        className="from-brand-600 via-brand-500 to-accent-500 mb-6 flex flex-col justify-between gap-4 rounded-xl bg-gradient-to-br p-6 text-white sm:flex-row sm:items-center"
       >
         <div>
           <h1 className="flex items-center gap-2 text-3xl font-extrabold">

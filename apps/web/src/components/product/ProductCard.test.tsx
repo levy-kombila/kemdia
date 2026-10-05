@@ -43,9 +43,10 @@ function renderCard(p: Product = product) {
 describe("<ProductCard />", () => {
   it("affiche prix, remise et badge, et échappe le titre (pas d'injection HTML)", () => {
     const { container } = renderCard();
-    expect(screen.getByText(/80\s000\sFCFA/)).toBeInTheDocument();
-    expect(screen.getByText("-20%")).toBeInTheDocument();
-    expect(screen.getByText("EN VEDETTE")).toBeInTheDocument();
+    expect(screen.getByText(/^80\s000\sFCFA$/)).toBeInTheDocument();
+    expect(screen.getByText(/-20\s%/)).toBeInTheDocument();
+    expect(screen.getByText("En vedette")).toBeInTheDocument();
+    expect(screen.getByText("Plus que 3 en stock")).toBeInTheDocument();
     // le titre malveillant est rendu comme du texte, aucune balise <img> n'est créée
     expect(container.querySelector('img[src="x"]')).toBeNull();
     expect(screen.getByRole("link", { name: /Casque/ })).toHaveAttribute(

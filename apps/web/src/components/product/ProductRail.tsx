@@ -47,6 +47,22 @@ export function ProductRail({ children, label }: { children: React.ReactNode; la
   );
 }
 
-export function RailItem({ children }: { children: React.ReactNode }) {
-  return <div className="w-[46%] shrink-0 snap-start sm:w-[31%] lg:w-[23.5%]">{children}</div>;
+export function RailItem({
+  children,
+  size = "md",
+}: {
+  children: React.ReactNode;
+  size?: "sm" | "md";
+}) {
+  return (
+    <div
+      className={
+        size === "sm"
+          ? "w-[40%] shrink-0 snap-start sm:w-[24%] lg:w-[15.8%]"
+          : "w-[46%] shrink-0 snap-start sm:w-[31%] lg:w-[19%] xl:w-[15.8%]"
+      }
+    >
+      {children}
+    </div>
+  );
 }

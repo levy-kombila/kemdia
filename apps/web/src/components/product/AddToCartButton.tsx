@@ -12,9 +12,22 @@ type Props = {
   quantity?: number;
   variant?: "icon" | "full";
   className?: string;
+  /** Texte du bouton (variante « full ») */
+  label?: string;
+  /** Appelé après l'ajout (ex. « Acheter maintenant » → page panier) */
+  onAdded?: () => void;
+  tone?: "primary" | "secondary";
 };
 
-export function AddToCartButton({ line, quantity = 1, variant = "full", className }: Props) {
+export function AddToCartButton({
+  line,
+  quantity = 1,
+  variant = "full",
+  className,
+  label = "Ajouter au panier",
+  onAdded,
+  tone = "primary",
+}: Props) {
   const { add } = useCart();
   const { notify } = useToast();
   const [done, setDone] = useState(false);
@@ -26,6 +39,7 @@ export function AddToCartButton({ line, quantity = 1, variant = "full", classNam
     notify(`${quantity} × « ${line.title} » ajouté au panier`);
     setDone(true);
     window.setTimeout(() => setDone(false), 1500);
+    onAdded?.();
   }
 
   if (variant === "icon") {
@@ -56,8 +70,11 @@ export function AddToCartButton({ line, quantity = 1, variant = "full", classNam
       onClick={onClick}
       disabled={outOfStock}
       className={cn(
-        "bg-brand-600 hover:bg-brand-700 disabled:bg-ink-200 disabled:text-ink-500 inline-flex h-12 items-center justify-center gap-2 rounded-full px-6 font-semibold text-white shadow-sm transition disabled:cursor-not-allowed",
-        done && "bg-success-600 hover:bg-success-600",
+        "disabled:bg-ink-200 disabled:text-ink-500 inline-flex h-12 items-center justify-center gap-2 rounded-full px-6 font-semibold shadow-sm transition disabled:cursor-not-allowed",
+        tone === "primary"
+          ? "bg-brand-600 hover:bg-brand-700 text-white"
+          : "bg-accent-400 hover:bg-accent-300 text-ink-900",
+        done && "bg-success-600 hover:bg-success-600 text-white",
         className,
       )}
     >
@@ -66,7 +83,7 @@ export function AddToCartButton({ line, quantity = 1, variant = "full", classNam
       ) : (
         <ShoppingCart className="size-5" aria-hidden />
       )}
-      {outOfStock ? "Rupture de stock" : done ? "Ajouté !" : "Ajouter au panier"}
+      {outOfStock ? "Rupture de stock" : done ? "Ajouté au panier" : label}
     </button>
   );
 }

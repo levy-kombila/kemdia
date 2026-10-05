@@ -15,7 +15,7 @@ export default function AccountPage() {
   return (
     <div className="container-page py-6">
       <Breadcrumbs items={[{ label: "Mon compte" }]} />
-      <div className="mx-auto max-w-xl rounded-3xl bg-white p-8 text-center shadow-[var(--shadow-card)]">
+      <div className="mx-auto max-w-xl rounded-xl bg-white p-8 text-center">
         <CircleUser className="text-brand-600 mx-auto size-14" aria-hidden />
         <h1 className="mt-3 text-2xl font-extrabold">Espace client</h1>
         <p className="text-ink-500 mt-2">

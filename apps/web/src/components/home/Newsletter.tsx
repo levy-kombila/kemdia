@@ -10,11 +10,9 @@ import { useToast } from "@/components/providers/ToastProvider";
 export function Newsletter() {
   const { notify } = useToast();
   return (
-    <section className="flex flex-col items-start justify-between gap-4 rounded-3xl bg-white p-6 shadow-[var(--shadow-card)] md:flex-row md:items-center md:p-8">
+    <section className="flex flex-col items-start justify-between gap-4 rounded-xl bg-white p-5 md:flex-row md:items-center md:p-8">
       <div>
-        <h2 className="text-xl font-extrabold">
-          Ne ratez aucune <span className="text-brand-600">offre</span>
-        </h2>
+        <h2 className="text-xl font-extrabold">Recevez les ventes flash avant tout le monde</h2>
         <p className="text-ink-500 text-sm">
           Promotions, nouveautés et ventes flash directement dans votre boîte mail.
         </p>

@@ -16,7 +16,7 @@ function untilMidnight(now: Date) {
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** Compte à rebours jusqu'à minuit (heure locale). Rendu « --:--:-- » côté serveur pour éviter un écart d'hydratation. */
-export function Countdown() {
+export function Countdown({ compact = false }: { compact?: boolean }) {
   const [t, setT] = useState<ReturnType<typeof untilMidnight> | null>(null);
 
   useEffect(() => {
@@ -31,6 +31,25 @@ export function Countdown() {
     [t ? pad(t.m) : "--", "Min"],
     [t ? pad(t.s) : "--", "Sec"],
   ];
+
+  if (compact) {
+    return (
+      <span
+        role="timer"
+        aria-label="Temps restant avant la fin des ventes flash"
+        className="font-price inline-flex items-center gap-1 text-lg"
+      >
+        {cells.map(([v, label], i) => (
+          <span key={label} className="inline-flex items-center gap-1">
+            {i > 0 && <span aria-hidden>:</span>}
+            <span className="bg-ink-900 min-w-[2.1rem] rounded px-1.5 py-0.5 text-center text-white">
+              {v}
+            </span>
+          </span>
+        ))}
+      </span>
+    );
+  }
 
   return (
     <div
