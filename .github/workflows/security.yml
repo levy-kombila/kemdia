@@ -1,14 +1,15 @@
-# Sécurité continue (DevSecOps) — répond directement aux catégories de failles
-# de l'ancien projet : secrets dans Git (CRIT-02/05), dépendances vulnérables (HIGH-07),
-# injections / XSS (CRIT-04) détectées par analyse statique.
+# Sécurité continue (DevSecOps) — répond aux catégories de failles de l'ancien projet :
+# secrets dans Git (CRIT-02/05), dépendances vulnérables (HIGH-07), injections / XSS (CRIT-04).
+# Toutes les actions sont épinglées par SHA de commit (protection contre le détournement de tags).
 name: Sécurité
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
   schedule:
     - cron: "17 5 * * 1" # chaque lundi 06:17 heure de Libreville
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,20 +19,25 @@ jobs:
     name: Détection de secrets (Gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # tout l'historique : un secret supprimé reste un secret fuité
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Binaire officiel, version figée et empreinte SHA-256 vérifiée (pas d'appel à l'API GitHub)
+      - name: Installer Gitleaks v8.30.1
+        run: |
+          curl -fsSL -o gitleaks.tgz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tgz" | sha256sum -c -
+          tar xzf gitleaks.tgz gitleaks
+      - name: Analyser tout l'historique Git
+        run: ./gitleaks git --redact --verbose --config .gitleaks.toml --exit-code 1 .
 
   dependencies:
     name: Audit des dépendances (pnpm audit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -39,26 +45,50 @@ jobs:
       - name: Échec si vulnérabilité haute ou critique
         run: pnpm audit --audit-level high --prod
 
-  dependency-review:
-    name: Revue des nouvelles dépendances
-    if: github.event_name == 'pull_request'
+  sast:
+    name: Analyse statique du code (Semgrep)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Installer Semgrep (version figée)
+        run: python3 -m pip install --user semgrep==1.179.0
+      - name: Analyser (règles TypeScript, React, Next.js, secrets)
+        run: |
+          ~/.local/bin/semgrep scan --metrics=off --error \
+            --config p/typescript --config p/react --config p/nextjs --config p/secrets \
+            --exclude '*.test.ts' --exclude '*.test.tsx' \
+            apps/ deploy/
 
+  shell:
+    name: Scripts de déploiement (ShellCheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: shellcheck deploy/bin/*.sh # shellcheck est préinstallé sur les runners Ubuntu
+
+  # Les deux analyses suivantes nécessitent GitHub Advanced Security sur un dépôt privé :
+  # elles s'activent automatiquement si le dépôt devient public (ou avec un plan qui les inclut).
   codeql:
     name: Analyse statique (CodeQL)
+    if: github.event.repository.private == false
     runs-on: ubuntu-latest
     permissions:
       security-events: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           languages: javascript-typescript
           queries: security-extended
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+
+  dependency-review:
+    name: Revue des nouvelles dépendances
+    if: github.event_name == 'pull_request' && github.event.repository.private == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high

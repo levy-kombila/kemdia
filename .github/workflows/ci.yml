@@ -1,84 +1,143 @@
-# Intégration continue : chaque push / Pull Request doit passer ces contrôles
-# avant de pouvoir être fusionné dans main (règle de protection de branche).
-name: CI
+# =============================================================================
+# CI/CD — à chaque Pull Request : qualité + image scannée.
+#          à chaque push sur main : idem + publication de l'image + déploiement STAGING automatique.
+# La production est déployée par release.yml (tag de version vX.Y.Z).
+# =============================================================================
+name: CI/CD
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: 1
 
 jobs:
   quality:
     name: Lint · Types · Tests · Build
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      NEXT_TELEMETRY_DISABLED: 1
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
 
       - name: Installer les dépendances (lockfile figé)
         run: pnpm install --frozen-lockfile
-
       - name: Format (Prettier)
         run: pnpm format:check
-
       - name: Lint (ESLint)
         run: pnpm lint
-
       - name: Vérification des types (TypeScript)
         run: pnpm typecheck
-
       - name: Tests unitaires et composants (Vitest)
         run: pnpm --filter @kemdia/web exec vitest run --coverage
-
       - name: Build de production
         run: pnpm build
 
       - name: Publier la couverture de tests
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage
           path: apps/web/coverage
           retention-days: 7
 
-  docker:
-    name: Image Docker
+  image:
+    name: Image Docker (build · scan · publication)
     runs-on: ubuntu-latest
     needs: quality
-    timeout-minutes: 20
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write # publication sur GitHub Container Registry
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+      image: ${{ steps.meta.outputs.image }}
+    env:
+      PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - name: Construire l'image (sans publier)
-        uses: docker/build-push-action@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - id: meta
+        name: Nom de l'image
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}/web" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Connexion au registre GHCR
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 1. Construire l'image localement et la scanner AVANT toute publication
+      - name: Construire l'image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: apps/web/Dockerfile
-          push: false
-          tags: kemdia-web:ci
           load: true
+          push: false
+          tags: kemdia-web:scan
+          build-args: NEXT_PUBLIC_SITE_URL=${{ vars.SITE_URL || 'https://kemdia.ga' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Scanner l'image (Trivy — vulnérabilités OS et paquets)
-        uses: aquasecurity/trivy-action@0.33.1
+
+      - name: Scanner l'image (Trivy — CVE critiques et hautes)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: kemdia-web:ci
+          image-ref: kemdia-web:scan
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
+
+      # 2. Publier (main uniquement) — le cache rend cette étape quasi instantanée
+      - name: Publier l'image (sha-<commit>, main)
+        id: push
+        if: env.PUBLISH == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:sha-${{ github.sha }}
+            ${{ steps.meta.outputs.image }}:main
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          build-args: NEXT_PUBLIC_SITE_URL=${{ vars.SITE_URL || 'https://kemdia.ga' }}
+          cache-from: type=gha
+
+  deploy-staging:
+    name: Déploiement STAGING
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      environment: staging
+      image: ${{ needs.image.outputs.image }}@${{ needs.image.outputs.digest }}
+      version: sha-${{ github.sha }}
+      url: ${{ vars.STAGING_URL }}
+    secrets: inherit

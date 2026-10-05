@@ -73,7 +73,9 @@ export default async function ProductPage({ params }: Props) {
     <div className="container-page py-6">
       <script
         type="application/ld+json"
-        // JSON.stringify + échappement de « < » : empêche toute fermeture prématurée de la balise
+        // Données structurées (méthode recommandée par Next.js) : JSON.stringify + échappement de « < »
+        // empêche toute fermeture prématurée de la balise. Contenu issu du catalogue, pas de l'URL.
+        // nosemgrep: typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
       />
       <Breadcrumbs

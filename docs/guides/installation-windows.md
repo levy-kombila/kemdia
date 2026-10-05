@@ -114,13 +114,15 @@ Les workflows CI et Sécurité se lancent automatiquement (onglet **Actions** du
 
 ## 9. Réglages GitHub recommandés (une fois le dépôt créé)
 
-_Settings → Branches → Add rule_ pour `main` :
+_Settings → Code security_ : activez **Dependabot alerts** et **Dependabot security updates**.
+_Settings → Actions → General_ : _Workflow permissions_ = **Read repository contents** (les workflows demandent eux-mêmes les droits nécessaires).
 
-- ✅ Require a pull request before merging
-- ✅ Require status checks to pass : `Lint · Types · Tests · Build`, `Détection de secrets (Gitleaks)`, `Audit des dépendances (pnpm audit)`, `Analyse statique (CodeQL)`
-- ✅ Do not allow bypassing the above settings
+Protection de la branche `main` (_Settings → Branches_ ou _Rules_) : disponible pour un dépôt **privé** uniquement avec GitHub Pro/Team.
+Si vous y passez, exigez : PR obligatoire + contrôles `Lint · Types · Tests · Build`, `Image Docker (build · scan · publication)`,
+`Détection de secrets (Gitleaks)`, `Audit des dépendances (pnpm audit)`, `Analyse statique du code (Semgrep)`.
+En attendant : jamais de push direct sur `main`, toujours une PR avec CI verte.
 
-_Settings → Code security_ : activez **Dependabot alerts**, **Secret scanning** et **Push protection**.
+Pour la mise en ligne : voir [deploiement.md](deploiement.md).
 
 ## Problèmes fréquents
 

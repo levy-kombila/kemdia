@@ -1,0 +1,28 @@
+# Variables définies dans /opt/kemdia/proxy/.env (voir .env.example)
+{
+	email {$ACME_EMAIL}
+}
+
+# --- Production ---------------------------------------------------------
+www.{$PROD_DOMAIN} {
+	redir https://{$PROD_DOMAIN}{uri} permanent
+}
+
+{$PROD_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy kemdia-production-web:3000
+	log {
+		output stdout
+		format json
+	}
+}
+
+# --- Staging (préproduction) : protégée par mot de passe, jamais indexée ---
+{$STAGING_DOMAIN} {
+	basic_auth {
+		{$STAGING_USER} {$STAGING_PASSWORD_HASH}
+	}
+	header X-Robots-Tag "noindex, nofollow"
+	encode zstd gzip
+	reverse_proxy kemdia-staging-web:3000
+}

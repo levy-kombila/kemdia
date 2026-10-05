@@ -1,0 +1,32 @@
+# Stack applicative Kemdia — une instance par environnement (staging, production).
+# Les variables viennent de /opt/kemdia/state/<env>.env, écrit par deploy.sh.
+name: kemdia-${KEMDIA_ENV:?}
+
+services:
+  web:
+    image: ${KEMDIA_IMAGE:?}
+    container_name: kemdia-${KEMDIA_ENV}-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      APP_ENV: ${KEMDIA_ENV}
+      APP_VERSION: ${APP_VERSION:-inconnue}
+    # Durcissement : système de fichiers en lecture seule, aucun privilège Linux
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/apps/web/.next/cache
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    pids_limit: 200
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    # Aucun port publié : seul le reverse proxy (Caddy) joint l'application via le réseau « edge »
+    networks: [edge]
+
+networks:
+  edge:
+    external: true
