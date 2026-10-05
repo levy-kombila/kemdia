@@ -330,6 +330,7 @@ flowchart LR
 | React échappe tout texte ; aucun `innerHTML` sur des données                                                                               | Tous les composants               | CRIT-04 (XSS)                          |
 | Tri/page/recherche validés par liste blanche et bornes                                                                                     | `lib/search-params.ts`            | MED-13                                 |
 | Filtres (prix, marque, stock, promo, note) : valeurs connues uniquement, marques comparées au catalogue                                    | `lib/filters.ts`                  | MED-13                                 |
+| Commande : seuls identifiants + quantités envoyés (aucun montant) ; numéro de paiement vérifié selon l'opérateur                           | `lib/checkout.ts`                 | CRIT-01, HIGH-05                       |
 | Optimiseur d'images limité à `/images/**` (URL externes refusées : 400)                                                                    | `next.config.ts`                  | HIGH-03 (SSRF)                         |
 | `localStorage` validé champ par champ                                                                                                      | `lib/cart.ts`, `LocationProvider` | Altération du panier                   |
 | Ville choisie dans une liste fermée, aucune redirection construite depuis l'URL                                                            | `LocationModal`                   | MED-01, MED-06, MED-14                 |
