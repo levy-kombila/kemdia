@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Image de production multi-étapes : seul le résultat « standalone » de Next.js est conservé.
 
-FROM node:22-alpine AS base
+FROM node:26-alpine AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
 
@@ -18,7 +18,7 @@ COPY --from=deps /repo/apps/web/node_modules ./apps/web/node_modules
 COPY . .
 RUN pnpm --filter @kemdia/web build
 
-FROM node:22-alpine AS runner
+FROM node:26-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 # Utilisateur non-root
