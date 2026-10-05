@@ -5,8 +5,9 @@
  * centralisée en « design tokens » au lieu de 18 fichiers CSS et de styles inline.
  */
 @theme {
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Montserrat Variable", "Inter Variable", ui-sans-serif, sans-serif;
+  /* Une seule famille, trois largeurs : texte (100), titres élargis (112), prix condensés (78) */
+  --font-sans: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
 
   --color-brand-50: #fff1f2;
   --color-brand-100: #ffe1e3;
@@ -20,7 +21,8 @@
   --color-accent-400: #ffc629;
   --color-accent-500: #f5a700;
 
-  --color-ink-50: #f6f7f9;
+  /* Fond « marché » plus soutenu : les cartes blanches ressortent, comme sur les grandes places de marché */
+  --color-ink-50: #eef0f3;
   --color-ink-100: #eceef2;
   --color-ink-200: #d9dde4;
   --color-ink-400: #8b93a1;
@@ -29,7 +31,10 @@
   --color-ink-800: #1f242c;
   --color-ink-900: #14181e;
 
-  --color-success-600: #0f9d58;
+  --color-success-600: #0b7a4b;
+  --color-forest-50: #e8f5ee;
+  --color-forest-600: #0b7a4b;
+  --color-forest-700: #08603b;
   --color-gabon-green: #009e60;
   --color-gabon-yellow: #fcd116;
   --color-gabon-blue: #3a75c4;
@@ -51,10 +56,24 @@
   h2,
   h3 {
     @apply font-display tracking-tight;
+    font-stretch: 112%;
   }
   :focus-visible {
     @apply outline-brand-600 outline-2 outline-offset-2;
   }
+}
+
+/* Chiffres de prix : condensés, très gras, à chasse fixe (les colonnes de prix s'alignent) */
+@utility font-price {
+  font-family: var(--font-display);
+  font-stretch: 78%;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+@utility font-wide {
+  font-stretch: 118%;
 }
 
 @utility container-page {

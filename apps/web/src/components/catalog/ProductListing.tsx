@@ -44,7 +44,7 @@ export function ProductListing({ result, sort, basePath, params = {} }: Props) {
       </div>
 
       {items.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-3xl bg-white px-6 py-16 text-center shadow-[var(--shadow-card)]">
+        <div className="flex flex-col items-center gap-3 rounded-xl bg-white px-6 py-16 text-center">
           <PackageSearch className="text-ink-200 size-12" aria-hidden />
           <p className="font-display text-lg font-bold">Aucun produit trouvé</p>
           <p className="text-ink-500 max-w-sm text-sm">

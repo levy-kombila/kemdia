@@ -99,6 +99,7 @@ Ces démarches prennent souvent plusieurs mois et **bloquent** des sprints si el
 | S2-T07 | Tests de bout en bout Playwright dans la CI (parcours d'achat sur mobile)                                              | ⏳     |
 | S2-T08 | Budget de performance (Lighthouse CI) : pages critiques < 2 s en 3G simulée                                            | ⏳     |
 | S2-T09 | Fermeture de la dette S1 : PR Dependabot obsolètes, mise à jour Dependabot npm                                         | ⏳     |
+| S2-T10 | Refonte visuelle « place de marché » : accueil, fiche produit, barre mobile, connexion                                 | ✅     |
 
 ## S3 — Backend : socle et module `catalog`
 

@@ -7,6 +7,7 @@
 | **0.3** | 2026-10-05 | S1     | §8 environnement de démonstration gratuit (Render), version inscrite dans l'image                                                          |
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests     |
+| **0.6** | 2026-10-05 | S2     | §5.5 charte graphique « place de marché » (Archivo à largeur variable, étiquette de prix), §5.6 structure des pages, §5.1 composants       |
 
 > Document vivant : chaque rapport de sprint (`docs/rapports/`) indique quelles sections il a modifiées.
 > Les sections marquées 🔜 seront rédigées au sprint indiqué.
@@ -185,10 +186,10 @@ apps/web/src
 │   ├── sitemap.ts  robots.ts  icon.svg  not-found.tsx  error.tsx
 │   └── layout.tsx           Gabarit commun : en-tête, pied de page, fournisseurs
 ├── components/
-│   ├── layout/              TopBar, Header, SearchForm, CategoryNav (méga-menu + tiroir), Footer
-│   ├── home/                Hero, PromoTiles, Countdown, CategoryShowcase, Newsletter
+│   ├── layout/              TopBar, Header, SearchForm, CategoryNav (méga-menu + tiroir), Footer, MobileTabBar
+│   ├── home/                Hero + HeroCarousel, CategoryBubbles, FlashSales, CategoryTiles, Countdown, Newsletter
 │   ├── catalog/             ProductListing (tri + pagination), Breadcrumbs, SortSelect
-│   ├── product/             ProductCard, ProductRail, ProductGallery, BuyBox, AddToCartButton
+│   ├── product/             ProductCard, ProductRail, ProductGallery, BuyBox, StickyBuyBar, AddToCartButton
 │   ├── auth/                Formulaires d'identité, saisie du code OTP, champs accessibles
 │   ├── cart/                MiniCart
 │   ├── location/            LocationModal (Gabon)
@@ -250,13 +251,36 @@ forme enregistrée `+241077123456` (à confirmer avec le fournisseur SMS au S4).
 
 ### 5.5 Charte graphique (tokens `globals.css`)
 
-| Token                     | Valeur                             | Usage                        |
-| ------------------------- | ---------------------------------- | ---------------------------- |
-| `brand-600`               | `#d61f2c`                          | Rouge Kemdia : actions, prix |
-| `accent-400`              | `#ffc629`                          | Jaune : remises, badges      |
-| `ink-900`                 | `#14181e`                          | Texte, navigation            |
-| `gabon-green/yellow/blue` | `#009e60` / `#fcd116` / `#3a75c4`  | Rappels discrets du drapeau  |
-| Polices                   | Montserrat (titres), Inter (texte) |                              |
+Direction (S2-T10) : **une place de marché dense**, inspirée des usages des grands sites (Amazon, Jumia) sans reprendre leur identité,
+avec une signature propre : le prix affiché comme une **étiquette de marché**.
+
+| Token                     | Valeur                            | Usage                                                                  |
+| ------------------------- | --------------------------------- | ---------------------------------------------------------------------- |
+| `brand-600`               | `#d61f2c`                         | Rouge Kemdia : actions, bandeau ventes flash, bannière                 |
+| `accent-400`              | `#ffc629`                         | Jaune : pastilles de remise (inclinées), bouton « Acheter maintenant » |
+| `ink-900`                 | `#14181e`                         | Texte, navigation                                                      |
+| `ink-50`                  | `#eef0f3`                         | Fond « marché » : les blocs blancs ressortent                          |
+| `forest-600`              | `#0b7a4b`                         | Livraison, stock, espace vendeur                                       |
+| `gabon-green/yellow/blue` | `#009e60` / `#fcd116` / `#3a75c4` | Rappels discrets du drapeau                                            |
+
+**Typographie** : une seule famille, **Archivo** à largeur variable (auto-hébergée, aucun CDN) :
+
+| Rôle   | Réglage                                     | Classe                 |
+| ------ | ------------------------------------------- | ---------------------- |
+| Texte  | largeur 100 %, graisse 400–600              | `font-sans`            |
+| Titres | largeur 112 %, graisse 800                  | `h1`–`h3`              |
+| Prix   | largeur 78 %, graisse 800, chiffres alignés | `font-price` (`Price`) |
+
+### 5.6 Structure des pages principales
+
+| Page          | Organisation                                                                                                                                                                                           |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Accueil       | Catégories à gauche · carrousel de bannières · raccourcis compte / vendeur ; ronds des rayons ; ventes flash (stock restant, compte à rebours) ; tuiles « un rayon, 4 produits » ; rangées de produits |
+| Fiche produit | Galerie · informations et prix (économie en FCFA) · encadré d'achat (date de livraison selon la ville, 2 boutons, garanties) ; sections Description / Caractéristiques / Avis                          |
+| Mobile        | Barre d'onglets en bas (Accueil, Rayons, Promos, Panier, Compte) ; sur la fiche produit, remplacée par une barre d'achat                                                                               |
+
+Accessibilité du carrousel : pause au survol et au focus, aucun défilement automatique si l'utilisateur réduit les animations,
+bannières masquées rendues inactives (`inert`).
 
 ## 6. Sécurité
 
@@ -364,12 +388,12 @@ flowchart TB
 
 ## 9. Qualité et tests
 
-| Niveau              | Outil                                                 | État S1                                                                             |
-| ------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Unitaires (logique) | Vitest                                                | 76 tests : formatage, livraison, panier, catalogue, paramètres d'URL, identité (S2) |
-| Composants          | Testing Library                                       | 12 tests : carte produit, saisie OTP, parcours inscription / connexion / oubli (S2) |
-| Bout en bout        | Playwright                                            | 🔜 S2                                                                               |
-| Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                                  |
+| Niveau              | Outil                                                 | État S1                                                                                          |
+| ------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Unitaires (logique) | Vitest                                                | 78 tests : formatage, livraison (dont dates), panier, catalogue, paramètres d'URL, identité (S2) |
+| Composants          | Testing Library                                       | 16 tests : carte produit, saisie OTP, parcours d'identité, carrousel, barre d'onglets (S2)       |
+| Bout en bout        | Playwright                                            | 🔜 S2                                                                                            |
+| Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                                               |
 
 ## 10. Glossaire
 

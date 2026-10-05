@@ -1,97 +1,219 @@
-import { ArrowRight, RotateCcw, Search, ShieldCheck, Truck } from "lucide-react";
+import { ChevronRight, Store, Truck, UserRound } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import type { Product } from "@/lib/types";
+import { CategoryIcon } from "@/components/ui/CategoryIcon";
+import { formatFCFA } from "@/lib/format";
+import type { Category, Product } from "@/lib/types";
+import { HeroCarousel } from "./HeroCarousel";
 
-const PROMISES = [
-  { icon: ShieldCheck, title: "Paiement", sub: "100 % sécurisé" },
-  { icon: Truck, title: "Livraison rapide", sub: "partout au Gabon" },
-  { icon: RotateCcw, title: "Retours faciles", sub: "sous 14 jours" },
-];
-
-/** Bannière d'accueil — transcription de la maquette « Bannière e-commerce » de l'ancien projet. */
-export function Hero({ showcase }: { showcase: Product[] }) {
+function ProductDisc({ product, className }: { product: Product; className?: string }) {
   return (
-    <section className="relative overflow-hidden rounded-3xl bg-white shadow-[var(--shadow-card)]">
-      <div className="grid items-center lg:grid-cols-[1.1fr_1fr]">
-        <div className="relative z-10 px-6 py-10 sm:px-10 lg:py-14">
-          <p className="bg-brand-50 text-brand-700 mb-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold tracking-wide">
-            <span aria-hidden className="bg-brand-600 size-1.5 rounded-full" /> ACHETEZ MALIN, VIVEZ
-            MIEUX
-          </p>
-          <h1 className="text-ink-900 text-4xl font-extrabold leading-[1.1] sm:text-5xl">
-            Des milliers de produits <br className="hidden sm:block" />
-            aux <span className="text-brand-600">meilleurs prix</span>
-          </h1>
-          <p className="text-ink-500 mt-4 max-w-lg">
-            High-tech, mode, maison, beauté et sport : commandez en quelques clics, payez par Mobile
-            Money et faites-vous livrer à Libreville en 24–48 h.
-          </p>
+    <div className={`absolute overflow-hidden rounded-full bg-white shadow-xl ${className ?? ""}`}>
+      {product.images[0] && (
+        <Image src={product.images[0]} alt="" fill sizes="220px" className="object-contain p-3" />
+      )}
+    </div>
+  );
+}
 
-          <ul className="mt-7 grid max-w-xl grid-cols-1 gap-3 sm:grid-cols-3">
-            {PROMISES.map(({ icon: Icon, title, sub }) => (
-              <li key={title} className="flex items-center gap-2 text-sm leading-tight">
-                <Icon className="text-brand-600 size-7 shrink-0" strokeWidth={1.75} aria-hidden />
-                <span>
-                  <span className="block font-semibold">{title}</span>
-                  <span className="text-ink-500">{sub}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+const slideBase =
+  "relative flex h-64 overflow-hidden px-5 pb-10 pt-5 sm:h-72 sm:px-10 sm:py-6 lg:h-full";
+const ctaClass =
+  "mt-4 inline-flex h-10 items-center whitespace-nowrap rounded-full px-5 text-sm font-bold transition sm:mt-5 sm:h-12 sm:px-6 sm:text-base";
 
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              href="#vedette"
-              className="bg-brand-600 hover:bg-brand-700 inline-flex h-12 items-center gap-2 rounded-full px-7 font-semibold text-white shadow-sm transition"
-            >
-              Découvrir <ArrowRight className="size-4" aria-hidden />
-            </Link>
+/**
+ * En-tête de l'accueil, organisé comme sur les grandes places de marché :
+ * catégories à gauche, bannières au centre, raccourcis compte / vendeur à droite.
+ */
+export function Hero({
+  categories,
+  techDeals,
+  cheapestTech,
+  fashion,
+}: {
+  categories: Category[];
+  techDeals: Product[];
+  cheapestTech: number;
+  fashion: Product[];
+}) {
+  const slides = [
+    <div key="tech" className={`${slideBase} bg-brand-600 text-white`}>
+      <div className="relative z-10 max-w-[60%] self-center sm:max-w-md">
+        <p className="hidden text-base font-semibold text-white/85 sm:block">
+          Smartphones, ordinateurs, audio
+        </p>
+        <h2 className="mt-1 text-2xl font-extrabold leading-[1.05] sm:text-4xl xl:text-5xl">
+          Le high-tech au prix du marché
+        </h2>
+        <p className="bg-accent-400 text-ink-900 font-price mt-3 inline-block -rotate-2 rounded-md px-2 py-1 text-lg sm:text-2xl">
+          dès {formatFCFA(cheapestTech)}
+        </p>
+        <div>
+          <Link
+            href="/categorie/high-tech"
+            className={`${ctaClass} text-brand-700 bg-white hover:bg-white/90`}
+          >
+            Voir le high-tech
+          </Link>
+        </div>
+      </div>
+      {techDeals[0] && (
+        <ProductDisc
+          product={techDeals[0]}
+          className="-right-6 top-6 size-40 sm:right-10 sm:size-56 xl:size-64"
+        />
+      )}
+      {techDeals[1] && (
+        <ProductDisc
+          product={techDeals[1]}
+          className="bottom-3 right-28 hidden size-32 sm:block lg:right-64 lg:size-40"
+        />
+      )}
+    </div>,
+
+    <div key="paiement" className={`${slideBase} bg-ink-900 text-white`}>
+      <div className="relative z-10 max-w-xl self-center">
+        <p className="hidden text-base font-semibold text-white/70 sm:block">
+          Paiement 100 % sécurisé
+        </p>
+        <h2 className="mt-1 text-2xl font-extrabold leading-[1.05] sm:text-4xl xl:text-5xl">
+          Payez avec votre téléphone
+        </h2>
+        <ul className="mt-4 flex flex-wrap gap-2 text-sm font-bold sm:text-base">
+          <li className="text-ink-900 rounded-full bg-white px-3 py-1.5">Airtel Money</li>
+          <li className="text-ink-900 rounded-full bg-white px-3 py-1.5">Moov Money</li>
+          <li className="rounded-full border border-white/40 px-3 py-1.5">À la livraison</li>
+        </ul>
+        <div>
+          <Link
+            href="/infos/paiement"
+            className={`${ctaClass} bg-accent-400 text-ink-900 hover:bg-accent-300`}
+          >
+            Comment payer
+          </Link>
+        </div>
+      </div>
+      <div
+        aria-hidden
+        className="bg-brand-600 absolute -right-16 -top-16 hidden size-72 rounded-full sm:block"
+      />
+      <div
+        aria-hidden
+        className="bg-accent-400 absolute -bottom-20 right-24 hidden size-48 rounded-full sm:block"
+      />
+    </div>,
+
+    <div key="livraison" className={`${slideBase} bg-accent-400 text-ink-900`}>
+      <div className="relative z-10 max-w-[62%] self-center sm:max-w-lg">
+        <p className="hidden text-base font-semibold sm:block">Libreville, Owendo, Akanda</p>
+        <h2 className="mt-1 text-2xl font-extrabold leading-[1.05] sm:text-4xl xl:text-5xl">
+          Livraison offerte dès 25 000 FCFA
+        </h2>
+        <p className="mt-2 hidden text-base sm:block">
+          Chez vous en 24 à 48 h. Partout au Gabon en 2 à 7 jours.
+        </p>
+        <div>
+          <Link
+            href="/infos/livraison"
+            className={`${ctaClass} bg-ink-900 hover:bg-ink-800 text-white`}
+          >
+            Zones et délais
+          </Link>
+        </div>
+      </div>
+      <Truck
+        aria-hidden
+        strokeWidth={1.25}
+        className="text-ink-900/15 absolute -right-6 bottom-0 size-52 sm:right-6 sm:size-72"
+      />
+      {fashion[0] && (
+        <ProductDisc product={fashion[0]} className="right-6 top-6 hidden size-36 lg:block" />
+      )}
+    </div>,
+  ];
+
+  return (
+    <section className="grid grid-cols-1 gap-3 lg:h-[26.5rem] lg:grid-cols-[14rem_1fr] xl:grid-cols-[14rem_1fr_15rem]">
+      <nav aria-label="Catégories" className="hidden rounded-xl bg-white py-2 lg:block">
+        <ul>
+          {categories.map((c) => (
+            <li key={c.id}>
+              <Link
+                href={`/categorie/${c.slug}`}
+                className="hover:bg-ink-50 hover:text-brand-700 flex items-center gap-3 px-4 py-2.5 text-sm font-medium"
+              >
+                <CategoryIcon name={c.icon} className="text-ink-500 size-[1.1rem]" />
+                <span className="flex-1">{c.name}</span>
+                <ChevronRight className="text-ink-400 size-4" aria-hidden />
+              </Link>
+            </li>
+          ))}
+          <li>
             <Link
               href="/promotions"
-              className="border-ink-200 text-ink-900 hover:border-ink-900 inline-flex h-12 items-center gap-2 rounded-full border px-6 font-semibold transition"
+              className="hover:bg-ink-50 text-brand-700 flex items-center gap-3 px-4 py-2.5 text-sm font-semibold"
             >
-              Voir les promotions
+              <span className="font-price bg-accent-400 text-ink-900 grid size-[1.1rem] place-items-center rounded text-[0.6rem]">
+                %
+              </span>
+              Promotions
+            </Link>
+          </li>
+          <li className="border-ink-100 mt-1 border-t pt-1">
+            <Link
+              href="/categories"
+              className="text-ink-500 hover:text-brand-700 block px-4 py-2.5 text-sm"
+            >
+              Toutes les catégories
+            </Link>
+          </li>
+        </ul>
+      </nav>
+
+      <HeroCarousel
+        slides={slides}
+        labels={[
+          "Le high-tech au prix du marché",
+          "Payez avec votre téléphone",
+          "Livraison offerte dès 25 000 FCFA",
+        ]}
+      />
+
+      <div className="hidden flex-col gap-3 xl:flex">
+        <div className="flex flex-1 flex-col rounded-xl bg-white p-4">
+          <span className="bg-ink-50 grid size-10 place-items-center rounded-full">
+            <UserRound className="text-ink-700 size-5" aria-hidden />
+          </span>
+          <p className="mt-2 font-bold">Bienvenue sur Kemdia</p>
+          <p className="text-ink-500 text-sm">Suivez vos commandes et retrouvez vos favoris.</p>
+          <div className="mt-auto grid gap-2 pt-3">
+            <Link
+              href="/connexion"
+              className="bg-brand-600 hover:bg-brand-700 rounded-full py-2 text-center text-sm font-semibold text-white"
+            >
+              Se connecter
+            </Link>
+            <Link
+              href="/inscription"
+              className="border-ink-200 hover:border-ink-900 rounded-full border py-2 text-center text-sm font-semibold"
+            >
+              Créer un compte
             </Link>
           </div>
         </div>
-
-        {/* Visuel : téléphone avec aperçu de l'application, construit en CSS + vraies photos produits */}
-        <div className="from-ink-800 via-ink-900 to-ink-900 relative hidden h-full min-h-[26rem] overflow-hidden bg-gradient-to-br lg:block">
-          <div
-            aria-hidden
-            className="bg-brand-600/90 absolute -left-24 -top-24 size-[28rem] rounded-full"
-          />
-          <div
-            aria-hidden
-            className="bg-accent-400/20 absolute -bottom-16 -right-10 size-64 rounded-full blur-2xl"
-          />
-          <div className="border-ink-900 absolute left-1/2 top-1/2 w-60 -translate-x-1/2 -translate-y-1/2 rotate-[-6deg] rounded-[2.2rem] border-[6px] bg-white p-3 shadow-2xl">
-            <div className="bg-ink-200 mx-auto mb-2 h-1.5 w-16 rounded-full" />
-            <p className="font-display text-center text-lg font-extrabold">
-              Kem<span className="text-brand-600">dia</span>
-            </p>
-            <div className="border-ink-200 text-ink-400 my-2 flex items-center justify-between rounded-full border px-3 py-1.5 text-[0.6rem]">
-              Rechercher un produit… <Search className="text-brand-600 size-3" aria-hidden />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {showcase.slice(0, 6).map((p) => (
-                <div
-                  key={p.id}
-                  className="bg-ink-100 relative aspect-square overflow-hidden rounded-xl"
-                >
-                  {p.images[0] && (
-                    <Image src={p.images[0]} alt="" fill sizes="110px" className="object-cover" />
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="absolute bottom-10 right-8 rotate-3 rounded-2xl bg-white px-4 py-3 shadow-xl">
-            <p className="text-ink-500 text-xs">Livraison Libreville</p>
-            <p className="font-display text-success-600 font-extrabold">Offerte dès 25 000 FCFA</p>
-          </div>
-        </div>
+        <Link
+          href="/infos/contact"
+          className="bg-forest-600 hover:bg-forest-700 group flex flex-col rounded-xl p-4 text-white"
+        >
+          <Store className="size-6" aria-hidden />
+          <span className="mt-2 font-bold">Vendez sur Kemdia</span>
+          <span className="text-sm text-white/85">
+            Ouvrez votre boutique et touchez tout le Gabon.
+          </span>
+          <span className="mt-2 text-sm font-semibold underline-offset-2 group-hover:underline">
+            Devenir vendeur
+          </span>
+        </Link>
       </div>
     </section>
   );

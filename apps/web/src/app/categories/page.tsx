@@ -15,10 +15,7 @@ export default function CategoriesPage() {
       <h1 className="mb-6 text-3xl font-extrabold">Toutes nos catégories</h1>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {tree.map((root) => (
-          <section
-            key={root.id}
-            className="overflow-hidden rounded-3xl bg-white shadow-[var(--shadow-card)]"
-          >
+          <section key={root.id} className="overflow-hidden rounded-xl bg-white">
             <Link
               href={`/categorie/${root.slug}`}
               className="bg-ink-900 group relative flex h-32 items-end p-5"

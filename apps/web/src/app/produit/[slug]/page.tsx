@@ -1,5 +1,5 @@
-import { RotateCcw, ShieldCheck, Smartphone } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 import { SectionHeader } from "@/components/home/SectionHeader";
@@ -7,7 +7,8 @@ import { BuyBox } from "@/components/product/BuyBox";
 import { ProductCard, toCartLine } from "@/components/product/ProductCard";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductRail, RailItem } from "@/components/product/ProductRail";
-import { Price } from "@/components/ui/Price";
+import { StickyBuyBar } from "@/components/product/StickyBuyBar";
+import { DiscountSticker, Price } from "@/components/ui/Price";
 import { Rating } from "@/components/ui/Rating";
 import {
   getAllProductSlugs,
@@ -42,6 +43,7 @@ export default async function ProductPage({ params }: Props) {
   const path = getCategoryPath(product.categoryId);
   const related = getRelatedProducts(product, 10);
   const discount = discountPercent(product.price, product.oldPrice);
+  const line = toCartLine(product);
 
   // Données structurées pour Google (rich snippets prix / disponibilité)
   const jsonLd = {
@@ -70,7 +72,7 @@ export default async function ProductPage({ params }: Props) {
   };
 
   return (
-    <div className="container-page py-6">
+    <div className="container-page py-4">
       <script
         type="application/ld+json"
         // Données structurées (méthode recommandée par Next.js) : JSON.stringify + échappement de « < »
@@ -85,78 +87,149 @@ export default async function ProductPage({ params }: Props) {
         ]}
       />
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1fr] xl:grid-cols-[1.25fr_1fr_20rem]">
         <ProductGallery images={product.images} title={product.title} />
 
-        <div className="rounded-3xl bg-white p-6 shadow-[var(--shadow-card)] sm:p-8">
+        <div className="rounded-xl bg-white p-5 sm:p-6">
           {product.brand && (
-            <p className="text-ink-500 mb-1 text-sm font-semibold uppercase tracking-wide">
-              {product.brand}
-            </p>
+            <Link
+              href={`/recherche?q=${encodeURIComponent(product.brand)}`}
+              className="text-brand-700 text-sm font-semibold hover:underline"
+            >
+              Marque : {product.brand}
+            </Link>
           )}
-          <h1 className="text-2xl font-extrabold leading-tight sm:text-3xl">{product.title}</h1>
-          <div className="mt-2">
+          <h1 className="mt-1 text-2xl font-extrabold leading-tight sm:text-[1.75rem]">
+            {product.title}
+          </h1>
+          <a href="#avis" className="mt-2 inline-flex hover:underline">
             <Rating value={product.rating} count={product.reviewCount} size="md" />
+          </a>
+
+          <div className="border-ink-100 my-4 border-y py-4">
+            <div className="flex items-start gap-3">
+              <Price price={product.price} oldPrice={product.oldPrice} size="lg" showSavings />
+              {discount && <DiscountSticker percent={discount} className="mt-1 text-lg" />}
+            </div>
+            <p className="text-ink-500 mt-1 text-xs">Prix en francs CFA, toutes taxes comprises</p>
           </div>
 
-          <div className="my-5 flex items-center gap-3">
-            <Price price={product.price} oldPrice={product.oldPrice} size="lg" />
-            {discount && (
-              <span className="bg-accent-400 rounded-full px-2.5 py-1 text-sm font-extrabold">
-                -{discount}%
-              </span>
+          <dl className="grid grid-cols-[7rem_1fr] gap-y-2 text-sm">
+            {product.brand && (
+              <>
+                <dt className="text-ink-500">Marque</dt>
+                <dd className="font-medium">{product.brand}</dd>
+              </>
             )}
+            {product.color && (
+              <>
+                <dt className="text-ink-500">Couleur</dt>
+                <dd className="font-medium">{product.color}</dd>
+              </>
+            )}
+            <dt className="text-ink-500">Rayon</dt>
+            <dd className="font-medium">{path.at(-1)?.name}</dd>
+            <dt className="text-ink-500">Référence</dt>
+            <dd className="font-medium">KMD-{product.id.padStart(5, "0")}</dd>
+          </dl>
+
+          {/* Encadré d'achat ici sur tablette ; colonne de droite sur grand écran */}
+          <div className="border-ink-100 mt-5 border-t pt-5 xl:hidden">
+            <BuyBox line={line} />
           </div>
-
-          <BuyBox line={toCartLine(product)} />
-
-          <ul className="border-ink-100 mt-6 grid gap-3 border-t pt-6 text-sm sm:grid-cols-3">
-            <li className="flex items-center gap-2">
-              <Smartphone className="text-brand-600 size-5" aria-hidden /> Airtel / Moov Money
-            </li>
-            <li className="flex items-center gap-2">
-              <ShieldCheck className="text-brand-600 size-5" aria-hidden /> Paiement sécurisé
-            </li>
-            <li className="flex items-center gap-2">
-              <RotateCcw className="text-brand-600 size-5" aria-hidden /> Retour sous 14 jours
-            </li>
-          </ul>
         </div>
+
+        <aside
+          className="hidden self-start rounded-xl bg-white p-5 xl:sticky xl:top-36 xl:block"
+          aria-label="Acheter"
+        >
+          <BuyBox line={line} />
+        </aside>
       </div>
 
-      <section
-        className="mt-8 rounded-3xl bg-white p-6 shadow-[var(--shadow-card)] sm:p-8"
-        aria-labelledby="description"
+      <nav
+        aria-label="Sections de la fiche"
+        className="border-ink-100 scrollbar-none mt-3 flex gap-6 overflow-x-auto rounded-t-xl border-b bg-white px-5 text-sm font-semibold sm:px-6"
       >
-        <h2 id="description" className="mb-3 text-xl font-bold">
-          Description
-        </h2>
-        <p className="text-ink-700 max-w-3xl whitespace-pre-line leading-7">
-          {product.description}
-        </p>
-        <dl className="mt-6 grid max-w-xl grid-cols-[8rem_1fr] gap-y-2 text-sm">
-          {product.brand && (
-            <>
-              <dt className="text-ink-500">Marque</dt>
-              <dd className="font-medium">{product.brand}</dd>
-            </>
+        {[
+          ["#description", "Description"],
+          ["#caracteristiques", "Caractéristiques"],
+          ["#avis", "Avis clients"],
+        ].map(([href, label]) => (
+          <a
+            key={href}
+            href={href}
+            className="hover:border-brand-600 hover:text-brand-700 shrink-0 border-b-2 border-transparent py-3.5"
+          >
+            {label}
+          </a>
+        ))}
+      </nav>
+      <div className="divide-ink-100 grid divide-y rounded-b-xl bg-white px-5 sm:px-6">
+        <section aria-labelledby="description" className="scroll-mt-40 py-6">
+          <h2 id="description" className="mb-3 text-lg font-bold">
+            Description
+          </h2>
+          <p className="text-ink-700 max-w-3xl whitespace-pre-line leading-7">
+            {product.description}
+          </p>
+        </section>
+        <section aria-labelledby="caracteristiques" className="scroll-mt-40 py-6">
+          <h2 id="caracteristiques" className="mb-3 text-lg font-bold">
+            Caractéristiques
+          </h2>
+          <table className="w-full max-w-2xl text-sm">
+            <tbody className="divide-ink-100 divide-y">
+              {[
+                ["Marque", product.brand],
+                ["Couleur", product.color],
+                ["Catégorie", path.map((c) => c.name).join(" › ")],
+                ["Référence", `KMD-${product.id.padStart(5, "0")}`],
+              ]
+                .filter((row): row is [string, string] => Boolean(row[1]))
+                .map(([k, v]) => (
+                  <tr key={k}>
+                    <th
+                      scope="row"
+                      className="bg-ink-50 text-ink-500 w-40 px-3 py-2.5 text-left font-medium"
+                    >
+                      {k}
+                    </th>
+                    <td className="px-3 py-2.5 font-medium">{v}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </section>
+        <section aria-labelledby="avis" className="scroll-mt-40 py-6">
+          <h2 id="avis" className="mb-3 text-lg font-bold">
+            Avis clients
+          </h2>
+          {product.reviewCount > 0 ? (
+            <div className="flex items-center gap-4">
+              <p className="font-price text-5xl">{product.rating.toFixed(1).replace(".", ",")}</p>
+              <div>
+                <Rating value={product.rating} size="md" />
+                <p className="text-ink-500 text-sm">
+                  Moyenne de {product.reviewCount} avis d&apos;acheteurs
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-ink-500">Aucun avis pour le moment.</p>
           )}
-          {product.color && (
-            <>
-              <dt className="text-ink-500">Couleur</dt>
-              <dd className="font-medium">{product.color}</dd>
-            </>
-          )}
-          <dt className="text-ink-500">Catégorie</dt>
-          <dd className="font-medium">{path.map((c) => c.name).join(" › ")}</dd>
-          <dt className="text-ink-500">Référence</dt>
-          <dd className="font-medium">KMD-{product.id.padStart(5, "0")}</dd>
-        </dl>
-      </section>
+          <p className="text-ink-500 mt-3 text-sm">
+            Seuls les clients ayant reçu ce produit peuvent donner leur avis.
+          </p>
+        </section>
+      </div>
 
       {related.length > 0 && (
-        <section className="mt-12" aria-labelledby="similaires">
-          <SectionHeader id="similaires" title="Vous aimerez" highlight="aussi" />
+        <section
+          className="mt-3 rounded-xl bg-white px-3 pb-3 pt-4 sm:px-5"
+          aria-labelledby="similaires"
+        >
+          <SectionHeader id="similaires" title="Vous aimerez aussi" />
           <ProductRail label="Produits similaires">
             {related.map((p) => (
               <RailItem key={p.id}>
@@ -166,6 +239,7 @@ export default async function ProductPage({ params }: Props) {
           </ProductRail>
         </section>
       )}
+      <StickyBuyBar line={line} oldPrice={product.oldPrice} />
     </div>
   );
 }

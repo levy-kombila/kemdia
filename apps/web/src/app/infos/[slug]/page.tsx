@@ -120,7 +120,7 @@ export default async function InfoPage({ params }: Props) {
   return (
     <div className="container-page py-6">
       <Breadcrumbs items={[{ label: INFO_PAGES[slug] }]} />
-      <article className="max-w-3xl rounded-3xl bg-white p-6 shadow-[var(--shadow-card)] sm:p-10">
+      <article className="max-w-3xl rounded-xl bg-white p-6 sm:p-10">
         <h1 className="mb-6 text-3xl font-extrabold">{INFO_PAGES[slug]}</h1>
         <div className="text-ink-700 space-y-4 leading-7 [&_li]:ml-5 [&_ul]:list-disc [&_ul]:space-y-1">
           {CONTENT[slug]}

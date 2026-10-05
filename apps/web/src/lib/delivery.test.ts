@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CITIES, ZONES, estimateDelivery, formatDelay, getCity } from "./delivery";
+import { CITIES, ZONES, deliveryWindow, estimateDelivery, formatDelay, getCity } from "./delivery";
 
 describe("zone de couverture", () => {
   it("ne contient que des villes du Gabon avec une zone valide", () => {
@@ -34,4 +34,15 @@ describe("estimateDelivery", () => {
 describe("formatDelay", () => {
   it("affiche en heures pour 1–2 jours", () => expect(formatDelay(1, 2)).toBe("24–48 h"));
   it("affiche en jours sinon", () => expect(formatDelay(4, 7)).toBe("4 à 7 jours"));
+});
+
+describe("deliveryWindow", () => {
+  it("saute le dimanche", () => {
+    // samedi 10 octobre 2026 + 1 jour ouvré → lundi 12
+    expect(deliveryWindow(new Date(2026, 9, 10), 1, 1)).toBe("lun. 12 oct.");
+  });
+  it("affiche une fenêtre de dates", () => {
+    // lundi 5 octobre 2026, zone 1 (1 à 2 jours)
+    expect(deliveryWindow(new Date(2026, 9, 5), 1, 2)).toBe("mar. 6 oct. – mer. 7 oct.");
+  });
 });
