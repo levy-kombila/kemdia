@@ -229,7 +229,7 @@ flowchart LR
 
 | Fichier                          | Rôle                                                                              |
 | -------------------------------- | --------------------------------------------------------------------------------- |
-| `.github/workflows/ci.yml`       | Qualité → image → scan → publication GHCR (main) → déploiement staging            |
+| `.github/workflows/ci.yml`       | Qualité → image → scan → publication GHCR + Docker Hub (main) → staging + démo    |
 | `.github/workflows/release.yml`  | Tag `vX.Y.Z` → promotion de l'image testée → Release GitHub → production          |
 | `.github/workflows/_deploy.yml`  | Déploiement réutilisable : SSH restreint, test de fumée, retour arrière           |
 | `.github/workflows/security.yml` | Gitleaks, pnpm audit, Semgrep, ShellCheck ; CodeQL si dépôt public ; chaque lundi |
