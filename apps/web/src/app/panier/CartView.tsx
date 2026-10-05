@@ -102,13 +102,12 @@ export function CartView() {
   }
 
   const checkout = (
-    <button
-      type="button"
-      disabled
-      className="bg-ink-200 text-ink-500 flex h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-full font-semibold"
+    <Link
+      href="/commande"
+      className="bg-accent-400 hover:bg-accent-300 text-ink-900 flex h-12 w-full items-center justify-center gap-2 rounded-full font-bold"
     >
-      <Lock className="size-4" aria-hidden /> Bientôt disponible
-    </button>
+      <Lock className="size-4" aria-hidden /> Commander
+    </Link>
   );
 
   return (

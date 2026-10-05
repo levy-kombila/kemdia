@@ -43,7 +43,7 @@ export function BuyBox({ line }: { line: Omit<CartLine, "quantity"> }) {
                 )}
               </p>
               <p>
-                Livré entre le{" "}
+                Livraison prévue{" "}
                 <strong>{deliveryWindow(new Date(), estimate.daysMin, estimate.daysMax)}</strong> à{" "}
                 {city.name}
                 {location?.neighborhood ? ` (${location.neighborhood})` : ""}

@@ -4,7 +4,7 @@ import { MessageSquareText, Mail } from "lucide-react";
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { authClient, DEMO_OTP, OTP_RESEND_DELAY_S, type OtpPurpose } from "@/lib/auth/client";
 import { isValidOtp, maskIdentifier, OTP_LENGTH, type Identifier } from "@/lib/auth/validation";
-import { FormAlert, SubmitButton } from "./Field";
+import { FormAlert, SubmitButton } from "@/components/ui/Field";
 import { OtpInput } from "./OtpInput";
 
 const ERRORS = {
