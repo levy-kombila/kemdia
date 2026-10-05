@@ -25,7 +25,7 @@ export default async function PromotionsPage({ searchParams }: Props) {
             <Zap className="fill-accent-400 text-accent-400 size-7" aria-hidden /> Promotions et
             ventes flash
           </h1>
-          <p className="mt-1 text-white/90">
+          <p className="mt-1 text-white">
             Des prix réduits sur une sélection d&apos;articles, chaque jour.
           </p>
         </div>

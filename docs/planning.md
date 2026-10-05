@@ -93,10 +93,10 @@ Ces démarches prennent souvent plusieurs mois et **bloquent** des sprints si el
 | S2-T01 | Pages connexion / inscription par **e-mail ou téléphone**, écran de code OTP, mot de passe oublié (interface)          | ✅     |
 | S2-T02 | Tunnel de commande (maquette) : adresse → livraison → paiement Moov / Airtel / à la livraison → confirmation           | ✅     |
 | S2-T03 | Filtres catégorie et recherche : prix, marque, disponibilité (FR-005)                                                  | ✅     |
-| S2-T04 | Favoris (liste de souhaits) dans le navigateur (FR-014)                                                                | ⏳     |
-| S2-T05 | Partage **WhatsApp** + aperçus OpenGraph soignés par produit                                                           | ⏳     |
-| S2-T06 | Page « Devenir vendeur » (présentation de l'offre marketplace)                                                         | ⏳     |
-| S2-T07 | Tests de bout en bout Playwright dans la CI (parcours d'achat sur mobile)                                              | ⏳     |
+| S2-T04 | Favoris (liste de souhaits) dans le navigateur (FR-014)                                                                | ✅     |
+| S2-T05 | Partage **WhatsApp** + aperçus OpenGraph soignés par produit                                                           | ✅     |
+| S2-T06 | Page « Devenir vendeur » (présentation de l'offre marketplace)                                                         | ✅     |
+| S2-T07 | Tests de bout en bout Playwright dans la CI (parcours d'achat sur mobile)                                              | ✅     |
 | S2-T08 | Budget de performance (Lighthouse CI) : pages critiques < 2 s en 3G simulée                                            | ⏳     |
 | S2-T09 | Fermeture de la dette S1 : PR Dependabot obsolètes, mise à jour Dependabot npm                                         | ⏳     |
 | S2-T10 | Refonte visuelle « place de marché » : accueil, fiche produit, barre mobile, connexion, listes, panier                 | ✅     |

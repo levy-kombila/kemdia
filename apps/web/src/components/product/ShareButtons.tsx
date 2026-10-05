@@ -45,7 +45,7 @@ export function ShareButtons({ url, title, price }: { url: string; title: string
         href={whatsappShareUrl(url, title, price)}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex h-10 items-center gap-2 rounded-full bg-[#128c4b] px-4 text-sm font-semibold text-white hover:bg-[#0e733d]"
+        className="bg-forest-700 inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white hover:bg-[#064d2f]"
       >
         <WhatsAppIcon /> Partager sur WhatsApp
       </a>

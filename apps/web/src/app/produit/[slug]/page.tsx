@@ -104,7 +104,7 @@ export default async function ProductPage({ params }: Props) {
         ]}
       />
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1fr] xl:grid-cols-[1.25fr_1fr_20rem]">
+      <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-[1fr_1fr] xl:grid-cols-[1.25fr_1fr_20rem]">
         <ProductGallery images={product.images} title={product.title} />
 
         <div className="rounded-xl bg-white p-5 sm:p-6">

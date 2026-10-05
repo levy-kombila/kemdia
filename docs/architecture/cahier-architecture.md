@@ -7,6 +7,7 @@
 | **0.3** | 2026-10-05 | S1     | §8 environnement de démonstration gratuit (Render), version inscrite dans l'image                                                          |
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests     |
+| **0.9** | 2026-10-06 | S2     | §5.8 favoris, partage et aperçus, page vendeur ; §5.2 rendu à la demande (`SITE_URL`) ; §7 et §9 tests de bout en bout                     |
 | **0.8** | 2026-10-05 | S2     | §5.7 tunnel de commande (port `OrderClient`, données envoyées) ; §6.2 mesures du tunnel                                                    |
 | **0.7** | 2026-10-05 | S2     | §5.6 pages de liste (filtres) et panier ; §6.2 filtres par liste blanche                                                                   |
 | **0.6** | 2026-10-05 | S2     | §5.5 charte graphique « place de marché » (Archivo à largeur variable, étiquette de prix), §5.6 structure des pages, §5.1 composants       |
@@ -184,6 +185,7 @@ apps/web/src
 │   ├── produit/[slug]/      Fiche produit (pré-générée au build)
 │   ├── recherche/           Résultats de recherche (non indexés)
 │   ├── connexion/  inscription/  mot-de-passe-oublie/   Parcours d'identité (S2)
+│   ├── commande/  favoris/  vendre/                     Tunnel de commande, favoris, page vendeur (S2)
 │   ├── promotions/  categories/  panier/  compte/  infos/[slug]/
 │   ├── sitemap.ts  robots.ts  icon.svg  not-found.tsx  error.tsx
 │   └── layout.tsx           Gabarit commun : en-tête, pied de page, fournisseurs
@@ -209,12 +211,13 @@ apps/web/src
 
 ### 5.2 Rendu des pages
 
-| Page                                | Mode                                             | Raison                                                             |
-| ----------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------ |
-| Accueil, catégories, compte, panier | Statique (build)                                 | Contenu identique pour tous ; le panier est rempli côté navigateur |
-| Fiche produit                       | Statique pré-générée (`generateStaticParams`)    | Rapide + SEO                                                       |
-| Catégorie, recherche, promotions    | Dynamique                                        | Dépend de `?tri=` et `?page=`                                      |
-| Infos                               | Statique, liste fermée (`dynamicParams = false`) | Toute autre URL → 404                                              |
+| Page                                                    | Mode                                             | Raison                                                                  |
+| ------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
+| Liste des catégories, compte, panier, favoris, commande | Statique (build)                                 | Contenu identique pour tous ; panier et favoris remplis côté navigateur |
+| Accueil, fiche produit                                  | À la demande (S2-T05)                            | Liens absolus des aperçus WhatsApp tirés de `SITE_URL` au démarrage     |
+| Aperçus `opengraph-image`                               | Statique pré-générée (`generateStaticParams`)    | Image 1200 × 630 calculée une fois, à la construction                   |
+| Catégorie, recherche, promotions                        | Dynamique                                        | Dépend de `?tri=`, `?page=` et des filtres                              |
+| Infos                                                   | Statique, liste fermée (`dynamicParams = false`) | Toute autre URL → 404                                                   |
 
 Composants **serveur** par défaut ; seuls les éléments interactifs sont des composants **client**
 (`"use client"`) : panier, mini-panier, menu, modale de ville, galerie, compte à rebours, tri.
@@ -311,6 +314,20 @@ flowchart LR
 **Données envoyées au serveur** (`buildOrderRequest`) : identifiants et quantités des articles, adresse, moyen et numéro de paiement.
 **Jamais de prix, de total ni de frais** : le serveur les recalcule (BR-004, faille CRIT-01 de l'ancien site).
 
+### 5.8 Favoris, partage et page vendeur (S2-T04 à T06)
+
+| Fonction            | Fonctionnement                                                                                                                                  |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Favoris (FR-014)    | `FavoritesProvider` + `lib/favorites.ts` : stockés dans le navigateur, revalidés au chargement, 100 au plus ; synchronisés avec le compte au S4 |
+| Partage WhatsApp    | Lien `wa.me` (texte encodé, `utm_source=whatsapp`), partage natif du téléphone ou copie du lien                                                 |
+| Aperçus (OpenGraph) | `opengraph-image.tsx` : image 1200 × 630 par produit (photo, prix, remise) et pour le site, **générées à la construction**                      |
+| Page vendeur        | `/vendre` : offre marketplace, étapes, conditions (KYC, BR-024), FAQ, demande d'ouverture (démo ; module `vendors` au S6)                       |
+
+**Adresse publique lue au démarrage** : les aperçus WhatsApp exigent des liens absolus. La même image Docker sert la démo,
+le staging et la production : l'adresse vient donc de la variable `SITE_URL` du serveur (`siteUrl()`), et les pages partagées
+(accueil, fiches produit, `sitemap.xml`, `robots.txt`) sont rendues à la demande. Le catalogue étant en mémoire, cela coûte
+quelques millisecondes par page.
+
 ## 6. Sécurité
 
 ### 6.1 Principes
@@ -360,9 +377,10 @@ flowchart LR
     subgraph ci[CI — chaque PR et main]
       direction TB
       q[format · lint · types · tests · build]
+      e[parcours de bout en bout<br/>Playwright + accessibilité]
       i[image Docker + scan Trivy]
       s[Gitleaks · pnpm audit · Semgrep · ShellCheck]
-      q --> i
+      q --> e --> i
     end
     ci -->|fusion main| pub[(GHCR web:sha-…)]
     pub -->|auto| stg[STAGING + test de fumée]
@@ -371,16 +389,16 @@ flowchart LR
     prod -. échec .-> rb[retour arrière auto]
 ```
 
-| Fichier                          | Rôle                                                                              |
-| -------------------------------- | --------------------------------------------------------------------------------- |
-| `.github/workflows/ci.yml`       | Qualité → image → scan → publication GHCR + Docker Hub (main) → staging + démo    |
-| `.github/workflows/release.yml`  | Tag `vX.Y.Z` → promotion de l'image testée → Release GitHub → production          |
-| `.github/workflows/_deploy.yml`  | Déploiement réutilisable : SSH restreint, test de fumée, retour arrière           |
-| `.github/workflows/security.yml` | Gitleaks, pnpm audit, Semgrep, ShellCheck ; CodeQL si dépôt public ; chaque lundi |
-| `.github/dependabot.yml`         | Mises à jour hebdomadaires (npm, actions épinglées par SHA, image Docker)         |
-| `apps/web/Dockerfile`            | Multi-étapes, `standalone`, non-root, sans npm, healthcheck `/api/health`         |
-| `deploy/`                        | Scripts et configuration serveur (voir §8)                                        |
-| `.husky/pre-commit`              | Formatage automatique avant chaque commit                                         |
+| Fichier                          | Rôle                                                                                          |
+| -------------------------------- | --------------------------------------------------------------------------------------------- |
+| `.github/workflows/ci.yml`       | Qualité → bout en bout → image → scan → publication GHCR + Docker Hub (main) → staging + démo |
+| `.github/workflows/release.yml`  | Tag `vX.Y.Z` → promotion de l'image testée → Release GitHub → production                      |
+| `.github/workflows/_deploy.yml`  | Déploiement réutilisable : SSH restreint, test de fumée, retour arrière                       |
+| `.github/workflows/security.yml` | Gitleaks, pnpm audit, Semgrep, ShellCheck ; CodeQL si dépôt public ; chaque lundi             |
+| `.github/dependabot.yml`         | Mises à jour hebdomadaires (npm, actions épinglées par SHA, image Docker)                     |
+| `apps/web/Dockerfile`            | Multi-étapes, `standalone`, non-root, sans npm, healthcheck `/api/health`                     |
+| `deploy/`                        | Scripts et configuration serveur (voir §8)                                                    |
+| `.husky/pre-commit`              | Formatage automatique avant chaque commit                                                     |
 
 **Principes** : _build once, deploy many_ · déploiement par digest immuable · actions épinglées par SHA ·
 aucun secret dans Git · tout changement passe par une PR.
@@ -419,12 +437,12 @@ flowchart TB
 
 ## 9. Qualité et tests
 
-| Niveau              | Outil                                                 | État S1                                                                                          |
-| ------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Unitaires (logique) | Vitest                                                | 78 tests : formatage, livraison (dont dates), panier, catalogue, paramètres d'URL, identité (S2) |
-| Composants          | Testing Library                                       | 16 tests : carte produit, saisie OTP, parcours d'identité, carrousel, barre d'onglets (S2)       |
-| Bout en bout        | Playwright                                            | 🔜 S2                                                                                            |
-| Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                                               |
+| Niveau              | Outil                                                 | État S1                                                                                                                                                                          |
+| ------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unitaires (logique) | Vitest                                                | 78 tests : formatage, livraison (dont dates), panier, catalogue, paramètres d'URL, identité (S2)                                                                                 |
+| Composants          | Testing Library                                       | 16 tests : carte produit, saisie OTP, parcours d'identité, carrousel, barre d'onglets (S2)                                                                                       |
+| Bout en bout        | Playwright + axe-core                                 | 16 scénarios × 2 appareils (téléphone Pixel 7, ordinateur) : achat complet, filtres, favoris, partage, vendeur, en-têtes de sécurité, XSS, accessibilité WCAG AA de 7 pages (S2) |
+| Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                                                                                                                               |
 
 ## 10. Glossaire
 
