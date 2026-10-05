@@ -8,6 +8,8 @@ Ce guide met en ligne Kemdia selon les pratiques DevOps standard :
 - **test de fumée + retour arrière automatique** si la nouvelle version ne répond pas ;
 - **aucun secret dans Git**, accès serveur par clé SSH restreinte, HTTPS automatique.
 
+> 💡 Pas encore de serveur ? Une **démo publique gratuite** est possible tout de suite : voir [demo-gratuite.md](demo-gratuite.md).
+
 ## 1. Vue d'ensemble
 
 ```mermaid

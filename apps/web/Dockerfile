@@ -24,7 +24,10 @@ RUN pnpm --filter @kemdia/web build
 
 FROM node:22-alpine AS runner
 WORKDIR /app
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
+# Version inscrite dans l'image (sha-<commit>) : exposée par /api/health, surchargée par deploy.sh si besoin
+ARG APP_VERSION=dev
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 \
+    APP_VERSION=$APP_VERSION APP_ENV=production
 # Correctifs de sécurité de l'OS + suppression de npm/corepack (inutiles à l'exécution, sources de CVE)
 RUN apk upgrade --no-cache \
   && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
@@ -36,5 +39,5 @@ COPY --from=build --chown=kemdia:kemdia /repo/apps/web/public ./apps/web/public
 USER kemdia
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1
+  CMD wget -qO- "http://127.0.0.1:${PORT}/api/health" >/dev/null || exit 1
 CMD ["node", "apps/web/server.js"]

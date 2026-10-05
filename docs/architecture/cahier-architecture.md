@@ -1,9 +1,10 @@
 # Cahier d'architecture — Kemdia
 
-| Version | Date       | Sprint | Changements                                                                    |
-| ------- | ---------- | ------ | ------------------------------------------------------------------------------ |
-| **0.1** | 2026-10-05 | S1     | Création : contexte, exigences, stack, architecture frontend, sécurité, DevOps |
-| **0.2** | 2026-10-05 | S1     | §7 pipeline CD complet, §8 architecture de déploiement (ADR-0005)              |
+| Version | Date       | Sprint | Changements                                                                       |
+| ------- | ---------- | ------ | --------------------------------------------------------------------------------- |
+| **0.1** | 2026-10-05 | S1     | Création : contexte, exigences, stack, architecture frontend, sécurité, DevOps    |
+| **0.2** | 2026-10-05 | S1     | §7 pipeline CD complet, §8 architecture de déploiement (ADR-0005)                 |
+| **0.3** | 2026-10-05 | S1     | §8 environnement de démonstration gratuit (Render), version inscrite dans l'image |
 
 > Document vivant : chaque rapport de sprint (`docs/rapports/`) indique quelles sections il a modifiées.
 > Les sections marquées 🔜 seront rédigées au sprint indiqué.
@@ -267,7 +268,7 @@ flowchart TB
 | -------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Hébergement          | VPS Ubuntu 24.04 (2 vCPU / 4 Go), Europe de l'Ouest — à réévaluer avec l'APDPVP pour les données personnelles (S7) |
 | Conteneur applicatif | Lecture seule, `cap_drop: ALL`, `no-new-privileges`, 512 Mo max, logs bornés                                       |
-| Environnements       | `staging` (auto, protégé) · `production` (tag de version)                                                          |
+| Environnements       | `demo` (Render Free, public, auto à chaque fusion) · `staging` (auto, protégé) · `production` (tag de version)     |
 | Fiabilité            | Healthcheck, `compose up --wait`, test de fumée, retour arrière automatique, verrou anti-déploiements concurrents  |
 | Traçabilité          | Release GitHub par version, résumé de chaque déploiement dans Actions, `/opt/kemdia/deploy.log`                    |
 | À venir              | PostgreSQL + sauvegardes chiffrées (S3), surveillance et alertes (S7), _blue/green_ sans coupure (S7)              |
