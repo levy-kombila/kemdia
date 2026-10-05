@@ -1,10 +1,8 @@
 import { Zap } from "lucide-react";
 import type { Metadata } from "next";
 import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
-import { ProductListing } from "@/components/catalog/ProductListing";
+import { CatalogView } from "@/components/catalog/CatalogView";
 import { Countdown } from "@/components/home/Countdown";
-import { queryProducts } from "@/lib/catalog";
-import { first, parsePage, parseSort } from "@/lib/search-params";
 
 export const metadata: Metadata = {
   title: "Promotions et ventes flash",
@@ -15,30 +13,31 @@ export const metadata: Metadata = {
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 export default async function PromotionsPage({ searchParams }: Props) {
-  const sp = await searchParams;
-  const sort = parseSort(first(sp.tri));
-  const page = parsePage(first(sp.page));
-  const result = queryProducts({ onlyDeals: true, sort, page });
-
   return (
-    <div className="container-page py-6">
+    <div className="container-page space-y-3 py-4">
       <Breadcrumbs items={[{ label: "Promotions" }]} />
       <header
         id="ventes-flash"
-        className="from-brand-600 via-brand-500 to-accent-500 mb-6 flex flex-col justify-between gap-4 rounded-xl bg-gradient-to-br p-6 text-white sm:flex-row sm:items-center"
+        className="bg-brand-600 flex flex-col gap-3 rounded-xl px-5 py-5 text-white sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <h1 className="flex items-center gap-2 text-3xl font-extrabold">
-            <Zap className="fill-accent-300 text-accent-300 size-8" aria-hidden /> Promotions &
+          <h1 className="flex items-center gap-2 text-2xl font-extrabold sm:text-3xl">
+            <Zap className="fill-accent-400 text-accent-400 size-7" aria-hidden /> Promotions et
             ventes flash
           </h1>
           <p className="mt-1 text-white/90">
             Des prix réduits sur une sélection d&apos;articles, chaque jour.
           </p>
         </div>
-        <Countdown />
+        <p className="flex items-center gap-2 text-sm">
+          Se termine dans <Countdown compact />
+        </p>
       </header>
-      <ProductListing result={result} sort={sort} basePath="/promotions" />
+      <CatalogView
+        basePath="/promotions"
+        query={{ onlyDeals: true }}
+        searchParams={await searchParams}
+      />
     </div>
   );
 }

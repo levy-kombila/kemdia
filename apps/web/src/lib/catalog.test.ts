@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   getCategoryBySlug,
+  getFacets,
   getCategoryPath,
   getCategoryTree,
   getDescendantIds,
   getProductBySlug,
   queryProducts,
 } from "./catalog";
+import { EMPTY_FILTERS } from "./filters";
 
 describe("catalogue", () => {
   it("construit un arbre avec 5 univers racines", () => {
@@ -66,4 +68,25 @@ describe("catalogue", () => {
   });
 
   it("produit inconnu → undefined", () => expect(getProductBySlug("n-existe-pas")).toBeUndefined());
+});
+
+describe("filtres et compteurs (S2-T03)", () => {
+  it("les compteurs de marque correspondent aux résultats filtrés", () => {
+    const facets = getFacets({});
+    const top = facets.brands[0]!;
+    const result = queryProducts({
+      filters: { ...EMPTY_FILTERS, brands: [top.name] },
+      pageSize: 100,
+    });
+    expect(result.total).toBe(top.count);
+    expect(result.items.every((p) => p.brand === top.name)).toBe(true);
+  });
+
+  it("filtre par tranche de prix et disponibilité", () => {
+    const result = queryProducts({
+      filters: { ...EMPTY_FILTERS, price: "moins-50000", inStock: true },
+      pageSize: 100,
+    });
+    expect(result.items.every((p) => p.price < 50_000 && p.stock > 0)).toBe(true);
+  });
 });

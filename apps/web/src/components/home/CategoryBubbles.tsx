@@ -3,13 +3,25 @@ import Link from "next/link";
 import type { CategoryHighlight } from "@/lib/catalog";
 
 /** Rangée de ronds : accès direct aux rayons, défilable au doigt sur mobile. */
-export function CategoryBubbles({ items }: { items: CategoryHighlight[] }) {
+export function CategoryBubbles({
+  items,
+  title = "Parcourir les rayons",
+}: {
+  items: CategoryHighlight[];
+  title?: string;
+}) {
+  if (items.length === 0) return null;
   return (
-    <section aria-labelledby="rayons" className="rounded-xl bg-white px-3 py-4 sm:px-5">
-      <h2 id="rayons" className="mb-3 px-1 text-lg font-extrabold">
-        Parcourir les rayons
+    <section
+      aria-labelledby={`rayons-${title.length}`}
+      className="rounded-xl bg-white px-3 py-4 sm:px-5"
+    >
+      <h2 id={`rayons-${title.length}`} className="mb-3 px-1 text-lg font-extrabold">
+        {title}
       </h2>
-      <ul className="scrollbar-none -mx-3 flex gap-3 overflow-x-auto px-3 sm:gap-5 lg:justify-between">
+      <ul
+        className={`scrollbar-none -mx-3 flex gap-3 overflow-x-auto px-3 sm:gap-6 ${items.length >= 10 ? "lg:justify-between" : ""}`}
+      >
         {items.map(({ category, image }) => (
           <li key={category.id} className="shrink-0">
             <Link
