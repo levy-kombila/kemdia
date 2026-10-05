@@ -34,3 +34,10 @@ même image (scannée, non-root) que les autres environnements ; aucune donnée 
 - Offre gratuite : mise en veille après 15 min sans visite, ~1 min au premier chargement.
 - Le job de démo est ignoré tant que `RENDER_DEPLOY_HOOK_URL` n'est pas défini.
 - Le déploiement Render réel n'a pas encore été testé (compte à créer par le propriétaire).
+
+## 5. Complément S1-T22 — publication sur Docker Hub
+
+L'image est désormais poussée **en une seule opération** vers GHCR (privé) et Docker Hub (`levy2025/kemdia`, public),
+avec le même digest. La démo Render tire l'image publique Docker Hub : plus besoin de jeton GitHub chez Render.
+Le nom d'utilisateur Docker Hub est une _variable_ GitHub et non un _secret_, car GitHub supprime les sorties de job
+contenant un secret. Activation : variable `DOCKERHUB_USERNAME` + secret `DOCKERHUB_TOKEN` (jeton Docker Hub Read & Write).

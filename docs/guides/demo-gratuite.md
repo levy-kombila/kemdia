@@ -9,8 +9,10 @@ puis la démo reçoit **exactement cette image** (par digest), et un test vérif
 ```mermaid
 flowchart LR
     merge[Fusion dans main] --> ci[CI : tests + image scannée]
-    ci --> ghcr[(GHCR<br/>ghcr.io/levy-kombila/kemdia/web)]
+    ci --> hub[(Docker Hub<br/>levy2025/kemdia)]
+    ci --> ghcr[(GHCR<br/>privé)]
     ci -->|deploy hook + digest| render[Render Free<br/>kemdia.onrender.com]
+    hub -->|pull public| render
     render -->|/api/health = sha du commit ?| ok[✅ résumé dans Actions]
 ```
 
@@ -24,34 +26,47 @@ flowchart LR
 
 ## Où est l'image Docker ?
 
-L'image n'est **pas** sur Docker Hub : elle est publiée sur **GitHub Container Registry (GHCR)**, à côté du code.
-Vous la voyez sur <https://github.com/levy-kombila?tab=packages> (paquet `kemdia/web`), ou sur la page du dépôt,
-colonne de droite, rubrique **Packages**. Elle est **privée** : il faut un jeton pour la télécharger.
+Le pipeline publie **la même image** (même digest) à deux endroits :
+
+| Registre                  | Adresse                                                                  | Visibilité                                                                     |
+| ------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| **Docker Hub**            | `levy2025/kemdia` — <https://hub.docker.com/r/levy2025/kemdia>           | **Publique** : Render (et n'importe qui) peut la télécharger sans mot de passe |
+| GitHub Container Registry | `ghcr.io/levy-kombila/kemdia/web` — onglet **Packages** du profil GitHub | Privée, utilisée pour staging/production                                       |
+
+Étiquettes : `latest` et `main` (dernière version de `main`), `sha-<commit>` (une par version, pour revenir en arrière).
+
+> L'image ne contient aucun secret (configuration par variables d'environnement) ni donnée réelle :
+> la rendre publique sur Docker Hub ne pose pas de problème de sécurité. Le code source, lui, reste privé.
 
 ## Mise en place (≈ 15 minutes, une seule fois)
 
-### 1. Créer un jeton GitHub en lecture seule pour Render
+### 1. Publier l'image sur Docker Hub
 
-GitHub → photo de profil → **Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic)**
+1. Sur <https://hub.docker.com>, connecté avec `levy2025` : avatar → **Account settings → Personal access tokens → Generate new token**.
+   Nom : `github-actions-kemdia`, permissions **Read & Write**, expiration 90 jours. **Copiez le jeton** (affiché une seule fois).
+2. Sur GitHub → dépôt `kemdia` → **Settings → Secrets and variables → Actions** :
 
-- Note : `render-ghcr-lecture`
-- Expiration : 90 jours (mettez un rappel pour le renouveler)
-- Cochez **uniquement** `read:packages`
-- **Generate token**, puis copiez-le (il ne s'affiche qu'une fois). Ne le mettez nulle part ailleurs que dans Render.
+| Onglet        | Nom                  | Valeur              |
+| ------------- | -------------------- | ------------------- |
+| **Variables** | `DOCKERHUB_USERNAME` | `levy2025`          |
+| **Secrets**   | `DOCKERHUB_TOKEN`    | le jeton Docker Hub |
 
-> Le registre GHCR n'accepte que les jetons _classic_. `read:packages` seul ne donne accès à aucun code ni réglage du dépôt.
+> Le nom d'utilisateur va dans **Variables** (il n'est pas secret) : s'il était en _Secret_, GitHub masquerait
+> le nom de l'image et le job de démo ne pourrait pas le recevoir. Le **jeton**, lui, est toujours un _Secret_.
+
+3. _Actions → CI/CD → Run workflow_ sur `main`. Quand le job **Image Docker** est vert, son résumé affiche le lien Docker Hub
+   et l'image apparaît sur <https://hub.docker.com/repositories/levy2025>.
 
 ### 2. Créer le service sur Render
 
 1. Créez un compte sur <https://render.com> (gratuit, sans carte bancaire pour l'offre Free).
 2. **New → Web Service → Existing Image**.
-3. Image URL : `ghcr.io/levy-kombila/kemdia/web:main`
-4. **Credential → Add credential** : registre `GitHub`, utilisateur `levy-kombila`, mot de passe = le jeton de l'étape 1.
-5. Nom : `kemdia` (l'adresse sera `https://kemdia.onrender.com`, ou proche si le nom est pris). Région : **Frankfurt** (la plus proche du Gabon).
-6. Instance type : **Free**.
-7. **Environment variables** : `PORT` = `3000` et `APP_ENV` = `demo`.
-8. **Advanced → Health Check Path** : `/api/health`
-9. **Deploy Web Service**. Au bout de 2–3 minutes, le site répond sur l'adresse affichée en haut de la page.
+3. Image URL : `docker.io/levy2025/kemdia:latest` — **Credential : No credential** (l'image est publique).
+4. Nom : `kemdia` (l'adresse sera `https://kemdia.onrender.com`, ou proche si le nom est pris). Région : **Frankfurt** (la plus proche du Gabon).
+5. Instance type : **Free**.
+6. **Environment variables** : `PORT` = `3000` et `APP_ENV` = `demo`.
+7. **Advanced → Health Check Path** : `/api/health`
+8. **Deploy Web Service**. Au bout de 2–3 minutes, le site répond sur l'adresse affichée en haut de la page.
 
 ### 3. Relier Render au pipeline GitHub
 
@@ -74,12 +89,12 @@ renvoie la version du commit, puis contrôle la page d'accueil et les en-têtes 
 
 ## Sécurité
 
-| Point               | Mesure                                                                                            |
-| ------------------- | ------------------------------------------------------------------------------------------------- |
-| Jeton Render → GHCR | Lecture seule (`read:packages`), expiration 90 jours, stocké uniquement chez Render               |
-| URL du deploy hook  | Secret GitHub, jamais affichée dans les journaux                                                  |
-| Image               | Même image que staging/production : scannée par Trivy, utilisateur non-root, en-têtes de sécurité |
-| Données             | Démonstration uniquement ; ne jamais brancher la future base de production sur cet environnement  |
+| Point              | Mesure                                                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Jeton Docker Hub   | Utilisé uniquement par la CI (secret GitHub, masqué dans les journaux), expiration 90 jours, révocable sur Docker Hub |
+| URL du deploy hook | Secret GitHub, jamais affichée dans les journaux                                                                      |
+| Image              | Même image que staging/production : scannée par Trivy, utilisateur non-root, en-têtes de sécurité                     |
+| Données            | Démonstration uniquement ; ne jamais brancher la future base de production sur cet environnement                      |
 
 ## Et ensuite ?
 

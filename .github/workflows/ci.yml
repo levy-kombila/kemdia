@@ -66,14 +66,32 @@ jobs:
     outputs:
       digest: ${{ steps.push.outputs.digest }}
       image: ${{ steps.meta.outputs.image }}
+      dockerhub: ${{ steps.meta.outputs.dockerhub }}
     env:
       PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      # Docker Hub : activé dès que la VARIABLE DOCKERHUB_USERNAME et le SECRET DOCKERHUB_TOKEN existent.
+      # Le nom d'utilisateur est une variable (pas un secret) : GitHub supprime les sorties de job
+      # qui contiennent un secret, ce qui empêcherait la démo de connaître le nom de l'image.
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+      DOCKERHUB_REPO: ${{ vars.DOCKERHUB_REPO || 'kemdia' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - id: meta
-        name: Nom de l'image
-        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}/web" >> "$GITHUB_OUTPUT"
+        name: Noms et étiquettes de l'image
+        run: |
+          ghcr="ghcr.io/${GITHUB_REPOSITORY,,}/web"
+          tags="$ghcr:sha-$GITHUB_SHA"$'\n'"$ghcr:main"
+          dockerhub=""
+          if [ -n "$DOCKERHUB_USERNAME" ]; then
+            dockerhub="docker.io/${DOCKERHUB_USERNAME,,}/${DOCKERHUB_REPO,,}"
+            tags="$tags"$'\n'"$dockerhub:sha-$GITHUB_SHA"$'\n'"$dockerhub:main"$'\n'"$dockerhub:latest"
+          fi
+          {
+            echo "image=$ghcr"
+            echo "dockerhub=$dockerhub"
+            echo "tags<<EOF"; echo "$tags"; echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -84,6 +102,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Connexion à Docker Hub
+        if: env.PUBLISH == 'true' && env.DOCKERHUB_USERNAME != ''
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }} # jeton d'accès Docker Hub, jamais le mot de passe du compte
 
       # 1. Construire l'image localement et la scanner AVANT toute publication
       - name: Construire l'image
@@ -109,7 +134,8 @@ jobs:
           exit-code: "1"
 
       # 2. Publier (main uniquement) — le cache rend cette étape quasi instantanée
-      - name: Publier l'image (sha-<commit>, main)
+      # Une seule construction poussée vers GHCR ET Docker Hub : même digest partout
+      - name: Publier l'image (GHCR + Docker Hub)
         id: push
         if: env.PUBLISH == 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -117,9 +143,7 @@ jobs:
           context: .
           file: apps/web/Dockerfile
           push: true
-          tags: |
-            ${{ steps.meta.outputs.image }}:sha-${{ github.sha }}
-            ${{ steps.meta.outputs.image }}:main
+          tags: ${{ steps.meta.outputs.tags }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -127,6 +151,24 @@ jobs:
             NEXT_PUBLIC_SITE_URL=${{ vars.SITE_URL || 'https://kemdia.ga' }}
             APP_VERSION=sha-${{ github.sha }}
           cache-from: type=gha
+
+      - name: Résumé de la publication
+        if: env.PUBLISH == 'true'
+        env:
+          GHCR: ${{ steps.meta.outputs.image }}
+          DOCKERHUB: ${{ steps.meta.outputs.dockerhub }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          {
+            echo "### Image publiée"
+            echo "- GHCR : \`$GHCR:main\`"
+            if [ -n "$DOCKERHUB" ]; then
+              echo "- Docker Hub : \`${DOCKERHUB#docker.io/}:latest\` — https://hub.docker.com/r/${DOCKERHUB#docker.io/}"
+            else
+              echo "- Docker Hub : non configuré (variable DOCKERHUB_USERNAME / secret DOCKERHUB_TOKEN absents)"
+            fi
+            echo "- Digest : \`$DIGEST\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   deploy-staging:
     name: Déploiement STAGING
@@ -160,7 +202,8 @@ jobs:
     env:
       HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
       DEMO_URL: ${{ vars.DEMO_URL }}
-      IMAGE: ${{ needs.image.outputs.image }}@${{ needs.image.outputs.digest }}
+      # Image publique Docker Hub si configurée (Render la tire sans identifiants), sinon GHCR
+      IMAGE: ${{ needs.image.outputs.dockerhub || needs.image.outputs.image }}@${{ needs.image.outputs.digest }}
       VERSION: sha-${{ github.sha }}
     steps:
       - name: Déclencher le déploiement

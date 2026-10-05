@@ -32,29 +32,30 @@
 
 ## S1 — Fondations frontend + DevOps ✅
 
-| ID     | Tâche                                                                                                          | Statut                     |
-| ------ | -------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| S1-T01 | Monorepo pnpm + Turborepo, Prettier, EditorConfig (ADR-0003)                                                   | ✅                         |
-| S1-T02 | Application Next.js 16 + Tailwind 4, charte Kemdia (design tokens)                                             | ✅                         |
-| S1-T03 | Migration des données de démo (112 catégories, 50 produits, images WebP) — sans données personnelles           | ✅                         |
-| S1-T04 | En-tête : barre d'infos, recherche, ville de livraison, compte, mini-panier                                    | ✅                         |
-| S1-T05 | Méga-menu catégories (desktop) + tiroir (mobile)                                                               | ✅                         |
-| S1-T06 | Page d'accueil (transcription de la maquette : hero, ventes flash, nouveautés, promos, catégories, carrousels) | ✅                         |
-| S1-T07 | Pages catégorie, recherche, promotions, toutes les catégories (tri + pagination validés)                       | ✅                         |
-| S1-T08 | Fiche produit (galerie, quantité, estimation livraison, données structurées SEO)                               | ✅                         |
-| S1-T09 | Panier côté navigateur (ADR-0004) + choix de ville Gabon                                                       | ✅                         |
-| S1-T10 | Pages d'information, 404, erreur, sitemap, robots                                                              | ✅                         |
-| S1-T11 | En-têtes de sécurité (CSP, HSTS, X-Frame-Options…)                                                             | ✅                         |
-| S1-T12 | Tests unitaires et composants (Vitest) — 37 tests                                                              | ✅                         |
-| S1-T13 | CI GitHub Actions : format, lint, types, tests, build, image Docker + Trivy                                    | ✅                         |
-| S1-T14 | Sécurité continue : Gitleaks, pnpm audit, CodeQL, Dependabot, revue des dépendances                            | ✅                         |
-| S1-T15 | Dockerfile multi-étapes non-root + docker-compose                                                              | ✅                         |
-| S1-T16 | Rapport Sprint 1 + Cahier d'architecture v0.1                                                                  | ✅                         |
-| S1-T17 | Pipeline CD : GHCR, staging automatique, release → production, retour arrière (ADR-0005)                       | ✅                         |
-| S1-T18 | Scripts serveur durcis (setup, deploy restreint), Caddy HTTPS                                                  | ✅                         |
-| S1-T19 | Actions épinglées par SHA, Semgrep + ShellCheck, compatibilité dépôt privé                                     | ✅                         |
-| S1-T20 | Mise en ligne v0.1.0 (serveur, domaine, secrets GitHub)                                                        | ⏳ en attente du serveur   |
-| S1-T21 | Démo publique gratuite (Render) déployée automatiquement par le pipeline                                       | ✅ code · ⏳ compte Render |
+| ID     | Tâche                                                                                                          | Statut                        |
+| ------ | -------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| S1-T01 | Monorepo pnpm + Turborepo, Prettier, EditorConfig (ADR-0003)                                                   | ✅                            |
+| S1-T02 | Application Next.js 16 + Tailwind 4, charte Kemdia (design tokens)                                             | ✅                            |
+| S1-T03 | Migration des données de démo (112 catégories, 50 produits, images WebP) — sans données personnelles           | ✅                            |
+| S1-T04 | En-tête : barre d'infos, recherche, ville de livraison, compte, mini-panier                                    | ✅                            |
+| S1-T05 | Méga-menu catégories (desktop) + tiroir (mobile)                                                               | ✅                            |
+| S1-T06 | Page d'accueil (transcription de la maquette : hero, ventes flash, nouveautés, promos, catégories, carrousels) | ✅                            |
+| S1-T07 | Pages catégorie, recherche, promotions, toutes les catégories (tri + pagination validés)                       | ✅                            |
+| S1-T08 | Fiche produit (galerie, quantité, estimation livraison, données structurées SEO)                               | ✅                            |
+| S1-T09 | Panier côté navigateur (ADR-0004) + choix de ville Gabon                                                       | ✅                            |
+| S1-T10 | Pages d'information, 404, erreur, sitemap, robots                                                              | ✅                            |
+| S1-T11 | En-têtes de sécurité (CSP, HSTS, X-Frame-Options…)                                                             | ✅                            |
+| S1-T12 | Tests unitaires et composants (Vitest) — 37 tests                                                              | ✅                            |
+| S1-T13 | CI GitHub Actions : format, lint, types, tests, build, image Docker + Trivy                                    | ✅                            |
+| S1-T14 | Sécurité continue : Gitleaks, pnpm audit, CodeQL, Dependabot, revue des dépendances                            | ✅                            |
+| S1-T15 | Dockerfile multi-étapes non-root + docker-compose                                                              | ✅                            |
+| S1-T16 | Rapport Sprint 1 + Cahier d'architecture v0.1                                                                  | ✅                            |
+| S1-T17 | Pipeline CD : GHCR, staging automatique, release → production, retour arrière (ADR-0005)                       | ✅                            |
+| S1-T18 | Scripts serveur durcis (setup, deploy restreint), Caddy HTTPS                                                  | ✅                            |
+| S1-T19 | Actions épinglées par SHA, Semgrep + ShellCheck, compatibilité dépôt privé                                     | ✅                            |
+| S1-T20 | Mise en ligne v0.1.0 (serveur, domaine, secrets GitHub)                                                        | ⏳ en attente du serveur      |
+| S1-T21 | Démo publique gratuite (Render) déployée automatiquement par le pipeline                                       | ✅ code · ⏳ compte Render    |
+| S1-T22 | Publication de l'image sur Docker Hub (`levy2025/kemdia`) en plus de GHCR                                      | ✅ code · ⏳ jeton Docker Hub |
 
 ## S2 — Finitions frontend (proposition)
 
