@@ -51,8 +51,8 @@ Le pipeline publie **la même image** (même digest) à deux endroits :
 | **Variables** | `DOCKERHUB_USERNAME` | `levy2025`          |
 | **Secrets**   | `DOCKERHUB_TOKEN`    | le jeton Docker Hub |
 
-> Le nom d'utilisateur va dans **Variables** (il n'est pas secret) : s'il était en _Secret_, GitHub masquerait
-> le nom de l'image et le job de démo ne pourrait pas le recevoir. Le **jeton**, lui, est toujours un _Secret_.
+> Le nom d'utilisateur peut aller dans **Variables** (conseillé : il n'est pas secret et reste lisible dans les résumés)
+> ou dans **Secrets** (il apparaîtra alors masqué `***`). Le **jeton**, lui, est toujours un _Secret_.
 
 3. _Actions → CI/CD → Run workflow_ sur `main`. Quand le job **Image Docker** est vert, son résumé affiche le lien Docker Hub
    et l'image apparaît sur <https://hub.docker.com/repositories/levy2025>.

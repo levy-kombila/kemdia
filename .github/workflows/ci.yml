@@ -66,13 +66,11 @@ jobs:
     outputs:
       digest: ${{ steps.push.outputs.digest }}
       image: ${{ steps.meta.outputs.image }}
-      dockerhub: ${{ steps.meta.outputs.dockerhub }}
     env:
-      PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-      # Docker Hub : activé dès que la VARIABLE DOCKERHUB_USERNAME et le SECRET DOCKERHUB_TOKEN existent.
-      # Le nom d'utilisateur est une variable (pas un secret) : GitHub supprime les sorties de job
-      # qui contiennent un secret, ce qui empêcherait la démo de connaître le nom de l'image.
-      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+      # Publication sur main : après une fusion (push) OU un lancement manuel (Run workflow)
+      PUBLISH: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
+      # Docker Hub : activé dès que DOCKERHUB_USERNAME (variable conseillée, ou secret) et le secret DOCKERHUB_TOKEN existent.
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_REPO: ${{ vars.DOCKERHUB_REPO || 'kemdia' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -107,7 +105,7 @@ jobs:
         if: env.PUBLISH == 'true' && env.DOCKERHUB_USERNAME != ''
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }} # jeton d'accès Docker Hub, jamais le mot de passe du compte
 
       # 1. Construire l'image localement et la scanner AVANT toute publication
@@ -165,7 +163,7 @@ jobs:
             if [ -n "$DOCKERHUB" ]; then
               echo "- Docker Hub : \`${DOCKERHUB#docker.io/}:latest\` — https://hub.docker.com/r/${DOCKERHUB#docker.io/}"
             else
-              echo "- Docker Hub : non configuré (variable DOCKERHUB_USERNAME / secret DOCKERHUB_TOKEN absents)"
+              echo "- Docker Hub : non configuré : DOCKERHUB_USERNAME introuvable (ni variable ni secret)"
             fi
             echo "- Digest : \`$DIGEST\`"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -173,7 +171,7 @@ jobs:
   deploy-staging:
     name: Déploiement STAGING
     needs: image
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     concurrency:
       group: deploy-staging
       cancel-in-progress: false
@@ -193,7 +191,7 @@ jobs:
   deploy-demo:
     name: Déploiement DÉMO (Render)
     needs: image
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
@@ -202,8 +200,11 @@ jobs:
     env:
       HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
       DEMO_URL: ${{ vars.DEMO_URL }}
-      # Image publique Docker Hub si configurée (Render la tire sans identifiants), sinon GHCR
-      IMAGE: ${{ needs.image.outputs.dockerhub || needs.image.outputs.image }}@${{ needs.image.outputs.digest }}
+      GHCR_IMAGE: ${{ needs.image.outputs.image }}
+      DIGEST: ${{ needs.image.outputs.digest }}
+      # Recalculé ici : GitHub supprime les sorties de job qui contiennent un secret
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_REPO: ${{ vars.DOCKERHUB_REPO || 'kemdia' }}
       VERSION: sha-${{ github.sha }}
     steps:
       - name: Déclencher le déploiement
@@ -212,6 +213,12 @@ jobs:
           if [ -z "$HOOK" ]; then
             echo "::notice::Démo ignorée : le secret RENDER_DEPLOY_HOOK_URL n'est pas défini."
             echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # Image publique Docker Hub si configurée (Render la tire sans identifiants), sinon GHCR
+          if [ -n "$DOCKERHUB_USERNAME" ]; then
+            IMAGE="docker.io/${DOCKERHUB_USERNAME,,}/${DOCKERHUB_REPO,,}@$DIGEST"
+          else
+            IMAGE="$GHCR_IMAGE@$DIGEST"
           fi
           img=$(jq -rn --arg v "$IMAGE" '$v|@uri')
           sep='?'; case "$HOOK" in *\?*) sep='&';; esac
