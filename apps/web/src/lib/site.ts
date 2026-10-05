@@ -10,6 +10,25 @@ export const SITE = {
   locale: "fr_GA",
 } as const;
 
+/**
+ * Adresse publique du site, lue AU DÉMARRAGE du serveur (variable SITE_URL), pas à la construction de l'image.
+ * Indispensable pour les aperçus WhatsApp / Facebook (liens absolus) : la même image Docker sert
+ * la démo (kemdia.onrender.com), le staging et la production, chacun avec sa propre adresse.
+ * Valeur invalide → repli sur l'adresse inscrite à la construction.
+ */
+export function siteUrl(): string {
+  const raw = process.env.SITE_URL;
+  if (raw) {
+    try {
+      const u = new URL(raw);
+      if (u.protocol === "https:" || u.protocol === "http:") return u.origin;
+    } catch {
+      /* valeur invalide : ignorée */
+    }
+  }
+  return SITE.url.replace(/\/+$/, "");
+}
+
 export const INFO_PAGES = {
   "a-propos": "Qui sommes-nous ?",
   contact: "Nous contacter",

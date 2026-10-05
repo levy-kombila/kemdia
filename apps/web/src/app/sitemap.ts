@@ -1,9 +1,12 @@
 import type { MetadataRoute } from "next";
 import { getAllCategorySlugs, getAllProductSlugs } from "@/lib/catalog";
-import { INFO_PAGES, SITE } from "@/lib/site";
+import { INFO_PAGES, siteUrl } from "@/lib/site";
+
+// Adresse lue au démarrage du serveur (SITE_URL) : rendu à la demande
+export const dynamic = "force-dynamic";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const url = (path: string) => `${SITE.url}${path}`;
+  const url = (path: string) => `${siteUrl()}${path}`;
   return [
     { url: url("/"), changeFrequency: "daily", priority: 1 },
     { url: url("/promotions"), changeFrequency: "daily", priority: 0.8 },

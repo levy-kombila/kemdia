@@ -7,8 +7,21 @@ import { cn } from "@/lib/cn";
 import { discountPercent, truncate } from "@/lib/format";
 import type { Product } from "@/lib/types";
 import { AddToCartButton } from "./AddToCartButton";
+import { FavoriteButton } from "./FavoriteButton";
 
 export type CardBadge = "featured" | "new" | "bestseller";
+
+export function toFavorite(p: Product) {
+  return {
+    productId: p.id,
+    slug: p.slug,
+    title: p.title,
+    price: p.price,
+    oldPrice: p.oldPrice,
+    image: p.images[0] ?? null,
+    inStock: p.stock > 0,
+  };
+}
 
 export function toCartLine(p: Product) {
   return {
@@ -81,6 +94,7 @@ export function ProductCard({
             {label.text}
           </span>
         )}
+        <FavoriteButton item={toFavorite(product)} className="absolute bottom-1.5 right-1.5 z-10" />
         {product.stock <= 0 && (
           <span className="bg-ink-900/85 pointer-events-none absolute inset-x-0 bottom-0 py-1 text-center text-xs font-semibold text-white">
             Rupture de stock

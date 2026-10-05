@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { CartProvider, useCart } from "@/components/providers/CartProvider";
+import { FavoritesProvider } from "@/components/providers/FavoritesProvider";
 import { ToastProvider } from "@/components/providers/ToastProvider";
 import type { Product } from "@/lib/types";
 import { ProductCard } from "./ProductCard";
@@ -33,8 +34,10 @@ function renderCard(p: Product = product) {
   return render(
     <ToastProvider>
       <CartProvider>
-        <ProductCard product={p} badge="featured" />
-        <CartCount />
+        <FavoritesProvider>
+          <ProductCard product={p} badge="featured" />
+          <CartCount />
+        </FavoritesProvider>
       </CartProvider>
     </ToastProvider>,
   );
@@ -59,6 +62,18 @@ describe("<ProductCard />", () => {
     renderCard();
     await userEvent.click(screen.getByRole("button", { name: /Ajouter .* au panier/ }));
     expect(screen.getByTestId("count")).toHaveTextContent("1");
+  });
+
+  it("ajoute et retire des favoris (bouton à bascule annoncé)", async () => {
+    renderCard();
+    const heart = screen.getByRole("button", { name: /Ajouter .* aux favoris/ });
+    expect(heart).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(heart);
+    expect(screen.getByRole("button", { name: /Retirer .* des favoris/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(JSON.parse(localStorage.getItem("kemdia.favorites.v1") ?? "[]")).toHaveLength(1);
   });
 
   it("désactive le bouton en rupture de stock", () => {

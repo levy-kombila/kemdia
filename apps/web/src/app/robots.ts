@@ -1,5 +1,8 @@
 import type { MetadataRoute } from "next";
-import { SITE } from "@/lib/site";
+import { siteUrl } from "@/lib/site";
+
+// Adresse lue au démarrage du serveur (SITE_URL) : rendu à la demande
+export const dynamic = "force-dynamic";
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -16,6 +19,6 @@ export default function robots(): MetadataRoute.Robots {
         "/commande",
       ],
     },
-    sitemap: `${SITE.url}/sitemap.xml`,
+    sitemap: `${siteUrl()}/sitemap.xml`,
   };
 }

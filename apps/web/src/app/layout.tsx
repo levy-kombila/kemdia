@@ -7,33 +7,35 @@ import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { Providers } from "@/components/providers/Providers";
-import { SITE } from "@/lib/site";
+import { SITE, siteUrl } from "@/lib/site";
 
-export const metadata: Metadata = {
-  metadataBase: new URL(SITE.url),
-  title: {
-    default: `${SITE.name} — ${SITE.tagline}`,
-    template: `%s | ${SITE.name}`,
-  },
-  description: SITE.description,
-  applicationName: SITE.name,
-  keywords: [
-    "e-commerce Gabon",
-    "boutique en ligne Libreville",
-    "Mobile Money",
-    "livraison Gabon",
-    "Kemdia",
-  ],
-  openGraph: {
-    type: "website",
-    locale: SITE.locale,
-    siteName: SITE.name,
-    title: `${SITE.name} — ${SITE.tagline}`,
+export function generateMetadata(): Metadata {
+  return {
+    metadataBase: new URL(siteUrl()),
+    title: {
+      default: `${SITE.name} — ${SITE.tagline}`,
+      template: `%s | ${SITE.name}`,
+    },
     description: SITE.description,
-  },
-  twitter: { card: "summary_large_image" },
-  formatDetection: { telephone: false },
-};
+    applicationName: SITE.name,
+    keywords: [
+      "e-commerce Gabon",
+      "boutique en ligne Libreville",
+      "Mobile Money",
+      "livraison Gabon",
+      "Kemdia",
+    ],
+    openGraph: {
+      type: "website",
+      locale: SITE.locale,
+      siteName: SITE.name,
+      title: `${SITE.name} — ${SITE.tagline}`,
+      description: SITE.description,
+    },
+    twitter: { card: "summary_large_image" },
+    formatDetection: { telephone: false },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#d61f2c",
