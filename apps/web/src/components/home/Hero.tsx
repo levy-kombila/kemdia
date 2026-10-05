@@ -39,7 +39,7 @@ export function Hero({
   const slides = [
     <div key="tech" className={`${slideBase} bg-brand-600 text-white`}>
       <div className="relative z-10 max-w-[60%] self-center sm:max-w-md">
-        <p className="hidden text-base font-semibold text-white/85 sm:block">
+        <p className="hidden text-base font-semibold text-white sm:block">
           Smartphones, ordinateurs, audio
         </p>
         <h2 className="mt-1 text-2xl font-extrabold leading-[1.05] sm:text-4xl xl:text-5xl">
@@ -73,7 +73,7 @@ export function Hero({
 
     <div key="paiement" className={`${slideBase} bg-ink-900 text-white`}>
       <div className="relative z-10 max-w-xl self-center">
-        <p className="hidden text-base font-semibold text-white/70 sm:block">
+        <p className="hidden text-base font-semibold text-white sm:block">
           Paiement 100 % sécurisé
         </p>
         <h2 className="mt-1 text-2xl font-extrabold leading-[1.05] sm:text-4xl xl:text-5xl">
@@ -202,12 +202,12 @@ export function Hero({
           </div>
         </div>
         <Link
-          href="/infos/contact"
+          href="/vendre"
           className="bg-forest-600 hover:bg-forest-700 group flex flex-col rounded-xl p-4 text-white"
         >
           <Store className="size-6" aria-hidden />
           <span className="mt-2 font-bold">Vendez sur Kemdia</span>
-          <span className="text-sm text-white/85">
+          <span className="text-sm text-white">
             Ouvrez votre boutique et touchez tout le Gabon.
           </span>
           <span className="mt-2 text-sm font-semibold underline-offset-2 group-hover:underline">

@@ -1,9 +1,10 @@
 "use client";
 
-import { ChevronDown, CircleUser, MapPin } from "lucide-react";
+import { ChevronDown, CircleUser, Heart, MapPin } from "lucide-react";
 import Link from "next/link";
 import { useDeliveryLocation } from "@/components/providers/LocationProvider";
 import { MiniCart } from "@/components/cart/MiniCart";
+import { useFavorites } from "@/components/providers/FavoritesProvider";
 
 export function LocationButton() {
   const { city, location, openModal } = useDeliveryLocation();
@@ -43,11 +44,33 @@ export function AccountLink() {
   );
 }
 
+export function FavoritesLink() {
+  const { items, hydrated } = useFavorites();
+  const count = hydrated ? items.length : 0;
+  return (
+    <Link
+      href="/favoris"
+      className="hover:bg-ink-50 relative flex items-center gap-2 rounded-lg px-2 py-1"
+    >
+      <Heart className="text-ink-700 size-6" aria-hidden />
+      <span className="hidden text-sm font-semibold xl:block">Favoris</span>
+      <span className="sr-only xl:hidden">Favoris</span>
+      {count > 0 && (
+        <span className="bg-brand-600 absolute left-6 top-0 grid min-w-4 place-items-center rounded-full px-1 text-[0.6rem] font-bold text-white">
+          {count}
+          <span className="sr-only"> produit(s)</span>
+        </span>
+      )}
+    </Link>
+  );
+}
+
 export function HeaderActions() {
   return (
     <div className="flex items-center gap-1 sm:gap-2">
       <LocationButton />
       <AccountLink />
+      <FavoritesLink />
       <MiniCart />
     </div>
   );

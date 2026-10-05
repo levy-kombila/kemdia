@@ -18,6 +18,9 @@ import {
   queryProducts,
 } from "@/lib/catalog";
 
+// Rendu à la demande : les liens absolus (aperçus WhatsApp) utilisent l'adresse du serveur (SITE_URL)
+export const dynamic = "force-dynamic";
+
 function railSection(id: string, title: string, href: string, children: React.ReactNode) {
   return (
     <section aria-labelledby={id} className="rounded-xl bg-white px-3 pb-3 pt-4 sm:px-5">

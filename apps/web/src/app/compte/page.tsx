@@ -6,9 +6,9 @@ import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 export const metadata: Metadata = { title: "Mon compte", robots: { index: false } };
 
 const FEATURES = [
-  { icon: Package, label: "Suivi de mes commandes" },
-  { icon: Heart, label: "Liste d'envies" },
-  { icon: MapPin, label: "Carnet d'adresses" },
+  { icon: Package, label: "Suivi de mes commandes", href: null },
+  { icon: Heart, label: "Mes favoris", href: "/favoris" },
+  { icon: MapPin, label: "Carnet d'adresses", href: null },
 ];
 
 export default function AccountPage() {
@@ -22,14 +22,29 @@ export default function AccountPage() {
           Connectez-vous pour suivre vos commandes, retrouver vos favoris et vos adresses.
         </p>
         <ul className="mt-6 grid gap-3 text-left sm:grid-cols-3">
-          {FEATURES.map(({ icon: Icon, label }) => (
-            <li
-              key={label}
-              className="bg-ink-50 flex items-center gap-2 rounded-xl p-3 text-sm font-medium"
-            >
-              <Icon className="text-brand-600 size-5" aria-hidden /> {label}
-            </li>
-          ))}
+          {FEATURES.map(({ icon: Icon, label, href }) => {
+            const content = (
+              <>
+                <Icon className="text-brand-600 size-5" aria-hidden /> {label}
+              </>
+            );
+            return (
+              <li key={label}>
+                {href ? (
+                  <Link
+                    href={href}
+                    className="bg-ink-50 hover:bg-brand-50 flex items-center gap-2 rounded-xl p-3 text-sm font-medium"
+                  >
+                    {content}
+                  </Link>
+                ) : (
+                  <span className="bg-ink-50 flex items-center gap-2 rounded-xl p-3 text-sm font-medium">
+                    {content}
+                  </span>
+                )}
+              </li>
+            );
+          })}
         </ul>
         <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
           <Link

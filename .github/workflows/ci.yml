@@ -55,10 +55,43 @@ jobs:
           path: apps/web/coverage
           retention-days: 7
 
+  e2e:
+    name: Tests de bout en bout (Playwright)
+    runs-on: ubuntu-latest
+    needs: quality
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Installer les dépendances (lockfile figé)
+        run: pnpm install --frozen-lockfile
+      - name: Installer le navigateur Chromium (version liée à Playwright)
+        run: pnpm --filter @kemdia/web exec playwright install --with-deps chromium
+      - name: Build de production
+        run: pnpm build
+      - name: Parcours dans un vrai navigateur (téléphone + ordinateur)
+        run: pnpm --filter @kemdia/web e2e
+
+      - name: Publier le rapport en cas d'échec (captures, traces)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rapport-playwright
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7
+
   image:
     name: Image Docker (build · scan · publication)
     runs-on: ubuntu-latest
-    needs: quality
+    # Aucune image n'est construite ni publiée si un parcours client est cassé
+    needs: [quality, e2e]
     timeout-minutes: 25
     permissions:
       contents: read

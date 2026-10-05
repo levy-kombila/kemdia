@@ -56,7 +56,7 @@ function Option({
   );
   if (disabled)
     return (
-      <span className="text-ink-400 flex items-center gap-2.5 py-1.5 text-sm">
+      <span aria-disabled="true" className="text-ink-500 flex items-center gap-2.5 py-1.5 text-sm">
         {box}
         <span className="flex-1">{label}</span>
         <span className="text-xs">0</span>

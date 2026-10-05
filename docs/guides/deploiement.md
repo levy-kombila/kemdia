@@ -120,11 +120,14 @@ sudo docker logs kemdia-caddy --tail 20     # certificats obtenus une fois les D
 
 **Onglet _Variables_ → New repository variable**
 
-| Variable         | Valeur                      |
-| ---------------- | --------------------------- |
-| `SITE_URL`       | `https://kemdia.ga`         |
-| `STAGING_URL`    | `https://staging.kemdia.ga` |
-| `PRODUCTION_URL` | `https://kemdia.ga`         |
+| Variable   | Valeur              |
+| ---------- | ------------------- |
+| `SITE_URL` | `https://kemdia.ga` |
+
+> `SITE_URL` (variable GitHub) est l'adresse inscrite à la construction de l'image. Chaque serveur peut la remplacer
+> au démarrage par sa propre variable d'environnement `SITE_URL` (utilisée pour les aperçus WhatsApp, le sitemap et robots.txt).
+> | `STAGING_URL` | `https://staging.kemdia.ga` |
+> | `PRODUCTION_URL` | `https://kemdia.ga` |
 
 Tant que `DEPLOY_SSH_HOST` n'est pas défini, l'étape de déploiement est simplement ignorée (la CI reste verte).
 

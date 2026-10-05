@@ -71,6 +71,13 @@ export function Footer() {
                   </Link>
                 </li>
               ))}
+              {col.title === "À propos" && (
+                <li>
+                  <Link href="/vendre" className="hover:text-white">
+                    Vendre sur Kemdia
+                  </Link>
+                </li>
+              )}
             </ul>
           </div>
         ))}

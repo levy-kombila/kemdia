@@ -4,35 +4,50 @@ import { notFound } from "next/navigation";
 import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 import { SectionHeader } from "@/components/home/SectionHeader";
 import { BuyBox } from "@/components/product/BuyBox";
-import { ProductCard, toCartLine } from "@/components/product/ProductCard";
+import { FavoriteButton } from "@/components/product/FavoriteButton";
+import { ProductCard, toCartLine, toFavorite } from "@/components/product/ProductCard";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductRail, RailItem } from "@/components/product/ProductRail";
+import { ShareButtons } from "@/components/product/ShareButtons";
 import { StickyBuyBar } from "@/components/product/StickyBuyBar";
 import { DiscountSticker, Price } from "@/components/ui/Price";
 import { Rating } from "@/components/ui/Rating";
-import {
-  getAllProductSlugs,
-  getCategoryPath,
-  getProductBySlug,
-  getRelatedProducts,
-} from "@/lib/catalog";
-import { discountPercent } from "@/lib/format";
-import { SITE } from "@/lib/site";
+import { getCategoryPath, getProductBySlug, getRelatedProducts } from "@/lib/catalog";
+import { discountPercent, formatFCFA } from "@/lib/format";
+import { SITE, siteUrl } from "@/lib/site";
 
 type Props = { params: Promise<{ slug: string }> };
 
-export function generateStaticParams() {
-  return getAllProductSlugs().map((slug) => ({ slug }));
-}
+// Rendu à la demande : l'adresse absolue des aperçus (WhatsApp, Facebook) vient de SITE_URL au démarrage.
+// Le catalogue est en mémoire : quelques millisecondes par page.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const product = getProductBySlug((await params).slug);
   if (!product) return { title: "Produit introuvable" };
+  const price = formatFCFA(product.price);
+  const discount = discountPercent(product.price, product.oldPrice);
+  // Texte affiché sous l'image dans WhatsApp : le prix d'abord, c'est ce qui fait cliquer
+  const description = `${price}${discount ? ` (-${discount} %)` : ""} · Livraison partout au Gabon · Paiement Airtel Money et Moov Money`;
   return {
     title: product.title,
     description: product.description.slice(0, 155),
     alternates: { canonical: `/produit/${product.slug}` },
-    openGraph: { images: product.images.slice(0, 1) },
+    // L'image d'aperçu (1200 × 630) est générée par opengraph-image.tsx, dans ce même dossier
+    openGraph: {
+      type: "website",
+      url: `/produit/${product.slug}`,
+      title: `${product.title} — ${price}`,
+      description,
+      siteName: SITE.name,
+      locale: SITE.locale,
+    },
+    twitter: { card: "summary_large_image", title: `${product.title} — ${price}`, description },
+    other: {
+      "product:price:amount": String(product.price),
+      "product:price:currency": "XAF",
+      "product:availability": product.stock > 0 ? "in stock" : "out of stock",
+    },
   };
 }
 
@@ -44,13 +59,15 @@ export default async function ProductPage({ params }: Props) {
   const related = getRelatedProducts(product, 10);
   const discount = discountPercent(product.price, product.oldPrice);
   const line = toCartLine(product);
+  const base = siteUrl();
+  const productUrl = `${base}/produit/${product.slug}`;
 
   // Données structurées pour Google (rich snippets prix / disponibilité)
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
     name: product.title,
-    image: product.images.map((i) => `${SITE.url}${i}`),
+    image: product.images.map((i) => `${base}${i}`),
     description: product.description,
     brand: product.brand ? { "@type": "Brand", name: product.brand } : undefined,
     aggregateRating:
@@ -67,7 +84,7 @@ export default async function ProductPage({ params }: Props) {
       price: product.price,
       availability:
         product.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-      url: `${SITE.url}/produit/${product.slug}`,
+      url: productUrl,
     },
   };
 
@@ -87,7 +104,7 @@ export default async function ProductPage({ params }: Props) {
         ]}
       />
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1fr] xl:grid-cols-[1.25fr_1fr_20rem]">
+      <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-[1fr_1fr] xl:grid-cols-[1.25fr_1fr_20rem]">
         <ProductGallery images={product.images} title={product.title} />
 
         <div className="rounded-xl bg-white p-5 sm:p-6">
@@ -105,6 +122,10 @@ export default async function ProductPage({ params }: Props) {
           <a href="#avis" className="mt-2 inline-flex hover:underline">
             <Rating value={product.rating} count={product.reviewCount} size="md" />
           </a>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <FavoriteButton item={toFavorite(product)} variant="inline" />
+            <ShareButtons url={productUrl} title={product.title} price={product.price} />
+          </div>
 
           <div className="border-ink-100 my-4 border-y py-4">
             <div className="flex items-start gap-3">

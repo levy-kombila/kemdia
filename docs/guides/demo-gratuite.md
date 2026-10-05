@@ -64,7 +64,8 @@ Le pipeline publie **la même image** (même digest) à deux endroits :
 3. Image URL : `docker.io/levy2025/kemdia:latest` — **Credential : No credential** (l'image est publique).
 4. Nom : `kemdia` (l'adresse sera `https://kemdia.onrender.com`, ou proche si le nom est pris). Région : **Frankfurt** (la plus proche du Gabon).
 5. Instance type : **Free**.
-6. **Environment variables** : `PORT` = `3000` et `APP_ENV` = `demo`.
+6. **Environment variables** : `PORT` = `3000`, `APP_ENV` = `demo` et `SITE_URL` = l'adresse du service (ex. `https://kemdia.onrender.com`).
+   `SITE_URL` sert aux aperçus WhatsApp / Facebook (liens absolus) ; elle est lue au démarrage, sans reconstruire l'image.
 7. **Advanced → Health Check Path** : `/api/health`
 8. **Deploy Web Service**. Au bout de 2–3 minutes, le site répond sur l'adresse affichée en haut de la page.
 
