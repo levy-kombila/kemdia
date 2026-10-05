@@ -37,3 +37,15 @@ export function parseQuery(value: unknown): string {
 export function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
+
+/**
+ * Adresse de retour après connexion (?retour=/panier).
+ * Protection contre la redirection ouverte : seuls les chemins internes sont acceptés
+ * (« //site-pirate.com » ou « https://… » renverraient l'utilisateur vers un faux site).
+ */
+export function parseReturnTo(value: unknown): string {
+  if (typeof value !== "string" || value.length > 200) return "/compte";
+  if (!value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return "/compte";
+  if (/[\u0000-\u001f]/.test(value)) return "/compte";
+  return value;
+}

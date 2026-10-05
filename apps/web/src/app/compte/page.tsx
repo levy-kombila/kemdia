@@ -19,8 +19,7 @@ export default function AccountPage() {
         <CircleUser className="text-brand-600 mx-auto size-14" aria-hidden />
         <h1 className="mt-3 text-2xl font-extrabold">Espace client</h1>
         <p className="text-ink-500 mt-2">
-          La création de compte et la connexion sécurisée arrivent dans une prochaine version de
-          Kemdia.
+          Connectez-vous pour suivre vos commandes, retrouver vos favoris et vos adresses.
         </p>
         <ul className="mt-6 grid gap-3 text-left sm:grid-cols-3">
           {FEATURES.map(({ icon: Icon, label }) => (
@@ -32,12 +31,20 @@ export default function AccountPage() {
             </li>
           ))}
         </ul>
-        <Link
-          href="/"
-          className="bg-brand-600 mt-6 inline-block rounded-full px-6 py-3 font-semibold text-white"
-        >
-          Continuer mes achats
-        </Link>
+        <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+          <Link
+            href="/connexion"
+            className="bg-brand-600 hover:bg-brand-700 rounded-full px-6 py-3 font-semibold text-white"
+          >
+            Se connecter
+          </Link>
+          <Link
+            href="/inscription"
+            className="border-brand-600 text-brand-700 hover:bg-brand-50 rounded-full border-2 px-6 py-2.5 font-semibold"
+          >
+            Créer un compte
+          </Link>
+        </div>
       </div>
     </div>
   );
