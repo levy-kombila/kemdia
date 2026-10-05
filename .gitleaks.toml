@@ -2,5 +2,7 @@
 useDefault = true
 
 [allowlist]
-description = "Fichiers d'exemple sans vrais secrets"
+description = "Fichiers d'exemple sans vrais secrets ; noms de clés du stockage navigateur (ex. kemdia.favorites.v1), qui ne sont pas des secrets"
 paths = ['''\.env\.example$''']
+regexTarget = "line"
+regexes = ['''STORAGE_KEY = "kemdia\.[a-z]+\.v[0-9]+";''']
