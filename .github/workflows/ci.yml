@@ -94,7 +94,9 @@ jobs:
           load: true
           push: false
           tags: kemdia-web:scan
-          build-args: NEXT_PUBLIC_SITE_URL=${{ vars.SITE_URL || 'https://kemdia.ga' }}
+          build-args: |
+            NEXT_PUBLIC_SITE_URL=${{ vars.SITE_URL || 'https://kemdia.ga' }}
+            APP_VERSION=sha-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -121,7 +123,9 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-          build-args: NEXT_PUBLIC_SITE_URL=${{ vars.SITE_URL || 'https://kemdia.ga' }}
+          build-args: |
+            NEXT_PUBLIC_SITE_URL=${{ vars.SITE_URL || 'https://kemdia.ga' }}
+            APP_VERSION=sha-${{ github.sha }}
           cache-from: type=gha
 
   deploy-staging:
@@ -141,3 +145,57 @@ jobs:
       version: sha-${{ github.sha }}
       url: ${{ vars.STAGING_URL }}
     secrets: inherit
+
+  # Démo publique gratuite (Render, offre Free) : même image que staging, déployée par digest.
+  # Ignorée tant que le secret RENDER_DEPLOY_HOOK_URL n'est pas défini (voir docs/guides/demo-gratuite.md).
+  deploy-demo:
+    name: Déploiement DÉMO (Render)
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: deploy-demo
+      cancel-in-progress: true
+    env:
+      HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+      DEMO_URL: ${{ vars.DEMO_URL }}
+      IMAGE: ${{ needs.image.outputs.image }}@${{ needs.image.outputs.digest }}
+      VERSION: sha-${{ github.sha }}
+    steps:
+      - name: Déclencher le déploiement
+        id: trigger
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::notice::Démo ignorée : le secret RENDER_DEPLOY_HOOK_URL n'est pas défini."
+            echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          img=$(jq -rn --arg v "$IMAGE" '$v|@uri')
+          sep='?'; case "$HOOK" in *\?*) sep='&';; esac
+          # L'URL du hook est secrète : curl en mode silencieux, jamais affichée
+          curl -fsS -X POST -o /dev/null "${HOOK}${sep}imgURL=${img}"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+          echo "Déploiement demandé : $IMAGE"
+
+      - name: Attendre la nouvelle version (démarrage à froid possible)
+        if: steps.trigger.outputs.ready == 'true' && env.DEMO_URL != ''
+        run: |
+          for i in $(seq 1 40); do
+            body=$(curl -fsS --max-time 60 "$DEMO_URL/api/health" || true)
+            if echo "$body" | grep -q "\"version\":\"$VERSION\""; then
+              echo "✅ Démo à jour : $body"; exit 0
+            fi
+            echo "… tentative $i : ${body:-pas de réponse}"; sleep 20
+          done
+          echo "::error::La démo ne sert pas encore $VERSION après ~15 min (voir le tableau de bord Render)."
+          exit 1
+
+      - name: Vérifier la page d'accueil et les en-têtes de sécurité
+        if: steps.trigger.outputs.ready == 'true' && env.DEMO_URL != ''
+        run: |
+          headers=$(curl -fsS -o /dev/null -D - --max-time 30 "$DEMO_URL/")
+          for h in content-security-policy strict-transport-security x-frame-options; do
+            echo "$headers" | grep -qi "^$h:" || { echo "::error::En-tête manquant : $h"; exit 1; }
+          done
+          curl -fsS --max-time 30 "$DEMO_URL/" | grep -q "Kemdia"
+          echo "### Démo publique en ligne : $DEMO_URL (\`$VERSION\`)" >> "$GITHUB_STEP_SUMMARY"

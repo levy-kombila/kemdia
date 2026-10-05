@@ -39,3 +39,4 @@ docs/         Planning, rapports de sprint, cahier d'architecture, ADR, guides, 
 - 🔐 [Politique de sécurité](SECURITY.md) · [Suivi de l'audit de l'ancienne version](docs/securite/heritage-audit-django.md)
 - 🔀 [Workflow Git](docs/guides/workflow-git.md)
 - 🚀 [Déploiement (CI/CD, serveur, mise en production)](docs/guides/deploiement.md)
+- 🌍 [Démo publique gratuite (Render)](docs/guides/demo-gratuite.md)
