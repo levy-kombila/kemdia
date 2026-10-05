@@ -3,6 +3,7 @@
 | Version | Date       | Sprint | Changements                                                                    |
 | ------- | ---------- | ------ | ------------------------------------------------------------------------------ |
 | **0.1** | 2026-10-05 | S1     | Création : contexte, exigences, stack, architecture frontend, sécurité, DevOps |
+| **0.2** | 2026-10-05 | S1     | §7 pipeline CD complet, §8 architecture de déploiement (ADR-0005)              |
 
 > Document vivant : chaque rapport de sprint (`docs/rapports/`) indique quelles sections il a modifiées.
 > Les sections marquées 🔜 seront rédigées au sprint indiqué.
@@ -209,42 +210,67 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 
 ```mermaid
 flowchart LR
-    dev[Poste développeur] -->|git commit| hook[Hook pre-commit<br/>Prettier]
-    hook -->|git push / PR| ci
-    subgraph ci[GitHub Actions]
+    dev[Poste développeur] -->|commit| hook[pre-commit<br/>Prettier]
+    hook -->|PR| ci
+    subgraph ci[CI — chaque PR et main]
       direction TB
-      q[CI : format · lint · types · tests · build]
-      d[Image Docker + scan Trivy]
-      s[Sécurité : Gitleaks · pnpm audit · CodeQL · revue dépendances]
-      q --> d
+      q[format · lint · types · tests · build]
+      i[image Docker + scan Trivy]
+      s[Gitleaks · pnpm audit · Semgrep · ShellCheck]
+      q --> i
     end
-    ci -->|tout est vert| merge[Fusion dans main]
-    merge -.->|S2| preprod[Préproduction automatique]
-    preprod -.->|validation manuelle| prod[Production]
+    ci -->|fusion main| pub[(GHCR web:sha-…)]
+    pub -->|auto| stg[STAGING + test de fumée]
+    stg -->|tag vX.Y.Z| rel[Release : même image → web:vX.Y.Z]
+    rel --> prod[PRODUCTION + test de fumée]
+    prod -. échec .-> rb[retour arrière auto]
 ```
 
-| Fichier                            | Rôle                                                                    |
-| ---------------------------------- | ----------------------------------------------------------------------- |
-| `.github/workflows/ci.yml`         | Qualité + build + image Docker scannée                                  |
-| `.github/workflows/security.yml`   | Secrets, dépendances, analyse statique ; aussi chaque lundi             |
-| `.github/dependabot.yml`           | Mises à jour hebdomadaires (npm, Actions, Docker)                       |
-| `.github/pull_request_template.md` | Liste de contrôle de revue                                              |
-| `apps/web/Dockerfile`              | Image multi-étapes, `output: standalone`, non-root, healthcheck         |
-| `docker-compose.yml`               | Exécution locale « comme en prod » (lecture seule, `no-new-privileges`) |
-| `.husky/pre-commit`                | Formatage automatique avant chaque commit                               |
+| Fichier                          | Rôle                                                                              |
+| -------------------------------- | --------------------------------------------------------------------------------- |
+| `.github/workflows/ci.yml`       | Qualité → image → scan → publication GHCR (main) → déploiement staging            |
+| `.github/workflows/release.yml`  | Tag `vX.Y.Z` → promotion de l'image testée → Release GitHub → production          |
+| `.github/workflows/_deploy.yml`  | Déploiement réutilisable : SSH restreint, test de fumée, retour arrière           |
+| `.github/workflows/security.yml` | Gitleaks, pnpm audit, Semgrep, ShellCheck ; CodeQL si dépôt public ; chaque lundi |
+| `.github/dependabot.yml`         | Mises à jour hebdomadaires (npm, actions épinglées par SHA, image Docker)         |
+| `apps/web/Dockerfile`            | Multi-étapes, `standalone`, non-root, sans npm, healthcheck `/api/health`         |
+| `deploy/`                        | Scripts et configuration serveur (voir §8)                                        |
+| `.husky/pre-commit`              | Formatage automatique avant chaque commit                                         |
 
-**Stratégie de branches** : `main` (protégée, toujours déployable) ← PR depuis `feature/Sx-Tyy-description`.
-Voir [`docs/guides/workflow-git.md`](../guides/workflow-git.md).
+**Principes** : _build once, deploy many_ · déploiement par digest immuable · actions épinglées par SHA ·
+aucun secret dans Git · tout changement passe par une PR.
+**Stratégie de branches** : `main` toujours déployable ← PR depuis `feature/Sx-Tyy-description`.
+Voir [`workflow-git.md`](../guides/workflow-git.md) et [`deploiement.md`](../guides/deploiement.md).
 
-## 8. Déploiement 🔜 (S7)
+## 8. Déploiement
 
-Options à arbitrer (latence vers Libreville, coût, conformité) :
+Décision : [ADR-0005](adr/0005-strategie-deploiement.md).
 
-- VPS / cloud en Europe ou en Afrique du Sud + CDN ;
-- hébergeur local gabonais pour les données personnelles si exigé par l'APDPVP.
+```mermaid
+flowchart TB
+    internet((Internet)) -->|80/443| caddy
+    subgraph vps[VPS Ubuntu 24.04 — UFW 22/80/443, Fail2ban, MAJ auto]
+      caddy[Caddy<br/>HTTPS Let's Encrypt]
+      subgraph edge[réseau Docker « edge » — aucun port publié]
+        prod[kemdia-production-web]
+        stg[kemdia-staging-web<br/>mot de passe + noindex]
+      end
+      caddy -->|kemdia.ga| prod
+      caddy -->|staging.kemdia.ga| stg
+      deploy[/opt/kemdia/bin/deploy.sh/]
+    end
+    gha[GitHub Actions] -->|SSH clé restreinte<br/>forced command| deploy
+    deploy -->|pull par digest| ghcr[(GHCR)]
+```
 
-Exigences fixées dès maintenant : HTTPS uniquement, image Docker identique préprod/prod,
-secrets injectés par l'hébergeur, sauvegardes PostgreSQL chiffrées et testées.
+| Élément              | Choix                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Hébergement          | VPS Ubuntu 24.04 (2 vCPU / 4 Go), Europe de l'Ouest — à réévaluer avec l'APDPVP pour les données personnelles (S7) |
+| Conteneur applicatif | Lecture seule, `cap_drop: ALL`, `no-new-privileges`, 512 Mo max, logs bornés                                       |
+| Environnements       | `staging` (auto, protégé) · `production` (tag de version)                                                          |
+| Fiabilité            | Healthcheck, `compose up --wait`, test de fumée, retour arrière automatique, verrou anti-déploiements concurrents  |
+| Traçabilité          | Release GitHub par version, résumé de chaque déploiement dans Actions, `/opt/kemdia/deploy.log`                    |
+| À venir              | PostgreSQL + sauvegardes chiffrées (S3), surveillance et alertes (S7), _blue/green_ sans coupure (S7)              |
 
 ## 9. Qualité et tests
 

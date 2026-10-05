@@ -9,9 +9,14 @@ updates:
         patterns: ["next", "react", "react-dom", "eslint-config-next", "@types/react*"]
       dev-tools:
         dependency-type: development
+  # Met aussi à jour les SHA épinglés des actions GitHub
   - package-ecosystem: github-actions
     directory: "/"
     schedule: { interval: weekly }
   - package-ecosystem: docker
     directory: "/apps/web"
     schedule: { interval: weekly }
+    ignore:
+      # On reste sur Node.js LTS (22) : les versions majeures se décident manuellement
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]

@@ -2,8 +2,8 @@
 
 Plateforme e-commerce pour le Gabon — paiement Mobile Money, livraison dans 13 villes.
 
-[![CI](https://github.com/OWNER/kemdia/actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
-[![Sécurité](https://github.com/OWNER/kemdia/actions/workflows/security.yml/badge.svg)](../../actions/workflows/security.yml)
+[![CI](https://github.com/levy-kombila/kemdia/actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
+[![Sécurité](https://github.com/levy-kombila/kemdia/actions/workflows/security.yml/badge.svg)](../../actions/workflows/security.yml)
 
 ## Démarrage rapide
 
@@ -26,6 +26,7 @@ pnpm dev          # http://localhost:3000
 
 ```
 apps/web/     Site client — Next.js 16, React 19, Tailwind 4
+deploy/       Scripts et configuration du serveur (Caddy, déploiement)
 docs/         Planning, rapports de sprint, cahier d'architecture, ADR, guides, sécurité
 .github/      CI/CD (qualité, Docker, sécurité), Dependabot, modèles
 ```
@@ -37,3 +38,4 @@ docs/         Planning, rapports de sprint, cahier d'architecture, ADR, guides, 
 - 📝 [Rapports](docs/rapports/) — dernier : [Sprint 1](docs/rapports/2026-10-05_S1_fondations-frontend.md)
 - 🔐 [Politique de sécurité](SECURITY.md) · [Suivi de l'audit de l'ancienne version](docs/securite/heritage-audit-django.md)
 - 🔀 [Workflow Git](docs/guides/workflow-git.md)
+- 🚀 [Déploiement (CI/CD, serveur, mise en production)](docs/guides/deploiement.md)

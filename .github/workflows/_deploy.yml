@@ -1,0 +1,98 @@
+# =============================================================================
+# Workflow réutilisable : déploie une image (par digest) sur un environnement,
+# vérifie qu'elle répond (test de fumée) et revient en arrière automatiquement sinon.
+# =============================================================================
+name: Déploiement (réutilisable)
+
+on:
+  workflow_call:
+    inputs:
+      environment: { type: string, required: true, description: "staging ou production" }
+      image: { type: string, required: true, description: "ghcr.io/...@sha256:..." }
+      version: { type: string, required: true, description: "sha-<commit> ou vX.Y.Z" }
+      url: { type: string, required: false, description: "URL publique à tester" }
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    name: ${{ inputs.environment }} ← ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+      SSH_USER: ${{ secrets.DEPLOY_SSH_USER || 'deploy' }}
+      TARGET_ENV: ${{ inputs.environment }}
+      IMAGE: ${{ inputs.image }}
+      VERSION: ${{ inputs.version }}
+      URL: ${{ inputs.url }}
+    steps:
+      - name: Serveur configuré ?
+        id: check
+        run: |
+          if [ -z "$SSH_HOST" ]; then
+            echo "::notice::Déploiement ignoré : le secret DEPLOY_SSH_HOST n'est pas encore défini (voir docs/guides/deploiement.md)."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Préparer SSH (clé restreinte + empreinte du serveur épinglée)
+        if: steps.check.outputs.ready == 'true'
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Déployer
+        id: deploy
+        if: steps.check.outputs.ready == 'true'
+        env:
+          REG_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Le jeton (éphémère, lecture seule) passe par l'entrée standard : jamais dans les logs ni sur le disque du serveur
+          printf '%s\n%s\n' "${{ github.actor }}" "$REG_TOKEN" | \
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+              "$SSH_USER@$SSH_HOST" "$TARGET_ENV $IMAGE $VERSION"
+
+      - name: Test de fumée
+        if: steps.check.outputs.ready == 'true' && inputs.url != ''
+        env:
+          BASIC_AUTH: ${{ inputs.environment == 'staging' && secrets.STAGING_BASIC_AUTH || '' }}
+        run: |
+          auth=(); [ -n "$BASIC_AUTH" ] && auth=(-u "$BASIC_AUTH")
+          for i in $(seq 1 12); do
+            body=$(curl -fsS --max-time 10 "${auth[@]}" "$URL/api/health" || true)
+            if echo "$body" | grep -q "\"version\":\"$VERSION\""; then echo "✅ $VERSION répond : $body"; break; fi
+            echo "… tentative $i : $body"; sleep 5
+            [ "$i" = 12 ] && { echo "::error::La version $VERSION ne répond pas sur $URL"; exit 1; }
+          done
+          headers=$(curl -fsS -o /dev/null -D - --max-time 10 "${auth[@]}" "$URL/")
+          for h in content-security-policy strict-transport-security x-frame-options x-content-type-options; do
+            echo "$headers" | grep -qi "^$h:" || { echo "::error::En-tête de sécurité manquant : $h"; exit 1; }
+          done
+          curl -fsS --max-time 10 "${auth[@]}" "$URL/" | grep -q "Kemdia" || { echo "::error::Page d'accueil invalide"; exit 1; }
+          echo "✅ Page d'accueil et en-têtes de sécurité OK"
+
+      - name: Retour arrière automatique
+        if: failure() && steps.deploy.outcome == 'success'
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "$TARGET_ENV rollback -" < /dev/null
+          echo "::warning::Le test de fumée a échoué : la version précédente a été rétablie sur $TARGET_ENV."
+
+      - name: Résumé
+        if: always() && steps.check.outputs.ready == 'true'
+        run: |
+          {
+            echo "### Déploiement $TARGET_ENV"
+            echo "| | |"; echo "|---|---|"
+            echo "| Version | \`$VERSION\` |"
+            echo "| Image | \`$IMAGE\` |"
+            echo "| URL | ${URL:-—} |"
+            echo "| Résultat | ${{ job.status }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
