@@ -1,10 +1,11 @@
 # Cahier d'architecture — Kemdia
 
-| Version | Date       | Sprint | Changements                                                                       |
-| ------- | ---------- | ------ | --------------------------------------------------------------------------------- |
-| **0.1** | 2026-10-05 | S1     | Création : contexte, exigences, stack, architecture frontend, sécurité, DevOps    |
-| **0.2** | 2026-10-05 | S1     | §7 pipeline CD complet, §8 architecture de déploiement (ADR-0005)                 |
-| **0.3** | 2026-10-05 | S1     | §8 environnement de démonstration gratuit (Render), version inscrite dans l'image |
+| Version | Date       | Sprint | Changements                                                                                                                                |
+| ------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **0.1** | 2026-10-05 | S1     | Création : contexte, exigences, stack, architecture frontend, sécurité, DevOps                                                             |
+| **0.2** | 2026-10-05 | S1     | §7 pipeline CD complet, §8 architecture de déploiement (ADR-0005)                                                                          |
+| **0.3** | 2026-10-05 | S1     | §8 environnement de démonstration gratuit (Render), version inscrite dans l'image                                                          |
+| **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués |
 
 > Document vivant : chaque rapport de sprint (`docs/rapports/`) indique quelles sections il a modifiées.
 > Les sections marquées 🔜 seront rédigées au sprint indiqué.
@@ -13,34 +14,65 @@
 
 ## 1. Contexte et objectifs
 
-**Kemdia** est une plateforme de commerce en ligne destinée au marché africain, lancée d'abord au **Gabon**.
+**Kemdia** est une **marketplace hybride** destinée au marché africain, lancée d'abord au **Gabon** :
+Kemdia vend son propre stock **et** accueille des vendeurs tiers, avec paiement Mobile Money et livraison organisée.
+Vision détaillée, personas et analyse de marché : [synthèse du KSAD](../references/ksad-synthese.md) (Volumes 1 et 2).
 
-| Objectif                                            | Indicateur                                                  |
-| --------------------------------------------------- | ----------------------------------------------------------- |
-| Vendre en ligne au Gabon avec paiement Mobile Money | Commandes payées / jour                                     |
-| Site rapide sur mobile en 3G/4G                     | Page d'accueil < 50 Ko compressée hors images ; LCP < 2,5 s |
-| Sécurité de niveau production                       | 0 faille critique/haute ouverte avant mise en ligne         |
-| Livraison fiable par ville et quartier              | Délai respecté ≥ 95 %                                       |
+### 1.1 Modèle économique
+
+| Source de revenus             | Règle                                                   | Réf.   |
+| ----------------------------- | ------------------------------------------------------- | ------ |
+| Vente directe                 | Marge sur le stock propre de Kemdia                     | —      |
+| Commission marketplace        | 8 % à 14 % sur les ventes des vendeurs tiers            | BR-020 |
+| Affiliation (social commerce) | Partage de commission avec des ambassadeurs (après MVP) | BR-022 |
+| Logistique                    | 15 % de chaque frais de livraison                       | BR-021 |
+
+### 1.2 MVP — lancement visé fin 2027
+
+| Élément   | Périmètre                                                                                                      |
+| --------- | -------------------------------------------------------------------------------------------------------------- |
+| Catalogue | ~500 produits : stock Kemdia + **50 vendeurs partenaires**                                                     |
+| Comptes   | Inscription et connexion par **e-mail ou téléphone** (code OTP)                                                |
+| Paiement  | **Moov Money, Airtel Money, paiement à la livraison**                                                          |
+| Livraison | Transporteur partenaire (ex. COMAT), Libreville d'abord, 13 villes au catalogue des tarifs                     |
+| Support   | WhatsApp Business + tchat                                                                                      |
+| Hors MVP  | 2FA client, portefeuille Kemdia Pay v2, publicité vendeurs, suivi GPS, application mobile, expansion régionale |
+
+### 1.3 Objectifs mesurables
+
+| Objectif                        | Indicateur                                                            |
+| ------------------------------- | --------------------------------------------------------------------- |
+| Adoption                        | 5 000 acheteurs inscrits après le lancement                           |
+| Paiement adapté au marché       | 90 % des transactions en Mobile Money                                 |
+| Satisfaction                    | Note moyenne > 4/5 sur les premières commandes                        |
+| Site rapide sur mobile en 3G/4G | Page d'accueil < 50 Ko compressée hors images ; pages critiques < 2 s |
+| Sécurité de niveau production   | 0 faille critique/haute ouverte avant mise en ligne                   |
+| Livraison fiable                | Délai respecté ≥ 95 %                                                 |
 
 **Zone de couverture phase 1** : 13 villes du Gabon réparties en 4 zones tarifaires
 (Libreville, Port-Gentil, Franceville, Lambaréné, Oyem, Moanda, Mouila, Tchibanga, Koulamoutou, Bitam, Mitzic, Lastourville, Makokou).
 
 ## 2. Exigences
 
-### 2.1 Fonctionnelles (phase 1)
+### 2.1 Fonctionnelles
 
-| #   | Exigence                                                             | Sprint                            |
-| --- | -------------------------------------------------------------------- | --------------------------------- |
-| F1  | Parcourir le catalogue par catégories (3 niveaux)                    | S1 ✅                             |
-| F2  | Rechercher (insensible aux accents), trier, paginer                  | S1 ✅                             |
-| F3  | Consulter une fiche produit (photos, prix, stock, livraison estimée) | S1 ✅                             |
-| F4  | Gérer un panier                                                      | S1 ✅ (navigateur) · S5 (serveur) |
-| F5  | Choisir sa ville / son quartier de livraison au Gabon                | S1 ✅                             |
-| F6  | Créer un compte, se connecter                                        | S4                                |
-| F7  | Commander et payer (Airtel Money, Moov Money, à la livraison)        | S5                                |
-| F8  | Suivre sa commande                                                   | S5                                |
-| F9  | Administrer produits, stocks, commandes, livraisons                  | S6                                |
-| F10 | Vendeurs tiers (marketplace)                                         | Phase 2                           |
+Les **règles métier** (BR-xxx) et les **exigences fonctionnelles** (FR-xxx) issues du KSAD sont numérotées, rattachées à un module
+et à un sprint dans [`regles-metier.md`](regles-metier.md). Résumé :
+
+| #   | Exigence                                                                 | Sprint                              |
+| --- | ------------------------------------------------------------------------ | ----------------------------------- |
+| F1  | Parcourir le catalogue par catégories (3 niveaux)                        | S1 ✅                               |
+| F2  | Rechercher, filtrer, trier, paginer                                      | S1 ✅ · S2 (filtres) · S3 (serveur) |
+| F3  | Fiche produit (photos, prix, stock, livraison estimée, variantes)        | S1 ✅ · S3 (variantes)              |
+| F4  | Panier                                                                   | S1 ✅ (navigateur) · S5 (serveur)   |
+| F5  | Ville / quartier de livraison au Gabon                                   | S1 ✅                               |
+| F6  | Compte client par e-mail ou téléphone (OTP)                              | S4                                  |
+| F7  | Commander et payer (Moov Money, Airtel Money, à la livraison)            | S5                                  |
+| F8  | Suivre sa commande                                                       | S5 · S7                             |
+| F9  | Vendeurs tiers : boutique, KYC, produits modérés, commandes, commissions | S6                                  |
+| F10 | Back-office : modération, KYC, commandes, livraisons                     | S6                                  |
+| F11 | Livraison via transporteur partenaire                                    | S7                                  |
+| F12 | Affiliation                                                              | Après MVP                           |
 
 ### 2.2 Non fonctionnelles
 
@@ -53,6 +85,7 @@
 | Qualité        | Lint + types + tests obligatoires en CI ; revue de code par PR                                            |
 | Exploitabilité | Image Docker, configuration par variables d'environnement, logs sans données personnelles                 |
 | Conformité     | Loi gabonaise n°001/2011 sur la protection des données personnelles (APDPVP)                              |
+| Disponibilité  | Objectif 99,9 % en production (KSAD Vol. 2), sauvegardes testées, surveillance                            |
 
 ## 3. Vue d'ensemble
 
@@ -94,20 +127,46 @@ flowchart TB
 **État au Sprint 1** : seul `apps/web` existe ; le catalogue provient d'un fichier de démonstration
 lu côté serveur par `src/lib/catalog.ts`, qui sera remplacé par des appels à l'API sans modifier les composants.
 
+### 3.3 Modules du backend (cible MVP) 🔜 S3
+
+Monolithe modulaire NestJS, architecture hexagonale, un schéma PostgreSQL par module
+([ADR-0006](adr/0006-monolithe-modulaire-7-modules.md) — explications simples dans [concepts.md](concepts.md)).
+
+```mermaid
+flowchart LR
+    web[apps/web<br/>Next.js] -->|REST /api/v1| api
+    subgraph api[apps/api — NestJS]
+      identity[identity]
+      catalog[catalog]
+      vendors[vendors]
+      orders[orders]
+      payments[payments]
+      shipping[shipping]
+      notif[notifications]
+    end
+    orders -->|prix, stock| catalog
+    orders -->|encaisser| payments
+    orders -->|expédier| shipping
+    vendors -->|produits à modérer| catalog
+    payments -->|adaptateurs| mm[(Airtel Money<br/>Moov Money)]
+    shipping -->|adaptateur| tr[(Transporteur)]
+    api --> db[(PostgreSQL<br/>1 schéma par module)]
+```
+
 ## 4. Choix technologiques
 
-| Couche     | Choix                                            | Version     | Justification                                                                |
-| ---------- | ------------------------------------------------ | ----------- | ---------------------------------------------------------------------------- |
-| Langage    | TypeScript (strict)                              | 5.9         | Un seul langage front/back — [ADR-0002](adr/0002-stack-typescript-nextjs.md) |
-| Frontend   | Next.js (App Router) + React                     | 16.3 / 19.2 | SSR/SSG, SEO, Server Components                                              |
-| Style      | Tailwind CSS                                     | 4           | Design tokens centralisés, CSS final minimal                                 |
-| Icônes     | lucide-react                                     | —           | Seules les icônes utilisées sont embarquées                                  |
-| Polices    | Inter + Montserrat (auto-hébergées, @fontsource) | —           | Aucune requête vers Google : vie privée + CSP stricte                        |
-| Tests      | Vitest + Testing Library                         | 5           | Rapide, compatible TypeScript                                                |
-| Monorepo   | pnpm + Turborepo                                 | 10 / 2      | [ADR-0003](adr/0003-monorepo.md)                                             |
-| Conteneur  | Docker (Node 22 Alpine, utilisateur non-root)    | —           | Même artefact en préprod et prod                                             |
-| CI/CD      | GitHub Actions                                   | —           | Intégré au dépôt                                                             |
-| Backend 🔜 | NestJS + Prisma + PostgreSQL                     | —           | S3                                                                           |
+| Couche     | Choix                                               | Version     | Justification                                                                |
+| ---------- | --------------------------------------------------- | ----------- | ---------------------------------------------------------------------------- |
+| Langage    | TypeScript (strict)                                 | 5.9         | Un seul langage front/back — [ADR-0002](adr/0002-stack-typescript-nextjs.md) |
+| Frontend   | Next.js (App Router) + React                        | 16.3 / 19.2 | SSR/SSG, SEO, Server Components                                              |
+| Style      | Tailwind CSS                                        | 4           | Design tokens centralisés, CSS final minimal                                 |
+| Icônes     | lucide-react                                        | —           | Seules les icônes utilisées sont embarquées                                  |
+| Polices    | Inter + Montserrat (auto-hébergées, @fontsource)    | —           | Aucune requête vers Google : vie privée + CSP stricte                        |
+| Tests      | Vitest + Testing Library                            | 5           | Rapide, compatible TypeScript                                                |
+| Monorepo   | pnpm + Turborepo                                    | 10 / 2      | [ADR-0003](adr/0003-monorepo.md)                                             |
+| Conteneur  | Docker (Node 22 Alpine, utilisateur non-root)       | —           | Même artefact en préprod et prod                                             |
+| CI/CD      | GitHub Actions                                      | —           | Intégré au dépôt                                                             |
+| Backend 🔜 | NestJS + Prisma + PostgreSQL (un schéma par module) | —           | S3 — [ADR-0006](adr/0006-monolithe-modulaire-7-modules.md)                   |
 
 ## 5. Architecture du frontend (`apps/web`)
 
@@ -283,6 +342,8 @@ flowchart TB
 | Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                          |
 
 ## 10. Glossaire
+
+Explications détaillées, avec des exemples Kemdia : [concepts.md](concepts.md).
 
 - **SSR / SSG** : rendu des pages sur le serveur, à la demande / à l'avance.
 - **Server / Client Component** : composant React exécuté uniquement sur le serveur / aussi dans le navigateur.
