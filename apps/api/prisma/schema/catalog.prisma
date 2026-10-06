@@ -1,2 +1,87 @@
 // Module catalog : catégories, produits, variantes, stock (S3-T03).
 // Chaque modèle de ce fichier porte @@schema("catalog").
+// Règles complémentaires posées en SQL dans la migration (Prisma ne sait pas les décrire) :
+// prix > 0, stock >= 0, prix barré > prix, note entre 0 et 5.
+
+/// Statut d'un produit : DRAFT (préparation, modération BR-003), PUBLISHED (visible), ARCHIVED (désactivé, BR-002).
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+
+  @@map("product_status")
+  @@schema("catalog")
+}
+
+/// Catégorie (arborescence de 4 niveaux au plus, vérifiée par le domaine).
+model Category {
+  /// BR-042 : identifiant public UUID, jamais un numéro qui se suit
+  id        String     @id @db.Uuid
+  slug      String     @unique @db.VarChar(120)
+  name      String     @db.VarChar(80)
+  parentId  String?    @map("parent_id") @db.Uuid
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children  Category[] @relation("CategoryTree")
+  icon      String     @db.VarChar(40)
+  image     String?    @db.VarChar(200)
+  position  Int        @default(0)
+  products  Product[]
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([parentId])
+  @@map("categories")
+  @@schema("catalog")
+}
+
+/// Produit. `price` et `compareAtPrice` reprennent la variante active la moins chère (tri et filtres par prix).
+model Product {
+  id             String           @id @db.Uuid
+  slug           String           @unique @db.VarChar(120)
+  title          String           @db.VarChar(120)
+  description    String           @default("")
+  brand          String?          @db.VarChar(60)
+  categoryId     String           @map("category_id") @db.Uuid
+  category       Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  images         String[]         @default([])
+  status         ProductStatus    @default(DRAFT)
+  price          Int
+  compareAtPrice Int?             @map("compare_at_price")
+  rating         Float            @default(0)
+  reviewCount    Int              @default(0) @map("review_count")
+  isFeatured     Boolean          @default(false) @map("is_featured")
+  isBestseller   Boolean          @default(false) @map("is_bestseller")
+  isNew          Boolean          @default(false) @map("is_new")
+  /// Titre, marque, catégorie et caractéristiques en minuscules sans accents (recherche)
+  searchText     String           @default("") @map("search_text")
+  variants       ProductVariant[]
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([categoryId])
+  @@index([status, price])
+  @@map("products")
+  @@schema("catalog")
+}
+
+/// Variante d'un produit (FR-013) : prix et stock propres.
+model ProductVariant {
+  id             String   @id @db.Uuid
+  productId      String   @map("product_id") @db.Uuid
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku            String   @unique @db.VarChar(40)
+  name           String   @db.VarChar(80)
+  /// Caractéristiques : { "couleur": "Noir", "taille": "M" }
+  attributes     Json     @default("{}")
+  price          Int
+  compareAtPrice Int?     @map("compare_at_price")
+  stock          Int      @default(0)
+  isActive       Boolean  @default(true) @map("is_active")
+  position       Int      @default(0)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([productId])
+  @@map("product_variants")
+  @@schema("catalog")
+}

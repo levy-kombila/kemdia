@@ -44,7 +44,7 @@ docs/         Planning, rapports de sprint, cahier d'architecture, ADR, guides, 
 - 🏛️ [Cahier d'architecture](docs/architecture/cahier-architecture.md) et [décisions (ADR)](docs/architecture/adr/)
 - 📘 [Comprendre l'architecture (concepts expliqués simplement)](docs/architecture/concepts.md)
 - 📏 [Règles métier et exigences (BR / FR)](docs/architecture/regles-metier.md) · [Synthèse du KSAD](docs/references/ksad-synthese.md)
-- 📝 [Rapports](docs/rapports/) — dernier : [S3-T02 — PostgreSQL et Prisma](docs/rapports/2026-10-06_S3-T02_postgresql-prisma.md)
+- 📝 [Rapports](docs/rapports/) — dernier : [S3-T03 — module catalogue](docs/rapports/2026-10-06_S3-T03_module-catalog.md)
 - 🔐 [Politique de sécurité](SECURITY.md) · [Suivi de l'audit de l'ancienne version](docs/securite/heritage-audit-django.md)
 - 🗄️ [Base de données locale (PostgreSQL, migrations)](docs/guides/base-de-donnees.md)
 - 🔀 [Workflow Git](docs/guides/workflow-git.md)

@@ -7,13 +7,13 @@ import { AppModule } from "../src/app.module.js";
 import { loadConfig, type AppConfig } from "../src/config/env.js";
 import { PrismaService } from "../src/database/prisma.service.js";
 import { configureApp } from "../src/http/configure-app.js";
+import { testDatabaseUrl } from "./integration-db.js";
 
 /**
  * Tests d'intégration : une VRAIE base PostgreSQL, migrations appliquées (`pnpm db:deploy`).
  * Lancés par `pnpm test:int` avec DATABASE_URL (en CI : base éphémère détruite après le job).
  */
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) throw new Error("DATABASE_URL est requis pour les tests d'intégration");
+const DATABASE_URL = testDatabaseUrl();
 
 const configFor = (env: NodeJS.ProcessEnv = {}): AppConfig =>
   loadConfig({

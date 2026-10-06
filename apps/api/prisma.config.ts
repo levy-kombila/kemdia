@@ -6,7 +6,11 @@ if (existsSync(".env")) process.loadEnvFile(".env");
 
 export default defineConfig({
   schema: "prisma/schema",
-  migrations: { path: "prisma/migrations" },
+  migrations: {
+    path: "prisma/migrations",
+    // Données de démonstration : pnpm db:seed
+    seed: "node --import @swc-node/register/esm-register prisma/seed.ts",
+  },
   // process.env et non env() : env() lève une erreur si la variable manque, or `prisma generate`
   // (CI, construction de l'image) n'a pas besoin de base de données.
   datasource: { url: process.env.DATABASE_URL },

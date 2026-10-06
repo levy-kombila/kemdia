@@ -19,6 +19,7 @@ Ils ne servent qu'ici ; en ligne, l'adresse de la base vient du serveur (variabl
 ```bash
 pnpm install
 pnpm --filter @kemdia/api db:deploy   # applique les migrations du dépôt
+pnpm --filter @kemdia/api db:seed     # catalogue de démonstration : 112 catégories, 50 produits
 pnpm --filter @kemdia/api dev         # API sur http://localhost:4000/api/health
 ```
 
@@ -42,23 +43,28 @@ La CI vérifie que les migrations correspondent exactement au schéma : un oubli
 
 ## Commandes utiles
 
-| Commande (préfixe `pnpm --filter @kemdia/api`) | Rôle                                                                     |
-| ---------------------------------------------- | ------------------------------------------------------------------------ |
-| `db:migrate --name <nom>`                      | Créer et appliquer une migration (poste de développement uniquement)     |
-| `db:deploy`                                    | Appliquer les migrations existantes (c'est aussi ce que fait le serveur) |
-| `db:status`                                    | Voir les migrations appliquées ou en attente                             |
-| `db:check`                                     | Vérifier que la base correspond au schéma (code 2 = écart)               |
-| `db:reset`                                     | ⚠️ **Effacer** la base locale et rejouer toutes les migrations           |
-| `generate`                                     | Régénérer le client Prisma (automatique avant lint, types, tests, build) |
-| `test:int`                                     | Tests d'intégration sur la vraie base (besoin de `DATABASE_URL`)         |
+| Commande (préfixe `pnpm --filter @kemdia/api`) | Rôle                                                                                 |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `db:migrate --name <nom>`                      | Créer et appliquer une migration (poste de développement uniquement)                 |
+| `db:deploy`                                    | Appliquer les migrations existantes (c'est aussi ce que fait le serveur)             |
+| `db:status`                                    | Voir les migrations appliquées ou en attente                                         |
+| `db:check`                                     | Vérifier que la base correspond au schéma (code 2 = écart)                           |
+| `db:seed`                                      | Importer le catalogue de démonstration (relançable ; refusé en production)           |
+| `db:reset`                                     | ⚠️ **Effacer** la base locale et rejouer les migrations (relancer ensuite `db:seed`) |
+| `generate`                                     | Régénérer le client Prisma (automatique avant lint, types, tests, build)             |
+| `test:int`                                     | Tests d'intégration sur une base **de test** (nom finissant par `_test`)             |
 
-Pour lancer `test:int` en local :
+Les tests d'intégration **vident les tables du catalogue**. Ils refusent donc de tourner sur une base dont le nom
+ne finit pas par `_test` : ta base de développement (`kemdia`) est protégée. Pour les lancer en local :
 
 ```bash
-DATABASE_URL=postgresql://kemdia:kemdia@localhost:5432/kemdia pnpm --filter @kemdia/api test:int
+docker compose exec db createdb -U kemdia kemdia_test       # une seule fois
+export DATABASE_URL=postgresql://kemdia:kemdia@localhost:5432/kemdia_test
+pnpm --filter @kemdia/api db:deploy
+pnpm --filter @kemdia/api test:int
 ```
 
-(PowerShell : `$env:DATABASE_URL="postgresql://kemdia:kemdia@localhost:5432/kemdia"` puis la commande.)
+(PowerShell : `$env:DATABASE_URL="postgresql://kemdia:kemdia@localhost:5432/kemdia_test"` au lieu de `export`.)
 
 ## Règles à respecter
 
