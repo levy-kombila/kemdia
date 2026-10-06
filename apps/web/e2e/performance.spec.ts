@@ -46,12 +46,15 @@ type Metrics = {
   tbt: number;
   jsKb: number;
   totalKb: number;
+  shifts?: string[];
 };
 
 async function measure(page: Page, path: string): Promise<Metrics> {
   await page.addInitScript(() => {
-    const w = window as unknown as { __perf: { lcp: number; cls: number; tbt: number } };
-    w.__perf = { lcp: 0, cls: 0, tbt: 0 };
+    const w = window as unknown as {
+      __perf: { lcp: number; cls: number; tbt: number; shifts: string[] };
+    };
+    w.__perf = { lcp: 0, cls: 0, tbt: 0, shifts: [] };
     new PerformanceObserver((l) => {
       for (const e of l.getEntries()) w.__perf.lcp = e.startTime;
     }).observe({ type: "largest-contentful-paint", buffered: true });
@@ -81,7 +84,9 @@ async function measure(page: Page, path: string): Promise<Metrics> {
   await page.waitForTimeout(1500); // laisse arriver les dernières mesures (LCP, tâches longues)
 
   return page.evaluate(() => {
-    const w = window as unknown as { __perf: { lcp: number; cls: number; tbt: number } };
+    const w = window as unknown as {
+      __perf: { lcp: number; cls: number; tbt: number; shifts: string[] };
+    };
     const fcp = performance.getEntriesByName("first-contentful-paint")[0]?.startTime ?? 0;
     const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
     const res = performance.getEntriesByType("resource") as PerformanceResourceTiming[];
@@ -96,6 +101,7 @@ async function measure(page: Page, path: string): Promise<Metrics> {
       tbt: Math.round(w.__perf.tbt),
       jsKb: Math.round(js / 1024),
       totalKb: Math.round(total / 1024),
+      shifts: w.__perf.shifts.slice(0, 6),
     };
   });
 }
@@ -115,8 +121,10 @@ async function measureMedian(
     runs.push(await measure(await context.newPage(), path));
     await context.close();
   }
-  const keys = Object.keys(runs[0]!) as (keyof Metrics)[];
-  return Object.fromEntries(keys.map((k) => [k, median(runs.map((r) => r[k]))])) as Metrics;
+  const keys = ["fcp", "lcp", "cls", "tbt", "jsKb", "totalKb"] as const;
+  const result = Object.fromEntries(keys.map((k) => [k, median(runs.map((r) => r[k]))])) as Metrics;
+  result.shifts = runs.flatMap((r) => r.shifts ?? []).slice(0, 6);
+  return result;
 }
 
 for (const { name, path, override, why } of PAGES) {
@@ -147,7 +155,9 @@ for (const { name, path, override, why } of PAGES) {
     console.log(`[perf] ${name} ${JSON.stringify(m)}`);
     expect.soft(m.fcp, "premier affichage (ms)").toBeLessThanOrEqual(b.fcp);
     expect.soft(m.lcp, "plus grand élément (ms)").toBeLessThanOrEqual(b.lcp);
-    expect.soft(m.cls, "décalages de mise en page").toBeLessThanOrEqual(b.cls);
+    expect
+      .soft(m.cls, `décalages de mise en page — éléments : ${m.shifts?.join(" | ") || "aucun"}`)
+      .toBeLessThanOrEqual(b.cls);
     // Le blocage dépend beaucoup de la machine (les serveurs de CI sont partagés et irréguliers) :
     // il est affiché dans le résumé et signalé, mais ne bloque pas la PR.
     if (m.tbt > b.tbt)
