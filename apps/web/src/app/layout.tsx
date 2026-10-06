@@ -60,7 +60,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="fr-GA" className={archivo.variable}>
+    // data-scroll-behavior : défilement doux seulement à l'intérieur d'une page, pas lors d'un changement de page
+    <html lang="fr-GA" className={archivo.variable} data-scroll-behavior="smooth">
       <body className="flex min-h-dvh flex-col">
         <a
           href="#contenu"

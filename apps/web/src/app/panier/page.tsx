@@ -8,7 +8,8 @@ import { CartView } from "./CartView";
 
 export const metadata: Metadata = { title: "Mon panier", robots: { index: false } };
 
-export default function CartPage() {
+export default async function CartPage() {
+  const suggestions = await getBestsellers(12);
   return (
     <div className="container-page space-y-3 py-4 pb-24 lg:pb-4">
       <Breadcrumbs items={[{ label: "Panier" }]} />
@@ -24,7 +25,7 @@ export default function CartPage() {
           href="/recherche?tri=note"
         />
         <ProductRail label="Suggestions">
-          {getBestsellers(12).map((p) => (
+          {suggestions.map((p) => (
             <RailItem key={p.id}>
               <ProductCard product={p} />
             </RailItem>

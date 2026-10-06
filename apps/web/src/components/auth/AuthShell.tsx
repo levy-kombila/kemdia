@@ -11,7 +11,7 @@ const BENEFITS = [
 ];
 
 /** Mise en page commune : carte du formulaire + rappel des avantages (grand écran). */
-export function AuthShell({
+export async function AuthShell({
   title,
   subtitle,
   children,
@@ -21,7 +21,8 @@ export function AuthShell({
   children: ReactNode;
 }) {
   const seen = new Set<string>();
-  const products = [...getFeaturedProducts(12), ...getBestsellers(12)]
+  const [featured, bestsellers] = await Promise.all([getFeaturedProducts(12), getBestsellers(12)]);
+  const products = [...featured, ...bestsellers]
     .filter((p) => !seen.has(p.id) && seen.add(p.id))
     .slice(0, 12);
   return (
@@ -32,14 +33,8 @@ export function AuthShell({
           <ul aria-hidden className="absolute -inset-x-16 -top-10 grid -rotate-6 grid-cols-3 gap-3">
             {products.map((p) => (
               <li key={p.id} className="relative aspect-square overflow-hidden rounded-xl bg-white">
-                {p.images[0] && (
-                  <Image
-                    src={p.images[0]}
-                    alt=""
-                    fill
-                    sizes="160px"
-                    className="object-contain p-3"
-                  />
+                {p.image && (
+                  <Image src={p.image} alt="" fill sizes="160px" className="object-contain p-3" />
                 )}
               </li>
             ))}

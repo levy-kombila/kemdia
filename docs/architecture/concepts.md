@@ -42,8 +42,9 @@ Pour ajouter Orange Money au Sénégal, on écrit un nouvel adaptateur ; **les r
         └────────────────────────────────────────────────────────────────┘
 ```
 
-**Déjà visible au Sprint 1** : `apps/web/src/lib/catalog.ts` est un « port » : aujourd'hui il lit un fichier de démonstration,
-au Sprint 3 il appellera l'API — **sans modifier un seul composant** du site.
+**Exemple concret (S3-T05)** : dans le site, `lib/catalog/port.ts` est un « port » (la prise) et il existe deux « adaptateurs » (les fiches) :
+`api-catalog.ts` lit l'API, `file-catalog.ts` lit le fichier de démonstration. Le choix se fait **une fois, au démarrage**, selon la variable `API_URL`.
+Les pages ne savent pas lequel est branché.
 
 ## 4. Un schéma PostgreSQL par module
 

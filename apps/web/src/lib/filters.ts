@@ -4,14 +4,15 @@
  * Les URL restent partageables (WhatsApp) et fonctionnent sans JavaScript.
  */
 
-export const PRICE_BUCKETS = {
-  "moins-50000": { label: "Moins de 50 000 FCFA", min: 0, max: 49_999 },
-  "50000-150000": { label: "50 000 à 150 000 FCFA", min: 50_000, max: 150_000 },
-  "150000-300000": { label: "150 000 à 300 000 FCFA", min: 150_001, max: 300_000 },
-  "plus-300000": { label: "Plus de 300 000 FCFA", min: 300_001, max: Number.MAX_SAFE_INTEGER },
-} as const;
+import { PRICE_RANGES, type PriceRangeKey } from "@kemdia/contracts/constants";
+import type { ProductQuery } from "@kemdia/contracts";
 
-export type PriceBucket = keyof typeof PRICE_BUCKETS;
+/** Tranches de prix : celles du contrat partagé avec l'API (mêmes clés dans l'URL et dans les compteurs). */
+export const PRICE_BUCKETS = Object.fromEntries(PRICE_RANGES.map((r) => [r.key, r])) as {
+  [K in PriceRangeKey]: Extract<(typeof PRICE_RANGES)[number], { key: K }>;
+};
+
+export type PriceBucket = PriceRangeKey;
 
 export type ProductFilters = {
   price?: PriceBucket;
@@ -65,22 +66,15 @@ export function countActiveFilters(f: ProductFilters): number {
   );
 }
 
-type Filterable = {
-  price: number;
-  oldPrice: number | null;
-  brand: string | null;
-  stock: number;
-  rating: number;
-};
-
-export function matchesFilters(p: Filterable, f: ProductFilters): boolean {
-  if (f.price) {
-    const { min, max } = PRICE_BUCKETS[f.price];
-    if (p.price < min || p.price > max) return false;
-  }
-  if (f.brands.length && (!p.brand || !f.brands.includes(p.brand))) return false;
-  if (f.inStock && p.stock <= 0) return false;
-  if (f.onlyDeals && !(p.oldPrice !== null && p.oldPrice > p.price)) return false;
-  if (f.minRating && p.rating < f.minRating) return false;
-  return true;
+/** Filtres de l'URL → paramètres de l'API (`/api/v1/products`). */
+export function filtersToQuery(f: ProductFilters): ProductQuery {
+  return {
+    ...(f.price
+      ? { priceMin: PRICE_BUCKETS[f.price].min, priceMax: PRICE_BUCKETS[f.price].max }
+      : {}),
+    ...(f.brands.length ? { brands: f.brands } : {}),
+    ...(f.inStock ? { inStock: true } : {}),
+    ...(f.onlyDeals ? { onlyDeals: true } : {}),
+    ...(f.minRating ? { minRating: f.minRating } : {}),
+  };
 }

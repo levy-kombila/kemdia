@@ -58,12 +58,14 @@ describe("validatePaymentPhone", () => {
 });
 
 describe("buildOrderRequest", () => {
-  it("n'envoie que les identifiants et quantités, jamais de prix", () => {
+  it("n'envoie que la variante et la quantité, jamais de prix (S3-T05)", () => {
     const lines: CartLine[] = [
       {
-        productId: "38",
+        variantId: "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a",
+        productId: "0b9f1c7e-3f5a-4b8e-9c2d-1a2b3c4d5e6f",
         slug: "x",
         title: "X",
+        variantName: "",
         price: 1,
         image: null,
         quantity: 2,
@@ -71,7 +73,7 @@ describe("buildOrderRequest", () => {
       },
     ];
     const req = buildOrderRequest(lines, address, "airtel", "077123456");
-    expect(req.items).toEqual([{ productId: "38", quantity: 2 }]);
+    expect(req.items).toEqual([{ variantId: "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a", quantity: 2 }]);
     expect(JSON.stringify(req)).not.toMatch(/price|total|fee/i);
     expect(req.delivery.phone).toBe("+241077123456");
     expect(req.payment).toEqual({ method: "airtel", phone: "+241077123456" });

@@ -22,6 +22,10 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 export default async function SearchPage({ searchParams }: Props) {
   const sp = await searchParams;
   const q = parseQuery(first(sp.q));
+  const [highlights, bestsellers] = await Promise.all([
+    getCategoryHighlights(12),
+    getBestsellers(8),
+  ]);
 
   const empty = (
     <div className="space-y-3">
@@ -34,7 +38,7 @@ export default async function SearchPage({ searchParams }: Props) {
           d&apos;une référence) ou parcourez les rayons.
         </p>
       </div>
-      <CategoryBubbles items={getCategoryHighlights(12)} />
+      <CategoryBubbles items={highlights} />
       <section aria-labelledby="suggestions">
         <SectionHeader
           id="suggestions"
@@ -42,7 +46,7 @@ export default async function SearchPage({ searchParams }: Props) {
           href="/recherche?tri=note"
         />
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-4">
-          {getBestsellers(8).map((p) => (
+          {bestsellers.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
         </div>

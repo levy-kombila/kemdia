@@ -1,3 +1,4 @@
+import { PRICE_RANGES, type Badge, type SortKey } from "@kemdia/contracts/constants";
 import type { Category } from "../domain/category.js";
 import type { Product } from "../domain/product.js";
 
@@ -15,8 +16,8 @@ export interface CategoryRepository {
   save(category: Category): Promise<void>;
 }
 
-export const SORT_KEYS = ["pertinence", "nouveautes", "prix-asc", "prix-desc", "note"] as const;
-export type SortKey = (typeof SORT_KEYS)[number];
+// Tris et sélections : définis par le contrat HTTP partagé avec le site (@kemdia/contracts)
+export { SORT_KEYS, type Badge, type SortKey } from "@kemdia/contracts/constants";
 
 /** Critères de sélection, déjà validés et normalisés par l'application. */
 export interface ProductCriteria {
@@ -30,6 +31,7 @@ export interface ProductCriteria {
   inStock: boolean;
   onlyDeals: boolean;
   minRating?: number;
+  badge?: Badge;
 }
 
 /** Produit tel qu'affiché dans une liste (carte produit) : seulement les produits publiés. */
@@ -43,6 +45,12 @@ export interface ProductSummary {
   price: number;
   compareAtPrice: number | null;
   inStock: boolean;
+  /** Variante proposée par défaut : la variante active la moins chère (même règle que Product.mainVariant). */
+  variantId: string;
+  /** Stock de la variante par défaut. */
+  stock: number;
+  /** Nombre de variantes actives. */
+  variantCount: number;
   rating: number;
   reviewCount: number;
   isFeatured: boolean;
@@ -64,13 +72,10 @@ export interface PriceRange {
   max: number;
 }
 
-/** Tranches de prix des filtres : mêmes clés et bornes que le site (apps/web/src/lib/filters.ts). */
-export const DEFAULT_PRICE_RANGES: readonly PriceRange[] = Object.freeze([
-  { key: "moins-50000", min: 0, max: 49_999 },
-  { key: "50000-150000", min: 50_000, max: 150_000 },
-  { key: "150000-300000", min: 150_001, max: 300_000 },
-  { key: "plus-300000", min: 300_001, max: 100_000_000 },
-]);
+/** Tranches de prix des filtres : celles du contrat partagé avec le site (@kemdia/contracts). */
+export const DEFAULT_PRICE_RANGES: readonly PriceRange[] = Object.freeze(
+  PRICE_RANGES.map(({ key, min, max }) => ({ key, min, max })),
+);
 
 /** Compteurs affichés à côté des filtres (« Beats (3) »), calculés AVANT application des filtres. */
 export interface Facets {

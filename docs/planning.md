@@ -110,7 +110,7 @@ Ces démarches prennent souvent plusieurs mois et **bloquent** des sprints si el
 | S3-T02 | PostgreSQL en local via `docker compose` (parité avec la production), Prisma, un schéma par module       | ✅     |
 | S3-T03 | Module `catalog` : catégories, produits, **variantes**, stock, UUID (BR-001, BR-042, FR-013)             | ✅     |
 | S3-T04 | API REST `/api/v1` documentée (OpenAPI), limitation de débit                                             | ✅     |
-| S3-T05 | Le site lit l'API au lieu du fichier de démonstration (`lib/catalog.ts`)                                 | ⏳     |
+| S3-T05 | Le site lit l'API au lieu du fichier de démonstration (`lib/catalog.ts`)                                 | ✅     |
 | S3-T06 | CI : tests d'intégration avec une base PostgreSQL éphémère, image Docker de l'API                        | ⏳     |
 | S3-T07 | Démo Render : API + base de données gratuite                                                             | ⏳     |
 | S3-T08 | Dette : blocage de l'accueil ramené à 300 ms (chargement progressif), ESLint 10, évaluation TypeScript 7 | ⏳     |
@@ -118,7 +118,7 @@ Ces démarches prennent souvent plusieurs mois et **bloquent** des sprints si el
 ## S4 à S8 — grandes lignes
 
 - **S4 `identity` + `notifications`** : e-mail ou téléphone + OTP (BR-041), Argon2id, cookies sécurisés, blocage après 3 échecs (BR-040), RBAC, journal d'audit.
-- **S5 `orders` + `payments`** : panier serveur, réservation de stock atomique (BR-012), coupons (BR-030), paiement à la livraison sous conditions (BR-011),
+- **S5 `orders` + `payments`** : panier serveur (et vérification du panier par `POST /availability` au passage en caisse), réservation de stock atomique (BR-012), coupons (BR-030), paiement à la livraison sous conditions (BR-011),
   adaptateurs Moov / Airtel en _sandbox_, webhooks signés, idempotence, factures (FR-015).
 - **S6 `vendors` + back-office** : boutique, KYC (BR-024), modération des produits (BR-003), commandes vendeur (BR-013), commissions (BR-020), modération des avis.
 - **S7 `shipping` + préproduction** : transporteur, commission logistique (BR-021), serveur durci, surveillance, sauvegardes chiffrées testées, test d'intrusion, conformité.

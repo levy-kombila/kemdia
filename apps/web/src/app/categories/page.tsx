@@ -5,10 +5,17 @@ import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { countProducts, getCategoryTree } from "@/lib/catalog";
 
+/** Nombre de produits de chaque grand rayon (sous-rayons compris), en parallèle. */
+async function rootCounts(slugs: string[]): Promise<Map<string, number>> {
+  const counts = await Promise.all(slugs.map((slug) => countProducts(slug)));
+  return new Map(slugs.map((slug, i) => [slug, counts[i] ?? 0]));
+}
+
 export const metadata: Metadata = { title: "Toutes les catégories" };
 
-export default function CategoriesPage() {
-  const tree = getCategoryTree();
+export default async function CategoriesPage() {
+  const tree = await getCategoryTree();
+  const counts = await rootCounts(tree.map((root) => root.slug));
   return (
     <div className="container-page py-6">
       <Breadcrumbs items={[{ label: "Catégories" }]} />
@@ -33,7 +40,7 @@ export default function CategoriesPage() {
                 <CategoryIcon name={root.icon} className="size-6" />
                 {root.name}
                 <span className="text-sm font-medium text-white/70">
-                  ({countProducts(root.id)})
+                  ({counts.get(root.slug) ?? 0})
                 </span>
               </h2>
             </Link>

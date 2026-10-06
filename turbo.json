@@ -10,9 +10,9 @@
       "dependsOn": ["^build", "generate"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
-    "lint": { "dependsOn": ["generate"] },
-    "typecheck": { "dependsOn": ["generate"] },
-    "test": { "dependsOn": ["generate"] },
-    "dev": { "dependsOn": ["generate"], "cache": false, "persistent": true }
+    "lint": { "dependsOn": ["^build", "generate"] },
+    "typecheck": { "dependsOn": ["^build", "generate"] },
+    "test": { "dependsOn": ["^build", "generate"] },
+    "dev": { "dependsOn": ["^build", "generate"], "cache": false, "persistent": true }
   }
 }

@@ -1,4 +1,4 @@
-import { PRODUCT_QUERY_PARAMETERS } from "./schemas.js";
+import { PRODUCT_QUERY_PARAMETERS } from "@kemdia/contracts";
 
 /** Description OpenAPI des routes du catalogue (les schémas viennent de schemas.ts). */
 

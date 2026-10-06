@@ -1,15 +1,13 @@
 import "reflect-metadata";
-import { readFileSync } from "node:fs";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { demoCatalog, uuidV5, type DemoCatalog } from "@kemdia/contracts/demo";
+import { afterAll, beforeAll, describe, expect, it, onTestFinished } from "vitest";
 import { loadConfig } from "../src/config/env.js";
 import { PrismaService } from "../src/database/prisma.service.js";
 import { CatalogService } from "../src/modules/catalog/application/catalog.service.js";
-import { Product } from "../src/modules/catalog/domain/product.js";
+import { Product, type Variant } from "../src/modules/catalog/domain/product.js";
 import {
   importCatalog,
   prepareDemoCatalog,
-  uuidV5,
-  type DemoCatalog,
 } from "../src/modules/catalog/infrastructure/demo-catalog.js";
 import { PrismaCategoryRepository } from "../src/modules/catalog/infrastructure/prisma-category.repository.js";
 import { PrismaProductRepository } from "../src/modules/catalog/infrastructure/prisma-product.repository.js";
@@ -20,9 +18,7 @@ import { testDatabaseUrl } from "./integration-db.js";
  * contraintes de la base. Les résultats attendus sont recalculés à partir du fichier de démonstration,
  * avec la même logique que le site : l'API donnera les mêmes listes que le site d'aujourd'hui (S3-T05).
  */
-const data = JSON.parse(
-  readFileSync(new URL("../prisma/seed/catalogue-demo.json", import.meta.url), "utf8"),
-) as DemoCatalog;
+const data: DemoCatalog = demoCatalog;
 
 const config = loadConfig({
   NODE_ENV: "test",
@@ -169,6 +165,55 @@ describe("Catalogue (intégration PostgreSQL)", () => {
       }
     }
     expect(new Set(seen).size).toBe(50);
+  });
+
+  it("sélections de l'accueil (badge) et tri « ventes »", async () => {
+    const count = async (badge: string) =>
+      (await service.searchProducts({ badge, pageSize: 48 })).total;
+    expect(await count("featured")).toBe(data.products.filter((p) => p.isFeatured).length);
+    expect(await count("new")).toBe(data.products.filter((p) => p.isNew).length);
+    expect(await count("bestseller")).toBe(data.products.filter((p) => p.isBestseller).length);
+    const sold = await service.searchProducts({ sort: "ventes", pageSize: 48 });
+    const reviews = sold.items.map((p) => p.reviewCount);
+    expect(reviews).toEqual([...reviews].sort((a, b) => b - a));
+  });
+
+  it("liste : variante par défaut (la moins chère active), son stock, nombre de variantes", async () => {
+    const source = data.products.find((p) => p.stock > 0);
+    const product = await service.getProduct(source?.slug ?? "");
+    if (!product) throw new Error("produit de démonstration introuvable");
+    // Deux variantes : une plus chère en stock, une moins chère sans stock
+    const base = product.variants[0] as Variant;
+    const cheaperId = "8d9e0f1a-2b3c-4d4e-8f5a-6b7c8d9e0f1a";
+    const twoVariants = Product.create({
+      ...product,
+      variants: [
+        { ...base, price: base.price + 1_000, compareAtPrice: null, stock: 4 },
+        {
+          ...base,
+          id: cheaperId,
+          sku: "KMD-MOINS-CHERE",
+          price: 1_000,
+          compareAtPrice: null,
+          stock: 0,
+        },
+      ],
+    });
+    await products.save(twoVariants, twoVariants.searchText(""));
+    // Les tests suivants s'appuient sur les données d'origine : on les remet à la fin
+    const categoryName = (await service.categoryPath(product.categoryId)).at(-1)?.name ?? "";
+    onTestFinished(() => products.save(product, product.searchText(categoryName)));
+    const [summary] = (
+      await service.searchProducts({ q: product.title, pageSize: 48 })
+    ).items.filter((p) => p.id === product.id);
+    expect(summary).toMatchObject({
+      variantId: cheaperId,
+      stock: 0,
+      variantCount: 2,
+      price: 1_000,
+      inStock: true, // l'autre variante a du stock
+    });
+    expect(summary?.variantId).toBe(twoVariants.mainVariant.id);
   });
 
   it("page trop loin : dernière page", async () => {

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`)."
   },
   "servers": [
@@ -159,10 +159,10 @@
           },
           {
             "name": "sort",
-            "description": "Tri",
+            "description": "Tri (« ventes » : les plus demandés d'abord)",
             "schema": {
               "type": "string",
-              "enum": ["pertinence", "nouveautes", "prix-asc", "prix-desc", "note"],
+              "enum": ["pertinence", "nouveautes", "prix-asc", "prix-desc", "note", "ventes"],
               "default": "pertinence"
             },
             "in": "query",
@@ -257,6 +257,16 @@
             "schema": {
               "type": "string",
               "enum": ["promotions"]
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "badge",
+            "description": "Sélection : mis en avant, nouveautés ou meilleures ventes",
+            "schema": {
+              "type": "string",
+              "enum": ["featured", "new", "bestseller"]
             },
             "in": "query",
             "required": false
@@ -313,10 +323,10 @@
           },
           {
             "name": "sort",
-            "description": "Tri",
+            "description": "Tri (« ventes » : les plus demandés d'abord)",
             "schema": {
               "type": "string",
-              "enum": ["pertinence", "nouveautes", "prix-asc", "prix-desc", "note"],
+              "enum": ["pertinence", "nouveautes", "prix-asc", "prix-desc", "note", "ventes"],
               "default": "pertinence"
             },
             "in": "query",
@@ -411,6 +421,16 @@
             "schema": {
               "type": "string",
               "enum": ["promotions"]
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "badge",
+            "description": "Sélection : mis en avant, nouveautés ou meilleures ventes",
+            "schema": {
+              "type": "string",
+              "enum": ["featured", "new", "bestseller"]
             },
             "in": "query",
             "required": false
@@ -941,6 +961,12 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
+          "variantId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Variante proposée par défaut (la moins chère)"
+          },
           "rating": {
             "type": "number",
             "minimum": 0,
@@ -965,7 +991,8 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Variant"
-            }
+            },
+            "description": "Variantes actives"
           }
         },
         "required": [
@@ -981,6 +1008,7 @@
           "compareAtPrice",
           "inStock",
           "totalStock",
+          "variantId",
           "rating",
           "reviewCount",
           "isFeatured",
@@ -1074,7 +1102,26 @@
             "description": "Prix barré, toujours supérieur au prix"
           },
           "inStock": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Au moins une variante active a du stock"
+          },
+          "variantId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Variante proposée par défaut (la moins chère) : celle ajoutée au panier depuis une liste"
+          },
+          "stock": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Stock de la variante par défaut"
+          },
+          "variantCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Nombre de variantes actives (au-delà de 1 : choix sur la fiche)"
           },
           "rating": {
             "type": "number",
@@ -1106,6 +1153,9 @@
           "price",
           "compareAtPrice",
           "inStock",
+          "variantId",
+          "stock",
+          "variantCount",
           "rating",
           "reviewCount",
           "isFeatured",

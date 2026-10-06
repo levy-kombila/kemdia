@@ -5,28 +5,34 @@ import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 import { SectionHeader } from "@/components/home/SectionHeader";
 import { BuyBox } from "@/components/product/BuyBox";
 import { FavoriteButton } from "@/components/product/FavoriteButton";
-import { ProductCard, toCartLine, toFavorite } from "@/components/product/ProductCard";
+import { ProductCard } from "@/components/product/ProductCard";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductRail, RailItem } from "@/components/product/ProductRail";
 import { ShareButtons } from "@/components/product/ShareButtons";
 import { StickyBuyBar } from "@/components/product/StickyBuyBar";
+import { VariantPicker } from "@/components/product/VariantPicker";
 import { DiscountSticker, Price } from "@/components/ui/Price";
 import { Rating } from "@/components/ui/Rating";
-import { getCategoryPath, getProductBySlug, getRelatedProducts } from "@/lib/catalog";
+import { getProduct, getRelatedProducts } from "@/lib/catalog";
 import { discountPercent, formatFCFA } from "@/lib/format";
+import { attributeRows, detailCartLine, detailFavorite, selectVariant } from "@/lib/product-view";
+import { first } from "@/lib/search-params";
 import { SITE, siteUrl } from "@/lib/site";
 
-type Props = { params: Promise<{ slug: string }> };
+type Props = {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
-// Rendu à la demande : l'adresse absolue des aperçus (WhatsApp, Facebook) vient de SITE_URL au démarrage.
-// Le catalogue est en mémoire : quelques millisecondes par page.
+// Rendu à la demande : l'adresse absolue des aperçus (WhatsApp, Facebook) vient de SITE_URL au démarrage,
+// et le catalogue n'est jamais lu pendant la construction (S3-T05).
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const product = getProductBySlug((await params).slug);
+  const product = await getProduct((await params).slug);
   if (!product) return { title: "Produit introuvable" };
   const price = formatFCFA(product.price);
-  const discount = discountPercent(product.price, product.oldPrice);
+  const discount = discountPercent(product.price, product.compareAtPrice);
   // Texte affiché sous l'image dans WhatsApp : le prix d'abord, c'est ce qui fait cliquer
   const description = `${price}${discount ? ` (-${discount} %)` : ""} · Livraison partout au Gabon · Paiement Airtel Money et Moov Money`;
   return {
@@ -46,19 +52,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     other: {
       "product:price:amount": String(product.price),
       "product:price:currency": "XAF",
-      "product:availability": product.stock > 0 ? "in stock" : "out of stock",
+      "product:availability": product.inStock ? "in stock" : "out of stock",
     },
   };
 }
 
-export default async function ProductPage({ params }: Props) {
-  const product = getProductBySlug((await params).slug);
+export default async function ProductPage({ params, searchParams }: Props) {
+  const [{ slug }, sp] = await Promise.all([params, searchParams]);
+  const product = await getProduct(slug);
   if (!product) notFound();
 
-  const path = getCategoryPath(product.categoryId);
-  const related = getRelatedProducts(product, 10);
-  const discount = discountPercent(product.price, product.oldPrice);
-  const line = toCartLine(product);
+  const variant = selectVariant(product, first(sp.variante));
+  const path = product.path;
+  const related = await getRelatedProducts(product, 10);
+  const discount = discountPercent(variant.price, variant.compareAtPrice);
+  const line = detailCartLine(product, variant);
+  const favorite = detailFavorite(product);
+  const attributes = attributeRows(variant);
   const base = siteUrl();
   const productUrl = `${base}/produit/${product.slug}`;
 
@@ -78,14 +88,17 @@ export default async function ProductPage({ params }: Props) {
             reviewCount: product.reviewCount,
           }
         : undefined,
-    offers: {
+    offers: product.variants.map((v) => ({
       "@type": "Offer",
+      sku: v.sku,
       priceCurrency: "XAF",
-      price: product.price,
-      availability:
-        product.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-      url: productUrl,
-    },
+      price: v.price,
+      availability: v.available ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+      url:
+        product.variants.length > 1
+          ? `${productUrl}?variante=${encodeURIComponent(v.sku)}`
+          : productUrl,
+    })),
   };
 
   return (
@@ -123,16 +136,26 @@ export default async function ProductPage({ params }: Props) {
             <Rating value={product.rating} count={product.reviewCount} size="md" />
           </a>
           <div className="mt-3 flex flex-wrap gap-2">
-            <FavoriteButton item={toFavorite(product)} variant="inline" />
+            <FavoriteButton item={favorite} variant="inline" />
             <ShareButtons url={productUrl} title={product.title} price={product.price} />
           </div>
 
           <div className="border-ink-100 my-4 border-y py-4">
             <div className="flex items-start gap-3">
-              <Price price={product.price} oldPrice={product.oldPrice} size="lg" showSavings />
+              <Price
+                price={variant.price}
+                oldPrice={variant.compareAtPrice}
+                size="lg"
+                showSavings
+              />
               {discount && <DiscountSticker percent={discount} className="mt-1 text-lg" />}
             </div>
             <p className="text-ink-500 mt-1 text-xs">Prix en francs CFA, toutes taxes comprises</p>
+            <VariantPicker
+              slug={product.slug}
+              variants={product.variants}
+              selectedId={variant.id}
+            />
           </div>
 
           <dl className="grid grid-cols-[7rem_1fr] gap-y-2 text-sm">
@@ -142,16 +165,16 @@ export default async function ProductPage({ params }: Props) {
                 <dd className="font-medium">{product.brand}</dd>
               </>
             )}
-            {product.color && (
-              <>
-                <dt className="text-ink-500">Couleur</dt>
-                <dd className="font-medium">{product.color}</dd>
-              </>
-            )}
+            {attributes.map(([label, value]) => (
+              <div key={label} className="contents">
+                <dt className="text-ink-500">{label}</dt>
+                <dd className="font-medium">{value}</dd>
+              </div>
+            ))}
             <dt className="text-ink-500">Rayon</dt>
             <dd className="font-medium">{path.at(-1)?.name}</dd>
             <dt className="text-ink-500">Référence</dt>
-            <dd className="font-medium">KMD-{product.id.padStart(5, "0")}</dd>
+            <dd className="font-medium">{variant.sku}</dd>
           </dl>
 
           {/* Encadré d'achat ici sur tablette ; colonne de droite sur grand écran */}
@@ -203,9 +226,9 @@ export default async function ProductPage({ params }: Props) {
             <tbody className="divide-ink-100 divide-y">
               {[
                 ["Marque", product.brand],
-                ["Couleur", product.color],
+                ...attributes,
                 ["Catégorie", path.map((c) => c.name).join(" › ")],
-                ["Référence", `KMD-${product.id.padStart(5, "0")}`],
+                ["Référence", variant.sku],
               ]
                 .filter((row): row is [string, string] => Boolean(row[1]))
                 .map(([k, v]) => (
@@ -260,7 +283,7 @@ export default async function ProductPage({ params }: Props) {
           </ProductRail>
         </section>
       )}
-      <StickyBuyBar line={line} oldPrice={product.oldPrice} />
+      <StickyBuyBar line={line} oldPrice={variant.compareAtPrice} />
     </div>
   );
 }

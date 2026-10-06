@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués  |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests      |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                       |
+| **1.6** | 2026-10-06 | S3     | Le site lit l'API (ADR-0011) : §3.2, §3.7 contrat `packages/contracts`, §5.1, §5.2, §5.7 panier par variante, §5.9 (nouvelle), §6.2, §7, §9 |
 | **1.5** | 2026-10-06 | S3     | §3.7 API REST `/api/v1` et documentation OpenAPI (ADR-0010) ; §3.4 `docs/`, variables ; §4 ; §6.3 limitation de débit ; §9 tests de contrat |
 | **1.4** | 2026-10-06 | S3     | BR-005 : 3 niveaux de catégories (domaine + déclencheur SQL) ; Fitness déplacé sous Sport & Loisirs ; §2.1, §3.6, §6.3, §9                  |
 | **1.3** | 2026-10-06 | S3     | §3.6 module `catalog` (ADR-0009) : domaine, cas d'utilisation, persistance, import de démonstration ; §2.1 F3 ; §6.3 ; §9 tests             |
@@ -141,6 +142,9 @@ lu côté serveur par `src/lib/catalog.ts`, qui sera remplacé par des appels à
 **État au S3-T02** : `apps/api` existe (socle, contrôle de santé, aucune route métier) et se connecte à PostgreSQL ;
 le module `catalog` (S3-T03) lit et écrit catégories, produits et variantes ; ses routes HTTP arrivent au S3-T04,
 exposé en HTTP sous `/api/v1` (S3-T04, §3.7) ; le site l'appellera au S3-T05.
+
+**État au S3-T05** : le serveur du site lit le catalogue **dans l'API** (§5.9, [ADR-0011](adr/0011-site-branche-api.md)) ;
+le navigateur ne l'appelle jamais directement. Le fichier de démonstration ne sert plus qu'à la démo Render, jusqu'au S3-T07.
 
 ### 3.3 Modules du backend (cible MVP)
 
@@ -334,11 +338,19 @@ Décision : [ADR-0010](adr/0010-api-rest-openapi.md). Description complète : [`
 
 ```mermaid
 flowchart LR
-    z[Schémas Zod<br/>interface/schemas.ts] -->|valide les corps| r[Routes]
+    z[Schémas Zod<br/>packages/contracts] -->|valide les corps| r[Routes]
     z -->|z.toJSONSchema| o[OpenAPI 3.1<br/>/api/v1/openapi.json<br/>docs/api/openapi.json]
     z -->|valide chaque réponse| t[Tests de contrat<br/>en mémoire + vraie base]
     o --> ui[Page /api/docs<br/>servie par l'API, sans CDN]
+    z -->|valide chaque réponse reçue| site[Site<br/>lib/catalog/api-catalog.ts]
 ```
+
+**Contrat partagé (S3-T05)** : les schémas vivent dans le paquet `packages/contracts` (`@kemdia/contracts`), utilisé par l'API **et** le site.
+`@kemdia/contracts/constants` (tris, badges, tranches de prix, limites) n'embarque pas Zod : la couche `application` de l'API peut l'utiliser
+(le test d'architecture l'autorise, et interdit le reste du paquet au domaine et à l'application). `@kemdia/contracts/demo` contient les données
+et les identifiants de démonstration (UUID v5). Le paquet est compilé à l'installation (`prepare`) et par Turborepo (`^build`).
+Le paramètre `badge` (`featured`, `new`, `bestseller`) et le tri `ventes` ont été ajoutés pour l'accueil ; chaque produit de liste porte
+sa **variante par défaut** (`variantId`, `stock`) et `variantCount` (contrat 1.1.0).
 
 **Limitation de débit** : par adresse IP (`req.ip`, qui ne croit `X-Forwarded-For` que derrière un relais déclaré par `TRUST_PROXY`).
 Le serveur du site présente la clé `API_INTERNAL_KEY` et n'est pas limité : il sert tous les visiteurs depuis une seule adresse.
@@ -359,6 +371,7 @@ Le serveur du site présente la clé `API_INTERNAL_KEY` et n'est pas limité : i
 | Backend   | NestJS (modules ES, Express 5) + Zod + pino                            | 12 / 4 / 10 | S3 — [ADR-0006](adr/0006-monolithe-modulaire-7-modules.md), [ADR-0007](adr/0007-socle-api-nestjs.md) |
 | Base      | PostgreSQL + Prisma (adaptateur `pg`), un schéma par module            | 18 / 7.10   | S3 — [ADR-0008](adr/0008-postgresql-prisma.md)                                                       |
 | API       | OpenAPI 3.1 (depuis Zod), Swagger UI auto-hébergé, `@nestjs/throttler` | 3.1 / 5 / 6 | S3-T04 — [ADR-0010](adr/0010-api-rest-openapi.md)                                                    |
+| Contrat   | Paquet `@kemdia/contracts` (Zod), partagé par l'API et le site         | 4           | S3-T05 — [ADR-0011](adr/0011-site-branche-api.md)                                                    |
 
 ## 5. Architecture du frontend (`apps/web`)
 
@@ -369,42 +382,48 @@ apps/web/src
 ├── app/                     Routes (1 dossier = 1 URL)
 │   ├── page.tsx             Accueil
 │   ├── categorie/[slug]/    Liste par catégorie (rendu à la demande : tri/pagination)
-│   ├── produit/[slug]/      Fiche produit (pré-générée au build)
+│   ├── produit/[slug]/      Fiche produit (variante choisie par ?variante=<sku>)
 │   ├── recherche/           Résultats de recherche (non indexés)
 │   ├── connexion/  inscription/  mot-de-passe-oublie/   Parcours d'identité (S2)
 │   ├── commande/  favoris/  vendre/                     Tunnel de commande, favoris, page vendeur (S2)
 │   ├── promotions/  categories/  panier/  compte/  infos/[slug]/
-│   ├── sitemap.ts  robots.ts  icon.svg  not-found.tsx  error.tsx
+│   ├── sitemap.ts  robots.ts  icon.svg  not-found.tsx  error.tsx  global-error.tsx
 │   └── layout.tsx           Gabarit commun : en-tête, pied de page, fournisseurs
 ├── components/
 │   ├── layout/              TopBar, Header, SearchForm, CategoryNav (méga-menu + tiroir), Footer, MobileTabBar
 │   ├── home/                Hero + HeroCarousel, CategoryBubbles, FlashSales, CategoryTiles, Countdown, Newsletter
 │   ├── catalog/             ProductListing (tri + pagination), Breadcrumbs, SortSelect
-│   ├── product/             ProductCard, ProductRail, ProductGallery, BuyBox, StickyBuyBar, AddToCartButton
+│   ├── product/             ProductCard, ProductRail, ProductGallery, BuyBox, StickyBuyBar, AddToCartButton, VariantPicker
 │   ├── auth/                Formulaires d'identité, saisie du code OTP, champs accessibles
 │   ├── cart/                MiniCart
 │   ├── location/            LocationModal (Gabon)
 │   ├── providers/           Panier, ville de livraison, notifications
 │   └── ui/                  Logo, Price, Rating, CategoryIcon
 ├── lib/                     Logique pure, testée
-│   ├── catalog.ts           Accès catalogue (server-only) — futur client API
-│   ├── cart.ts              Réducteur du panier + validation du stockage
+│   ├── catalog/             Port du catalogue (server-only) : index.ts (seul point d'entrée des pages),
+│   │                        port.ts, api-catalog.ts (HTTP), file-catalog.ts (démo) — §5.9
+│   ├── config/              Source du catalogue choisie et vérifiée au démarrage (instrumentation.ts)
+│   ├── cart.ts              Réducteur du panier (une ligne = une variante) + validation du stockage
+│   ├── product-view.ts      Variante choisie, caractéristiques, ligne de panier de la fiche
 │   ├── delivery.ts          Villes, zones, calcul des frais
 │   ├── auth/                Validation (téléphone gabonais, e-mail, mot de passe) + port AuthClient
 │   ├── search-params.ts     Validation des paramètres d'URL (liste blanche, adresse de retour)
-│   └── format.ts  site.ts  types.ts  cn.ts
-└── data/catalog.seed.json   Données de démonstration (S1 → remplacé par l'API en S3)
+│   └── format.ts  site.ts  types.ts (types du contrat)  cn.ts
+└── instrumentation.ts       Vérifie la configuration au démarrage du serveur
+
+packages/contracts/          Schémas Zod et constantes partagés avec l'API ; données de démonstration (/demo)
 ```
 
 ### 5.2 Rendu des pages
 
-| Page                                                    | Mode                                             | Raison                                                                  |
-| ------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
-| Liste des catégories, compte, panier, favoris, commande | Statique (build)                                 | Contenu identique pour tous ; panier et favoris remplis côté navigateur |
-| Accueil, fiche produit                                  | À la demande (S2-T05)                            | Liens absolus des aperçus WhatsApp tirés de `SITE_URL` au démarrage     |
-| Aperçus `opengraph-image`                               | Statique pré-générée (`generateStaticParams`)    | Image 1200 × 630 calculée une fois, à la construction                   |
-| Catégorie, recherche, promotions                        | Dynamique                                        | Dépend de `?tri=`, `?page=` et des filtres                              |
-| Infos                                                   | Statique, liste fermée (`dynamicParams = false`) | Toute autre URL → 404                                                   |
+| Page                                        | Mode                                             | Raison                                                                  |
+| ------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
+| Compte, favoris, commande, pages d'identité | Statique (build)                                 | Contenu identique pour tous ; panier et favoris remplis côté navigateur |
+| Toute page qui lit le catalogue (S3-T05)    | À la demande (`connection()`)                    | Aucun appel à l'API pendant `next build` (§5.9) ; cache de 60 s         |
+| Accueil, fiche produit                      | À la demande (S2-T05)                            | Liens absolus des aperçus WhatsApp tirés de `SITE_URL` au démarrage     |
+| Aperçus `opengraph-image`                   | À la demande (S3-T05)                            | Image 1200 × 630 ; prix lu dans l'API                                   |
+| Catégorie, recherche, promotions            | Dynamique                                        | Dépend de `?tri=`, `?page=` et des filtres                              |
+| Infos                                       | Statique, liste fermée (`dynamicParams = false`) | Toute autre URL → 404                                                   |
 
 Composants **serveur** par défaut ; seuls les éléments interactifs sont des composants **client**
 (`"use client"`) : panier, mini-panier, menu, modale de ville, galerie, compte à rebours, tri.
@@ -498,7 +517,7 @@ flowchart LR
 | Paiement à la livraison         | Grisé avec la raison si la ville ou le montant ne le permettent pas (BR-011, valeurs provisoires)           |
 | Port `OrderClient`              | Adaptateur de démonstration en S2 ; API `orders` + `payments` en S5, sans changer l'interface               |
 
-**Données envoyées au serveur** (`buildOrderRequest`) : identifiants et quantités des articles, adresse, moyen et numéro de paiement.
+**Données envoyées au serveur** (`buildOrderRequest`) : `{ variantId, quantity }` pour chaque article (S3-T05), adresse, moyen et numéro de paiement.
 **Jamais de prix, de total ni de frais** : le serveur les recalcule (BR-004, faille CRIT-01 de l'ancien site).
 
 ### 5.8 Favoris, partage et page vendeur (S2-T04 à T06)
@@ -512,8 +531,36 @@ flowchart LR
 
 **Adresse publique lue au démarrage** : les aperçus WhatsApp exigent des liens absolus. La même image Docker sert la démo,
 le staging et la production : l'adresse vient donc de la variable `SITE_URL` du serveur (`siteUrl()`), et les pages partagées
-(accueil, fiches produit, `sitemap.xml`, `robots.txt`) sont rendues à la demande. Le catalogue étant en mémoire, cela coûte
-quelques millisecondes par page.
+(accueil, fiches produit, `sitemap.xml`, `robots.txt`) sont rendues à la demande. Le catalogue étant gardé 60 s en mémoire (§5.9),
+cela coûte quelques millisecondes par page.
+
+### 5.9 Lecture du catalogue dans l'API (S3-T05)
+
+Décision : [ADR-0011](adr/0011-site-branche-api.md).
+
+```mermaid
+flowchart LR
+    pages[Pages et en-tête] --> idx[lib/catalog/index.ts<br/>connection + garde de build]
+    idx --> port{{CatalogPort}}
+    port -->|API_URL définie| api[api-catalog.ts<br/>HTTP + clé interne<br/>délai, cache 60 s, contrat vérifié]
+    port -->|API_URL absente, hors production| file[file-catalog.ts<br/>@kemdia/contracts/demo]
+    api --> v1[(API /api/v1)]
+```
+
+| Configuration (au démarrage)                 | Comportement                                                                                                 |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `API_URL` + `API_INTERNAL_KEY`               | Catalogue lu dans l'API **uniquement** ; API muette, en retard ou réponse hors contrat → page d'erreur (500) |
+| `API_URL` absente                            | Fichier de démonstration (démo Render jusqu'au S3-T07, développement sans base)                              |
+| `APP_ENV=production` sans `API_URL`          | **Le serveur refuse de démarrer** (code 1, message en français)                                              |
+| Clé sans `API_URL`, adresse ou clé invalides | Refus de démarrer                                                                                            |
+
+- **Jamais de bascule automatique** de l'API vers le fichier : une panne doit se voir, pas afficher de faux prix.
+- **Construction** : `lib/catalog` appelle `connection()` (la page devient dynamique) puis refuse toute lecture si `NEXT_PHASE` est la construction.
+  Une page qui tenterait de lire le catalogue au build fait donc échouer `next build` avec un message renvoyant à l'ADR-0011.
+- **En-tête** : rendu sur toutes les pages, il affiche un menu des catégories vide si l'API est indisponible (et seulement dans ce cas) ;
+  la page elle-même affiche l'erreur.
+- **Panier** (`kemdia.cart.v2`) : une ligne = une variante ; les paniers `v1` sont effacés au chargement. Les **favoris** restent par produit (UUID).
+- Variables : `API_URL`, `API_INTERNAL_KEY` (secret), `CATALOG_TIMEOUT_MS` (5000 par défaut) — voir `apps/web/.env.example`.
 
 ## 6. Sécurité
 
@@ -538,7 +585,9 @@ quelques millisecondes par page.
 | Optimiseur d'images limité à `/images/**` (URL externes refusées : 400)                                                                    | `next.config.ts`                  | HIGH-03 (SSRF)                         |
 | `localStorage` validé champ par champ                                                                                                      | `lib/cart.ts`, `LocationProvider` | Altération du panier                   |
 | Ville choisie dans une liste fermée, aucune redirection construite depuis l'URL                                                            | `LocationModal`                   | MED-01, MED-06, MED-14                 |
-| Code catalogue `server-only`                                                                                                               | `lib/catalog.ts`                  | Fuite de logique côté client           |
+| Code catalogue `server-only`                                                                                                               | `lib/catalog/`                    | Fuite de logique côté client           |
+| Catalogue (S3-T05) : réponses de l'API validées par le contrat, délai maximal, slug vérifié avant l'appel, jamais de repli silencieux      | `lib/catalog/api-catalog.ts`      | Données altérées, SSRF, faux prix      |
+| Configuration du site vérifiée au démarrage : production sans API refusée, clé interne obligatoire, adresse sans identifiants (S3-T05)     | `lib/config/`, `instrumentation`  | CRIT-02, mauvais réglage               |
 | `.gitignore` : `.env*`, `*.sqlite3`, dumps                                                                                                 | racine                            | CRIT-02, CRIT-03, CRIT-05, LOW-02      |
 | Gitleaks (historique complet), pnpm audit, CodeQL, Dependabot, Trivy                                                                       | CI                                | CRIT-02, HIGH-07                       |
 | Pages d'erreur sans détail technique                                                                                                       | `error.tsx`                       | Fuite d'informations                   |
@@ -568,7 +617,7 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 | Images de produits : chemins `/images/…` uniquement, jamais d'adresse externe (S3-T03)                                                                                                  | `catalog/domain/category.ts`                     | HIGH-03 (SSRF)                                         |
 | Tests d'intégration limités aux bases `*_test` (ils vident des tables) (S3-T03)                                                                                                         | `test/integration-db.ts`                         | Perte de données de développement                      |
 | Limitation de débit par IP (120/min, 30/min pour la disponibilité), 429 en français + `Retry-After` ; clé interne du site comparée en temps constant (S3-T04)                           | `http/rate-limit.ts`                             | Déni de service, force brute                           |
-| Corps de requête validés par schéma, champs inconnus refusés (S3-T04)                                                                                                                   | `catalog/interface/schemas.ts`                   | Injection de champs (ex. un prix envoyé par le client) |
+| Corps de requête validés par schéma, champs inconnus refusés (S3-T04)                                                                                                                   | `packages/contracts/src/schemas.ts`              | Injection de champs (ex. un prix envoyé par le client) |
 | Page de documentation : fichiers servis par l'API (liste fermée), CSP propre, désactivée par défaut en production ; télémétrie `@scarf/scarf` bloquée (S3-T04)                          | `docs/`                                          | Script tiers, fuite d'informations                     |
 | Base locale accessible seulement depuis le poste (`127.0.0.1`), authentification SCRAM-SHA-256 (S3-T02)                                                                                 | `docker-compose.yml`                             | Base exposée sur le réseau                             |
 
@@ -601,18 +650,20 @@ flowchart LR
     prod -. échec .-> rb[retour arrière auto]
 ```
 
-| Fichier                           | Rôle                                                                                              |
-| --------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `.github/workflows/ci.yml`        | Qualité → bout en bout → image → scan → publication GHCR + Docker Hub (main) → staging + démo     |
-| `.github/workflows/release.yml`   | Tag `vX.Y.Z` → promotion de l'image testée → Release GitHub → production                          |
-| `.github/workflows/_deploy.yml`   | Déploiement réutilisable : SSH restreint, test de fumée, retour arrière                           |
-| `.github/workflows/security.yml`  | Gitleaks, pnpm audit, Semgrep, ShellCheck ; CodeQL si dépôt public ; chaque lundi                 |
-| `.github/dependabot.yml`          | Mises à jour hebdomadaires (npm, actions épinglées par SHA, image Docker)                         |
-| `apps/web/Dockerfile`             | Multi-étapes, `standalone`, non-root, sans npm, healthcheck `/api/health`                         |
-| `apps/api/`                       | Lint, types, tests (avec couverture) et build dans la même étape « qualité » que le site (S3-T01) |
-| Job « migrations et intégration » | Base PostgreSQL 18 éphémère : `db:deploy`, `db:check` (migrations = schéma), `test:int` (S3-T02)  |
-| `deploy/`                         | Scripts et configuration serveur (voir §8)                                                        |
-| `.husky/pre-commit`               | Formatage automatique avant chaque commit                                                         |
+| Fichier                           | Rôle                                                                                                                                                     |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/ci.yml`        | Qualité → bout en bout → image → scan → publication GHCR + Docker Hub (main) → staging + démo                                                            |
+| `.github/workflows/release.yml`   | Tag `vX.Y.Z` → promotion de l'image testée → Release GitHub → production                                                                                 |
+| `.github/workflows/_deploy.yml`   | Déploiement réutilisable : SSH restreint, test de fumée, retour arrière                                                                                  |
+| `.github/workflows/security.yml`  | Gitleaks, pnpm audit, Semgrep, ShellCheck ; CodeQL si dépôt public ; chaque lundi                                                                        |
+| `.github/dependabot.yml`          | Mises à jour hebdomadaires (npm, actions épinglées par SHA, image Docker)                                                                                |
+| `apps/web/Dockerfile`             | Multi-étapes, `standalone`, non-root, sans npm, healthcheck `/api/health`                                                                                |
+| `apps/api/`                       | Lint, types, tests (avec couverture) et build dans la même étape « qualité » que le site (S3-T01)                                                        |
+| Job « migrations et intégration » | Base PostgreSQL 18 éphémère : `db:deploy`, `db:check` (migrations = schéma), `test:int` (S3-T02)                                                         |
+| Job « bout en bout » (S3-T05)     | Site construit avec une API **injoignable**, puis parcours et performance contre la vraie API (PostgreSQL 18, clé éphémère) ; aucune réponse 429 tolérée |
+| Job « image » (S3-T05)            | L'image démarre dans les 3 configurations : production sans API (refus), démo (fichier), API muette (500)                                                |
+| `deploy/`                         | Scripts et configuration serveur (voir §8)                                                                                                               |
+| `.husky/pre-commit`               | Formatage automatique avant chaque commit                                                                                                                |
 
 **Principes** : _build once, deploy many_ · déploiement par digest immuable · actions épinglées par SHA ·
 aucun secret dans Git · tout changement passe par une PR.
@@ -652,15 +703,17 @@ flowchart TB
 
 ## 9. Qualité et tests
 
-| Niveau              | Outil                                                 | État S1                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unitaires (logique) | Vitest                                                | 78 tests : formatage, livraison (dont dates), panier, catalogue, paramètres d'URL, identité (S2)                                                                                                                                                                                                                                                                                                                             |
-| Composants          | Testing Library                                       | 16 tests : carte produit, saisie OTP, parcours d'identité, carrousel, barre d'onglets (S2)                                                                                                                                                                                                                                                                                                                                   |
-| Bout en bout        | Playwright + axe-core                                 | 16 scénarios × 2 appareils (téléphone Pixel 7, ordinateur) : achat complet, filtres, favoris, partage, vendeur, en-têtes de sécurité, XSS, accessibilité WCAG AA de 7 pages (S2)                                                                                                                                                                                                                                             |
-| Performance         | Playwright + Web Vitals (Chrome DevTools)             | 5 pages, médiane de 3 chargements à froid en 3G : premier affichage, plus grand élément, décalages, blocage, poids ; tableau dans le résumé de la CI (S2-T08)                                                                                                                                                                                                                                                                |
-| API (S3)            | Vitest + Supertest                                    | 123 tests (S3-T04 : routes HTTP, contrat, limitation de débit, documentation OpenAPI ; dont 46 sur le catalogue : domaine, BR-001, recherche, import — S3-T03) : configuration, journaux, en-têtes de sécurité, CORS, format des erreurs, versionnement des routes, santé de la base, architecture du code et du schéma Prisma (S3-T01, T02)                                                                                 |
-| API — intégration   | Vitest + vraie base PostgreSQL 18                     | 33 tests, dont 6 de contrat HTTP sur la vraie base (S3-T04 : chaque catégorie, chaque produit, chaque page validés par leur schéma) et 21 sur le catalogue : listes, recherche, filtres, tri, compteurs **comparés à la logique du site**, BR-001, contraintes SQL, 3 niveaux de catégories (S3-T03) ; et : santé, schémas créés, requête trop longue interrompue, injection SQL, base injoignable → 503 sans fuite (S3-T02) |
-| Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Niveau              | Outil                                                 | État S1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unitaires (logique) | Vitest                                                | 78 tests : formatage, livraison (dont dates), panier, catalogue, paramètres d'URL, identité (S2)                                                                                                                                                                                                                                                                                                                                                                                              |
+| Composants          | Testing Library                                       | 16 tests : carte produit, saisie OTP, parcours d'identité, carrousel, barre d'onglets (S2)                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Bout en bout        | Playwright + axe-core                                 | 16 scénarios × 2 appareils (téléphone Pixel 7, ordinateur) : achat complet, filtres, favoris, partage, vendeur, en-têtes de sécurité, XSS, accessibilité WCAG AA de 7 pages (S2) ; **contre la vraie API** depuis le S3-T05                                                                                                                                                                                                                                                                   |
+| Performance         | Playwright + Web Vitals (Chrome DevTools)             | 5 pages, médiane de 3 chargements à froid en 3G : premier affichage, plus grand élément, décalages, blocage, poids ; tableau dans le résumé de la CI (S2-T08)                                                                                                                                                                                                                                                                                                                                 |
+| Site — catalogue    | Vitest                                                | S3-T05 : 147 tests du site au total (+27), dont 31 sur la lecture du catalogue : configuration (les 3 cas : API, fichier, production sans API refusée), adaptateur HTTP (délai, 404, réponse hors contrat, cache, clé interne), adaptateur fichier (mêmes résultats que l'API), garde de construction ; panier par variante (`kemdia.cart.v2`)                                                                                                                                                |
+| Contrat partagé     | Vitest                                                | 8 tests (S3-T05) : schémas, OpenAPI, identifiants de démonstration stables ; l'API vérifie que ses règles (quantité maximale) sont celles du contrat                                                                                                                                                                                                                                                                                                                                          |
+| API (S3)            | Vitest + Supertest                                    | 127 tests (S3-T05 : paramètre `badge`, tri `ventes`, alignement sur le contrat ; S3-T04 : routes HTTP, contrat, limitation de débit, documentation OpenAPI ; dont 46 sur le catalogue : domaine, BR-001, recherche, import — S3-T03) : configuration, journaux, en-têtes de sécurité, CORS, format des erreurs, versionnement des routes, santé de la base, architecture du code et du schéma Prisma (S3-T01, T02)                                                                            |
+| API — intégration   | Vitest + vraie base PostgreSQL 18                     | 35 tests (S3-T05 : badges, tri `ventes`, variante par défaut d'une liste), dont 6 de contrat HTTP sur la vraie base (S3-T04 : chaque catégorie, chaque produit, chaque page validés par leur schéma) et 21 sur le catalogue : listes, recherche, filtres, tri, compteurs **comparés à la logique du site**, BR-001, contraintes SQL, 3 niveaux de catégories (S3-T03) ; et : santé, schémas créés, requête trop longue interrompue, injection SQL, base injoignable → 503 sans fuite (S3-T02) |
+| Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ## 10. Glossaire
 

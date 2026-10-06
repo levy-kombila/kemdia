@@ -135,7 +135,7 @@ export function CartView() {
             <ul className="divide-ink-100 divide-y">
               {state.lines.map((l) => (
                 <li
-                  key={l.productId}
+                  key={l.variantId}
                   className="grid grid-cols-[5.5rem_1fr] gap-x-4 gap-y-3 p-4 sm:grid-cols-[6.5rem_1fr_auto] sm:p-5"
                 >
                   <Link
@@ -161,6 +161,9 @@ export function CartView() {
                     >
                       {l.title}
                     </Link>
+                    {l.variantName && (
+                      <p className="text-ink-700 mt-0.5 text-sm">{l.variantName}</p>
+                    )}
                     <p className="text-ink-500 mt-1 flex items-center gap-1 text-xs">
                       <BadgeCheck className="text-brand-600 size-3.5" aria-hidden /> Vendu par
                       Kemdia
@@ -174,12 +177,12 @@ export function CartView() {
                       <QuantityInput
                         value={l.quantity}
                         max={Math.min(l.maxQuantity, MAX_QTY_PER_LINE)}
-                        onChange={(n) => setQuantity(l.productId, n)}
+                        onChange={(n) => setQuantity(l.variantId, n)}
                         label={`Quantité pour ${l.title}`}
                       />
                       <button
                         type="button"
-                        onClick={() => remove(l.productId)}
+                        onClick={() => remove(l.variantId)}
                         className="text-ink-500 hover:text-brand-700 inline-flex items-center gap-1 text-sm"
                         aria-label={`Supprimer « ${l.title} » du panier`}
                       >

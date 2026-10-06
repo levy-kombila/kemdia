@@ -81,18 +81,30 @@ export function FavoritesView() {
                 </Link>
                 <Price price={f.price} oldPrice={f.oldPrice} size="sm" className="mt-1" />
                 <div className="mt-auto flex items-center gap-2 pt-3">
-                  <AddToCartButton
-                    line={{
-                      productId: f.productId,
-                      slug: f.slug,
-                      title: f.title,
-                      price: f.price,
-                      image: f.image,
-                      maxQuantity: f.inStock ? 20 : 0,
-                    }}
-                    className="h-10 flex-1 px-3 text-sm"
-                    label="Au panier"
-                  />
+                  {f.variantId ? (
+                    <AddToCartButton
+                      line={{
+                        variantId: f.variantId,
+                        productId: f.productId,
+                        slug: f.slug,
+                        title: f.title,
+                        variantName: "",
+                        price: f.price,
+                        image: f.image,
+                        maxQuantity: f.inStock ? 20 : 0,
+                      }}
+                      className="h-10 flex-1 px-3 text-sm"
+                      label="Au panier"
+                    />
+                  ) : (
+                    // Plusieurs variantes (couleur, taille…) : le choix se fait sur la fiche
+                    <Link
+                      href={`/produit/${f.slug}`}
+                      className="bg-brand-600 hover:bg-brand-700 inline-flex h-10 flex-1 items-center justify-center rounded-full px-3 text-sm font-semibold text-white"
+                    >
+                      Choisir
+                    </Link>
+                  )}
                   <button
                     type="button"
                     onClick={() => remove(f.productId)}

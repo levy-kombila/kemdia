@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { MAX_AVAILABILITY_LINES } from "@kemdia/contracts/constants";
 import { CategoryTree, type Category, type CategoryNode } from "../domain/category.js";
 import type { Orderability, Product } from "../domain/product.js";
 import {
@@ -23,7 +24,7 @@ import {
 export const CATEGORY_CACHE_MS = 60_000;
 
 /** Un panier ne dépasse pas ce nombre de lignes (protection contre les requêtes démesurées). */
-export const MAX_AVAILABILITY_LINES = 100;
+export { MAX_AVAILABILITY_LINES };
 
 export interface CategoryView {
   category: Category;
@@ -167,6 +168,7 @@ export class CatalogService {
       // Page Promotions : la liste de base est déjà limitée aux promotions (compteurs compris)
       onlyDeals: search.onlyDeals || search.promotionsOnly,
       ...(search.minRating !== undefined ? { minRating: search.minRating } : {}),
+      ...(search.badge ? { badge: search.badge } : {}),
     };
   }
 }

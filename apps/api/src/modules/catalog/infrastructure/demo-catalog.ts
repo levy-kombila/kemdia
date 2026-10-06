@@ -1,11 +1,11 @@
-import { createHash } from "node:crypto";
+import { demoIds, type DemoCatalog } from "@kemdia/contracts/demo";
 import { CategoryTree, createCategory, type Category } from "../domain/category.js";
 import { Product } from "../domain/product.js";
 import type { CategoryRepository, ProductRepository } from "../application/ports.js";
 
 /**
  * Import du catalogue de démonstration (112 catégories, 50 produits, sans aucune donnée personnelle),
- * repris du fichier utilisé par le site depuis le S1 (`prisma/seed/catalogue-demo.json`).
+ * fourni par le paquet partagé `@kemdia/contracts/demo` (le même que le mode « fichier » du site).
  *
  * - Chaque produit de démonstration devient un produit à **une variante** (sa couleur).
  * - Identifiants **UUID stables** calculés à partir de l'adresse (UUID v5) : relancer l'import met à jour
@@ -13,47 +13,7 @@ import type { CategoryRepository, ProductRepository } from "../application/ports
  * - Tout passe par le domaine : une donnée invalide arrête l'import avant d'écrire quoi que ce soit.
  */
 
-export interface DemoCatalog {
-  categories: {
-    id: string;
-    name: string;
-    slug: string;
-    parentId: string | null;
-    icon: string;
-    image: string | null;
-  }[];
-  products: {
-    id: string;
-    slug: string;
-    title: string;
-    description: string;
-    price: number;
-    oldPrice: number | null;
-    brand: string | null;
-    categoryId: string;
-    images: string[];
-    stock: number;
-    rating: number;
-    reviewCount: number;
-    isFeatured: boolean;
-    isBestseller: boolean;
-    isNew: boolean;
-    color: string | null;
-  }[];
-}
-
-/** Espace de noms des UUID v5 de la démonstration (valeur fixe, propre à Kemdia). */
-const DEMO_NAMESPACE = "6f1c2a8e-4b7d-5e3f-9a1b-2c3d4e5f6a7b";
-
-/** UUID v5 (RFC 9562) : même nom → même identifiant, sur toutes les machines. */
-export function uuidV5(name: string, namespace = DEMO_NAMESPACE): string {
-  const ns = Buffer.from(namespace.replace(/-/g, ""), "hex");
-  const hash = createHash("sha1").update(ns).update(name, "utf8").digest();
-  hash[6] = ((hash[6] as number) & 0x0f) | 0x50;
-  hash[8] = ((hash[8] as number) & 0x3f) | 0x80;
-  const hex = hash.subarray(0, 16).toString("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
+export type { DemoCatalog } from "@kemdia/contracts/demo";
 
 export interface PreparedCatalog {
   categories: Category[];
@@ -67,12 +27,12 @@ export function prepareDemoCatalog(data: DemoCatalog): PreparedCatalog {
     const slug = slugOf.get(legacyId);
     if (!slug)
       throw new Error(`catégorie ${legacyId} introuvable dans les données de démonstration`);
-    return uuidV5(`categorie:${slug}`);
+    return demoIds.category(slug);
   };
 
   const categories = data.categories.map((c, position) =>
     createCategory({
-      id: uuidV5(`categorie:${c.slug}`),
+      id: demoIds.category(c.slug),
       slug: c.slug,
       name: c.name,
       parentId: c.parentId === null ? null : categoryId(c.parentId),
@@ -85,7 +45,7 @@ export function prepareDemoCatalog(data: DemoCatalog): PreparedCatalog {
 
   const products = data.products.map((p) => {
     const product = Product.create({
-      id: uuidV5(`produit:${p.slug}`),
+      id: demoIds.product(p.slug),
       slug: p.slug,
       title: p.title,
       description: p.description,
@@ -100,8 +60,8 @@ export function prepareDemoCatalog(data: DemoCatalog): PreparedCatalog {
       isNew: p.isNew,
       variants: [
         {
-          id: uuidV5(`variante:${p.slug}`),
-          sku: `KMD-${createHash("sha1").update(p.slug).digest("hex").slice(0, 10).toUpperCase()}`,
+          id: demoIds.variant(p.slug),
+          sku: demoIds.sku(p.slug),
           name: p.color ?? "Standard",
           attributes: p.color ? { couleur: p.color } : {},
           price: p.price,

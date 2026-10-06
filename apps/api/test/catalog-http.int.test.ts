@@ -1,6 +1,6 @@
 import "reflect-metadata";
+import { demoCatalog, uuidV5, type DemoCatalog } from "@kemdia/contracts/demo";
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { Test } from "@nestjs/testing";
 import request from "supertest";
@@ -13,8 +13,6 @@ import { configureApp } from "../src/http/configure-app.js";
 import {
   importCatalog,
   prepareDemoCatalog,
-  uuidV5,
-  type DemoCatalog,
 } from "../src/modules/catalog/infrastructure/demo-catalog.js";
 import { PrismaCategoryRepository } from "../src/modules/catalog/infrastructure/prisma-category.repository.js";
 import { PrismaProductRepository } from "../src/modules/catalog/infrastructure/prisma-product.repository.js";
@@ -25,7 +23,7 @@ import {
   FacetsSchema,
   ProductDetailSchema,
   ProductPageSchema,
-} from "../src/modules/catalog/interface/schemas.js";
+} from "@kemdia/contracts";
 import { testDatabaseUrl } from "./integration-db.js";
 
 /**
@@ -34,9 +32,7 @@ import { testDatabaseUrl } from "./integration-db.js";
  */
 // Clé tirée au hasard à chaque exécution : aucune clé n'est écrite dans le code
 const INTERNAL_KEY = randomBytes(32).toString("base64url");
-const data = JSON.parse(
-  readFileSync(new URL("../prisma/seed/catalogue-demo.json", import.meta.url), "utf8"),
-) as DemoCatalog;
+const data: DemoCatalog = demoCatalog;
 
 const matches = <T>(schema: z.ZodType<T>, body: unknown, what: string): T => {
   const result = schema.safeParse(body);

@@ -5,3 +5,7 @@
 # (pas de force push). Toute autre clé, dans un autre commit ou fichier, reste détectée.
 c10280f758bf8ff7e64789e1efaf90e60ac973d2:apps/api/test/catalog-http.int.test.ts:generic-api-key:34
 c10280f758bf8ff7e64789e1efaf90e60ac973d2:apps/api/test/catalog-http.test.ts:generic-api-key:35
+# S3-T05 (PR #22) : faux positifs — la règle générique a pris une adresse de test (domaine api.invalid, route des catégories)
+# pour une clé, dans un test puis dans le commentaire qui l'expliquait ici. Aucune valeur secrète ; les deux lignes sont réécrites.
+a568709fd95b361b4300bd5558bfe09ec0a62e9c:apps/web/src/lib/catalog/index.test.ts:generic-api-key:52
+39b78db0e485558656a7440427ea752ccaa506aa:.gitleaksignore:generic-api-key:8

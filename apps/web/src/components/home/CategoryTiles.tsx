@@ -1,10 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { formatFCFA } from "@/lib/format";
-import type { Category, Product } from "@/lib/types";
+import type { CategoryTile } from "@/lib/catalog";
 
 /** Tuiles « un rayon, quatre produits » : un coup d'œil sur chaque univers sans quitter l'accueil. */
-export function CategoryTiles({ tiles }: { tiles: { category: Category; products: Product[] }[] }) {
+export function CategoryTiles({ tiles }: { tiles: CategoryTile[] }) {
   return (
     <section
       aria-label="Nos univers"
@@ -18,9 +18,9 @@ export function CategoryTiles({ tiles }: { tiles: { category: Category; products
               <li key={p.id}>
                 <Link href={`/produit/${p.slug}`} className="group block">
                   <span className="bg-ink-50 relative block aspect-square overflow-hidden rounded-lg">
-                    {p.images[0] && (
+                    {p.image && (
                       <Image
-                        src={p.images[0]}
+                        src={p.image}
                         alt=""
                         fill
                         sizes="(min-width: 1280px) 10vw, (min-width: 640px) 22vw, 42vw"

@@ -16,7 +16,9 @@ pnpm --filter @kemdia/api db:deploy         # crée les tables
 pnpm dev          # site http://localhost:3000 + API http://localhost:4000/api/health
 ```
 
-Le site fonctionne seul ; la base n'est utile que pour l'API (guide : [docs/guides/base-de-donnees.md](docs/guides/base-de-donnees.md)).
+Le site fonctionne seul (fichier de démonstration). Pour qu'il lise **l'API** (S3-T05) : `pnpm --filter @kemdia/api db:seed`,
+puis mettre la **même clé** `API_INTERNAL_KEY` dans `apps/api/.env` et `apps/web/.env.local`, avec `API_URL=http://localhost:4000`
+dans `apps/web/.env.local` (modèle : `apps/web/.env.example`). Guide : [docs/guides/base-de-donnees.md](docs/guides/base-de-donnees.md).
 
 | Commande                                             | Rôle                         |
 | ---------------------------------------------------- | ---------------------------- |
@@ -33,6 +35,7 @@ Le site fonctionne seul ; la base n'est utile que pour l'API (guide : [docs/guid
 ```
 apps/web/     Site client — Next.js 16, React 19, Tailwind 4
 apps/api/     API — NestJS 12, monolithe modulaire, PostgreSQL 18 + Prisma 7 (Sprint 3, en construction)
+packages/contracts/  Contrat partagé API ↔ site (schémas Zod, constantes, données de démonstration)
 deploy/       Scripts et configuration du serveur (Caddy, déploiement)
 docs/         Planning, rapports de sprint, cahier d'architecture, ADR, guides, sécurité
 .github/      CI/CD (qualité, Docker, sécurité), Dependabot, modèles
@@ -44,7 +47,7 @@ docs/         Planning, rapports de sprint, cahier d'architecture, ADR, guides, 
 - 🏛️ [Cahier d'architecture](docs/architecture/cahier-architecture.md) et [décisions (ADR)](docs/architecture/adr/)
 - 📘 [Comprendre l'architecture (concepts expliqués simplement)](docs/architecture/concepts.md)
 - 📏 [Règles métier et exigences (BR / FR)](docs/architecture/regles-metier.md) · [Synthèse du KSAD](docs/references/ksad-synthese.md)
-- 📝 [Rapports](docs/rapports/) — dernier : [S3-T04 — API REST et documentation](docs/rapports/2026-10-06_S3-T04_api-rest.md)
+- 📝 [Rapports](docs/rapports/) — dernier : [S3-T05 — Le site lit l'API](docs/rapports/2026-10-06_S3-T05_site-branche-api.md)
 - 🔐 [Politique de sécurité](SECURITY.md) · [Suivi de l'audit de l'ancienne version](docs/securite/heritage-audit-django.md)
 - 🔌 [API : description OpenAPI](docs/api/openapi.json) — page interactive sur http://localhost:4000/api/docs (`pnpm --filter @kemdia/api dev`)
 - 🗄️ [Base de données locale (PostgreSQL, migrations)](docs/guides/base-de-donnees.md)

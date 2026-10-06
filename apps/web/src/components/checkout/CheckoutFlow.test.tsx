@@ -11,11 +11,13 @@ vi.mock("@/lib/orders/client", async (importOriginal) => {
 
 function seedCart(price: number) {
   localStorage.setItem(
-    "kemdia.cart.v1",
+    "kemdia.cart.v2",
     JSON.stringify({
       lines: [
         {
-          productId: "38",
+          variantId: "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a",
+          productId: "0b9f1c7e-3f5a-4b8e-9c2d-1a2b3c4d5e6f",
+          variantName: "",
           slug: "pixel",
           title: "Google Pixel Blanc",
           price,
@@ -37,7 +39,8 @@ async function fillAddress(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Continuer" }));
 }
 
-describe("<CheckoutFlow />", () => {
+// Parcours saisis touche par touche : plus lents que 5 s quand tous les tests du dépôt tournent en parallèle.
+describe("<CheckoutFlow />", { timeout: 15_000 }, () => {
   beforeEach(() => localStorage.clear());
 
   it("bloque l'étape adresse tant qu'elle est incomplète", async () => {
@@ -74,7 +77,7 @@ describe("<CheckoutFlow />", () => {
       await screen.findByText(/Merci Marie, votre commande est confirmée/),
     ).toBeInTheDocument();
     expect(screen.getByText(/KMD-DEMO-/)).toBeInTheDocument();
-    expect(JSON.parse(localStorage.getItem("kemdia.cart.v1") ?? "{}").lines).toEqual([]);
+    expect(JSON.parse(localStorage.getItem("kemdia.cart.v2") ?? "{}").lines).toEqual([]);
   });
 
   it("refuse un numéro d'un autre opérateur et le paiement à la livraison au-delà du plafond", async () => {

@@ -10,6 +10,8 @@ import {
   useState,
 } from "react";
 import {
+  CART_STORAGE_KEY,
+  LEGACY_CART_STORAGE_KEYS,
   cartCount,
   cartReducer,
   cartSubtotal,
@@ -19,7 +21,7 @@ import {
   type CartState,
 } from "@/lib/cart";
 
-const STORAGE_KEY = "kemdia.cart.v1";
+const STORAGE_KEY = CART_STORAGE_KEY;
 
 type CartApi = {
   state: CartState;
@@ -27,8 +29,8 @@ type CartApi = {
   count: number;
   subtotal: number;
   add: (line: Omit<CartLine, "quantity">, quantity?: number) => void;
-  setQuantity: (productId: string, quantity: number) => void;
-  remove: (productId: string) => void;
+  setQuantity: (variantId: string, quantity: number) => void;
+  remove: (variantId: string) => void;
   clear: () => void;
 };
 
@@ -58,6 +60,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setHydrated(true);
     };
     load();
+    // Ancien panier (v1, sans variantes) : abandonné et effacé proprement (S3-T05)
+    try {
+      for (const key of LEGACY_CART_STORAGE_KEYS) window.localStorage.removeItem(key);
+    } catch {
+      /* stockage bloqué : rien à effacer */
+    }
     const onStorage = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY) load();
     };
@@ -79,10 +87,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     [],
   );
   const setQuantity = useCallback<CartApi["setQuantity"]>(
-    (productId, quantity) => dispatch({ type: "setQuantity", productId, quantity }),
+    (variantId, quantity) => dispatch({ type: "setQuantity", variantId, quantity }),
     [],
   );
-  const remove = useCallback((productId: string) => dispatch({ type: "remove", productId }), []);
+  const remove = useCallback((variantId: string) => dispatch({ type: "remove", variantId }), []);
   const clear = useCallback(() => dispatch({ type: "clear" }), []);
 
   const api = useMemo<CartApi>(

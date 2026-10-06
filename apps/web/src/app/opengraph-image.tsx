@@ -8,8 +8,9 @@ export const contentType = "image/png";
 export const alt = "Kemdia, le shopping en ligne livré partout au Gabon";
 
 export default async function Image() {
+  const bestsellers = await getBestsellers(6);
   const photos = (
-    await Promise.all(getBestsellers(6).map((p) => publicImageAsPng(p.images[0], 200)))
+    await Promise.all(bestsellers.map((p) => publicImageAsPng(p.image ?? undefined, 200)))
   ).filter((p): p is string => p !== null);
   return new ImageResponse(
     <div

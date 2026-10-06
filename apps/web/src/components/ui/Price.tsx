@@ -19,9 +19,12 @@ export function Price({
   oldPrice,
   size = "md",
   showSavings = false,
+  prefix,
   className,
 }: {
   price: number;
+  /** Petit mot avant le prix (« dès » quand le prix dépend de la variante choisie) */
+  prefix?: string;
   oldPrice?: number | null;
   size?: keyof typeof SIZES;
   showSavings?: boolean;
@@ -32,7 +35,15 @@ export function Price({
   return (
     <div className={cn("flex flex-col", className)}>
       <p className="text-ink-900 flex items-baseline gap-1 whitespace-nowrap">
-        <span className="sr-only">{formatFCFA(price)}</span>
+        <span className="sr-only">
+          {prefix ? `${prefix} ` : ""}
+          {formatFCFA(price)}
+        </span>
+        {prefix && (
+          <span aria-hidden className={cn("text-ink-500 font-semibold", s.unit)}>
+            {prefix}
+          </span>
+        )}
         <span aria-hidden className={cn("font-price", s.amount)}>
           {digits(price)}
         </span>

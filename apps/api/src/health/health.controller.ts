@@ -4,10 +4,9 @@ import type { Response } from "express";
 import { APP_CONFIG } from "../config/config.module.js";
 import type { AppConfig } from "../config/env.js";
 import { DatabaseHealth, type DatabaseStatus } from "../database/database-health.js";
-import type { z } from "zod";
-import type { HealthSchema } from "./health.schema.js";
+import type { Health } from "@kemdia/contracts";
 
-export type HealthStatus = z.infer<typeof HealthSchema> & { checks: { database: DatabaseStatus } };
+export type HealthStatus = Health & { checks: { database: DatabaseStatus } };
 
 /**
  * Contrôle de santé (`GET /api/health`), comme celui du site :

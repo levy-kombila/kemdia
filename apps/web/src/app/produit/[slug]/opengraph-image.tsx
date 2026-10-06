@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { getAllProductSlugs, getProductBySlug } from "@/lib/catalog";
+import { getProduct } from "@/lib/catalog";
 import { discountPercent } from "@/lib/format";
 import { ogAmount, ogFonts, publicImageAsPng } from "@/lib/og-image";
 
@@ -8,15 +8,13 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const alt = "Produit Kemdia : photo, prix et livraison au Gabon";
 
-// Les aperçus ne dépendent que du catalogue : générés une fois, à la construction de l'image
-export function generateStaticParams() {
-  return getAllProductSlugs().map((slug) => ({ slug }));
-}
+// Généré à la demande (le catalogue n'est jamais lu pendant la construction, S3-T05).
+// WhatsApp et Facebook gardent l'aperçu en cache de leur côté : il n'est calculé qu'au premier partage.
 
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
-  const product = getProductBySlug((await params).slug);
+  const product = await getProduct((await params).slug);
   const photo = await publicImageAsPng(product?.images[0], 520);
-  const discount = product ? discountPercent(product.price, product.oldPrice) : null;
+  const discount = product ? discountPercent(product.price, product.compareAtPrice) : null;
   const title = product?.title ?? "Kemdia";
   const amount = product ? ogAmount(product.price) : "";
 
@@ -107,7 +105,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
             <span style={{ fontSize: 34, fontWeight: 600, color: "#14181e" }}>FCFA</span>
           </div>
         )}
-        {product?.oldPrice && product.oldPrice > product.price && (
+        {product?.compareAtPrice && product.compareAtPrice > product.price && (
           <div
             style={{
               display: "flex",
@@ -116,7 +114,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
               textDecoration: "line-through",
             }}
           >
-            {`${ogAmount(product.oldPrice)} FCFA`}
+            {`${ogAmount(product.compareAtPrice)} FCFA`}
           </div>
         )}
         <div

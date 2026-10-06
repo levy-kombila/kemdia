@@ -46,6 +46,8 @@ jobs:
         run: pnpm --filter @kemdia/web exec vitest run --coverage
       - name: Tests de l'API (Vitest)
         run: pnpm --filter @kemdia/api exec vitest run --coverage
+      - name: Tests du contrat partagé (Vitest)
+        run: pnpm --filter @kemdia/contracts test
       - name: Build de production
         run: pnpm build
 
@@ -108,10 +110,25 @@ jobs:
         run: pnpm --filter @kemdia/api test:int
 
   e2e:
-    name: Tests de bout en bout et performance (Playwright)
+    name: Bout en bout et performance (site + API + PostgreSQL)
     runs-on: ubuntu-latest
     needs: quality
-    timeout-minutes: 25
+    timeout-minutes: 30
+    # Le site lit la VRAIE API (S3-T05) : base éphémère, détruite à la fin du job
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: kemdia
+          POSTGRES_PASSWORD: kemdia_ci
+          POSTGRES_DB: kemdia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kemdia -d kemdia"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://kemdia:kemdia_ci@localhost:5432/kemdia
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -124,17 +141,67 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Installer le navigateur Chromium (version liée à Playwright)
         run: pnpm --filter @kemdia/web exec playwright install --with-deps chromium
-      - name: Build de production
-        run: pnpm build
-      - name: Parcours dans un vrai navigateur (téléphone + ordinateur)
+
+      - name: Clé interne éphémère (masquée dans les journaux)
+        run: |
+          key=$(openssl rand -hex 32)
+          echo "::add-mask::$key"
+          echo "E2E_API_KEY=$key" >> "$GITHUB_ENV"
+
+      - name: Construire l'API
+        run: pnpm --filter @kemdia/api build
+      - name: Construire le site — avec une API injoignable (preuve S3-T05)
+        # Une adresse d'API qui ne répond pas est configurée pendant `next build` : si une page lisait
+        # le catalogue à la construction, la garde (lib/catalog) ferait échouer cette étape.
+        env:
+          API_URL: http://api-injoignable.invalid:4000
+          API_INTERNAL_KEY: ${{ env.E2E_API_KEY }}
+        run: pnpm --filter @kemdia/web build
+
+      - name: Base de démonstration (migrations + import)
+        run: |
+          pnpm --filter @kemdia/api db:deploy
+          pnpm --filter @kemdia/api db:seed
+      - name: Démarrer l'API
+        env:
+          NODE_ENV: production
+          APP_ENV: staging
+          APP_VERSION: sha-${{ github.sha }}
+          PORT: "4000"
+          LOG_LEVEL: info
+          API_INTERNAL_KEY: ${{ env.E2E_API_KEY }}
+          API_DOCS: "false"
+        run: |
+          nohup node apps/api/dist/main.js > "$RUNNER_TEMP/api.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4000/api/health; then echo; exit 0; fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/api.log"; exit 1
+
+      - name: Parcours dans un vrai navigateur (téléphone + ordinateur), site branché sur l'API
+        env:
+          E2E_API_URL: http://127.0.0.1:4000
         run: pnpm --filter @kemdia/web e2e
-      - name: Budget de performance (téléphone, 3G, cache vide)
+      - name: Budget de performance (téléphone, 3G, cache vide), site branché sur l'API
+        env:
+          E2E_API_URL: http://127.0.0.1:4000
         run: pnpm --filter @kemdia/web perf
+      - name: Vérifier que le site a bien lu l'API (et seulement elle)
+        run: |
+          served=$(grep -c '"statusCode":200' "$RUNNER_TEMP/api.log" || true)
+          limited=$(grep -c '"statusCode":429' "$RUNNER_TEMP/api.log" || true)
+          echo "Requêtes servies par l'API : $served · refusées (limite de débit) : $limited"
+          echo "### Site branché sur l'API : $served requêtes servies, $limited limitées" >> "$GITHUB_STEP_SUMMARY"
+          [ "$served" -gt 100 ] && [ "$limited" -eq 0 ]
       - name: Tableau des mesures dans le résumé
         if: always()
         working-directory: apps/web
         run: node scripts/perf-summary.mjs >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Journal de l'API en cas d'échec
+        if: failure()
+        run: tail -n 200 "$RUNNER_TEMP/api.log" || true
       - name: Publier le rapport en cas d'échec (captures, traces)
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -221,6 +288,33 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
+
+      - name: Démarrer l'image dans les 3 configurations du catalogue (S3-T05)
+        run: |
+          wait_up() { for i in $(seq 1 40); do curl -fsS "$1/api/health" >/dev/null 2>&1 && return 0; sleep 1; done; return 1; }
+
+          echo "Cas 3 — APP_ENV=production sans API_URL : le site doit refuser de démarrer"
+          set +e
+          timeout 60 docker run --rm -e APP_ENV=production kemdia-web:scan > cas3.log 2>&1
+          code=$?
+          set -e
+          cat cas3.log
+          [ "$code" -eq 1 ] && grep -q "API_URL : obligatoire en production" cas3.log
+
+          echo "Cas 2 — sans API_URL (démo) : catalogue de démonstration"
+          docker run -d --name cas2 -p 3102:3000 -e APP_ENV=demo kemdia-web:scan
+          wait_up http://127.0.0.1:3102
+          curl -fsS http://127.0.0.1:3102/produit/apple-google-pixel-modern-blanc | grep -q "Apple Google Pixel Modern Blanc"
+          docker logs cas2 | grep -q "catalogue : fichier de démonstration"
+
+          echo "Cas 1 — API_URL définie mais injoignable : page d'erreur, jamais le fichier"
+          docker run -d --name cas1 -p 3101:3000 -e APP_ENV=staging \
+            -e API_URL=http://127.0.0.1:9 -e API_INTERNAL_KEY="$(openssl rand -hex 32)" kemdia-web:scan
+          wait_up http://127.0.0.1:3101
+          status=$(curl -s -o cas1.html -w '%{http_code}' http://127.0.0.1:3101/produit/apple-google-pixel-modern-blanc)
+          echo "statut : $status"
+          [ "$status" = "500" ] && ! grep -q "Apple Google Pixel Modern Blanc" cas1.html
+          echo "### Image : les 3 cas de configuration du catalogue sont vérifiés" >> "$GITHUB_STEP_SUMMARY"
 
       # 2. Publier (main uniquement) — le cache rend cette étape quasi instantanée
       # Une seule construction poussée vers GHCR ET Docker Hub : même digest partout

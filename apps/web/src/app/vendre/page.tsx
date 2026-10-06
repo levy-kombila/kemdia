@@ -77,11 +77,11 @@ const FAQ = [
   },
 ];
 
-export default function SellPage() {
-  const tiles = getCategoryTiles().slice(0, 3);
+export default async function SellPage() {
+  const tiles = (await getCategoryTiles()).slice(0, 3);
   const photos = tiles
     .flatMap((t) => t.products.slice(0, 2))
-    .filter((p) => p.images[0])
+    .filter((p): p is typeof p & { image: string } => p.image !== null)
     .slice(0, 6);
 
   return (
@@ -119,7 +119,7 @@ export default function SellPage() {
         >
           {photos.map((p) => (
             <li key={p.id} className="relative aspect-square overflow-hidden rounded-xl bg-white">
-              <Image src={p.images[0]!} alt="" fill sizes="140px" className="object-contain p-2" />
+              <Image src={p.image} alt="" fill sizes="140px" className="object-contain p-2" />
             </li>
           ))}
         </ul>

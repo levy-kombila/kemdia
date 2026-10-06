@@ -1,19 +1,34 @@
 /**
  * Logique pure du panier (sans React) — facile à tester.
  *
+ * Une ligne de panier est identifiée par sa VARIANTE (S3-T05, FR-013) : deux couleurs d'un même produit
+ * sont deux lignes. `productId` ne sert qu'à l'affichage (lien vers la fiche).
+ *
  * Le panier côté navigateur ne sert qu'à l'AFFICHAGE. Au moment de la commande,
- * seuls { productId, quantity } seront envoyés : le backend relira prix, stock et
- * promotions en base. Un prix modifié dans le navigateur n'aura donc aucun effet
+ * seuls { variantId, quantity } sont envoyés : le serveur relit prix, stock et
+ * promotions en base. Un prix modifié dans le navigateur n'a donc aucun effet
  * (leçons CRIT-01, HIGH-05, HIGH-06 de l'audit).
  */
+
+/** Clé du panier dans le navigateur. v1 (identifiants numériques, sans variante) est abandonnée. */
+export const CART_STORAGE_KEY = "kemdia.cart.v2";
+export const LEGACY_CART_STORAGE_KEYS = ["kemdia.cart.v1"] as const;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export const MAX_QTY_PER_LINE = 20;
 export const MAX_LINES = 50;
 
 export type CartLine = {
+  /** Identifiant de la ligne : la variante choisie (UUID) */
+  variantId: string;
+  /** Produit de la variante (affichage, lien vers la fiche) */
   productId: string;
   slug: string;
   title: string;
+  /** Nom de la variante (« Noir · 128 Go ») ; vide pour un produit sans choix */
+  variantName: string;
   /** Prix indicatif au moment de l'ajout (FCFA) */
   price: number;
   image: string | null;
@@ -26,8 +41,8 @@ export type CartState = { lines: CartLine[] };
 
 export type CartAction =
   | { type: "add"; line: Omit<CartLine, "quantity">; quantity: number }
-  | { type: "setQuantity"; productId: string; quantity: number }
-  | { type: "remove"; productId: string }
+  | { type: "setQuantity"; variantId: string; quantity: number }
+  | { type: "remove"; variantId: string }
   | { type: "clear" }
   | { type: "hydrate"; state: CartState };
 
@@ -43,11 +58,11 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
     case "add": {
       if (action.line.maxQuantity <= 0) return state;
-      const existing = state.lines.find((l) => l.productId === action.line.productId);
+      const existing = state.lines.find((l) => l.variantId === action.line.variantId);
       if (existing) {
         return {
           lines: state.lines.map((l) =>
-            l.productId === action.line.productId
+            l.variantId === action.line.variantId
               ? {
                   ...l,
                   ...action.line,
@@ -68,13 +83,13 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
     case "setQuantity":
       return {
         lines: state.lines.map((l) =>
-          l.productId === action.productId
+          l.variantId === action.variantId
             ? { ...l, quantity: clampQty(action.quantity, l.maxQuantity) }
             : l,
         ),
       };
     case "remove":
-      return { lines: state.lines.filter((l) => l.productId !== action.productId) };
+      return { lines: state.lines.filter((l) => l.variantId !== action.variantId) };
     case "clear":
       return emptyCart;
     case "hydrate":
@@ -107,14 +122,19 @@ export function parseStoredCart(raw: string | null): CartState {
     for (const l of (data as { lines: unknown[] }).lines.slice(0, MAX_LINES)) {
       if (!l || typeof l !== "object") continue;
       const c = l as Record<string, unknown>;
-      if (!isStr(c.productId) || !isStr(c.slug) || !isStr(c.title)) continue;
+      if (!isStr(c.variantId) || !UUID.test(c.variantId)) continue;
+      if (!isStr(c.productId) || !UUID.test(c.productId)) continue;
+      if (!isStr(c.slug) || !SLUG.test(c.slug) || !isStr(c.title)) continue;
+      if (lines.some((existing) => existing.variantId === c.variantId)) continue;
       if (!isNum(c.price) || !isNum(c.quantity) || !isNum(c.maxQuantity) || c.maxQuantity <= 0)
         continue;
       const image = isStr(c.image) && c.image.startsWith("/images/") ? c.image : null;
       lines.push({
+        variantId: c.variantId,
         productId: c.productId,
         slug: c.slug,
         title: c.title,
+        variantName: typeof c.variantName === "string" ? c.variantName.slice(0, 80) : "",
         price: Math.round(c.price),
         image,
         maxQuantity: Math.floor(c.maxQuantity),

@@ -11,6 +11,9 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      # Sans API_URL : catalogue de démonstration. (L'image fixe APP_ENV=production par défaut,
+      # qui exige l'API : ici on est sur le poste.)
+      APP_ENV: local
     read_only: true
     tmpfs:
       - /tmp

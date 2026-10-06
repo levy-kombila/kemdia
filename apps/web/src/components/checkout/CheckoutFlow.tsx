@@ -585,7 +585,7 @@ function Confirmation({
           <dt className="text-ink-500 w-28 shrink-0">Articles</dt>
           <dd>
             {lines.map((l) => (
-              <span key={l.productId} className="block">
+              <span key={l.variantId} className="block">
                 {l.quantity} × {l.title}
               </span>
             ))}
