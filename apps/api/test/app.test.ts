@@ -6,6 +6,7 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../src/app.module.js";
 import { loadConfig } from "../src/config/env.js";
+import { DatabaseHealth, type DatabaseStatus } from "../src/database/database-health.js";
 import { configureApp } from "../src/http/configure-app.js";
 
 /** Routes de test uniquement : erreurs prévues et imprévues, lecture d'un corps JSON. */
@@ -27,7 +28,18 @@ class ProbeController {
   }
 }
 
-async function startApp(env: NodeJS.ProcessEnv = {}): Promise<NestExpressApplication> {
+/** Base de données simulée : ces tests n'ont pas besoin de PostgreSQL (voir test/database.int.test.ts). */
+class FakeDatabaseHealth {
+  status: DatabaseStatus = "ok";
+  check(): Promise<DatabaseStatus> {
+    return Promise.resolve(this.status);
+  }
+}
+
+async function startApp(
+  env: NodeJS.ProcessEnv = {},
+  database = new FakeDatabaseHealth(),
+): Promise<NestExpressApplication> {
   const config = loadConfig({
     NODE_ENV: "test",
     LOG_LEVEL: "silent",
@@ -37,7 +49,10 @@ async function startApp(env: NodeJS.ProcessEnv = {}): Promise<NestExpressApplica
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule.register(config)],
     controllers: [ProbeController],
-  }).compile();
+  })
+    .overrideProvider(DatabaseHealth)
+    .useValue(database)
+    .compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });
   configureApp(app, config);
   await app.init();
@@ -48,18 +63,37 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 describe("API — socle HTTP", () => {
   let app: NestExpressApplication;
+  const database = new FakeDatabaseHealth();
   beforeAll(async () => {
-    app = await startApp();
+    app = await startApp({}, database);
   });
   afterAll(async () => {
     await app.close();
   });
 
   describe("GET /api/health", () => {
-    it("indique la version et l'environnement, sans cache", async () => {
+    it("indique la version, l'environnement et l'état de la base, sans cache", async () => {
+      database.status = "ok";
       const res = await request(app.getHttpServer()).get("/api/health").expect(200);
-      expect(res.body).toEqual({ status: "ok", version: "sha-test", environment: "local" });
+      expect(res.body).toEqual({
+        status: "ok",
+        version: "sha-test",
+        environment: "local",
+        checks: { database: "ok" },
+      });
       expect(res.headers["cache-control"]).toBe("no-store");
+    });
+
+    it("répond 503 si PostgreSQL est indisponible (conteneur « unhealthy »)", async () => {
+      database.status = "indisponible";
+      const res = await request(app.getHttpServer()).get("/api/health").expect(503);
+      expect(res.body).toEqual({
+        status: "degrade",
+        version: "sha-test",
+        environment: "local",
+        checks: { database: "indisponible" },
+      });
+      database.status = "ok";
     });
 
     it("n'existe pas sous /api/v1 (route sans version)", async () => {

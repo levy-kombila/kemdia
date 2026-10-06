@@ -1,5 +1,7 @@
-# Lancer le site comme en production : docker compose up --build
-# (PostgreSQL et l'API seront ajoutés ici aux sprints backend)
+# Environnement local (voir docs/guides/base-de-donnees.md) :
+#   docker compose up -d db        PostgreSQL seul, pour développer l'API (pnpm dev)
+#   docker compose up --build web  le site comme en production
+# (l'image de l'API sera ajoutée au S3-T06)
 services:
   web:
     build:
@@ -16,3 +18,35 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
+
+  # PostgreSQL 18 : même version majeure que la démo (Render) et la future production.
+  # Identifiants de DÉVELOPPEMENT uniquement (base accessible seulement depuis ce poste) ;
+  # on peut les changer dans un fichier .env à la racine (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB).
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kemdia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kemdia}
+      POSTGRES_DB: ${POSTGRES_DB:-kemdia}
+      # Mots de passe vérifiés par SCRAM-SHA-256 (jamais en clair sur le réseau)
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --encoding=UTF8
+      TZ: Africa/Libreville
+    ports:
+      # 127.0.0.1 : la base n'est PAS joignable depuis le réseau local (Wi-Fi, etc.)
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # PostgreSQL 18 range ses données sous /var/lib/postgresql/18/… : on monte le dossier parent
+      - kemdia-db:/var/lib/postgresql
+    shm_size: 128mb
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  # Données conservées entre deux redémarrages ; `docker compose down -v` les efface
+  kemdia-db:

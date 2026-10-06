@@ -56,6 +56,20 @@ describe("Architecture (ADR-0006, hexagonale)", () => {
       );
     });
 
+    it("seule l'infrastructure accède à la base (PrismaService, client généré)", () => {
+      const prismaService = "../../../database/prisma.service.js";
+      expect(
+        checkImport(MODULES, file("catalog/infrastructure/repo.ts"), prismaService),
+      ).toBeNull();
+      expect(checkImport(MODULES, file("catalog/application/list.ts"), prismaService)).toMatch(
+        /seule la couche « infrastructure »/,
+      );
+      expect(checkImport(MODULES, file("catalog/interface/ctrl.ts"), prismaService)).not.toBeNull();
+      expect(
+        checkImport(MODULES, file("catalog/domain/p.ts"), "../../../generated/prisma/client.js"),
+      ).not.toBeNull();
+    });
+
     it("le socle technique (config, http) reste accessible", () => {
       expect(
         checkImport(MODULES, file("catalog/catalog.module.ts"), "../../config/config.module.js"),

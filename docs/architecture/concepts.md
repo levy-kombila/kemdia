@@ -51,6 +51,19 @@ Une base de données PostgreSQL peut contenir plusieurs **schémas** (comme des 
 `catalog.products`, `orders.orders`… Règle : **pas de jointure entre schémas**. Ainsi, un module peut être déplacé dans une autre base
 sans casser les autres.
 
+**Chez Kemdia (depuis le S3-T02)** : chaque module a son fichier `apps/api/prisma/schema/<module>.prisma`.
+Un test automatique refuse qu'un modèle des _Commandes_ soit « relié » à un modèle du _Catalogue_ : la commande garde seulement
+l'identifiant du produit, et demande le reste au module _Catalogue_.
+
+### Migration
+
+**Image** : le **carnet de chantier** d'une maison. On n'y efface rien ; chaque modification (« ajout d'une fenêtre ») est une nouvelle page,
+datée, que l'on peut rejouer dans l'ordre pour reconstruire la maison à l'identique.
+
+**Chez Kemdia** : une migration est un petit fichier SQL dans `apps/api/prisma/migrations/` (ex. « créer la table des produits »).
+Le poste, la CI, la démo et la production rejouent **les mêmes migrations dans le même ordre** : leurs bases ont donc exactement la même forme.
+Règle d'or : une migration déjà fusionnée ne se modifie jamais ; on en ajoute une nouvelle. Mode d'emploi : [base-de-donnees.md](../guides/base-de-donnees.md).
+
 ## 5. UUID
 
 Un identifiant comme `7f3c9a2e-5b1d-4e8a-9c6f-2d4b8e1a0c37` au lieu de `1, 2, 3…`.

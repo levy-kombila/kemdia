@@ -7,6 +7,12 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts", "test/**/*.test.ts"],
-    coverage: { reporter: ["text", "lcov"], include: ["src/**"], exclude: ["src/main.ts"] },
+    // Les tests d'intégration (vraie base) ont leur propre configuration : vitest.int.config.mts
+    exclude: ["**/node_modules/**", "**/*.int.test.ts"],
+    coverage: {
+      reporter: ["text", "lcov"],
+      include: ["src/**"],
+      exclude: ["src/main.ts", "src/generated/**"],
+    },
   },
 });

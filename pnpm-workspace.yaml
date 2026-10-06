@@ -6,6 +6,19 @@ onlyBuiltDependencies:
   - sharp
   - unrs-resolver
 
-# Script d'installation inutile : il vérifie seulement le binaire natif, déjà fourni par un paquet optionnel
+# Scripts d'installation inutiles, ignorés volontairement :
+# - @swc/core vérifie seulement le binaire natif, déjà fourni par un paquet optionnel ;
+# - prisma / @prisma/engines téléchargent le moteur de migrations, que Prisma récupère de toute façon
+#   à la première commande (pnpm generate, db:migrate…) : l'installation reste rapide et hors réseau.
 ignoredBuiltDependencies:
   - "@swc/core"
+  - "@prisma/engines"
+  - prisma
+
+# Correctifs de sécurité imposés à des sous-dépendances (pnpm audit) :
+# - outil Prisma 7.10 (CLI uniquement, absent de l'exécution de l'API) : mysql2 3.15 et deepmerge-ts 7
+#   ont des failles corrigées (GHSA-3f6p-5ww8-9rcr, GHSA-rgwj-5xj2-c3m3, GHSA-ggr8-5vv4-36mx).
+#   À retirer quand Prisma livrera ces versions lui-même.
+overrides:
+  mysql2: ^3.24.5
+  deepmerge-ts: ^8.0.2

@@ -1,10 +1,18 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
-    "build": { "dependsOn": ["^build"], "outputs": [".next/**", "!.next/cache/**", "dist/**"] },
-    "lint": {},
-    "typecheck": {},
-    "test": {},
-    "dev": { "cache": false, "persistent": true }
+    "generate": {
+      "inputs": ["prisma/schema/**", "prisma.config.ts"],
+      "outputs": ["src/generated/**"],
+      "passThroughEnv": ["PRISMA_ENGINES_MIRROR", "PRISMA_SCHEMA_ENGINE_BINARY"]
+    },
+    "build": {
+      "dependsOn": ["^build", "generate"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "lint": { "dependsOn": ["generate"] },
+    "typecheck": { "dependsOn": ["generate"] },
+    "test": { "dependsOn": ["generate"] },
+    "dev": { "dependsOn": ["generate"], "cache": false, "persistent": true }
   }
 }

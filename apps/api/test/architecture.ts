@@ -16,6 +16,9 @@ const FORBIDDEN_PACKAGES: Partial<Record<Layer, readonly string[]>> = {
   application: ["@prisma/", "express"],
 };
 
+/** Accès à la base (dossiers de src/) : réservé à la couche infrastructure des modules. */
+const DATABASE_DIRS = ["database", "generated"] as const;
+
 /** Couches internes qu'une couche n'a pas le droit d'importer. */
 const FORBIDDEN_LAYERS: Partial<Record<Layer, readonly Layer[]>> = {
   domain: ["application", "infrastructure", "interface"],
@@ -54,7 +57,15 @@ export function checkImport(modulesDir: string, file: string, specifier: string)
       : null;
   }
 
-  const target = locate(modulesDir, resolve(dirname(file), specifier));
+  const absolute = resolve(dirname(file), specifier);
+  const database = DATABASE_DIRS.find((dir) =>
+    absolute.startsWith(join(dirname(modulesDir), dir) + sep),
+  );
+  if (database && from.layer !== "infrastructure") {
+    return `${from.module}/${from.path} : seule la couche « infrastructure » accède à la base (src/${database})`;
+  }
+
+  const target = locate(modulesDir, absolute);
   if (!target) return null; // src/config, src/http… : socle technique partagé
 
   if (target.module !== from.module) {

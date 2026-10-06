@@ -13,6 +13,12 @@ z.config(z.locales.fr());
 
 const LOG_LEVELS = ["fatal", "error", "warn", "info", "debug", "trace", "silent"] as const;
 
+/**
+ * Base locale lancée par `docker compose up -d db` (identifiants de développement, accessibles
+ * seulement depuis le poste). Refusée en production : la vraie adresse vient du serveur.
+ */
+export const LOCAL_DATABASE_URL = "postgresql://kemdia:kemdia@localhost:5432/kemdia";
+
 /** Liste séparée par des virgules → tableau sans éléments vides. */
 const commaList = z
   .string()
@@ -39,12 +45,27 @@ const envSchema = z
     CORS_ORIGINS: commaList.pipe(z.array(z.url({ protocol: /^https?$/ }))),
     /** Nombre de relais (ex. Caddy = 1) dont on accepte l'en-tête X-Forwarded-For pour connaître l'adresse du client. */
     TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
+    /** Adresse PostgreSQL. Contient un mot de passe : jamais journalisée, jamais affichée. */
+    DATABASE_URL: z
+      .url({ protocol: /^postgres(ql)?$/, error: "adresse postgresql://… attendue" })
+      .default(LOCAL_DATABASE_URL),
+    /** Connexions simultanées au plus (la démo gratuite de Render en accepte peu). */
+    DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(50).default(10),
+    /** Une requête SQL plus longue est interrompue : protège la base d'une requête qui s'emballe. */
+    DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).default(10_000),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== "production") return;
     // En production, l'image doit indiquer sa version (traçabilité, test de fumée du pipeline)
     if (env.APP_VERSION === "dev") {
       ctx.addIssue({ code: "custom", path: ["APP_VERSION"], message: "obligatoire en production" });
+    }
+    if (env.DATABASE_URL === LOCAL_DATABASE_URL) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["DATABASE_URL"],
+        message: "obligatoire en production (l'adresse de développement est refusée)",
+      });
     }
     env.CORS_ORIGINS.forEach((origin, index) => {
       if (!origin.startsWith("https://")) {

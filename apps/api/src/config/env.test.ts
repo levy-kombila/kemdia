@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ConfigError, loadConfig } from "./env.js";
+import { ConfigError, LOCAL_DATABASE_URL, loadConfig } from "./env.js";
 
 const problems = (env: NodeJS.ProcessEnv): readonly string[] => {
   try {
@@ -22,6 +22,9 @@ describe("loadConfig", () => {
       LOG_LEVEL: "info",
       CORS_ORIGINS: [],
       TRUST_PROXY: 0,
+      DATABASE_URL: LOCAL_DATABASE_URL,
+      DATABASE_POOL_MAX: 10,
+      DATABASE_STATEMENT_TIMEOUT_MS: 10_000,
     });
   });
 
@@ -80,16 +83,45 @@ describe("loadConfig", () => {
     expect(error?.message).not.toContain("mot-de-passe-colle-par-erreur");
   });
 
+  describe("base de données", () => {
+    it("accepte postgres:// et postgresql://", () => {
+      expect(loadConfig({ DATABASE_URL: "postgres://u:p@db:5432/k" }).DATABASE_URL).toBe(
+        "postgres://u:p@db:5432/k",
+      );
+      expect(loadConfig({ DATABASE_URL: "postgresql://u:p@db/k?sslmode=require" })).toBeTruthy();
+    });
+
+    it("refuse une autre sorte d'adresse, sans recopier le mot de passe", () => {
+      const list = problems({ DATABASE_URL: "mysql://u:motdepasse-secret@db/k" });
+      expect(list).toEqual(["DATABASE_URL : adresse postgresql://… attendue"]);
+      expect(list.join()).not.toContain("motdepasse-secret");
+    });
+
+    it("borne la taille du groupe de connexions et la durée des requêtes", () => {
+      expect(problems({ DATABASE_POOL_MAX: "0", DATABASE_STATEMENT_TIMEOUT_MS: "999999" })).toEqual(
+        [
+          expect.stringMatching(/^DATABASE_POOL_MAX : /),
+          expect.stringMatching(/^DATABASE_STATEMENT_TIMEOUT_MS : /),
+        ],
+      );
+    });
+  });
+
   describe("en production", () => {
-    const prod = { NODE_ENV: "production", APP_VERSION: "v0.3.0" } as const;
+    const prod = {
+      NODE_ENV: "production",
+      APP_VERSION: "v0.3.0",
+      DATABASE_URL: "postgresql://kemdia_app:s3cr3t@db.internal:5432/kemdia",
+    } as const;
 
     it("accepte une configuration complète", () => {
       expect(loadConfig({ ...prod, CORS_ORIGINS: "https://kemdia.ga" }).APP_VERSION).toBe("v0.3.0");
     });
 
-    it("exige la version de l'image", () => {
+    it("exige la version de l'image et une vraie base de données", () => {
       expect(problems({ NODE_ENV: "production" })).toEqual([
         "APP_VERSION : obligatoire en production",
+        "DATABASE_URL : obligatoire en production (l'adresse de développement est refusée)",
       ]);
     });
 
