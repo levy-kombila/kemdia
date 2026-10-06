@@ -8,7 +8,7 @@
 **Image** : un **centre commercial**. Un seul bâtiment (une seule application à déployer), mais des boutiques séparées
 (catalogue, commandes, paiements…) avec chacune sa porte d'entrée. Une boutique ne passe pas par l'arrière-boutique d'une autre.
 
-**Chez Kemdia** : `apps/api` sera une seule application NestJS, découpée en 7 modules ([ADR-0006](adr/0006-monolithe-modulaire-7-modules.md)).
+**Chez Kemdia** : `apps/api` est une seule application NestJS (socle en place depuis le S3-T01), découpée en 7 modules ([ADR-0006](adr/0006-monolithe-modulaire-7-modules.md)).
 Le module _Commandes_ ne lit pas directement les tables du _Catalogue_ : il demande le prix au catalogue.
 
 **Pourquoi pas des microservices ?** Ce serait 7 applications, 7 déploiements, 7 bases : trop lourd pour 2 développeurs.

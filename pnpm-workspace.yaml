@@ -5,3 +5,7 @@ packages:
 onlyBuiltDependencies:
   - sharp
   - unrs-resolver
+
+# Script d'installation inutile : il vérifie seulement le binaire natif, déjà fourni par un paquet optionnel
+ignoredBuiltDependencies:
+  - "@swc/core"

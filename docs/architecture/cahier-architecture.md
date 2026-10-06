@@ -1,17 +1,18 @@
 # Cahier d'architecture — Kemdia
 
-| Version | Date       | Sprint | Changements                                                                                                                                |
-| ------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **0.1** | 2026-10-05 | S1     | Création : contexte, exigences, stack, architecture frontend, sécurité, DevOps                                                             |
-| **0.2** | 2026-10-05 | S1     | §7 pipeline CD complet, §8 architecture de déploiement (ADR-0005)                                                                          |
-| **0.3** | 2026-10-05 | S1     | §8 environnement de démonstration gratuit (Render), version inscrite dans l'image                                                          |
-| **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués |
-| **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests     |
-| **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                      |
-| **0.9** | 2026-10-06 | S2     | §5.8 favoris, partage et aperçus, page vendeur ; §5.2 rendu à la demande (`SITE_URL`) ; §7 et §9 tests de bout en bout                     |
-| **0.8** | 2026-10-05 | S2     | §5.7 tunnel de commande (port `OrderClient`, données envoyées) ; §6.2 mesures du tunnel                                                    |
-| **0.7** | 2026-10-05 | S2     | §5.6 pages de liste (filtres) et panier ; §6.2 filtres par liste blanche                                                                   |
-| **0.6** | 2026-10-05 | S2     | §5.5 charte graphique « place de marché » (Archivo à largeur variable, étiquette de prix), §5.6 structure des pages, §5.1 composants       |
+| Version | Date       | Sprint | Changements                                                                                                                                 |
+| ------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0.1** | 2026-10-05 | S1     | Création : contexte, exigences, stack, architecture frontend, sécurité, DevOps                                                              |
+| **0.2** | 2026-10-05 | S1     | §7 pipeline CD complet, §8 architecture de déploiement (ADR-0005)                                                                           |
+| **0.3** | 2026-10-05 | S1     | §8 environnement de démonstration gratuit (Render), version inscrite dans l'image                                                           |
+| **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués  |
+| **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests      |
+| **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                       |
+| **1.1** | 2026-10-06 | S3     | §3.4 socle de l'API (`apps/api`, ADR-0007) ; §4 versions du backend ; §6.3 sécurité de l'API (ancien §6.3 → §6.4) ; §7 et §9 tests de l'API |
+| **0.9** | 2026-10-06 | S2     | §5.8 favoris, partage et aperçus, page vendeur ; §5.2 rendu à la demande (`SITE_URL`) ; §7 et §9 tests de bout en bout                      |
+| **0.8** | 2026-10-05 | S2     | §5.7 tunnel de commande (port `OrderClient`, données envoyées) ; §6.2 mesures du tunnel                                                     |
+| **0.7** | 2026-10-05 | S2     | §5.6 pages de liste (filtres) et panier ; §6.2 filtres par liste blanche                                                                    |
+| **0.6** | 2026-10-05 | S2     | §5.5 charte graphique « place de marché » (Archivo à largeur variable, étiquette de prix), §5.6 structure des pages, §5.1 composants        |
 
 > Document vivant : chaque rapport de sprint (`docs/rapports/`) indique quelles sections il a modifiées.
 > Les sections marquées 🔜 seront rédigées au sprint indiqué.
@@ -133,7 +134,9 @@ flowchart TB
 **État au Sprint 1** : seul `apps/web` existe ; le catalogue provient d'un fichier de démonstration
 lu côté serveur par `src/lib/catalog.ts`, qui sera remplacé par des appels à l'API sans modifier les composants.
 
-### 3.3 Modules du backend (cible MVP) 🔜 S3
+**État au S3-T01** : `apps/api` existe (socle, contrôle de santé, aucune route métier) ; le site ne l'appelle pas encore (S3-T05).
+
+### 3.3 Modules du backend (cible MVP)
 
 Monolithe modulaire NestJS, architecture hexagonale, un schéma PostgreSQL par module
 ([ADR-0006](adr/0006-monolithe-modulaire-7-modules.md) — explications simples dans [concepts.md](concepts.md)).
@@ -159,20 +162,69 @@ flowchart LR
     api --> db[(PostgreSQL<br/>1 schéma par module)]
 ```
 
+### 3.4 Socle de l'API (`apps/api`, S3-T01)
+
+Décision : [ADR-0007](adr/0007-socle-api-nestjs.md).
+
+```
+apps/api/
+├── src/
+│   ├── main.ts               Démarrage : configuration validée → application → écoute
+│   ├── app.module.ts         Assemblage : configuration, journaux, santé, puis les modules métier
+│   ├── config/               Schéma Zod des variables d'environnement (loadConfig) + jeton APP_CONFIG
+│   ├── http/                 Réglages HTTP communs (configure-app), journaux, format des erreurs
+│   ├── health/               GET /api/health
+│   └── modules/              Modules métier (catalog au S3-T03) — organisation : modules/README.md
+├── test/                     Tests HTTP (Supertest) et test d'architecture
+└── .env.example              Liste commentée des variables
+```
+
+**Chemin d'une requête**
+
+```mermaid
+flowchart LR
+    req([Requête]) --> h[Helmet<br/>en-têtes] --> c[CORS<br/>fermé par défaut] --> b[Corps JSON<br/>≤ 100 Ko]
+    b --> r{Route<br/>/api/health · /api/v1/…}
+    r --> ctl[Contrôleur du module]
+    r -->|inconnue| f
+    ctl -->|erreur| f[Filtre d'erreurs<br/>Problem Details]
+    ctl --> res([Réponse JSON<br/>+ X-Request-Id])
+    f --> res
+```
+
+**Organisation d'un module** (hexagonale, vérifiée par `test/architecture.test.ts`) :
+`domain/` (règles pures) ← `application/` (cas d'utilisation et ports) ← `infrastructure/` (Prisma…) et `interface/` (HTTP).
+Un autre module n'entre que par `index.ts`.
+
+**Configuration** (vérifiée au démarrage ; liste complète dans `apps/api/.env.example`) :
+
+| Variable       | Défaut         | Règle en production                       |
+| -------------- | -------------- | ----------------------------------------- |
+| `NODE_ENV`     | `development`  | `production`                              |
+| `APP_ENV`      | `local`        | `demo`, `staging` ou `production`         |
+| `APP_VERSION`  | `dev`          | **Obligatoire** (fournie par le pipeline) |
+| `HOST`, `PORT` | `0.0.0.0:4000` | —                                         |
+| `LOG_LEVEL`    | `info`         | `debug` et `trace` **interdits**          |
+| `CORS_ORIGINS` | vide (fermé)   | HTTPS uniquement                          |
+| `TRUST_PROXY`  | `0`            | `1` derrière Caddy                        |
+
+Une valeur invalide arrête l'API (code de sortie 1) avec la liste des variables en cause, **sans afficher leur valeur**.
+
 ## 4. Choix technologiques
 
-| Couche     | Choix                                               | Version     | Justification                                                                |
-| ---------- | --------------------------------------------------- | ----------- | ---------------------------------------------------------------------------- |
-| Langage    | TypeScript (strict)                                 | 5.9         | Un seul langage front/back — [ADR-0002](adr/0002-stack-typescript-nextjs.md) |
-| Frontend   | Next.js (App Router) + React                        | 16.3 / 19.2 | SSR/SSG, SEO, Server Components                                              |
-| Style      | Tailwind CSS                                        | 4           | Design tokens centralisés, CSS final minimal                                 |
-| Icônes     | lucide-react                                        | —           | Seules les icônes utilisées sont embarquées                                  |
-| Polices    | Inter + Montserrat (auto-hébergées, @fontsource)    | —           | Aucune requête vers Google : vie privée + CSP stricte                        |
-| Tests      | Vitest + Testing Library                            | 5           | Rapide, compatible TypeScript                                                |
-| Monorepo   | pnpm + Turborepo                                    | 10 / 2      | [ADR-0003](adr/0003-monorepo.md)                                             |
-| Conteneur  | Docker (Node 22 Alpine, utilisateur non-root)       | —           | Même artefact en préprod et prod                                             |
-| CI/CD      | GitHub Actions                                      | —           | Intégré au dépôt                                                             |
-| Backend 🔜 | NestJS + Prisma + PostgreSQL (un schéma par module) | —           | S3 — [ADR-0006](adr/0006-monolithe-modulaire-7-modules.md)                   |
+| Couche    | Choix                                            | Version     | Justification                                                                                        |
+| --------- | ------------------------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------- |
+| Langage   | TypeScript (strict)                              | 5.9         | Un seul langage front/back — [ADR-0002](adr/0002-stack-typescript-nextjs.md)                         |
+| Frontend  | Next.js (App Router) + React                     | 16.3 / 19.2 | SSR/SSG, SEO, Server Components                                                                      |
+| Style     | Tailwind CSS                                     | 4           | Design tokens centralisés, CSS final minimal                                                         |
+| Icônes    | lucide-react                                     | —           | Seules les icônes utilisées sont embarquées                                                          |
+| Polices   | Inter + Montserrat (auto-hébergées, @fontsource) | —           | Aucune requête vers Google : vie privée + CSP stricte                                                |
+| Tests     | Vitest + Testing Library                         | 5           | Rapide, compatible TypeScript                                                                        |
+| Monorepo  | pnpm + Turborepo                                 | 10 / 2      | [ADR-0003](adr/0003-monorepo.md)                                                                     |
+| Conteneur | Docker (Node 22 Alpine, utilisateur non-root)    | —           | Même artefact en préprod et prod                                                                     |
+| CI/CD     | GitHub Actions                                   | —           | Intégré au dépôt                                                                                     |
+| Backend   | NestJS (modules ES, Express 5) + Zod + pino      | 12 / 4 / 10 | S3 — [ADR-0006](adr/0006-monolithe-modulaire-7-modules.md), [ADR-0007](adr/0007-socle-api-nestjs.md) |
+| Base 🔜   | PostgreSQL + Prisma (un schéma par module)       | —           | S3-T02                                                                                               |
 
 ## 5. Architecture du frontend (`apps/web`)
 
@@ -364,7 +416,19 @@ quelques millisecondes par page.
 
 Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-django.md`](../securite/heritage-audit-django.md).
 
-### 6.3 Prévu 🔜
+### 6.3 Sécurité de l'API (S3-T01)
+
+| Mesure                                                                                                          | Où                               | Faille(s) de l'ancien projet évitée(s) |
+| --------------------------------------------------------------------------------------------------------------- | -------------------------------- | -------------------------------------- |
+| Configuration validée au démarrage ; valeurs jamais affichées ; `debug` interdit en production                  | `config/env.ts`                  | CRIT-02 (secrets), mauvaise config     |
+| CSP `default-src 'none'; frame-ancestors 'none'`, HSTS, `nosniff`, `X-Frame-Options: DENY`, sans `X-Powered-By` | `http/configure-app.ts`          | LOW-03, empreinte technologique        |
+| CORS fermé par défaut ; origines explicites, HTTPS en production                                                | `http/configure-app.ts`          | Appels depuis un site tiers            |
+| Corps JSON limité à 100 Ko                                                                                      | `http/configure-app.ts`          | Déni de service                        |
+| Erreurs imprévues : message générique (détail dans les journaux) ; 404 sans recopier l'adresse                  | `http/problem-details.filter.ts` | Fuite d'informations, XSS réfléchie    |
+| Journaux sans paramètres d'URL, sans corps ni en-têtes ; champs sensibles masqués ; identifiant de requête      | `http/logging.ts`                | Données personnelles dans les journaux |
+| Couches et modules isolés (test d'architecture)                                                                 | `test/architecture.test.ts`      | Couplage, contournement des règles     |
+
+### 6.4 Prévu 🔜
 
 - S4 : CSP à _nonce_ via `proxy.ts`, cookies de session `HttpOnly; Secure; SameSite=Lax`, protection CSRF, limitation de débit.
 - S5 : signature des webhooks Mobile Money, idempotence des paiements, transactions SQL pour stock et coupons.
@@ -390,16 +454,17 @@ flowchart LR
     prod -. échec .-> rb[retour arrière auto]
 ```
 
-| Fichier                          | Rôle                                                                                          |
-| -------------------------------- | --------------------------------------------------------------------------------------------- |
-| `.github/workflows/ci.yml`       | Qualité → bout en bout → image → scan → publication GHCR + Docker Hub (main) → staging + démo |
-| `.github/workflows/release.yml`  | Tag `vX.Y.Z` → promotion de l'image testée → Release GitHub → production                      |
-| `.github/workflows/_deploy.yml`  | Déploiement réutilisable : SSH restreint, test de fumée, retour arrière                       |
-| `.github/workflows/security.yml` | Gitleaks, pnpm audit, Semgrep, ShellCheck ; CodeQL si dépôt public ; chaque lundi             |
-| `.github/dependabot.yml`         | Mises à jour hebdomadaires (npm, actions épinglées par SHA, image Docker)                     |
-| `apps/web/Dockerfile`            | Multi-étapes, `standalone`, non-root, sans npm, healthcheck `/api/health`                     |
-| `deploy/`                        | Scripts et configuration serveur (voir §8)                                                    |
-| `.husky/pre-commit`              | Formatage automatique avant chaque commit                                                     |
+| Fichier                          | Rôle                                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `.github/workflows/ci.yml`       | Qualité → bout en bout → image → scan → publication GHCR + Docker Hub (main) → staging + démo     |
+| `.github/workflows/release.yml`  | Tag `vX.Y.Z` → promotion de l'image testée → Release GitHub → production                          |
+| `.github/workflows/_deploy.yml`  | Déploiement réutilisable : SSH restreint, test de fumée, retour arrière                           |
+| `.github/workflows/security.yml` | Gitleaks, pnpm audit, Semgrep, ShellCheck ; CodeQL si dépôt public ; chaque lundi                 |
+| `.github/dependabot.yml`         | Mises à jour hebdomadaires (npm, actions épinglées par SHA, image Docker)                         |
+| `apps/web/Dockerfile`            | Multi-étapes, `standalone`, non-root, sans npm, healthcheck `/api/health`                         |
+| `apps/api/`                      | Lint, types, tests (avec couverture) et build dans la même étape « qualité » que le site (S3-T01) |
+| `deploy/`                        | Scripts et configuration serveur (voir §8)                                                        |
+| `.husky/pre-commit`              | Formatage automatique avant chaque commit                                                         |
 
 **Principes** : _build once, deploy many_ · déploiement par digest immuable · actions épinglées par SHA ·
 aucun secret dans Git · tout changement passe par une PR.
@@ -444,6 +509,7 @@ flowchart TB
 | Composants          | Testing Library                                       | 16 tests : carte produit, saisie OTP, parcours d'identité, carrousel, barre d'onglets (S2)                                                                                       |
 | Bout en bout        | Playwright + axe-core                                 | 16 scénarios × 2 appareils (téléphone Pixel 7, ordinateur) : achat complet, filtres, favoris, partage, vendeur, en-têtes de sécurité, XSS, accessibilité WCAG AA de 7 pages (S2) |
 | Performance         | Playwright + Web Vitals (Chrome DevTools)             | 5 pages, médiane de 3 chargements à froid en 3G : premier affichage, plus grand élément, décalages, blocage, poids ; tableau dans le résumé de la CI (S2-T08)                    |
+| API (S3)            | Vitest + Supertest                                    | 35 tests : configuration, journaux, en-têtes de sécurité, CORS, format des erreurs, versionnement des routes, architecture (S3-T01)                                              |
 | Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                                                                                                                               |
 
 ## 10. Glossaire

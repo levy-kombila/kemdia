@@ -13,8 +13,8 @@ Mobile Money (Moov, Airtel) et paiement à la livraison, lancement visé **fin 2
 | --------- | ------------------------------------------------------------------------------------------------------- | ----------- |
 | **S0**    | Décision de réécriture, choix de la stack, poste de travail                                             | ✅ Terminé  |
 | **S1**    | Fondations frontend + DevOps (CI/CD, sécurité, démo publique)                                           | ✅ Terminé  |
-| **S2**    | Intégration du KSAD + finitions frontend (comptes, tunnel de commande, filtres, tests E2E)              | 🚧 En cours |
-| **S3**    | Backend NestJS + PostgreSQL, module `catalog`, site branché sur l'API                                   | ⏳          |
+| **S2**    | Intégration du KSAD + finitions frontend (comptes, tunnel de commande, filtres, tests E2E)              | ✅ Terminé  |
+| **S3**    | Backend NestJS + PostgreSQL, module `catalog`, site branché sur l'API                                   | 🚧 En cours |
 | **S4**    | Module `identity` : comptes par e-mail ou téléphone (OTP), sécurité de connexion                        | ⏳          |
 | **S5**    | Modules `orders` + `payments` : commande, Mobile Money, paiement à la livraison                         | ⏳          |
 | **S6**    | Module `vendors` + back-office : boutiques, KYC, modération, commissions                                | ⏳          |
@@ -27,7 +27,7 @@ Mobile Money (Moov, Airtel) et paiement à la livraison, lancement visé **fin 2
 | Jalon  | Contenu                                                                                              | Visé                       |
 | ------ | ---------------------------------------------------------------------------------------------------- | -------------------------- |
 | v0.1.0 | Site vitrine + CI/CD + démo publique                                                                 | ✅ S1                      |
-| v0.2.0 | Parcours client complet en démonstration : compte, commande, favoris, partage, tests de bout en bout | ✅ S2 (à étiqueter)        |
+| v0.2.0 | Parcours client complet en démonstration : compte, commande, favoris, partage, tests de bout en bout | ✅ S2                      |
 | v0.3.0 | Catalogue servi par l'API et PostgreSQL                                                              | fin S3                     |
 | v0.5.0 | Premier achat de bout en bout en environnement de test (Mobile Money _sandbox_)                      | fin S5                     |
 | v0.7.0 | Vendeurs partenaires opérationnels                                                                   | fin S6                     |
@@ -86,7 +86,7 @@ Ces démarches prennent souvent plusieurs mois et **bloquent** des sprints si el
 | S1-T21 | Démo publique gratuite (Render) déployée automatiquement par le pipeline                                       | ✅                       |
 | S1-T22 | Publication de l'image sur Docker Hub (`levy2025/kemdia`) en plus de GHCR                                      | ✅                       |
 
-## S2 — Intégration du KSAD + finitions frontend 🚧
+## S2 — Intégration du KSAD + finitions frontend ✅
 
 | ID     | Tâche                                                                                                                  | Statut |
 | ------ | ---------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -102,18 +102,18 @@ Ces démarches prennent souvent plusieurs mois et **bloquent** des sprints si el
 | S2-T09 | Fermeture de la dette S1 : PR Dependabot obsolètes, configuration Dependabot, mises à jour sûres                       | ✅     |
 | S2-T10 | Refonte visuelle « place de marché » : accueil, fiche produit, barre mobile, connexion, listes, panier                 | ✅     |
 
-## S3 — Backend : socle et module `catalog`
+## S3 — Backend : socle et module `catalog` 🚧
 
-| ID     | Tâche                                                                                                    |
-| ------ | -------------------------------------------------------------------------------------------------------- |
-| S3-T01 | `apps/api` NestJS, architecture hexagonale, configuration validée au démarrage                           |
-| S3-T02 | PostgreSQL en local via `docker compose` (parité avec la production), Prisma, un schéma par module       |
-| S3-T03 | Module `catalog` : catégories, produits, **variantes**, stock, UUID (BR-001, BR-042, FR-013)             |
-| S3-T04 | API REST `/api/v1` documentée (OpenAPI), limitation de débit                                             |
-| S3-T05 | Le site lit l'API au lieu du fichier de démonstration (`lib/catalog.ts`)                                 |
-| S3-T06 | CI : tests d'intégration avec une base PostgreSQL éphémère, image Docker de l'API                        |
-| S3-T07 | Démo Render : API + base de données gratuite                                                             |
-| S3-T08 | Dette : blocage de l'accueil ramené à 300 ms (chargement progressif), ESLint 10, évaluation TypeScript 7 |
+| ID     | Tâche                                                                                                    | Statut |
+| ------ | -------------------------------------------------------------------------------------------------------- | ------ |
+| S3-T01 | `apps/api` NestJS, architecture hexagonale, configuration validée au démarrage                           | ✅     |
+| S3-T02 | PostgreSQL en local via `docker compose` (parité avec la production), Prisma, un schéma par module       | ⏳     |
+| S3-T03 | Module `catalog` : catégories, produits, **variantes**, stock, UUID (BR-001, BR-042, FR-013)             | ⏳     |
+| S3-T04 | API REST `/api/v1` documentée (OpenAPI), limitation de débit                                             | ⏳     |
+| S3-T05 | Le site lit l'API au lieu du fichier de démonstration (`lib/catalog.ts`)                                 | ⏳     |
+| S3-T06 | CI : tests d'intégration avec une base PostgreSQL éphémère, image Docker de l'API                        | ⏳     |
+| S3-T07 | Démo Render : API + base de données gratuite                                                             | ⏳     |
+| S3-T08 | Dette : blocage de l'accueil ramené à 300 ms (chargement progressif), ESLint 10, évaluation TypeScript 7 | ⏳     |
 
 ## S4 à S8 — grandes lignes
 
