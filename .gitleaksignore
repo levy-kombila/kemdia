@@ -1,0 +1,7 @@
+# Détections Gitleaks acceptées, une par ligne (commit:fichier:règle:ligne). Chaque entrée doit être justifiée.
+#
+# S3-T04 (PR #21) : clés de TEST de l'API, écrites en clair dans deux tests puis remplacées par une clé
+# tirée au hasard dès le commit suivant. Valeurs sans aucun usage réel ; l'historique n'est pas réécrit
+# (pas de force push). Toute autre clé, dans un autre commit ou fichier, reste détectée.
+c10280f758bf8ff7e64789e1efaf90e60ac973d2:apps/api/test/catalog-http.int.test.ts:generic-api-key:34
+c10280f758bf8ff7e64789e1efaf90e60ac973d2:apps/api/test/catalog-http.test.ts:generic-api-key:35
