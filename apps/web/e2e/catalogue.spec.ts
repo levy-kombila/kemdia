@@ -28,6 +28,10 @@ test("les filtres réduisent la liste et restent dans l'adresse (partageable)", 
   expect(after).toBeLessThan(before);
   await expect(page.getByRole("list", { name: "Filtres actifs" })).toContainText("En promotion");
 
+  // Le tri conserve les filtres
+  await page.getByRole("combobox", { name: /Trier par/ }).selectOption("prix-asc");
+  await expect(page).toHaveURL(/promo=1.*tri=prix-asc|tri=prix-asc.*promo=1/);
+
   await page.getByRole("link", { name: "Tout effacer" }).click();
   await expect(page).not.toHaveURL(/promo=1/);
 });

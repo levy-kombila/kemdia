@@ -1,7 +1,7 @@
 import { SlidersHorizontal, X } from "lucide-react";
 import { FilterSheet } from "./FilterSheet";
 import Link from "next/link";
-import { Suspense, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { getFacets, queryProducts, type ProductQuery } from "@/lib/catalog";
 import { countActiveFilters, filtersToParams, parseFilters, PRICE_BUCKETS } from "@/lib/filters";
 import { first, parsePage, parseSort, SORT_OPTIONS } from "@/lib/search-params";
@@ -97,9 +97,12 @@ export function CatalogView({
             {sideTop && <div className="mb-4">{sideTop}</div>}
             {panel}
           </FilterSheet>
-          <Suspense>
-            <SortSelect value={sort} options={SORT_OPTIONS} />
-          </Suspense>
+          <SortSelect
+            value={sort}
+            options={SORT_OPTIONS}
+            basePath={basePath}
+            params={{ ...baseParams, ...filtersToParams(filters) }}
+          />
           {chips.length > 0 && (
             <ul
               className="flex w-full flex-wrap items-center gap-2 pt-1"

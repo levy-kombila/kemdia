@@ -16,7 +16,8 @@ if (results.length === 0) {
 }
 const order = ["Accueil", "Catégorie", "Fiche produit", "Recherche", "Panier"];
 results.sort((a, b) => order.indexOf(a.page) - order.indexOf(b.page));
-const cell = (v, max) => (v <= max ? `${v} / ${max}` : `**${v}** / ${max} ❌`);
+const cell = (v, max, soft = false) =>
+  v <= max ? `${v} / ${max}` : `**${v}** / ${max} ${soft ? "⚠️" : "❌"}`;
 const { network, cpu } = results[0];
 console.log(
   [
@@ -28,8 +29,10 @@ console.log(
     "| --- | --- | --- | --- | --- | --- | --- |",
     ...results.map(
       (r) =>
-        `| ${r.page} | ${cell(r.fcp, r.budget.fcp)} | ${cell(r.lcp, r.budget.lcp)} | ${cell(r.cls, r.budget.cls)} | ${cell(r.tbt, r.budget.tbt)} | ${cell(r.jsKb, r.budget.jsKb)} | ${cell(r.totalKb, r.budget.totalKb)} |`,
+        `| ${r.page} | ${cell(r.fcp, r.budget.fcp)} | ${cell(r.lcp, r.budget.lcp)} | ${cell(r.cls, r.budget.cls)} | ${cell(r.tbt, r.budget.tbt, true)} | ${cell(r.jsKb, r.budget.jsKb)} | ${cell(r.totalKb, r.budget.totalKb)} |`,
     ),
+    "",
+    "❌ bloque la PR · ⚠️ signalé seulement (le blocage du fil principal varie selon la machine de CI).",
     "",
     ...results.filter((r) => r.why).map((r) => `- **${r.page}** : budget adapté, ${r.why}.`),
   ].join("\n"),

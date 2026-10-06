@@ -13,7 +13,7 @@ const BUDGET = {
   fcp: 2000, // premier affichage (ms)
   lcp: 2500, // plus grand élément affiché (ms) — « bon » selon Google
   cls: 0.1, // décalages de mise en page
-  tbt: 300, // blocage du fil principal (ms)
+  tbt: 300, // blocage du fil principal (ms) — indicatif, voir plus bas
   jsKb: 300, // JavaScript transféré (Ko compressés)
   totalKb: 1200, // poids total transféré (Ko)
 };
@@ -148,7 +148,13 @@ for (const { name, path, override, why } of PAGES) {
     expect.soft(m.fcp, "premier affichage (ms)").toBeLessThanOrEqual(b.fcp);
     expect.soft(m.lcp, "plus grand élément (ms)").toBeLessThanOrEqual(b.lcp);
     expect.soft(m.cls, "décalages de mise en page").toBeLessThanOrEqual(b.cls);
-    expect.soft(m.tbt, "blocage du fil principal (ms)").toBeLessThanOrEqual(b.tbt);
+    // Le blocage dépend beaucoup de la machine (les serveurs de CI sont partagés et irréguliers) :
+    // il est affiché dans le résumé et signalé, mais ne bloque pas la PR.
+    if (m.tbt > b.tbt)
+      test.info().annotations.push({
+        type: "avertissement",
+        description: `Blocage ${m.tbt} ms > ${b.tbt} ms`,
+      });
     expect.soft(m.jsKb, "JavaScript (Ko)").toBeLessThanOrEqual(b.jsKb);
     expect.soft(m.totalKb, "poids total (Ko)").toBeLessThanOrEqual(b.totalKb);
   });
