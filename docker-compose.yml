@@ -1,7 +1,8 @@
 # Environnement local (voir docs/guides/base-de-donnees.md) :
-#   docker compose up -d db        PostgreSQL seul, pour développer l'API (pnpm dev)
-#   docker compose up --build web  le site comme en production
-# (l'image de l'API sera ajoutée au S3-T06)
+#   docker compose up -d db          PostgreSQL seul, pour développer l'API (pnpm dev)
+#   docker compose up --build web    le site comme en production (catalogue de démonstration)
+#   docker compose up --build        tout : base → migrations → API → site, avec les images de production (S3-T06)
+# Pour que le site lise l'API : API_INTERNAL_KEY=<clé> dans un fichier .env à la racine (jamais dans Git).
 services:
   web:
     build:
@@ -11,13 +12,60 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
-      # Sans API_URL : catalogue de démonstration. (L'image fixe APP_ENV=production par défaut,
-      # qui exige l'API : ici on est sur le poste.)
+      # L'image fixe APP_ENV=production par défaut, qui exige l'API : ici on est sur le poste.
       APP_ENV: local
+      # Clé définie dans le .env de la racine → le site lit l'API ci-dessous ; sinon : catalogue de démonstration
+      API_URL: ${API_INTERNAL_KEY:+http://api:4000}
+      API_INTERNAL_KEY: ${API_INTERNAL_KEY:-}
     read_only: true
     tmpfs:
       - /tmp
       - /app/apps/web/.next/cache
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  # Migrations de la base : tâche ponctuelle, avec la MÊME image que l'API, avant chaque démarrage de l'API
+  api-migrate:
+    build: &api-build
+      context: .
+      dockerfile: apps/api/Dockerfile
+      args:
+        APP_VERSION: local
+    image: kemdia-api:local
+    command: ["node", "dist/database/migrate.js"]
+    environment: &api-env
+      APP_ENV: local
+      DATABASE_URL: postgresql://${POSTGRES_USER:-kemdia}:${POSTGRES_PASSWORD:-kemdia}@db:5432/${POSTGRES_DB:-kemdia}
+    depends_on:
+      db:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
+  # API NestJS (image de production) : démarre seulement si les migrations ont réussi
+  api:
+    build: *api-build
+    image: kemdia-api:local
+    environment:
+      <<: *api-env
+      API_INTERNAL_KEY: ${API_INTERNAL_KEY:-}
+      API_DOCS: "true"
+    ports:
+      # Même port que `pnpm dev` : arrêter l'un avant de lancer l'autre
+      - "127.0.0.1:4000:4000"
+    depends_on:
+      api-migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped

@@ -51,7 +51,7 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: docker
-    directory: "/apps/web"
+    directories: ["/apps/web", "/apps/api"]
     schedule: { interval: weekly, day: monday, time: "06:00", timezone: Africa/Libreville }
     labels: [dependencies]
     commit-message: { prefix: "chore(docker)" }
