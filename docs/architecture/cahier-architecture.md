@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués  |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests      |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                       |
+| **1.7** | 2026-10-06 | S3     | Image Docker de l'API et migrations au déploiement (ADR-0012) : §3.5, §3.8 (nouvelle), §6.3, §7 job « image de l'API », §8, §9              |
 | **1.6** | 2026-10-06 | S3     | Le site lit l'API (ADR-0011) : §3.2, §3.7 contrat `packages/contracts`, §5.1, §5.2, §5.7 panier par variante, §5.9 (nouvelle), §6.2, §7, §9 |
 | **1.5** | 2026-10-06 | S3     | §3.7 API REST `/api/v1` et documentation OpenAPI (ADR-0010) ; §3.4 `docs/`, variables ; §4 ; §6.3 limitation de débit ; §9 tests de contrat |
 | **1.4** | 2026-10-06 | S3     | BR-005 : 3 niveaux de catégories (domaine + déclencheur SQL) ; Fitness déplacé sous Sport & Loisirs ; §2.1, §3.6, §6.3, §9                  |
@@ -252,17 +253,18 @@ flowchart LR
     end
 ```
 
-| Règle                                                                                         | Vérifiée par                                   |
-| --------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Un fichier Prisma par module ; chaque modèle dans le schéma PostgreSQL du module (`@@schema`) | `test/prisma-schema.test.ts`                   |
-| Aucune relation vers un autre module : on stocke un UUID                                      | `test/prisma-schema.test.ts`                   |
-| Seule la couche `infrastructure/` d'un module utilise Prisma                                  | `test/architecture.test.ts`                    |
-| Toute modification du schéma a sa migration                                                   | CI : `db:deploy` puis `db:check` sur base vide |
-| Une migration fusionnée n'est jamais modifiée ; on en ajoute une nouvelle                     | Revue de code                                  |
+| Règle                                                                                                | Vérifiée par                                   |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Un fichier Prisma par module ; chaque modèle dans le schéma PostgreSQL du module (`@@schema`)        | `test/prisma-schema.test.ts`                   |
+| Aucune relation vers un autre module : on stocke un UUID                                             | `test/prisma-schema.test.ts`                   |
+| Seule la couche `infrastructure/` d'un module utilise Prisma                                         | `test/architecture.test.ts`                    |
+| Toute modification du schéma a sa migration                                                          | CI : `db:deploy` puis `db:check` sur base vide |
+| Une migration fusionnée n'est jamais modifiée ; on en ajoute une nouvelle                            | Revue de code                                  |
+| Une migration ne casse pas la version précédente de l'API (« ajouter d'abord, supprimer plus tard ») | Revue de code (retour arrière possible)        |
 
 **Environnements** : poste → `docker compose up -d db` (accessible seulement depuis le poste) ; CI → base éphémère par exécution ;
-démo → base Render gratuite (S3-T07) ; production → serveur (S7). Les migrations sont appliquées par `pnpm db:deploy`
-avant le démarrage de la nouvelle version (intégré au déploiement au S3-T06 / T07).
+démo → base Render gratuite (S3-T07) ; production → serveur (S7). En ligne, les migrations sont appliquées par **l'image de l'API**
+(`node dist/database/migrate.js`) avant le démarrage de la nouvelle version (§3.8) ; sur le poste, `pnpm db:deploy` reste disponible.
 
 ### 3.6 Module `catalog` (S3-T03)
 
@@ -354,6 +356,34 @@ sa **variante par défaut** (`variantId`, `stock`) et `variantCount` (contrat 1.
 
 **Limitation de débit** : par adresse IP (`req.ip`, qui ne croit `X-Forwarded-For` que derrière un relais déclaré par `TRUST_PROXY`).
 Le serveur du site présente la clé `API_INTERNAL_KEY` et n'est pas limité : il sert tous les visiteurs depuis une seule adresse.
+
+### 3.8 Image Docker de l'API (S3-T06)
+
+Décision : [ADR-0012](adr/0012-image-api-migrations.md). Fichier : `apps/api/Dockerfile` (construit depuis la racine du dépôt).
+
+```mermaid
+flowchart LR
+    subgraph build[Construction — une fois par commit]
+      i[pnpm install<br/>API + contrat] --> b[contrat · client Prisma · tsc]
+      b --> d[pnpm deploy --prod<br/>dépendances de production]
+      d --> e[moteur de migrations<br/>Alpine, téléchargé ici]
+    end
+    e --> img[(Image ghcr.io/…/kemdia/api<br/>sha-commit)]
+    img -->|1. tâche ponctuelle| m[node dist/database/migrate.js<br/>prisma migrate deploy]
+    m -->|code 0| a[2. node dist/main.js<br/>API]
+    m -. échec .-> stop[la nouvelle API ne démarre pas]
+    m --> pg[(PostgreSQL)]
+    a --> pg
+```
+
+| Élément    | Valeur                                                                                                                            |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Base       | `node:22-alpine` mis à jour, sans npm ni corepack                                                                                 |
+| Contenu    | `dist/`, dépendances de production, `prisma/schema`, `prisma/migrations`, `prisma.config.ts`, moteur `/app/engines/schema-engine` |
+| Exécution  | Utilisateur `kemdia` (1001), fichiers en lecture seule, port 4000, `HEALTHCHECK` sur `/api/health` (base comprise)                |
+| Variables  | Celles de l'API (`apps/api/.env.example`) ; l'image fixe `NODE_ENV=production`, `APP_ENV=production` et `APP_VERSION` (sha)       |
+| Migrations | Même image, même configuration ; vérifiée comme au démarrage de l'API ; ne fait rien si la base est à jour ; verrou PostgreSQL    |
+| Local      | `docker compose up --build` : `db` → `api-migrate` → `api` (port 4000) → `web` (lit l'API si `API_INTERNAL_KEY` est dans `.env`)  |
 
 ## 4. Choix technologiques
 
@@ -601,25 +631,26 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 
 ### 6.3 Sécurité de l'API (S3-T01)
 
-| Mesure                                                                                                                                                                                  | Où                                               | Faille(s) de l'ancien projet évitée(s)                 |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------ |
-| Configuration validée au démarrage ; valeurs jamais affichées ; `debug` interdit en production                                                                                          | `config/env.ts`                                  | CRIT-02 (secrets), mauvaise config                     |
-| CSP `default-src 'none'; frame-ancestors 'none'`, HSTS, `nosniff`, `X-Frame-Options: DENY`, sans `X-Powered-By`                                                                         | `http/configure-app.ts`                          | LOW-03, empreinte technologique                        |
-| CORS fermé par défaut ; origines explicites, HTTPS en production                                                                                                                        | `http/configure-app.ts`                          | Appels depuis un site tiers                            |
-| Corps JSON limité à 100 Ko                                                                                                                                                              | `http/configure-app.ts`                          | Déni de service                                        |
-| Erreurs imprévues : message générique (détail dans les journaux) ; 404 sans recopier l'adresse                                                                                          | `http/problem-details.filter.ts`                 | Fuite d'informations, XSS réfléchie                    |
-| Journaux sans paramètres d'URL, sans corps ni en-têtes ; champs sensibles masqués ; identifiant de requête                                                                              | `http/logging.ts`                                | Données personnelles dans les journaux                 |
-| Couches et modules isolés (test d'architecture)                                                                                                                                         | `test/architecture.test.ts`                      | Couplage, contournement des règles                     |
-| `DATABASE_URL` jamais journalisée ; mot de passe masqué dans les messages du pilote ; adresse de développement refusée en production (S3-T02)                                           | `config/env.ts`, `database/`                     | CRIT-02 (identifiants exposés)                         |
-| Requêtes SQL paramétrées (Prisma), testé avec une valeur hostile ; requête limitée à 10 s ; ≤ 10 connexions (S3-T02)                                                                    | `database/prisma.service.ts`, test d'intégration | CRIT-04 (injection), déni de service                   |
-| Recherche : mots réduits à `[a-z0-9]`, 8 mots et 100 caractères au plus ; pages de 48 au plus ; 10 marques au plus (S3-T03)                                                             | `catalog/application/product-search.ts`          | MED-13, déni de service                                |
-| Contraintes SQL : prix > 0, prix barré > prix, stock ≥ 0 ; catégorie non supprimable si elle contient des produits ; déclencheur : 3 niveaux au plus et aucune boucle (BR-005) (S3-T03) | migration `catalogue`                            | Montants et stocks incohérents                         |
-| Images de produits : chemins `/images/…` uniquement, jamais d'adresse externe (S3-T03)                                                                                                  | `catalog/domain/category.ts`                     | HIGH-03 (SSRF)                                         |
-| Tests d'intégration limités aux bases `*_test` (ils vident des tables) (S3-T03)                                                                                                         | `test/integration-db.ts`                         | Perte de données de développement                      |
-| Limitation de débit par IP (120/min, 30/min pour la disponibilité), 429 en français + `Retry-After` ; clé interne du site comparée en temps constant (S3-T04)                           | `http/rate-limit.ts`                             | Déni de service, force brute                           |
-| Corps de requête validés par schéma, champs inconnus refusés (S3-T04)                                                                                                                   | `packages/contracts/src/schemas.ts`              | Injection de champs (ex. un prix envoyé par le client) |
-| Page de documentation : fichiers servis par l'API (liste fermée), CSP propre, désactivée par défaut en production ; télémétrie `@scarf/scarf` bloquée (S3-T04)                          | `docs/`                                          | Script tiers, fuite d'informations                     |
-| Base locale accessible seulement depuis le poste (`127.0.0.1`), authentification SCRAM-SHA-256 (S3-T02)                                                                                 | `docker-compose.yml`                             | Base exposée sur le réseau                             |
+| Mesure                                                                                                                                                                                   | Où                                               | Faille(s) de l'ancien projet évitée(s)                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------ |
+| Configuration validée au démarrage ; valeurs jamais affichées ; `debug` interdit en production                                                                                           | `config/env.ts`                                  | CRIT-02 (secrets), mauvaise config                     |
+| CSP `default-src 'none'; frame-ancestors 'none'`, HSTS, `nosniff`, `X-Frame-Options: DENY`, sans `X-Powered-By`                                                                          | `http/configure-app.ts`                          | LOW-03, empreinte technologique                        |
+| CORS fermé par défaut ; origines explicites, HTTPS en production                                                                                                                         | `http/configure-app.ts`                          | Appels depuis un site tiers                            |
+| Corps JSON limité à 100 Ko                                                                                                                                                               | `http/configure-app.ts`                          | Déni de service                                        |
+| Erreurs imprévues : message générique (détail dans les journaux) ; 404 sans recopier l'adresse                                                                                           | `http/problem-details.filter.ts`                 | Fuite d'informations, XSS réfléchie                    |
+| Journaux sans paramètres d'URL, sans corps ni en-têtes ; champs sensibles masqués ; identifiant de requête                                                                               | `http/logging.ts`                                | Données personnelles dans les journaux                 |
+| Couches et modules isolés (test d'architecture)                                                                                                                                          | `test/architecture.test.ts`                      | Couplage, contournement des règles                     |
+| `DATABASE_URL` jamais journalisée ; mot de passe masqué dans les messages du pilote ; adresse de développement refusée en production (S3-T02)                                            | `config/env.ts`, `database/`                     | CRIT-02 (identifiants exposés)                         |
+| Requêtes SQL paramétrées (Prisma), testé avec une valeur hostile ; requête limitée à 10 s ; ≤ 10 connexions (S3-T02)                                                                     | `database/prisma.service.ts`, test d'intégration | CRIT-04 (injection), déni de service                   |
+| Recherche : mots réduits à `[a-z0-9]`, 8 mots et 100 caractères au plus ; pages de 48 au plus ; 10 marques au plus (S3-T03)                                                              | `catalog/application/product-search.ts`          | MED-13, déni de service                                |
+| Contraintes SQL : prix > 0, prix barré > prix, stock ≥ 0 ; catégorie non supprimable si elle contient des produits ; déclencheur : 3 niveaux au plus et aucune boucle (BR-005) (S3-T03)  | migration `catalogue`                            | Montants et stocks incohérents                         |
+| Images de produits : chemins `/images/…` uniquement, jamais d'adresse externe (S3-T03)                                                                                                   | `catalog/domain/category.ts`                     | HIGH-03 (SSRF)                                         |
+| Tests d'intégration limités aux bases `*_test` (ils vident des tables) (S3-T03)                                                                                                          | `test/integration-db.ts`                         | Perte de données de développement                      |
+| Limitation de débit par IP (120/min, 30/min pour la disponibilité), 429 en français + `Retry-After` ; clé interne du site comparée en temps constant (S3-T04)                            | `http/rate-limit.ts`                             | Déni de service, force brute                           |
+| Image de l'API : non-root, lecture seule, sans npm ; moteur de migrations téléchargé à la construction ; scannée par Trivy ; migrations refusées si la configuration est fausse (S3-T06) | `apps/api/Dockerfile`, `database/migrate.ts`     | Image vulnérable, base de développement en production  |
+| Corps de requête validés par schéma, champs inconnus refusés (S3-T04)                                                                                                                    | `packages/contracts/src/schemas.ts`              | Injection de champs (ex. un prix envoyé par le client) |
+| Page de documentation : fichiers servis par l'API (liste fermée), CSP propre, désactivée par défaut en production ; télémétrie `@scarf/scarf` bloquée (S3-T04)                           | `docs/`                                          | Script tiers, fuite d'informations                     |
+| Base locale accessible seulement depuis le poste (`127.0.0.1`), authentification SCRAM-SHA-256 (S3-T02)                                                                                  | `docker-compose.yml`                             | Base exposée sur le réseau                             |
 
 ### 6.4 Prévu 🔜
 
@@ -638,7 +669,7 @@ flowchart LR
       q[format · lint · types · tests · build]
       d[API : migrations + intégration<br/>PostgreSQL 18 éphémère]
       e[parcours de bout en bout<br/>accessibilité · budget de performance]
-      i[image Docker + scan Trivy]
+      i[images Docker site + API<br/>scan Trivy · démarrage vérifié]
       s[Gitleaks · pnpm audit · Semgrep · ShellCheck]
       q --> e --> i
       d --> i
@@ -650,20 +681,22 @@ flowchart LR
     prod -. échec .-> rb[retour arrière auto]
 ```
 
-| Fichier                           | Rôle                                                                                                                                                     |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/ci.yml`        | Qualité → bout en bout → image → scan → publication GHCR + Docker Hub (main) → staging + démo                                                            |
-| `.github/workflows/release.yml`   | Tag `vX.Y.Z` → promotion de l'image testée → Release GitHub → production                                                                                 |
-| `.github/workflows/_deploy.yml`   | Déploiement réutilisable : SSH restreint, test de fumée, retour arrière                                                                                  |
-| `.github/workflows/security.yml`  | Gitleaks, pnpm audit, Semgrep, ShellCheck ; CodeQL si dépôt public ; chaque lundi                                                                        |
-| `.github/dependabot.yml`          | Mises à jour hebdomadaires (npm, actions épinglées par SHA, image Docker)                                                                                |
-| `apps/web/Dockerfile`             | Multi-étapes, `standalone`, non-root, sans npm, healthcheck `/api/health`                                                                                |
-| `apps/api/`                       | Lint, types, tests (avec couverture) et build dans la même étape « qualité » que le site (S3-T01)                                                        |
-| Job « migrations et intégration » | Base PostgreSQL 18 éphémère : `db:deploy`, `db:check` (migrations = schéma), `test:int` (S3-T02)                                                         |
-| Job « bout en bout » (S3-T05)     | Site construit avec une API **injoignable**, puis parcours et performance contre la vraie API (PostgreSQL 18, clé éphémère) ; aucune réponse 429 tolérée |
-| Job « image » (S3-T05)            | L'image démarre dans les 3 configurations : production sans API (refus), démo (fichier), API muette (500)                                                |
-| `deploy/`                         | Scripts et configuration serveur (voir §8)                                                                                                               |
-| `.husky/pre-commit`               | Formatage automatique avant chaque commit                                                                                                                |
+| Fichier                           | Rôle                                                                                                                                                                 |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/ci.yml`        | Qualité → bout en bout → image → scan → publication GHCR + Docker Hub (main) → staging + démo                                                                        |
+| `.github/workflows/release.yml`   | Tag `vX.Y.Z` → promotion de l'image testée → Release GitHub → production                                                                                             |
+| `.github/workflows/_deploy.yml`   | Déploiement réutilisable : SSH restreint, test de fumée, retour arrière                                                                                              |
+| `.github/workflows/security.yml`  | Gitleaks, pnpm audit, Semgrep, ShellCheck ; CodeQL si dépôt public ; chaque lundi                                                                                    |
+| `.github/dependabot.yml`          | Mises à jour hebdomadaires (npm, actions épinglées par SHA, image Docker)                                                                                            |
+| `apps/web/Dockerfile`             | Multi-étapes, `standalone`, non-root, sans npm, healthcheck `/api/health`                                                                                            |
+| `apps/api/`                       | Lint, types, tests (avec couverture) et build dans la même étape « qualité » que le site (S3-T01)                                                                    |
+| Job « migrations et intégration » | Base PostgreSQL 18 éphémère : `db:deploy`, `db:check` (migrations = schéma), `test:int` (S3-T02)                                                                     |
+| Job « bout en bout » (S3-T05)     | Site construit avec une API **injoignable**, puis parcours et performance contre la vraie API (PostgreSQL 18, clé éphémère) ; aucune réponse 429 tolérée             |
+| `apps/api/Dockerfile` (S3-T06)    | Image de l'API : multi-étapes, dépendances de production seules, non-root, moteur de migrations embarqué                                                             |
+| Job « image de l'API » (S3-T06)   | Construction, Trivy, migrations sur une base **vide** puis relance, refus d'une configuration fausse, API en lecture seule → `database: ok`, publication GHCR (main) |
+| Job « image » (S3-T05)            | L'image démarre dans les 3 configurations : production sans API (refus), démo (fichier), API muette (500)                                                            |
+| `deploy/`                         | Scripts et configuration serveur (voir §8)                                                                                                                           |
+| `.husky/pre-commit`               | Formatage automatique avant chaque commit                                                                                                                            |
 
 **Principes** : _build once, deploy many_ · déploiement par digest immuable · actions épinglées par SHA ·
 aucun secret dans Git · tout changement passe par une PR.
@@ -691,29 +724,30 @@ flowchart TB
     deploy -->|pull par digest| ghcr[(GHCR)]
 ```
 
-| Élément              | Choix                                                                                                              |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Hébergement          | VPS Ubuntu 24.04 (2 vCPU / 4 Go), Europe de l'Ouest — à réévaluer avec l'APDPVP pour les données personnelles (S7) |
-| Conteneur applicatif | Lecture seule, `cap_drop: ALL`, `no-new-privileges`, 512 Mo max, logs bornés                                       |
-| Environnements       | `demo` (Render Free, public, auto à chaque fusion) · `staging` (auto, protégé) · `production` (tag de version)     |
-| Fiabilité            | Healthcheck, `compose up --wait`, test de fumée, retour arrière automatique, verrou anti-déploiements concurrents  |
-| Traçabilité          | Release GitHub par version, résumé de chaque déploiement dans Actions, `/opt/kemdia/deploy.log`                    |
-| Base de données      | PostgreSQL 18 ([§3.5](#35-base-de-données-s3-t02)) : démo Render au S3-T07, serveur de production au S7            |
-| À venir              | Sauvegardes chiffrées et testées (S7), surveillance et alertes (S7), _blue/green_ sans coupure (S7)                |
+| Élément              | Choix                                                                                                                            |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Hébergement          | VPS Ubuntu 24.04 (2 vCPU / 4 Go), Europe de l'Ouest — à réévaluer avec l'APDPVP pour les données personnelles (S7)               |
+| Conteneur applicatif | Lecture seule, `cap_drop: ALL`, `no-new-privileges`, 512 Mo max, logs bornés                                                     |
+| Environnements       | `demo` (Render Free, public, auto à chaque fusion) · `staging` (auto, protégé) · `production` (tag de version)                   |
+| Fiabilité            | Healthcheck, `compose up --wait`, test de fumée, retour arrière automatique, verrou anti-déploiements concurrents                |
+| Traçabilité          | Release GitHub par version, résumé de chaque déploiement dans Actions, `/opt/kemdia/deploy.log`                                  |
+| Base de données      | PostgreSQL 18 ([§3.5](#35-base-de-données-s3-t02)) : démo Render au S3-T07, serveur de production au S7                          |
+| API                  | Image publiée sur GHCR à chaque fusion (S3-T06, §3.8) ; mise en ligne : démo au S3-T07, serveur au S7 (avec `API_URL` côté site) |
+| À venir              | Sauvegardes chiffrées et testées (S7), surveillance et alertes (S7), _blue/green_ sans coupure (S7)                              |
 
 ## 9. Qualité et tests
 
-| Niveau              | Outil                                                 | État S1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unitaires (logique) | Vitest                                                | 78 tests : formatage, livraison (dont dates), panier, catalogue, paramètres d'URL, identité (S2)                                                                                                                                                                                                                                                                                                                                                                                              |
-| Composants          | Testing Library                                       | 16 tests : carte produit, saisie OTP, parcours d'identité, carrousel, barre d'onglets (S2)                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Bout en bout        | Playwright + axe-core                                 | 16 scénarios × 2 appareils (téléphone Pixel 7, ordinateur) : achat complet, filtres, favoris, partage, vendeur, en-têtes de sécurité, XSS, accessibilité WCAG AA de 7 pages (S2) ; **contre la vraie API** depuis le S3-T05                                                                                                                                                                                                                                                                   |
-| Performance         | Playwright + Web Vitals (Chrome DevTools)             | 5 pages, médiane de 3 chargements à froid en 3G : premier affichage, plus grand élément, décalages, blocage, poids ; tableau dans le résumé de la CI (S2-T08)                                                                                                                                                                                                                                                                                                                                 |
-| Site — catalogue    | Vitest                                                | S3-T05 : 147 tests du site au total (+27), dont 31 sur la lecture du catalogue : configuration (les 3 cas : API, fichier, production sans API refusée), adaptateur HTTP (délai, 404, réponse hors contrat, cache, clé interne), adaptateur fichier (mêmes résultats que l'API), garde de construction ; panier par variante (`kemdia.cart.v2`)                                                                                                                                                |
-| Contrat partagé     | Vitest                                                | 8 tests (S3-T05) : schémas, OpenAPI, identifiants de démonstration stables ; l'API vérifie que ses règles (quantité maximale) sont celles du contrat                                                                                                                                                                                                                                                                                                                                          |
-| API (S3)            | Vitest + Supertest                                    | 127 tests (S3-T05 : paramètre `badge`, tri `ventes`, alignement sur le contrat ; S3-T04 : routes HTTP, contrat, limitation de débit, documentation OpenAPI ; dont 46 sur le catalogue : domaine, BR-001, recherche, import — S3-T03) : configuration, journaux, en-têtes de sécurité, CORS, format des erreurs, versionnement des routes, santé de la base, architecture du code et du schéma Prisma (S3-T01, T02)                                                                            |
-| API — intégration   | Vitest + vraie base PostgreSQL 18                     | 35 tests (S3-T05 : badges, tri `ventes`, variante par défaut d'une liste), dont 6 de contrat HTTP sur la vraie base (S3-T04 : chaque catégorie, chaque produit, chaque page validés par leur schéma) et 21 sur le catalogue : listes, recherche, filtres, tri, compteurs **comparés à la logique du site**, BR-001, contraintes SQL, 3 niveaux de catégories (S3-T03) ; et : santé, schémas créés, requête trop longue interrompue, injection SQL, base injoignable → 503 sans fuite (S3-T02) |
-| Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Niveau              | Outil                                                 | État S1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Unitaires (logique) | Vitest                                                | 78 tests : formatage, livraison (dont dates), panier, catalogue, paramètres d'URL, identité (S2)                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Composants          | Testing Library                                       | 16 tests : carte produit, saisie OTP, parcours d'identité, carrousel, barre d'onglets (S2)                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Bout en bout        | Playwright + axe-core                                 | 16 scénarios × 2 appareils (téléphone Pixel 7, ordinateur) : achat complet, filtres, favoris, partage, vendeur, en-têtes de sécurité, XSS, accessibilité WCAG AA de 7 pages (S2) ; **contre la vraie API** depuis le S3-T05                                                                                                                                                                                                                                                                                        |
+| Performance         | Playwright + Web Vitals (Chrome DevTools)             | 5 pages, médiane de 3 chargements à froid en 3G : premier affichage, plus grand élément, décalages, blocage, poids ; tableau dans le résumé de la CI (S2-T08)                                                                                                                                                                                                                                                                                                                                                      |
+| Site — catalogue    | Vitest                                                | S3-T05 : 147 tests du site au total (+27), dont 31 sur la lecture du catalogue : configuration (les 3 cas : API, fichier, production sans API refusée), adaptateur HTTP (délai, 404, réponse hors contrat, cache, clé interne), adaptateur fichier (mêmes résultats que l'API), garde de construction ; panier par variante (`kemdia.cart.v2`)                                                                                                                                                                     |
+| Contrat partagé     | Vitest                                                | 8 tests (S3-T05) : schémas, OpenAPI, identifiants de démonstration stables ; l'API vérifie que ses règles (quantité maximale) sont celles du contrat                                                                                                                                                                                                                                                                                                                                                               |
+| API (S3)            | Vitest + Supertest                                    | 134 tests (S3-T06 : script de migration — configuration vérifiée, aucune valeur affichée, échec et délai ; S3-T05 : paramètre `badge`, tri `ventes`, alignement sur le contrat ; S3-T04 : routes HTTP, contrat, limitation de débit, documentation OpenAPI ; dont 46 sur le catalogue : domaine, BR-001, recherche, import — S3-T03) : configuration, journaux, en-têtes de sécurité, CORS, format des erreurs, versionnement des routes, santé de la base, architecture du code et du schéma Prisma (S3-T01, T02) |
+| API — intégration   | Vitest + vraie base PostgreSQL 18                     | 35 tests (S3-T05 : badges, tri `ventes`, variante par défaut d'une liste), dont 6 de contrat HTTP sur la vraie base (S3-T04 : chaque catégorie, chaque produit, chaque page validés par leur schéma) et 21 sur le catalogue : listes, recherche, filtres, tri, compteurs **comparés à la logique du site**, BR-001, contraintes SQL, 3 niveaux de catégories (S3-T03) ; et : santé, schémas créés, requête trop longue interrompue, injection SQL, base injoignable → 503 sans fuite (S3-T02)                      |
+| Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ## 10. Glossaire
 
