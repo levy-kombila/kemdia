@@ -20,15 +20,16 @@ Le site fonctionne seul (fichier de démonstration). Pour qu'il lise **l'API** (
 puis mettre la **même clé** `API_INTERNAL_KEY` dans `apps/api/.env` et `apps/web/.env.local`, avec `API_URL=http://localhost:4000`
 dans `apps/web/.env.local` (modèle : `apps/web/.env.example`). Guide : [docs/guides/base-de-donnees.md](docs/guides/base-de-donnees.md).
 
-| Commande                                             | Rôle                         |
-| ---------------------------------------------------- | ---------------------------- |
-| `pnpm dev`                                           | Développement (site + API)   |
-| `pnpm --filter @kemdia/api dev`                      | API seule                    |
-| `pnpm test`                                          | Tests (Vitest)               |
-| `pnpm lint` / `pnpm typecheck` / `pnpm format:check` | Qualité                      |
-| `pnpm build`                                         | Build de production          |
-| `docker compose up --build web`                      | Image de production en local |
-| `docker compose up -d db`                            | Base PostgreSQL locale       |
+| Commande                                             | Rôle                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------ |
+| `pnpm dev`                                           | Développement (site + API)                                               |
+| `pnpm --filter @kemdia/api dev`                      | API seule                                                                |
+| `pnpm test`                                          | Tests (Vitest)                                                           |
+| `pnpm lint` / `pnpm typecheck` / `pnpm format:check` | Qualité                                                                  |
+| `pnpm build`                                         | Build de production                                                      |
+| `docker compose up --build web`                      | Image de production en local                                             |
+| `docker compose up -d db`                            | Base PostgreSQL locale                                                   |
+| `docker compose up --build`                          | Tout le système en images de production (base → migrations → API → site) |
 
 ## Structure
 
@@ -47,7 +48,7 @@ docs/         Planning, rapports de sprint, cahier d'architecture, ADR, guides, 
 - 🏛️ [Cahier d'architecture](docs/architecture/cahier-architecture.md) et [décisions (ADR)](docs/architecture/adr/)
 - 📘 [Comprendre l'architecture (concepts expliqués simplement)](docs/architecture/concepts.md)
 - 📏 [Règles métier et exigences (BR / FR)](docs/architecture/regles-metier.md) · [Synthèse du KSAD](docs/references/ksad-synthese.md)
-- 📝 [Rapports](docs/rapports/) — dernier : [S3-T05 — Le site lit l'API](docs/rapports/2026-10-06_S3-T05_site-branche-api.md)
+- 📝 [Rapports](docs/rapports/) — dernier : [S3-T06 — Image Docker de l'API](docs/rapports/2026-10-06_S3-T06_image-api.md)
 - 🔐 [Politique de sécurité](SECURITY.md) · [Suivi de l'audit de l'ancienne version](docs/securite/heritage-audit-django.md)
 - 🔌 [API : description OpenAPI](docs/api/openapi.json) — page interactive sur http://localhost:4000/api/docs (`pnpm --filter @kemdia/api dev`)
 - 🗄️ [Base de données locale (PostgreSQL, migrations)](docs/guides/base-de-donnees.md)

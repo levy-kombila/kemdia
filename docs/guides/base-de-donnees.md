@@ -54,7 +54,21 @@ Set-Content -Encoding ascii apps\web\.env.local "API_URL=http://localhost:4000`n
 Si l'API est arrêtée, les pages du catalogue affichent « Une erreur est survenue » : c'est voulu, le site ne bascule **jamais**
 tout seul sur le fichier ([ADR-0011](../architecture/adr/0011-site-branche-api.md)). Pour revenir au fichier : retirer `API_URL` de `apps/web/.env.local`.
 
-## 4. Modifier la structure de la base
+## 4. Tout lancer avec les images de production (S3-T06)
+
+Pour vérifier le système complet comme il tournera en ligne (Docker Desktop requis, `pnpm dev` arrêté) :
+
+```bash
+docker compose up --build        # base → migrations → API (port 4000) → site (port 3000)
+pnpm --filter @kemdia/api db:seed   # dans un autre terminal, une fois : catalogue de démonstration
+```
+
+- `api-migrate` applique les migrations puis s'arrête (« exited with code 0 ») ; l'API ne démarre qu'après.
+- Le site lit l'API si `API_INTERNAL_KEY=<clé>` est dans un fichier `.env` **à la racine** du dépôt ; sinon il lit le fichier de démonstration.
+  PowerShell (clé générée comme au §3) : `Add-Content -Encoding ascii .env "API_INTERNAL_KEY=$cle"`.
+- Dans l'image, les migrations se lancent avec `node dist/database/migrate.js` : c'est ce que fera chaque déploiement, avant la nouvelle API.
+
+## 5. Modifier la structure de la base
 
 1. Modifier le fichier du module dans `apps/api/prisma/schema/` (ex. `catalog.prisma`).
    Chaque modèle porte `@@schema("<module>")`, et **aucune relation vers un autre module** : on garde seulement son identifiant (UUID).
@@ -73,6 +87,7 @@ La CI vérifie que les migrations correspondent exactement au schéma : un oubli
 | ---------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | `db:migrate --name <nom>`                      | Créer et appliquer une migration (poste de développement uniquement)                         |
 | `db:deploy`                                    | Appliquer les migrations existantes (c'est aussi ce que fait le serveur)                     |
+| `migrate` (après `build`)                      | Même chose, par le script de l'image : configuration vérifiée comme l'API (S3-T06)           |
 | `db:status`                                    | Voir les migrations appliquées ou en attente                                                 |
 | `db:check`                                     | Vérifier que la base correspond au schéma (code 2 = écart)                                   |
 | `db:seed`                                      | Importer le catalogue de démonstration (relançable ; refusé en production)                   |
@@ -95,6 +110,10 @@ pnpm --filter @kemdia/api test:int
 ## Règles à respecter
 
 - **Ne jamais modifier une migration déjà fusionnée** dans `main` : elle a peut-être été appliquée en ligne. On en crée une nouvelle.
+- **Ajouter d'abord, supprimer plus tard** : une migration ne doit pas casser la version précédente de l'API, car en cas de retour arrière
+  l'ancienne version redémarre sur la base déjà migrée. Exemple pour renommer une colonne : PR 1 ajoute la nouvelle colonne et écrit dans les deux ;
+  PR 2 (une fois en ligne) lit la nouvelle ; PR 3 supprime l'ancienne.
+- Pas d'opération très longue (copie d'une grosse table…) sans en parler : le déploiement attend la fin des migrations (10 min au plus).
 - Ne jamais copier une base réelle (avec des clients) sur un poste, ni l'envoyer dans Git (leçon CRIT-03 de l'ancien site).
 - Ne jamais coller une `DATABASE_URL` de serveur dans un ticket, un message ou une capture : elle contient le mot de passe.
 

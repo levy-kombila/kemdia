@@ -34,6 +34,10 @@ flowchart LR
 | `deploy/app/compose.yml`         | Conteneur Kemdia (lecture seule, sans privilèges)                     |
 | `deploy/proxy/`                  | Caddy : HTTPS Let's Encrypt, staging protégé par mot de passe         |
 
+> **API (S3-T06)** : son image (`ghcr.io/<compte>/kemdia/api`) est construite, vérifiée et publiée par la même CI,
+> puis re-étiquetée avec le site à chaque release. Elle **n'est pas encore déployée** sur le serveur (base de production au S7) :
+> le serveur ne fait tourner que le site. Voir [§3.8 du cahier](../architecture/cahier-architecture.md#38-image-docker-de-lapi-s3-t06).
+
 ## 2. Ce qu'il vous faut
 
 | Élément        | Recommandation                                                                                                                                                                                                                                                            |
@@ -154,9 +158,12 @@ git tag -a v0.1.0 -m "Kemdia v0.1.0 — Sprint 1 : frontend"
 git push origin v0.1.0
 ```
 
-Le workflow **Release** vérifie que le tag est sur `main`, réutilise **exactement l'image testée en staging**
-(re-étiquetée `v0.1.0`, sans reconstruction), crée la Release GitHub avec les notes de version,
+Le workflow **Release** vérifie que le tag est sur `main`, réutilise **exactement les images testées par la CI**
+(site et API, re-étiquetées `v0.1.0`, sans reconstruction), crée la Release GitHub avec les notes de version,
 déploie en production et lance le test de fumée.
+
+> ⚠️ Depuis le S3-T05, le site refuse de démarrer en production sans `API_URL`. **Ne pas publier de version**
+> tant que l'API n'est pas installée sur le serveur (S7) : le retour arrière automatique remettrait l'ancienne version.
 
 > Seul le propriétaire du dépôt peut déclencher la production.
 > Avec GitHub Pro/Team, on peut en plus exiger une approbation manuelle via un _Environment_ « production » (voir §11).
