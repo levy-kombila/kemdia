@@ -122,7 +122,9 @@ async function measureMedian(
     await context.close();
   }
   const keys = ["fcp", "lcp", "cls", "tbt", "jsKb", "totalKb"] as const;
-  const result = Object.fromEntries(keys.map((k) => [k, median(runs.map((r) => r[k]))])) as Metrics;
+  const result = Object.fromEntries(
+    keys.map((k) => [k, median(runs.map((r) => r[k]))]),
+  ) as unknown as Metrics;
   result.shifts = runs.flatMap((r) => r.shifts ?? []).slice(0, 6);
   return result;
 }
