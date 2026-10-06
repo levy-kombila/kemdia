@@ -3,10 +3,10 @@ import Link from "next/link";
 import { ProductCard } from "@/components/product/ProductCard";
 import { cn } from "@/lib/cn";
 import type { SortKey } from "@/lib/search-params";
-import type { Paginated, Product } from "@/lib/types";
+import type { ProductPage } from "@/lib/types";
 
 type Props = {
-  result: Paginated<Product>;
+  result: ProductPage;
   sort: SortKey;
   basePath: string;
   /** Paramètres à conserver dans les liens (ex. q pour la recherche) */

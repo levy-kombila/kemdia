@@ -8,14 +8,13 @@ import { ProductCard } from "@/components/product/ProductCard";
 import { ProductRail, RailItem } from "@/components/product/ProductRail";
 import {
   getBestsellers,
-  getCategoryBySlug,
   getCategoryHighlights,
   getCategoryTiles,
   getDeals,
   getFeaturedProducts,
   getNewProducts,
   getRootCategories,
-  queryProducts,
+  listProducts,
 } from "@/lib/catalog";
 
 // Rendu à la demande : les liens absolus (aperçus WhatsApp) utilisent l'adresse du serveur (SITE_URL)
@@ -30,31 +29,45 @@ function railSection(id: string, title: string, href: string, children: React.Re
   );
 }
 
-export default function HomePage() {
-  const tech = getCategoryBySlug("high-tech");
-  const mode = getCategoryBySlug("mode");
-  const techItems = tech
-    ? queryProducts({ categoryId: tech.id, sort: "prix-asc", pageSize: 50 }).items
-    : [];
-  const fashion = mode ? queryProducts({ categoryId: mode.id, pageSize: 1 }).items : [];
-  const techShowcase = tech ? queryProducts({ categoryId: tech.id, pageSize: 2 }).items : [];
-
-  const featured = getFeaturedProducts(10);
-  const news = getNewProducts(10);
-  const bestsellers = getBestsellers(10);
-  const more = queryProducts({ pageSize: 12, sort: "nouveautes" }).items;
+export default async function HomePage() {
+  // Toutes les lectures partent en même temps (catalogue mis en cache 60 s côté serveur)
+  const [
+    roots,
+    cheapestTech,
+    fashion,
+    techShowcase,
+    highlights,
+    deals,
+    tiles,
+    featured,
+    news,
+    bestsellers,
+    more,
+  ] = await Promise.all([
+    getRootCategories(),
+    listProducts({ category: "high-tech", sort: "prix-asc", pageSize: 1 }),
+    listProducts({ category: "mode", pageSize: 1 }),
+    listProducts({ category: "high-tech", pageSize: 2 }),
+    getCategoryHighlights(12),
+    getDeals(10),
+    getCategoryTiles(),
+    getFeaturedProducts(10),
+    getNewProducts(10),
+    getBestsellers(10),
+    listProducts({ pageSize: 12, sort: "nouveautes" }),
+  ]);
 
   return (
     <div className="container-page space-y-3 py-3 sm:space-y-4 lg:py-4">
       <Hero
-        categories={getRootCategories()}
-        techDeals={techShowcase}
-        cheapestTech={techItems[0]?.price ?? 0}
-        fashion={fashion}
+        categories={roots}
+        techDeals={techShowcase.items}
+        cheapestTech={cheapestTech.items[0]?.price ?? 0}
+        fashion={fashion.items}
       />
-      <CategoryBubbles items={getCategoryHighlights(12)} />
-      <FlashSales deals={getDeals(10)} />
-      <CategoryTiles tiles={getCategoryTiles()} />
+      <CategoryBubbles items={highlights} />
+      <FlashSales deals={deals} />
+      <CategoryTiles tiles={tiles} />
 
       {railSection(
         "meilleures-ventes",
@@ -98,7 +111,7 @@ export default function HomePage() {
       <section aria-labelledby="tous-produits" className="pt-2">
         <SectionHeader id="tous-produits" title="Encore plus de produits" href="/recherche" />
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5 xl:grid-cols-6">
-          {more.map((p) => (
+          {more.items.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
         </div>

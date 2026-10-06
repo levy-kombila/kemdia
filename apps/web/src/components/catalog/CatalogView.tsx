@@ -2,8 +2,15 @@ import { SlidersHorizontal, X } from "lucide-react";
 import { FilterSheet } from "./FilterSheet";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { getFacets, queryProducts, type ProductQuery } from "@/lib/catalog";
-import { countActiveFilters, filtersToParams, parseFilters, PRICE_BUCKETS } from "@/lib/filters";
+import type { ProductQuery } from "@kemdia/contracts";
+import { getListingFacets, listProducts } from "@/lib/catalog";
+import {
+  countActiveFilters,
+  filtersToParams,
+  filtersToQuery,
+  parseFilters,
+  PRICE_BUCKETS,
+} from "@/lib/filters";
 import { first, parsePage, parseSort, SORT_OPTIONS } from "@/lib/search-params";
 import { FilterPanel, filterHref } from "./FilterPanel";
 import { ProductListing } from "./ProductListing";
@@ -13,7 +20,8 @@ type Props = {
   basePath: string;
   /** Paramètres propres à la page à conserver (ex. q) */
   baseParams?: Record<string, string>;
-  query: Pick<ProductQuery, "categoryId" | "q" | "onlyDeals">;
+  /** Sélection de la page : catégorie, recherche ou promotions (les filtres viennent de l'URL) */
+  query: Pick<ProductQuery, "category" | "q" | "scope">;
   searchParams: Record<string, string | string[] | undefined>;
   /** Bloc affiché en haut de la colonne de gauche (ex. sous-rayons) */
   sideTop?: ReactNode;
@@ -25,7 +33,7 @@ type Props = {
  * Page de liste commune (catégorie, recherche, promotions) : filtres à gauche, filtres actifs en pastilles,
  * tri, grille et pagination. Tout passe par l'URL, validée par liste blanche.
  */
-export function CatalogView({
+export async function CatalogView({
   basePath,
   baseParams = {},
   query,
@@ -33,14 +41,20 @@ export function CatalogView({
   sideTop,
   emptyState,
 }: Props) {
-  const facets = getFacets(query);
+  const facets = await getListingFacets(query);
   const filters = parseFilters(
     searchParams,
     facets.brands.map((b) => b.name),
   );
   const sort = parseSort(first(searchParams.tri));
   const page = parsePage(first(searchParams.page));
-  const result = queryProducts({ ...query, sort, page, pageSize: 20, filters });
+  const result = await listProducts({
+    ...query,
+    ...filtersToQuery(filters),
+    sort,
+    page,
+    pageSize: 20,
+  });
   const ctx = { basePath, baseParams, filters, sort };
   const active = countActiveFilters(filters);
 

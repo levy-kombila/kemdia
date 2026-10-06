@@ -1,17 +1,16 @@
+import type {
+  AvailabilityResponse,
+  Category as CategoryDto,
+  CategoryNode as CategoryNodeDto,
+  ProductDetail,
+} from "@kemdia/contracts";
+import type { AvailabilityResult } from "../application/catalog.service.js";
 import type { Category, CategoryNode } from "../domain/category.js";
 import type { Product } from "../domain/product.js";
-import type { AvailabilityResult } from "../application/catalog.service.js";
-import type { z } from "zod";
-import type {
-  AvailabilityResponseSchema,
-  CategoryNodeDto,
-  CategorySchema,
-  ProductDetailSchema,
-} from "./schemas.js";
 
 /** Transforme les objets du domaine en JSON public : seuls les champs prévus sortent (rien d'interne). */
 
-export function presentCategory(c: Category): z.infer<typeof CategorySchema> {
+export function presentCategory(c: Category): CategoryDto {
   return {
     id: c.id,
     slug: c.slug,
@@ -26,10 +25,7 @@ export function presentCategoryNode(node: CategoryNode): CategoryNodeDto {
   return { ...presentCategory(node), children: node.children.map(presentCategoryNode) };
 }
 
-export function presentProduct(
-  product: Product,
-  path: Category[],
-): z.infer<typeof ProductDetailSchema> {
+export function presentProduct(product: Product, path: Category[]): ProductDetail {
   const category = path.at(-1) ?? null;
   return {
     id: product.id,
@@ -44,6 +40,7 @@ export function presentProduct(
     compareAtPrice: product.compareAtPrice,
     inStock: product.isAvailable,
     totalStock: product.totalStock,
+    variantId: product.mainVariant.id,
     rating: product.rating,
     reviewCount: product.reviewCount,
     isFeatured: product.isFeatured,
@@ -65,9 +62,7 @@ export function presentProduct(
   };
 }
 
-export function presentAvailability(
-  results: AvailabilityResult[],
-): z.infer<typeof AvailabilityResponseSchema> {
+export function presentAvailability(results: AvailabilityResult[]): AvailabilityResponse {
   return {
     ok: results.every((r) => r.ok),
     lines: results.map((r) =>

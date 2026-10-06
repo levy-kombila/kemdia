@@ -1,7 +1,7 @@
 import { Check, Star } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import type { Facets } from "@/lib/catalog";
+import type { ListingFacets } from "@/lib/catalog";
 import { cn } from "@/lib/cn";
 import { filtersToParams, type ProductFilters } from "@/lib/filters";
 
@@ -88,7 +88,7 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /** Panneau de filtres : de simples liens (fonctionne sans JavaScript, URL partageable). */
-export function FilterPanel({ ctx, facets }: { ctx: Ctx; facets: Facets }) {
+export function FilterPanel({ ctx, facets }: { ctx: Ctx; facets: ListingFacets }) {
   const f = ctx.filters;
   const brands = facets.brands.slice(0, 12);
   return (

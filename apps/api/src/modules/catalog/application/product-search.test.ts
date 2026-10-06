@@ -87,6 +87,15 @@ describe("parseProductSearch — validation des recherches (leçon MED-13)", () 
     expect(search.brands).toHaveLength(MAX_BRANDS);
   });
 
+  it("sélection (badge) : seules les valeurs du contrat sont reconnues", () => {
+    expect(parseProductSearch({ badge: "bestseller" }).badge).toBe("bestseller");
+    expect(parseProductSearch({ badge: "admin" })).not.toHaveProperty("badge");
+  });
+
+  it("tri « ventes » accepté (les plus demandés d'abord)", () => {
+    expect(parseProductSearch({ sort: "ventes" }).sort).toBe("ventes");
+  });
+
   it("portée « promotions » (page Promotions) : seule valeur reconnue", () => {
     expect(parseProductSearch({ scope: "promotions" }).promotionsOnly).toBe(true);
     expect(parseProductSearch({ scope: "tout" }).promotionsOnly).toBe(false);

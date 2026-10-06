@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch --import @swc-node/register/esm-register src/main.ts",
+    "postinstall": "prisma generate",
+    "dev": "node --watch-path=src --import @swc-node/register/esm-register src/main.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "lint": "eslint .",
@@ -21,6 +22,7 @@
     "db:reset": "prisma migrate reset"
   },
   "dependencies": {
+    "@kemdia/contracts": "workspace:*",
     "@nestjs/common": "^12.1.2",
     "@nestjs/core": "^12.1.2",
     "@nestjs/platform-express": "^12.1.2",

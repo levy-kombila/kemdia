@@ -12,7 +12,7 @@ function Lines({ lines }: { lines: CartLine[] }) {
   return (
     <ul className="divide-ink-100 divide-y">
       {lines.map((l) => (
-        <li key={l.productId} className="flex items-center gap-3 py-2.5">
+        <li key={l.variantId} className="flex items-center gap-3 py-2.5">
           <span className="border-ink-100 relative size-14 shrink-0 overflow-hidden rounded-lg border bg-white">
             {l.image && (
               <Image src={l.image} alt="" fill sizes="56px" className="object-contain p-1" />
@@ -22,7 +22,10 @@ function Lines({ lines }: { lines: CartLine[] }) {
               <span className="sr-only"> exemplaire(s)</span>
             </span>
           </span>
-          <span className="line-clamp-2 flex-1 text-sm">{l.title}</span>
+          <span className="line-clamp-2 flex-1 text-sm">
+            {l.title}
+            {l.variantName && <span className="text-ink-500"> · {l.variantName}</span>}
+          </span>
           <span className="whitespace-nowrap text-sm font-semibold">
             {formatFCFA(l.price * l.quantity)}
           </span>

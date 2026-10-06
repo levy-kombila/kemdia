@@ -1,17 +1,24 @@
+import {
+  BADGES,
+  DEFAULT_PAGE_SIZE,
+  MAX_BRANDS,
+  MAX_PAGE,
+  MAX_PAGE_SIZE,
+  MAX_QUERY_LENGTH,
+  SORT_KEYS,
+  type Badge,
+  type SortKey,
+} from "@kemdia/contracts/constants";
 import { searchable } from "../domain/values.js";
-import { SORT_KEYS, type SortKey } from "./ports.js";
 
 /**
  * Validation d'une recherche venant de l'extérieur (URL, API) — même principe que le site (leçon MED-13) :
  * liste blanche, bornes, et jamais d'erreur sur une valeur farfelue : elle est simplement ignorée.
  */
 
-export const MAX_PAGE_SIZE = 48;
-export const DEFAULT_PAGE_SIZE = 20;
-export const MAX_PAGE = 500;
-export const MAX_QUERY_LENGTH = 100;
+// Bornes publiques : celles du contrat partagé avec le site
+export { DEFAULT_PAGE_SIZE, MAX_BRANDS, MAX_PAGE, MAX_PAGE_SIZE, MAX_QUERY_LENGTH };
 export const MAX_TERMS = 8;
-export const MAX_BRANDS = 10;
 
 export interface ProductSearchInput {
   categorySlug?: unknown;
@@ -27,6 +34,8 @@ export interface ProductSearchInput {
   minRating?: unknown;
   /** « promotions » : liste limitée aux produits en promotion (page Promotions du site), compteurs compris. */
   scope?: unknown;
+  /** Sélection éditoriale : « featured », « new » ou « bestseller ». */
+  badge?: unknown;
 }
 
 export interface ProductSearch {
@@ -42,6 +51,7 @@ export interface ProductSearch {
   onlyDeals: boolean;
   minRating?: number;
   promotionsOnly: boolean;
+  badge?: Badge;
 }
 
 const integer = (value: unknown): number | undefined => {
@@ -92,5 +102,6 @@ export function parseProductSearch(input: ProductSearchInput): ProductSearch {
     onlyDeals: flag(input.onlyDeals),
     ...(minRating !== undefined && minRating >= 1 && minRating <= 5 ? { minRating } : {}),
     promotionsOnly: input.scope === "promotions",
+    ...(BADGES.includes(input.badge as Badge) ? { badge: input.badge as Badge } : {}),
   };
 }

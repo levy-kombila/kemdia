@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { formatFCFA } from "@/lib/format";
-import type { Category, Product } from "@/lib/types";
+import type { Category, ProductSummary } from "@/lib/types";
 import { HeroCarousel } from "./HeroCarousel";
 
 function ProductDisc({
@@ -11,16 +11,16 @@ function ProductDisc({
   className,
   preload = false,
 }: {
-  product: Product;
+  product: ProductSummary;
   className?: string;
   /** Image de la 1re bannière : chargée en priorité (c'est le plus grand élément affiché, LCP) */
   preload?: boolean;
 }) {
   return (
     <div className={`absolute overflow-hidden rounded-full bg-white shadow-xl ${className ?? ""}`}>
-      {product.images[0] && (
+      {product.image && (
         <Image
-          src={product.images[0]}
+          src={product.image}
           alt=""
           fill
           sizes="(min-width: 1280px) 256px, (min-width: 640px) 224px, 160px"
@@ -48,9 +48,9 @@ export function Hero({
   fashion,
 }: {
   categories: Category[];
-  techDeals: Product[];
+  techDeals: ProductSummary[];
   cheapestTech: number;
-  fashion: Product[];
+  fashion: ProductSummary[];
 }) {
   const slides = [
     <div key="tech" className={`${slideBase} bg-brand-600 text-white`}>

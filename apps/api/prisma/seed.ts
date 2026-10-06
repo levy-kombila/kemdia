@@ -1,11 +1,10 @@
 import "reflect-metadata";
-import { readFileSync } from "node:fs";
+import { demoCatalog } from "@kemdia/contracts/demo";
 import { loadConfig } from "../src/config/env.js";
 import { PrismaService } from "../src/database/prisma.service.js";
 import {
   importCatalog,
   prepareDemoCatalog,
-  type DemoCatalog,
 } from "../src/modules/catalog/infrastructure/demo-catalog.js";
 import { PrismaCategoryRepository } from "../src/modules/catalog/infrastructure/prisma-category.repository.js";
 import { PrismaProductRepository } from "../src/modules/catalog/infrastructure/prisma-product.repository.js";
@@ -20,10 +19,7 @@ if (config.APP_ENV === "production") {
   process.exit(1);
 }
 
-const data = JSON.parse(
-  readFileSync(new URL("./seed/catalogue-demo.json", import.meta.url), "utf8"),
-) as DemoCatalog;
-const prepared = prepareDemoCatalog(data);
+const prepared = prepareDemoCatalog(demoCatalog);
 
 const prisma = new PrismaService(config);
 try {

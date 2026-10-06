@@ -1,12 +1,10 @@
-import { readFileSync } from "node:fs";
+import { demoCatalog, uuidV5, type DemoCatalog } from "@kemdia/contracts/demo";
 import { describe, expect, it } from "vitest";
 import { InMemoryCategories, InMemoryProducts } from "../../../../test/catalog/in-memory.js";
 import { CategoryTree } from "../domain/category.js";
-import { importCatalog, prepareDemoCatalog, uuidV5, type DemoCatalog } from "./demo-catalog.js";
+import { importCatalog, prepareDemoCatalog } from "./demo-catalog.js";
 
-const data = JSON.parse(
-  readFileSync(new URL("../../../../prisma/seed/catalogue-demo.json", import.meta.url), "utf8"),
-) as DemoCatalog;
+const data: DemoCatalog = demoCatalog;
 
 describe("Catalogue de démonstration", () => {
   it("UUID v5 conforme à la norme (exemple de la RFC 9562)", () => {

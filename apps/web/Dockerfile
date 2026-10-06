@@ -10,8 +10,10 @@ FROM base AS deps
 WORKDIR /repo
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/web/package.json apps/web/
-# Seules les dépendances du site sont installées (l'API a sa propre image)
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --filter @kemdia/web
+# Paquet de contrats partagé avec l'API (petit) : il se construit pendant l'installation (script « prepare »)
+COPY packages/contracts packages/contracts
+# Dépendances du site et de ses paquets internes uniquement (l'API aura sa propre image, S3-T06)
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --filter "@kemdia/web..."
 
 FROM base AS build
 WORKDIR /repo
@@ -20,8 +22,11 @@ ARG NEXT_PUBLIC_SITE_URL=https://kemdia.ga
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 COPY --from=deps /repo/node_modules ./node_modules
 COPY --from=deps /repo/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /repo/packages/contracts/node_modules ./packages/contracts/node_modules
 COPY . .
-RUN pnpm --filter @kemdia/web build
+# Le catalogue n'est JAMAIS lu ici (S3-T05) : aucune API n'est joignable pendant la construction de l'image,
+# et une lecture ferait échouer `next build` (garde dans apps/web/src/lib/catalog/index.ts)
+RUN pnpm --filter @kemdia/contracts build && pnpm --filter @kemdia/web build
 
 FROM node:22-alpine AS runner
 WORKDIR /app

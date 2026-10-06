@@ -5,13 +5,7 @@ import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 import { CatalogView } from "@/components/catalog/CatalogView";
 import { CategoryBubbles } from "@/components/home/CategoryBubbles";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
-import {
-  countProducts,
-  getCategoryBySlug,
-  getCategoryPath,
-  getChildHighlights,
-  getChildren,
-} from "@/lib/catalog";
+import { countProducts, getCategory, getChildHighlights } from "@/lib/catalog";
 import { cn } from "@/lib/cn";
 
 type Props = {
@@ -21,7 +15,7 @@ type Props = {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const category = getCategoryBySlug(slug);
+  const category = (await getCategory(slug))?.category;
   if (!category) return { title: "Catégorie introuvable" };
   return {
     title: category.name,
@@ -32,17 +26,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function CategoryPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const category = getCategoryBySlug(slug);
-  if (!category) notFound();
+  const view = await getCategory(slug);
+  if (!view) notFound();
 
-  const path = getCategoryPath(category.id);
+  const { category, path, children } = view;
   const parent = path.length > 1 ? path[path.length - 2] : undefined;
   // Sous-catégories ; si feuille, on affiche les « sœurs » pour naviguer latéralement
-  const children = getChildren(category.id);
-  const navItems = (children.length > 0 ? children : parent ? getChildren(parent.id) : [])
-    .map((c) => ({ ...c, count: countProducts(c.id) }))
+  const siblings =
+    children.length === 0 && parent ? (await getCategory(parent.slug))?.children : [];
+  const navBase = children.length > 0 ? children : (siblings ?? []);
+  const [navCounts, total, highlights] = await Promise.all([
+    Promise.all(navBase.map((c) => countProducts(c.slug))),
+    countProducts(category.slug),
+    getChildHighlights(category.slug),
+  ]);
+  const navItems = navBase
+    .map((c, i) => ({ ...c, count: navCounts[i] ?? 0 }))
     .filter((c) => c.count > 0 || c.id === category.id);
-  const total = countProducts(category.id);
 
   const sideNav =
     navItems.length > 0 ? (
@@ -89,14 +89,11 @@ export default async function CategoryPage({ params, searchParams }: Props) {
         </div>
       </header>
 
-      <CategoryBubbles
-        items={getChildHighlights(category.id)}
-        title={`Les rayons ${category.name}`}
-      />
+      <CategoryBubbles items={highlights} title={`Les rayons ${category.name}`} />
 
       <CatalogView
         basePath={`/categorie/${category.slug}`}
-        query={{ categoryId: category.id }}
+        query={{ category: category.slug }}
         searchParams={await searchParams}
         sideTop={sideNav}
       />

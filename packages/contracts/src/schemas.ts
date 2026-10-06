@@ -1,21 +1,58 @@
 import { z } from "zod";
-import { MAX_AVAILABILITY_LINES } from "../application/catalog.service.js";
-import { SORT_KEYS } from "../application/ports.js";
-import { MAX_ORDER_QUANTITY } from "../domain/product.js";
+import {
+  AVAILABILITY_REASONS,
+  MAX_AVAILABILITY_LINES,
+  MAX_ORDER_QUANTITY,
+  SLUG_PATTERN,
+} from "./constants.js";
 
 /**
- * Contrat HTTP du catalogue. Ces schémas servent trois fois :
- * 1. à valider les corps de requête (POST) ;
- * 2. à produire la documentation OpenAPI (`z.toJSONSchema`) ;
- * 3. dans les tests, à vérifier que chaque réponse réelle respecte la documentation.
+ * Contrat HTTP de l'API Kemdia : UNE seule définition, utilisée
+ * 1. par l'API, pour valider les corps de requête et produire la documentation OpenAPI ;
+ * 2. par le site, pour vérifier chaque réponse reçue de l'API ;
+ * 3. par les tests des deux côtés.
+ * Changer un schéma ici change l'API ET le site : TypeScript signale chaque endroit à adapter.
  */
 
 const uuid = z.uuid().describe("Identifiant UUID (BR-042)");
 const slug = z
   .string()
-  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  .regex(SLUG_PATTERN)
   .describe("Adresse lisible (ex. « telephones-portables »)");
 const fcfa = z.int().positive().describe("Montant en FCFA, entier (BR-004)");
+
+// --- Erreurs et supervision ---
+
+export const ProblemDetailsSchema = z
+  .object({
+    type: z.literal("about:blank"),
+    title: z
+      .string()
+      .describe("Résumé en français (« Ressource introuvable », « Trop de requêtes »…)"),
+    status: z.int().min(400).max(599),
+    detail: z
+      .string()
+      .optional()
+      .describe("Explication destinée au client (erreurs prévues uniquement)"),
+    requestId: z
+      .string()
+      .optional()
+      .describe("Identifiant à communiquer au support (en-tête X-Request-Id)"),
+  })
+  .meta({ id: "ProblemDetails", description: "Erreur au format Problem Details (RFC 9457)" });
+export type ProblemDetails = z.infer<typeof ProblemDetailsSchema>;
+
+export const HealthSchema = z
+  .object({
+    status: z.enum(["ok", "degrade"]),
+    version: z.string(),
+    environment: z.enum(["local", "demo", "staging", "production"]),
+    checks: z.object({ database: z.enum(["ok", "indisponible"]) }),
+  })
+  .meta({ id: "Health", description: "État de l'API et de la base de données" });
+export type Health = z.infer<typeof HealthSchema>;
+
+// --- Catégories ---
 
 export const CategorySchema = z
   .object({
@@ -27,13 +64,14 @@ export const CategorySchema = z
     image: z.string().nullable(),
   })
   .meta({ id: "Category", description: "Catégorie du catalogue" });
+export type Category = z.infer<typeof CategorySchema>;
 
-export interface CategoryNodeDto extends z.infer<typeof CategorySchema> {
-  children: CategoryNodeDto[];
+export interface CategoryNode extends Category {
+  children: CategoryNode[];
 }
 
-export const CategoryNodeSchema: z.ZodType<CategoryNodeDto> = CategorySchema.extend({
-  get children(): z.ZodArray<z.ZodType<CategoryNodeDto>> {
+export const CategoryNodeSchema: z.ZodType<CategoryNode> = CategorySchema.extend({
+  get children(): z.ZodArray<z.ZodType<CategoryNode>> {
     return z.array(CategoryNodeSchema);
   },
 }).meta({
@@ -44,6 +82,7 @@ export const CategoryNodeSchema: z.ZodType<CategoryNodeDto> = CategorySchema.ext
 export const CategoryTreeSchema = z
   .object({ items: z.array(CategoryNodeSchema) })
   .meta({ id: "CategoryTree" });
+export type CategoryTree = z.infer<typeof CategoryTreeSchema>;
 
 export const CategoryViewSchema = z
   .object({
@@ -52,6 +91,9 @@ export const CategoryViewSchema = z
     children: z.array(CategorySchema),
   })
   .meta({ id: "CategoryView" });
+export type CategoryView = z.infer<typeof CategoryViewSchema>;
+
+// --- Produits ---
 
 export const ProductSummarySchema = z
   .object({
@@ -63,7 +105,15 @@ export const ProductSummarySchema = z
     image: z.string().nullable(),
     price: fcfa.describe("Prix « à partir de » (variante active la moins chère)"),
     compareAtPrice: fcfa.nullable().describe("Prix barré, toujours supérieur au prix"),
-    inStock: z.boolean(),
+    inStock: z.boolean().describe("Au moins une variante active a du stock"),
+    variantId: uuid.describe(
+      "Variante proposée par défaut (la moins chère) : celle ajoutée au panier depuis une liste",
+    ),
+    stock: z.int().nonnegative().describe("Stock de la variante par défaut"),
+    variantCount: z
+      .int()
+      .min(1)
+      .describe("Nombre de variantes actives (au-delà de 1 : choix sur la fiche)"),
     rating: z.number().min(0).max(5),
     reviewCount: z.int().nonnegative(),
     isFeatured: z.boolean(),
@@ -71,6 +121,7 @@ export const ProductSummarySchema = z
     isNew: z.boolean(),
   })
   .meta({ id: "ProductSummary", description: "Produit dans une liste (carte produit)" });
+export type ProductSummary = z.infer<typeof ProductSummarySchema>;
 
 export const ProductPageSchema = z
   .object({
@@ -81,6 +132,7 @@ export const ProductPageSchema = z
     totalPages: z.int().min(1),
   })
   .meta({ id: "ProductPage" });
+export type ProductPage = z.infer<typeof ProductPageSchema>;
 
 export const VariantSchema = z
   .object({
@@ -96,6 +148,7 @@ export const VariantSchema = z
     available: z.boolean().describe("Commandable maintenant (BR-001)"),
   })
   .meta({ id: "Variant", description: "Variante d'un produit, avec son propre stock (FR-013)" });
+export type Variant = z.infer<typeof VariantSchema>;
 
 export const ProductDetailSchema = z
   .object({
@@ -111,14 +164,16 @@ export const ProductDetailSchema = z
     compareAtPrice: fcfa.nullable(),
     inStock: z.boolean(),
     totalStock: z.int().nonnegative(),
+    variantId: uuid.describe("Variante proposée par défaut (la moins chère)"),
     rating: z.number().min(0).max(5),
     reviewCount: z.int().nonnegative(),
     isFeatured: z.boolean(),
     isBestseller: z.boolean(),
     isNew: z.boolean(),
-    variants: z.array(VariantSchema).min(1),
+    variants: z.array(VariantSchema).min(1).describe("Variantes actives"),
   })
   .meta({ id: "ProductDetail", description: "Fiche produit" });
+export type ProductDetail = z.infer<typeof ProductDetailSchema>;
 
 export const FacetsSchema = z
   .object({
@@ -132,6 +187,9 @@ export const FacetsSchema = z
     id: "Facets",
     description: "Compteurs affichés à côté des filtres, calculés AVANT application des filtres",
   });
+export type Facets = z.infer<typeof FacetsSchema>;
+
+// --- Disponibilité (BR-001) ---
 
 export const AvailabilityRequestSchema = z
   .object({
@@ -147,7 +205,6 @@ export const AvailabilityRequestSchema = z
   })
   .strict()
   .meta({ id: "AvailabilityRequest", description: "Lignes d'un panier à vérifier (BR-001)" });
-
 export type AvailabilityRequest = z.infer<typeof AvailabilityRequestSchema>;
 
 export const AvailabilityResponseSchema = z
@@ -158,14 +215,7 @@ export const AvailabilityResponseSchema = z
         variantId: z.uuid(),
         quantity: z.int(),
         ok: z.boolean(),
-        reason: z
-          .enum([
-            "PRODUIT_INDISPONIBLE",
-            "VARIANTE_INCONNUE",
-            "QUANTITE_INVALIDE",
-            "STOCK_INSUFFISANT",
-          ])
-          .optional(),
+        reason: z.enum(AVAILABILITY_REASONS).optional(),
         available: z
           .int()
           .nonnegative()
@@ -175,55 +225,27 @@ export const AvailabilityResponseSchema = z
     ),
   })
   .meta({ id: "AvailabilityResponse" });
+export type AvailabilityResponse = z.infer<typeof AvailabilityResponseSchema>;
 
-/** Paramètres de recherche, pour la documentation (la validation tolérante est dans product-search.ts). */
-export const PRODUCT_QUERY_PARAMETERS = [
-  {
-    name: "category",
-    description: "Adresse de la catégorie (sous-catégories comprises)",
-    schema: { type: "string" },
-  },
-  {
-    name: "q",
-    description: "Mots recherchés (sans accents, 100 caractères au plus)",
-    schema: { type: "string" },
-  },
-  {
-    name: "sort",
-    description: "Tri",
-    schema: { type: "string", enum: [...SORT_KEYS], default: "pertinence" },
-  },
-  {
-    name: "page",
-    description: "Page (à partir de 1)",
-    schema: { type: "integer", minimum: 1, default: 1 },
-  },
-  {
-    name: "pageSize",
-    description: "Produits par page",
-    schema: { type: "integer", minimum: 1, maximum: 48, default: 20 },
-  },
-  { name: "priceMin", description: "Prix minimum (FCFA)", schema: { type: "integer", minimum: 0 } },
-  { name: "priceMax", description: "Prix maximum (FCFA)", schema: { type: "integer", minimum: 0 } },
-  {
-    name: "brands",
-    description: "Marques, séparées par des virgules (10 au plus)",
-    schema: { type: "string" },
-  },
-  { name: "inStock", description: "En stock uniquement", schema: { type: "string", enum: ["1"] } },
-  {
-    name: "onlyDeals",
-    description: "En promotion uniquement",
-    schema: { type: "string", enum: ["1"] },
-  },
-  {
-    name: "minRating",
-    description: "Note minimale",
-    schema: { type: "integer", minimum: 1, maximum: 5 },
-  },
-  {
-    name: "scope",
-    description: "« promotions » : page Promotions (liste et compteurs limités aux promotions)",
-    schema: { type: "string", enum: ["promotions"] },
-  },
-] as const;
+type JsonSchema = Record<string, unknown>;
+
+/**
+ * Tous les schémas ci-dessus au format JSON Schema 2020-12, prêts pour `components.schemas` d'un document OpenAPI 3.1.
+ * Calculé avec la même instance de Zod que celle qui a enregistré les schémas.
+ */
+export function openApiComponentSchemas(): Record<string, JsonSchema> {
+  const { schemas } = z.toJSONSchema(z.globalRegistry, {
+    uri: (id) => `#/components/schemas/${id}`,
+  }) as { schemas: Record<string, JsonSchema> };
+  return Object.fromEntries(
+    Object.entries(schemas)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([id, schema]) => {
+        const rest = { ...schema };
+        // $schema et $id sont propres à un fichier JSON Schema isolé : inutiles dans un composant OpenAPI
+        delete rest.$schema;
+        delete rest.$id;
+        return [id, rest];
+      }),
+  );
+}

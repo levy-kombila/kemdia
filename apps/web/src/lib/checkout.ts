@@ -86,7 +86,8 @@ export function validatePaymentPhone(method: PaymentMethod, phone: string): stri
 }
 
 export type OrderRequest = {
-  items: { productId: string; quantity: number }[];
+  /** Lignes de commande : la variante choisie et sa quantité, rien d'autre (S3-T05) */
+  items: { variantId: string; quantity: number }[];
   delivery: {
     fullName: string;
     phone: string;
@@ -109,7 +110,7 @@ export function buildOrderRequest(
 ): OrderRequest {
   const phone = normalizeGabonPhone(address.phone)?.value ?? "";
   return {
-    items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+    items: lines.map((l) => ({ variantId: l.variantId, quantity: l.quantity })),
     delivery: {
       fullName: address.fullName.trim().replace(/\s+/g, " "),
       phone,

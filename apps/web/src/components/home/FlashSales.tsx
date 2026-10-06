@@ -4,13 +4,13 @@ import Link from "next/link";
 import { ProductRail, RailItem } from "@/components/product/ProductRail";
 import { DiscountSticker, Price } from "@/components/ui/Price";
 import { discountPercent } from "@/lib/format";
-import type { Product } from "@/lib/types";
+import type { ProductSummary } from "@/lib/types";
 import { Countdown } from "./Countdown";
 
 const STOCK_SCALE = 50;
 
-function DealCard({ product }: { product: Product }) {
-  const discount = discountPercent(product.price, product.oldPrice);
+function DealCard({ product }: { product: ProductSummary }) {
+  const discount = discountPercent(product.price, product.compareAtPrice);
   const left = Math.max(0, product.stock);
   const ratio = Math.min(1, left / STOCK_SCALE);
   return (
@@ -19,9 +19,9 @@ function DealCard({ product }: { product: Product }) {
       className="group flex h-full flex-col rounded-lg p-2 hover:shadow-[var(--shadow-card-hover)]"
     >
       <span className="relative block aspect-square overflow-hidden rounded-md bg-white">
-        {product.images[0] && (
+        {product.image && (
           <Image
-            src={product.images[0]}
+            src={product.image}
             alt=""
             fill
             sizes="(min-width: 1024px) 15vw, 40vw"
@@ -31,7 +31,7 @@ function DealCard({ product }: { product: Product }) {
         {discount && <DiscountSticker percent={discount} className="absolute left-1 top-1.5" />}
       </span>
       <span className="text-ink-800 mt-2 line-clamp-1 text-[0.85rem]">{product.title}</span>
-      <Price price={product.price} oldPrice={product.oldPrice} size="sm" className="mt-1" />
+      <Price price={product.price} oldPrice={product.compareAtPrice} size="sm" className="mt-1" />
       <span className="text-ink-700 mt-2 text-xs font-medium">
         {left <= 10 ? (
           <strong className="text-brand-700">Plus que {left} en stock</strong>
@@ -50,7 +50,7 @@ function DealCard({ product }: { product: Product }) {
 }
 
 /** Bandeau « Ventes flash » : compte à rebours jusqu'à minuit, stock restant visible sur chaque offre. */
-export function FlashSales({ deals }: { deals: Product[] }) {
+export function FlashSales({ deals }: { deals: ProductSummary[] }) {
   if (deals.length === 0) return null;
   return (
     <section

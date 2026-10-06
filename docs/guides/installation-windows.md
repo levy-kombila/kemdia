@@ -2,6 +2,9 @@
 
 Temps estimé : 30 à 45 minutes. Toutes les commandes se tapent dans **PowerShell** (clic droit sur Démarrer → _Terminal_).
 
+> ⚠️ Windows PowerShell 5.1 ne connaît pas `&&`. Quand une documentation enchaîne `commande1 && commande2`,
+> tapez `commande1`, puis `commande2`.
+
 > 💡 Vous avez déjà VS Code et pyenv sur votre machine : on ne touche pas à Python, il peut rester installé.
 
 ## 1. Git
@@ -41,6 +44,17 @@ fnm install 22
 fnm default 22
 node -v    # doit afficher v22.x
 ```
+
+**Plus simple, sans gestionnaire de versions** (si fnm pose problème ; `nvm` n'est pas installé par ce guide) :
+
+```powershell
+winget show OpenJS.NodeJS --versions             # repérer la version 22.x la plus récente
+winget install OpenJS.NodeJS --version <22.x.y>  # par exemple la première 22.x de la liste
+```
+
+(`OpenJS.NodeJS.LTS` installerait la version LTS du moment, qui n'est plus la 22.)
+
+Rouvrez le terminal ; `node -v` doit afficher `v22.x`.
 
 ## 3. pnpm (gestionnaire de paquets)
 
@@ -89,6 +103,11 @@ pnpm dev
 
 Ouvrez <http://localhost:3000> 🎉
 
+Le site lit alors le **fichier de démonstration**. Pour l'API et la base (à partir du Sprint 3), suivez
+[base-de-donnees.md](base-de-donnees.md) (§1 à §3 : démarrer PostgreSQL, importer le catalogue, brancher le site sur l'API).
+
+**Après chaque `git pull`** : relancez `pnpm install` (nouvelles dépendances, client Prisma régénéré).
+
 Premier envoi vers GitHub :
 
 ```powershell
@@ -126,9 +145,13 @@ Pour la mise en ligne : voir [deploiement.md](deploiement.md).
 
 ## Problèmes fréquents
 
-| Symptôme                        | Solution                                                 |
-| ------------------------------- | -------------------------------------------------------- |
-| `pnpm` introuvable              | Rouvrir le terminal ; sinon `npm i -g pnpm@10.28.0`      |
-| `node` en mauvaise version      | `fnm use 22` dans le dossier du projet                   |
-| Port 3000 occupé                | `pnpm dev -- -p 3001`                                    |
-| Erreurs de fins de ligne (CRLF) | `git config --global core.autocrlf input` puis re-cloner |
+| Symptôme                        | Solution                                                                                                                      |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm` introuvable              | Rouvrir le terminal ; sinon `npm i -g pnpm@10.28.0`                                                                           |
+| `node` en mauvaise version      | `fnm use 22` dans le dossier du projet                                                                                        |
+| Port 3000 occupé                | `pnpm dev -- -p 3001`                                                                                                         |
+| Erreurs de fins de ligne (CRLF) | `git config --global core.autocrlf input` puis re-cloner                                                                      |
+| `Le jeton '&&' n'est pas…`      | Taper les deux commandes l'une après l'autre                                                                                  |
+| `nvm` n'est pas reconnu         | Normal : ce guide utilise fnm (ou Node installé par winget, §2)                                                               |
+| Erreur après un `git pull`      | `pnpm install`                                                                                                                |
+| Variable d'un `.env` ignorée    | Fichier enregistré en UTF-16 : le réécrire avec `Set-Content -Encoding ascii` (voir [base-de-donnees.md](base-de-donnees.md)) |

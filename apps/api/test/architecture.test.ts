@@ -30,6 +30,22 @@ describe("Architecture (ADR-0006, hexagonale)", () => {
       expect(checkImport(MODULES, file("catalog/domain/product.ts"), "./money.js")).toBeNull();
     });
 
+    it("le contrat HTTP : constantes pour l'application, schémas pour l'interface, rien pour le domaine", () => {
+      expect(
+        checkImport(MODULES, file("catalog/domain/product.ts"), "@kemdia/contracts/constants"),
+      ).not.toBeNull();
+      const useCase = file("catalog/application/list-products.ts");
+      expect(checkImport(MODULES, useCase, "@kemdia/contracts/constants")).toBeNull();
+      expect(checkImport(MODULES, useCase, "@kemdia/contracts")).not.toBeNull();
+      expect(checkImport(MODULES, useCase, "@kemdia/contracts/demo")).not.toBeNull();
+      expect(
+        checkImport(MODULES, file("catalog/interface/ctrl.ts"), "@kemdia/contracts"),
+      ).toBeNull();
+      expect(
+        checkImport(MODULES, file("catalog/infrastructure/seed.ts"), "@kemdia/contracts/demo"),
+      ).toBeNull();
+    });
+
     it("l'application ne connaît ni la base ni HTTP", () => {
       const useCase = file("catalog/application/list-products.ts");
       expect(checkImport(MODULES, useCase, "../infrastructure/prisma-products.js")).not.toBeNull();

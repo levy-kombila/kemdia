@@ -1,12 +1,13 @@
+import { unstable_rethrow } from "next/navigation";
 import { Logo } from "@/components/ui/Logo";
-import { getCategoryTree } from "@/lib/catalog";
+import { CatalogUnavailableError, getCategoryTree, type CategoryNode } from "@/lib/catalog";
 import { CategoryNav, type NavCategory } from "./CategoryNav";
 import { HeaderActions } from "./HeaderActions";
 import { SearchForm } from "./SearchForm";
 import { TopBar } from "./TopBar";
 
 function toNav(depth: number) {
-  return (c: ReturnType<typeof getCategoryTree>[number]): NavCategory => ({
+  return (c: CategoryNode): NavCategory => ({
     name: c.name,
     slug: c.slug,
     icon: c.icon,
@@ -14,9 +15,26 @@ function toNav(depth: number) {
   });
 }
 
-export function Header() {
+/**
+ * Menu des catégories : sans lui, le site reste utilisable (recherche, panier). Si le catalogue ne répond pas,
+ * l'en-tête s'affiche sans menu et la page elle-même montre la page d'erreur (aucune donnée de secours).
+ */
+async function navigationTree(): Promise<NavCategory[]> {
+  try {
+    return (await getCategoryTree()).map(toNav(2));
+  } catch (error) {
+    // Seule la panne du catalogue est tolérée ici. Tout le reste remonte : signaux internes de Next.js
+    // (rendu à la demande), garde de construction, configuration invalide.
+    unstable_rethrow(error);
+    if (!(error instanceof CatalogUnavailableError)) throw error;
+    console.error("[en-tête] menu des catégories indisponible :", (error as Error).message);
+    return [];
+  }
+}
+
+export async function Header() {
   // Seuls les champs utiles au menu sont envoyés au navigateur (3 niveaux)
-  const tree = getCategoryTree().map(toNav(2));
+  const tree = await navigationTree();
   return (
     <>
       <TopBar />

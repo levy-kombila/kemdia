@@ -3,6 +3,7 @@ import { PrismaService } from "../../../database/prisma.service.js";
 import type { Prisma } from "../../../generated/prisma/client.js";
 import { Product } from "../domain/product.js";
 import type {
+  Badge,
   Facets,
   Page,
   PriceRange,
@@ -18,6 +19,14 @@ const ORDER: Record<SortKey, Prisma.ProductOrderByWithRelationInput[]> = {
   "prix-asc": [{ price: "asc" }],
   "prix-desc": [{ price: "desc" }],
   note: [{ rating: "desc" }, { reviewCount: "desc" }],
+  // « Les plus demandés » : nombre d'avis, en attendant les ventes réelles (module orders, S5)
+  ventes: [{ reviewCount: "desc" }, { rating: "desc" }],
+};
+
+const BADGE_FILTERS: Record<Badge, Prisma.ProductWhereInput> = {
+  featured: { isFeatured: true },
+  new: { isNew: true },
+  bestseller: { isBestseller: true },
 };
 
 const AVAILABLE_VARIANT = {
@@ -81,15 +90,40 @@ export class PrismaProductRepository implements ProductRepository {
         isFeatured: true,
         isBestseller: true,
         isNew: true,
-        variants: { where: AVAILABLE_VARIANT, select: { id: true }, take: 1 },
+        // Variante par défaut : active la moins chère (même règle que Product.mainVariant)
+        variants: {
+          where: { isActive: true },
+          orderBy: [{ price: "asc" }, { position: "asc" }],
+          select: { id: true, stock: true },
+          take: 1,
+        },
+        _count: { select: { variants: { where: { isActive: true } } } },
       },
     });
+    const ids = rows.map((row) => row.id);
+    const inStock = new Set(
+      (
+        await this.prisma.productVariant.findMany({
+          where: { productId: { in: ids }, ...AVAILABLE_VARIANT },
+          select: { productId: true },
+          distinct: ["productId"],
+        })
+      ).map((v) => v.productId),
+    );
     return {
-      items: rows.map(({ variants, images, ...row }) => ({
-        ...row,
-        image: images[0] ?? null,
-        inStock: variants.length > 0,
-      })),
+      items: rows.map(({ variants, images, _count, ...row }) => {
+        const main = variants[0];
+        // Un produit publié a toujours une variante active (règle du domaine, Product.create)
+        if (!main) throw new Error(`produit ${row.slug} : aucune variante active`);
+        return {
+          ...row,
+          image: images[0] ?? null,
+          inStock: inStock.has(row.id),
+          variantId: main.id,
+          stock: main.stock,
+          variantCount: _count.variants,
+        };
+      }),
       page: current,
       pageSize,
       total,
@@ -197,6 +231,7 @@ function whereOf(c: ProductCriteria): Prisma.ProductWhereInput {
     // Le prix barré est toujours supérieur au prix (contrainte SQL) : « en promotion » = prix barré présent
     ...(c.onlyDeals ? { compareAtPrice: { not: null } } : {}),
     ...(c.minRating !== undefined ? { rating: { gte: c.minRating } } : {}),
+    ...(c.badge ? BADGE_FILTERS[c.badge] : {}),
   };
 }
 

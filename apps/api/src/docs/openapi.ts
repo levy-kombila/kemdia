@@ -1,34 +1,8 @@
-import { z } from "zod";
-import { HealthSchema } from "../health/health.schema.js";
-import { ProblemDetailsSchema } from "../http/problem-details.schema.js";
+import { openApiComponentSchemas } from "@kemdia/contracts";
 import { catalogPaths } from "../modules/catalog/interface/catalog.openapi.js";
-import * as catalogSchemas from "../modules/catalog/interface/schemas.js";
 
 /** Version du contrat HTTP (indépendante de la version de l'image) : à augmenter à chaque changement de l'API. */
-export const API_CONTRACT_VERSION = "1.0.0";
-
-// Les schémas doivent être chargés pour être enregistrés (.meta({ id })) avant la génération
-void [HealthSchema, ProblemDetailsSchema, catalogSchemas];
-
-type JsonSchema = Record<string, unknown>;
-
-/** Schémas Zod enregistrés → composants OpenAPI 3.1 (JSON Schema 2020-12). */
-function components(): Record<string, JsonSchema> {
-  const { schemas } = z.toJSONSchema(z.globalRegistry, {
-    uri: (id) => `#/components/schemas/${id}`,
-  }) as { schemas: Record<string, JsonSchema> };
-  return Object.fromEntries(
-    Object.entries(schemas)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([id, schema]) => {
-        const rest = { ...schema };
-        // $schema et $id sont propres à un fichier JSON Schema isolé : inutiles dans un composant OpenAPI
-        delete rest.$schema;
-        delete rest.$id;
-        return [id, rest];
-      }),
-  );
-}
+export const API_CONTRACT_VERSION = "1.1.0";
 
 /** Document OpenAPI complet de l'API, généré à partir des schémas réellement utilisés. */
 export function buildOpenApiDocument(): Record<string, unknown> {
@@ -73,6 +47,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       },
       ...catalogPaths,
     },
-    components: { schemas: components() },
+    // Schémas du contrat partagé avec le site (@kemdia/contracts)
+    components: { schemas: openApiComponentSchemas() },
   };
 }

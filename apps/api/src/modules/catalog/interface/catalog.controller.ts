@@ -18,7 +18,7 @@ import {
   presentCategoryNode,
   presentProduct,
 } from "./presenters.js";
-import { AvailabilityRequestSchema, type AvailabilityRequest } from "./schemas.js";
+import { AvailabilityRequestSchema, type AvailabilityRequest } from "@kemdia/contracts";
 
 /** Le catalogue change rarement : 60 s de cache côté client et relais (le site, un futur CDN). */
 const CACHE_PUBLIC = "public, max-age=60, stale-while-revalidate=300";
@@ -43,6 +43,7 @@ function searchInput(query: Record<string, unknown>): ProductSearchInput {
     onlyDeals: first(query.onlyDeals),
     minRating: first(query.minRating),
     scope: first(query.scope),
+    badge: first(query.badge),
   };
 }
 

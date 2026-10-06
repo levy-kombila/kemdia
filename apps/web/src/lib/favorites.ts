@@ -7,7 +7,13 @@
 export const MAX_FAVORITES = 100;
 
 export type Favorite = {
+  /** Les favoris restent par PRODUIT (S3-T05) */
   productId: string;
+  /**
+   * Variante à ajouter au panier depuis la liste, quand le produit n'en propose qu'une.
+   * Absente si le produit a plusieurs variantes : le choix se fait sur la fiche.
+   */
+  variantId?: string;
   slug: string;
   title: string;
   /** Prix indicatif au moment de l'ajout ; le vrai prix est celui de la fiche produit */
@@ -32,6 +38,8 @@ const isStr = (v: unknown, max = 300): v is string =>
   typeof v === "string" && v.length > 0 && v.length < max;
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0;
 const SLUG_RE = /^[a-z0-9-]+$/;
+/** Identifiants UUID (BR-042) : les favoris enregistrés avec les anciens numéros (« 38 ») sont écartés. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function parseStoredFavorites(raw: string | null): Favorite[] {
   if (!raw) return [];
@@ -45,6 +53,7 @@ export function parseStoredFavorites(raw: string | null): Favorite[] {
       const f = item as Record<string, unknown>;
       if (
         !isStr(f.productId, 64) ||
+        !UUID_RE.test(f.productId) ||
         !isStr(f.slug, 200) ||
         !SLUG_RE.test(f.slug) ||
         !isStr(f.title)
@@ -54,6 +63,7 @@ export function parseStoredFavorites(raw: string | null): Favorite[] {
       seen.add(f.productId);
       out.push({
         productId: f.productId,
+        ...(isStr(f.variantId, 64) && UUID_RE.test(f.variantId) ? { variantId: f.variantId } : {}),
         slug: f.slug,
         title: f.title,
         price: Math.round(f.price),

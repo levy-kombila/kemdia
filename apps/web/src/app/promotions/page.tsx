@@ -35,7 +35,7 @@ export default async function PromotionsPage({ searchParams }: Props) {
       </header>
       <CatalogView
         basePath="/promotions"
-        query={{ onlyDeals: true }}
+        query={{ scope: "promotions" }}
         searchParams={await searchParams}
       />
     </div>

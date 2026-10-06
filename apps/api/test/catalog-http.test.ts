@@ -10,7 +10,6 @@ import { loadConfig } from "../src/config/env.js";
 import { DatabaseHealth, type DatabaseStatus } from "../src/database/database-health.js";
 import { DOCS_CSP } from "../src/docs/docs.controller.js";
 import { configureApp } from "../src/http/configure-app.js";
-import { ProblemDetailsSchema } from "../src/http/problem-details.schema.js";
 import {
   CATEGORY_REPOSITORY,
   PRODUCT_REPOSITORY,
@@ -19,12 +18,13 @@ import { createCategory } from "../src/modules/catalog/domain/category.js";
 import { Product } from "../src/modules/catalog/domain/product.js";
 import {
   AvailabilityResponseSchema,
+  ProblemDetailsSchema,
   CategoryTreeSchema,
   CategoryViewSchema,
   FacetsSchema,
   ProductDetailSchema,
   ProductPageSchema,
-} from "../src/modules/catalog/interface/schemas.js";
+} from "@kemdia/contracts";
 import { ids, productProps, variantProps } from "./catalog/fixtures.js";
 import { InMemoryCategories, InMemoryProducts } from "./catalog/in-memory.js";
 

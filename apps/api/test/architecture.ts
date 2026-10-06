@@ -12,8 +12,24 @@ const LAYERS: readonly Layer[] = ["domain", "application", "infrastructure", "in
 
 /** Bibliothèques interdites par couche (préfixes de paquets). */
 const FORBIDDEN_PACKAGES: Partial<Record<Layer, readonly string[]>> = {
-  domain: ["@nestjs/", "@prisma/", "express", "pino", "nestjs-pino", "zod", "rxjs"],
-  application: ["@prisma/", "express"],
+  // Le domaine ne dépend même pas du contrat HTTP : les règles métier ne bougent pas quand l'API change
+  domain: [
+    "@nestjs/",
+    "@prisma/",
+    "express",
+    "pino",
+    "nestjs-pino",
+    "zod",
+    "rxjs",
+    "@kemdia/contracts",
+  ],
+  // L'application peut lire les constantes du contrat (tris, bornes), pas ses schémas HTTP (couche interface)
+  application: ["@prisma/", "express", "zod", "@kemdia/contracts"],
+};
+
+/** Exceptions explicites aux interdictions ci-dessus (constantes sans aucune dépendance). */
+const ALLOWED_PACKAGES: Partial<Record<Layer, readonly string[]>> = {
+  application: ["@kemdia/contracts/constants"],
 };
 
 /** Accès à la base (dossiers de src/) : réservé à la couche infrastructure des modules. */
@@ -49,6 +65,7 @@ export function checkImport(modulesDir: string, file: string, specifier: string)
   if (!from) return null;
 
   if (!specifier.startsWith(".")) {
+    if (ALLOWED_PACKAGES[from.layer]?.includes(specifier)) return null;
     const banned = FORBIDDEN_PACKAGES[from.layer]?.find(
       (pkg) => specifier === pkg || specifier.startsWith(pkg.endsWith("/") ? pkg : `${pkg}/`),
     );

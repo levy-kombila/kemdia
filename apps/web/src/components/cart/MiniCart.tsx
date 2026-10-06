@@ -85,7 +85,7 @@ export function MiniCart() {
               <>
                 <ul className="divide-ink-100 max-h-80 divide-y overflow-y-auto">
                   {state.lines.map((l) => (
-                    <li key={l.productId} className="flex items-center gap-3 px-4 py-3">
+                    <li key={l.variantId} className="flex items-center gap-3 px-4 py-3">
                       <div className="bg-ink-100 relative size-14 shrink-0 overflow-hidden rounded-lg">
                         {l.image && (
                           <Image src={l.image} alt="" fill sizes="56px" className="object-cover" />
@@ -104,7 +104,7 @@ export function MiniCart() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => remove(l.productId)}
+                        onClick={() => remove(l.variantId)}
                         className="text-ink-400 hover:bg-brand-50 hover:text-brand-600 rounded p-1.5"
                         aria-label={`Retirer « ${l.title} » du panier`}
                       >

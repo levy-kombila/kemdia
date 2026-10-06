@@ -1,36 +1,39 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { CartProvider, useCart } from "@/components/providers/CartProvider";
 import { FavoritesProvider } from "@/components/providers/FavoritesProvider";
 import { ToastProvider } from "@/components/providers/ToastProvider";
-import type { Product } from "@/lib/types";
+import type { ProductSummary } from "@/lib/types";
 import { ProductCard } from "./ProductCard";
 
-const product: Product = {
-  id: "42",
+const VARIANT = "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a";
+
+const product: ProductSummary = {
+  id: "0b9f1c7e-3f5a-4b8e-9c2d-1a2b3c4d5e6f",
   slug: "casque-test",
   title: '<img src=x onerror="alert(1)"> Casque',
-  description: "",
   price: 80000,
-  oldPrice: 100000,
+  compareAtPrice: 100000,
   brand: "Marque",
-  categoryId: "1",
-  images: [],
+  categoryId: "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+  image: null,
+  inStock: true,
+  variantId: VARIANT,
   stock: 3,
+  variantCount: 1,
   rating: 4.5,
   reviewCount: 12,
   isFeatured: true,
   isBestseller: false,
   isNew: false,
-  color: null,
 };
 
 function CartCount() {
   return <span data-testid="count">{useCart().count}</span>;
 }
 
-function renderCard(p: Product = product) {
+function renderCard(p: ProductSummary = product) {
   return render(
     <ToastProvider>
       <CartProvider>
@@ -58,10 +61,27 @@ describe("<ProductCard />", () => {
     );
   });
 
-  it("ajoute au panier au clic", async () => {
+  it("ajoute au panier la variante par défaut (S3-T05)", async () => {
     renderCard();
     await userEvent.click(screen.getByRole("button", { name: /Ajouter .* au panier/ }));
     expect(screen.getByTestId("count")).toHaveTextContent("1");
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem("kemdia.cart.v2") ?? "{}").lines?.[0]).toMatchObject({
+        variantId: VARIANT,
+        productId: product.id,
+      }),
+    );
+  });
+
+  it("plusieurs variantes : renvoie vers la fiche pour choisir, prix « dès »", () => {
+    renderCard({ ...product, variantCount: 3 });
+    expect(screen.queryByRole("button", { name: /Ajouter .* au panier/ })).toBeNull();
+    expect(screen.getByRole("link", { name: /Choisir une option/ })).toHaveAttribute(
+      "href",
+      "/produit/casque-test",
+    );
+    expect(screen.getByText(/^dès 80\s000\sFCFA$/)).toBeInTheDocument();
+    expect(screen.queryByText(/Plus que/)).toBeNull();
   });
 
   it("ajoute et retire des favoris (bouton à bascule annoncé)", async () => {
@@ -77,7 +97,7 @@ describe("<ProductCard />", () => {
   });
 
   it("désactive le bouton en rupture de stock", () => {
-    renderCard({ ...product, stock: 0 });
+    renderCard({ ...product, stock: 0, inStock: false });
     expect(screen.getByRole("button", { name: "Rupture de stock" })).toBeDisabled();
   });
 });
