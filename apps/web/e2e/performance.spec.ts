@@ -58,12 +58,30 @@ async function measure(page: Page, path: string): Promise<Metrics> {
     new PerformanceObserver((l) => {
       for (const e of l.getEntries()) w.__perf.lcp = e.startTime;
     }).observe({ type: "largest-contentful-paint", buffered: true });
+    type Shift = PerformanceEntry & {
+      value: number;
+      hadRecentInput: boolean;
+      sources?: {
+        node?: Node | null;
+        previousRect: DOMRectReadOnly;
+        currentRect: DOMRectReadOnly;
+      }[];
+    };
     new PerformanceObserver((l) => {
-      for (const e of l.getEntries() as (PerformanceEntry & {
-        value: number;
-        hadRecentInput: boolean;
-      })[])
-        if (!e.hadRecentInput) w.__perf.cls += e.value;
+      for (const e of l.getEntries() as Shift[]) {
+        if (e.hadRecentInput) continue;
+        w.__perf.cls += e.value;
+        // Pour comprendre un dépassement : quels éléments ont bougé, et de combien
+        for (const src of e.sources ?? []) {
+          const el = src.node instanceof Element ? src.node : src.node?.parentElement;
+          const name = el
+            ? `${el.tagName.toLowerCase()}.${String(el.className).split(" ").slice(0, 3).join(".")}`
+            : "?";
+          w.__perf.shifts.push(
+            `${e.value.toFixed(3)} ${name} y${Math.round(src.previousRect.y)}→${Math.round(src.currentRect.y)} h${Math.round(src.previousRect.height)}→${Math.round(src.currentRect.height)}`,
+          );
+        }
+      }
     }).observe({ type: "layout-shift", buffered: true });
     new PerformanceObserver((l) => {
       for (const e of l.getEntries()) w.__perf.tbt += Math.max(0, e.duration - 50);
@@ -101,7 +119,7 @@ async function measure(page: Page, path: string): Promise<Metrics> {
       tbt: Math.round(w.__perf.tbt),
       jsKb: Math.round(js / 1024),
       totalKb: Math.round(total / 1024),
-      shifts: w.__perf.shifts.slice(0, 6),
+      shifts: w.__perf.shifts.slice(0, 8),
     };
   });
 }
@@ -125,7 +143,7 @@ async function measureMedian(
   const result = Object.fromEntries(
     keys.map((k) => [k, median(runs.map((r) => r[k]))]),
   ) as unknown as Metrics;
-  result.shifts = runs.flatMap((r) => r.shifts ?? []).slice(0, 6);
+  result.shifts = (runs[runs.length - 1]?.shifts ?? []).slice(0, 8);
   return result;
 }
 
