@@ -20,6 +20,6 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "prisma/**/*.ts", "*.ts", "*.mts"],
+  "include": ["src/**/*.ts", "test/**/*.ts", "prisma/**/*.ts", "scripts/**/*.ts", "*.ts", "*.mts"],
   "exclude": ["node_modules", "dist"]
 }

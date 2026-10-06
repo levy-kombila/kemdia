@@ -1,15 +1,13 @@
 import { Controller, Get, Header, Inject, Res, VERSION_NEUTRAL } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import type { Response } from "express";
 import { APP_CONFIG } from "../config/config.module.js";
 import type { AppConfig } from "../config/env.js";
 import { DatabaseHealth, type DatabaseStatus } from "../database/database-health.js";
+import type { z } from "zod";
+import type { HealthSchema } from "./health.schema.js";
 
-export interface HealthStatus {
-  status: "ok" | "degrade";
-  version: string;
-  environment: AppConfig["APP_ENV"];
-  checks: { database: DatabaseStatus };
-}
+export type HealthStatus = z.infer<typeof HealthSchema> & { checks: { database: DatabaseStatus } };
 
 /**
  * Contrôle de santé (`GET /api/health`), comme celui du site :
@@ -19,6 +17,8 @@ export interface HealthStatus {
  * - 503 : l'API tourne mais la base est indisponible (le conteneur est alors marqué « unhealthy »).
  */
 @Controller({ path: "health", version: VERSION_NEUTRAL })
+// Appelé par Docker et la supervision toutes les quelques secondes : jamais limité
+@SkipThrottle()
 export class HealthController {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,

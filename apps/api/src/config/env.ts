@@ -53,6 +53,18 @@ const envSchema = z
     DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(50).default(10),
     /** Une requête SQL plus longue est interrompue : protège la base d'une requête qui s'emballe. */
     DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).default(10_000),
+    /** Requêtes par minute et par adresse IP (limitation de débit). */
+    RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(10).max(10_000).default(120),
+    /**
+     * Clé secrète du site Kemdia (en-tête `X-Kemdia-Internal-Key`) : le serveur du site appelle l'API pour
+     * tous les visiteurs depuis une seule adresse, il est donc exempté de la limite par adresse. Facultative.
+     */
+    API_INTERNAL_KEY: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{32,128}$/, "32 à 128 caractères parmi A-Z, a-z, 0-9, « - » et « _ »")
+      .optional(),
+    /** Documentation interactive (/api/docs) et description OpenAPI. Par défaut : activée sauf en production. */
+    API_DOCS: z.enum(["true", "false"]).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== "production") return;
@@ -86,7 +98,9 @@ const envSchema = z
     }
   });
 
-export type AppConfig = Readonly<z.output<typeof envSchema>>;
+type ParsedEnv = z.output<typeof envSchema>;
+
+export type AppConfig = Readonly<Omit<ParsedEnv, "API_DOCS"> & { API_DOCS: boolean }>;
 
 /** Erreur de configuration : liste des variables en cause, sans leurs valeurs. */
 export class ConfigError extends Error {
@@ -121,5 +135,9 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     });
     throw new ConfigError(problems);
   }
-  return Object.freeze(result.data);
+  const { API_DOCS, ...rest } = result.data;
+  return Object.freeze({
+    ...rest,
+    API_DOCS: API_DOCS === undefined ? rest.NODE_ENV !== "production" : API_DOCS === "true",
+  });
 }

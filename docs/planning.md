@@ -109,7 +109,7 @@ Ces démarches prennent souvent plusieurs mois et **bloquent** des sprints si el
 | S3-T01 | `apps/api` NestJS, architecture hexagonale, configuration validée au démarrage                           | ✅     |
 | S3-T02 | PostgreSQL en local via `docker compose` (parité avec la production), Prisma, un schéma par module       | ✅     |
 | S3-T03 | Module `catalog` : catégories, produits, **variantes**, stock, UUID (BR-001, BR-042, FR-013)             | ✅     |
-| S3-T04 | API REST `/api/v1` documentée (OpenAPI), limitation de débit                                             | ⏳     |
+| S3-T04 | API REST `/api/v1` documentée (OpenAPI), limitation de débit                                             | ✅     |
 | S3-T05 | Le site lit l'API au lieu du fichier de démonstration (`lib/catalog.ts`)                                 | ⏳     |
 | S3-T06 | CI : tests d'intégration avec une base PostgreSQL éphémère, image Docker de l'API                        | ⏳     |
 | S3-T07 | Démo Render : API + base de données gratuite                                                             | ⏳     |

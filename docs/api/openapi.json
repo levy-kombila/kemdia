@@ -1,0 +1,1188 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "API Kemdia",
+    "version": "1.0.0",
+    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`)."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Même adresse que cette documentation"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Catalogue",
+      "description": "Catégories, produits, variantes, disponibilité (module catalog)"
+    },
+    {
+      "name": "Supervision",
+      "description": "État du service"
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": ["Supervision"],
+        "summary": "État de l'API et de la base de données",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Tout fonctionne",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Base de données indisponible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/categories": {
+      "get": {
+        "tags": ["Catalogue"],
+        "summary": "Arborescence des catégories",
+        "operationId": "listCategories",
+        "responses": {
+          "200": {
+            "description": "Catégories racines et leurs sous-catégories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryTree"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/categories/{slug}": {
+      "get": {
+        "tags": ["Catalogue"],
+        "summary": "Une catégorie, son fil d'Ariane et ses sous-catégories",
+        "operationId": "getCategory",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "Adresse de la catégorie",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "maxLength": 120
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Catégorie trouvée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Catégorie inconnue",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products": {
+      "get": {
+        "tags": ["Catalogue"],
+        "summary": "Liste paginée : catégorie (sous-catégories comprises), recherche, filtres, tri",
+        "description": "Seuls les produits publiés sont listés. Une valeur invalide est ignorée (jamais d'erreur) ; une catégorie inconnue donne une liste vide.",
+        "operationId": "searchProducts",
+        "parameters": [
+          {
+            "name": "category",
+            "description": "Adresse de la catégorie (sous-catégories comprises)",
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "q",
+            "description": "Mots recherchés (sans accents, 100 caractères au plus)",
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "sort",
+            "description": "Tri",
+            "schema": {
+              "type": "string",
+              "enum": ["pertinence", "nouveautes", "prix-asc", "prix-desc", "note"],
+              "default": "pertinence"
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "page",
+            "description": "Page (à partir de 1)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "description": "Produits par page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 48,
+              "default": 20
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "priceMin",
+            "description": "Prix minimum (FCFA)",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "priceMax",
+            "description": "Prix maximum (FCFA)",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "brands",
+            "description": "Marques, séparées par des virgules (10 au plus)",
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "inStock",
+            "description": "En stock uniquement",
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "onlyDeals",
+            "description": "En promotion uniquement",
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "minRating",
+            "description": "Note minimale",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "scope",
+            "description": "« promotions » : page Promotions (liste et compteurs limités aux promotions)",
+            "schema": {
+              "type": "string",
+              "enum": ["promotions"]
+            },
+            "in": "query",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Une page de produits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products/facets": {
+      "get": {
+        "tags": ["Catalogue"],
+        "summary": "Compteurs des filtres (marques, tranches de prix, stock, promotions, note)",
+        "description": "Mêmes paramètres que la liste ; les filtres eux-mêmes ne sont pas appliqués aux compteurs.",
+        "operationId": "productFacets",
+        "parameters": [
+          {
+            "name": "category",
+            "description": "Adresse de la catégorie (sous-catégories comprises)",
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "q",
+            "description": "Mots recherchés (sans accents, 100 caractères au plus)",
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "sort",
+            "description": "Tri",
+            "schema": {
+              "type": "string",
+              "enum": ["pertinence", "nouveautes", "prix-asc", "prix-desc", "note"],
+              "default": "pertinence"
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "page",
+            "description": "Page (à partir de 1)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "description": "Produits par page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 48,
+              "default": 20
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "priceMin",
+            "description": "Prix minimum (FCFA)",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "priceMax",
+            "description": "Prix maximum (FCFA)",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "brands",
+            "description": "Marques, séparées par des virgules (10 au plus)",
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "inStock",
+            "description": "En stock uniquement",
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "onlyDeals",
+            "description": "En promotion uniquement",
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "minRating",
+            "description": "Note minimale",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "scope",
+            "description": "« promotions » : page Promotions (liste et compteurs limités aux promotions)",
+            "schema": {
+              "type": "string",
+              "enum": ["promotions"]
+            },
+            "in": "query",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Compteurs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Facets"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products/{slug}": {
+      "get": {
+        "tags": ["Catalogue"],
+        "summary": "Fiche produit, avec ses variantes et leur stock",
+        "operationId": "getProduct",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "Adresse du produit",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "maxLength": 120
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Produit publié",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Produit inconnu, en brouillon ou archivé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/availability": {
+      "post": {
+        "tags": ["Catalogue"],
+        "summary": "BR-001 : ces lignes de panier sont-elles commandables ?",
+        "description": "Ne modifie rien (la réservation du stock se fait à la commande, S5). Limité à 30 requêtes par minute.",
+        "operationId": "checkAvailability",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AvailabilityRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Réponse ligne par ligne",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvailabilityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide (détail en français)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AvailabilityRequest": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "variantId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "quantity": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 99
+                }
+              },
+              "required": ["variantId", "quantity"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["lines"],
+        "additionalProperties": false,
+        "description": "Lignes d'un panier à vérifier (BR-001)"
+      },
+      "AvailabilityResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "Toutes les lignes sont commandables"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "variantId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "quantity": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "ok": {
+                  "type": "boolean"
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "PRODUIT_INDISPONIBLE",
+                    "VARIANTE_INCONNUE",
+                    "QUANTITE_INVALIDE",
+                    "STOCK_INSUFFISANT"
+                  ]
+                },
+                "available": {
+                  "description": "Quantité restante (STOCK_INSUFFISANT)",
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["variantId", "quantity", "ok"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["ok", "lines"],
+        "additionalProperties": false
+      },
+      "Category": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "description": "Adresse lisible (ex. « telephones-portables »)"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parentId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Identifiant UUID (BR-042)"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "icon": {
+            "type": "string",
+            "description": "Nom d'icône du site"
+          },
+          "image": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["id", "slug", "name", "parentId", "icon", "image"],
+        "additionalProperties": false,
+        "description": "Catégorie du catalogue"
+      },
+      "CategoryNode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "description": "Adresse lisible (ex. « telephones-portables »)"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parentId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Identifiant UUID (BR-042)"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "icon": {
+            "type": "string",
+            "description": "Nom d'icône du site"
+          },
+          "image": {
+            "type": ["string", "null"]
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryNode"
+            }
+          }
+        },
+        "required": ["id", "slug", "name", "parentId", "icon", "image", "children"],
+        "additionalProperties": false,
+        "description": "Catégorie et ses sous-catégories (3 niveaux au plus, BR-005)"
+      },
+      "CategoryTree": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryNode"
+            }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false
+      },
+      "CategoryView": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            },
+            "description": "Fil d'Ariane, de la racine à la catégorie incluse"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            }
+          }
+        },
+        "required": ["category", "path", "children"],
+        "additionalProperties": false
+      },
+      "Facets": {
+        "type": "object",
+        "properties": {
+          "brands": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["name", "count"],
+              "additionalProperties": false
+            }
+          },
+          "prices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["key", "count"],
+              "additionalProperties": false
+            }
+          },
+          "inStock": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "deals": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "rating4": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["brands", "prices", "inStock", "deals", "rating4"],
+        "additionalProperties": false,
+        "description": "Compteurs affichés à côté des filtres, calculés AVANT application des filtres"
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok", "degrade"]
+          },
+          "version": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "string",
+            "enum": ["local", "demo", "staging", "production"]
+          },
+          "checks": {
+            "type": "object",
+            "properties": {
+              "database": {
+                "type": "string",
+                "enum": ["ok", "indisponible"]
+              }
+            },
+            "required": ["database"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["status", "version", "environment", "checks"],
+        "additionalProperties": false,
+        "description": "État de l'API et de la base de données"
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "about:blank"
+          },
+          "title": {
+            "type": "string",
+            "description": "Résumé en français (« Ressource introuvable », « Trop de requêtes »…)"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "detail": {
+            "description": "Explication destinée au client (erreurs prévues uniquement)",
+            "type": "string"
+          },
+          "requestId": {
+            "description": "Identifiant à communiquer au support (en-tête X-Request-Id)",
+            "type": "string"
+          }
+        },
+        "required": ["type", "title", "status"],
+        "additionalProperties": false,
+        "description": "Erreur au format Problem Details (RFC 9457)"
+      },
+      "ProductDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "description": "Adresse lisible (ex. « telephones-portables »)"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "brand": {
+            "type": ["string", "null"]
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Category"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            },
+            "description": "Fil d'Ariane de la catégorie du produit"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "price": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Montant en FCFA, entier (BR-004)"
+          },
+          "compareAtPrice": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Montant en FCFA, entier (BR-004)"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inStock": {
+            "type": "boolean"
+          },
+          "totalStock": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "rating": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "reviewCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "isFeatured": {
+            "type": "boolean"
+          },
+          "isBestseller": {
+            "type": "boolean"
+          },
+          "isNew": {
+            "type": "boolean"
+          },
+          "variants": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Variant"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "description",
+          "brand",
+          "category",
+          "path",
+          "images",
+          "price",
+          "compareAtPrice",
+          "inStock",
+          "totalStock",
+          "rating",
+          "reviewCount",
+          "isFeatured",
+          "isBestseller",
+          "isNew",
+          "variants"
+        ],
+        "additionalProperties": false,
+        "description": "Fiche produit"
+      },
+      "ProductPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductSummary"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "totalPages": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["items", "page", "pageSize", "total", "totalPages"],
+        "additionalProperties": false
+      },
+      "ProductSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "description": "Adresse lisible (ex. « telephones-portables »)"
+          },
+          "title": {
+            "type": "string"
+          },
+          "brand": {
+            "type": ["string", "null"]
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "image": {
+            "type": ["string", "null"]
+          },
+          "price": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Prix « à partir de » (variante active la moins chère)"
+          },
+          "compareAtPrice": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Montant en FCFA, entier (BR-004)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Prix barré, toujours supérieur au prix"
+          },
+          "inStock": {
+            "type": "boolean"
+          },
+          "rating": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "reviewCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "isFeatured": {
+            "type": "boolean"
+          },
+          "isBestseller": {
+            "type": "boolean"
+          },
+          "isNew": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "brand",
+          "categoryId",
+          "image",
+          "price",
+          "compareAtPrice",
+          "inStock",
+          "rating",
+          "reviewCount",
+          "isFeatured",
+          "isBestseller",
+          "isNew"
+        ],
+        "additionalProperties": false,
+        "description": "Produit dans une liste (carte produit)"
+      },
+      "Variant": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "sku": {
+            "type": "string",
+            "description": "Référence interne"
+          },
+          "name": {
+            "type": "string"
+          },
+          "attributes": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Caractéristiques : { couleur, taille… }"
+          },
+          "price": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Montant en FCFA, entier (BR-004)"
+          },
+          "compareAtPrice": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Montant en FCFA, entier (BR-004)"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stock": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "available": {
+            "type": "boolean",
+            "description": "Commandable maintenant (BR-001)"
+          }
+        },
+        "required": [
+          "id",
+          "sku",
+          "name",
+          "attributes",
+          "price",
+          "compareAtPrice",
+          "stock",
+          "available"
+        ],
+        "additionalProperties": false,
+        "description": "Variante d'un produit, avec son propre stock (FR-013)"
+      }
+    }
+  }
+}
