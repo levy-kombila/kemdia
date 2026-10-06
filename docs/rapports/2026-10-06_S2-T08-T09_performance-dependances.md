@@ -10,7 +10,7 @@
 ## 1. Résumé
 
 - **S2-T08** : à chaque PR, les pages clés sont chargées **à froid sur un téléphone en 3G**, et la CI échoue si elles dépassent le budget.
-  Les premières mesures ont révélé **3 vrais problèmes**, corrigés dans cette tâche.
+  Les premières mesures ont révélé **plusieurs vrais problèmes**, corrigés dans cette tâche.
 - **S2-T09** : les PR Dependabot obsolètes sont fermées, la configuration est revue (PR groupées, majeures sensibles écartées), et les mises à jour sûres sont appliquées.
 
 Le Sprint 2 est terminé : la version **v0.2.0** peut être étiquetée.
@@ -36,6 +36,9 @@ On réutilise donc Playwright, déjà en place, sans nouvelle dépendance.
 
 Le tableau des mesures s'affiche dans le **résumé de la CI** (onglet Actions → l'exécution → _Summary_).
 
+Mesurer sur la machine de CI a été précieux : certains sauts n'apparaissaient pas sur notre poste
+(la police de secours y est différente), exactement comme sur un téléphone Android.
+
 Le **blocage du fil principal** varie fortement d'une machine de CI à l'autre (jusqu'à +40 % entre ce poste et GitHub).
 Il est donc **signalé ⚠️ sans bloquer la PR**, pour éviter des échecs au hasard. Les autres mesures sont stables et **bloquent** (❌).
 
@@ -56,14 +59,14 @@ Il est donc **signalé ⚠️ sans bloquer la PR**, pour éviter des échecs au 
 
 ### Problèmes trouvés et corrigés
 
-| Problème                                                                                        | Correction                                                                                                             | Effet                   |
-| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| **Texte qui saute** à l'arrivée de la police (CLS 0,23 sur le panier)                           | Police servie par `next/font` : préchargée, avec une police de secours aux mêmes dimensions                            | Décalages ≈ 0           |
-| Le squelette du panier était réutilisé pour le contenu (saut de 257 px)                         | Hauteur réservée + éléments distincts                                                                                  | Décalages 0,23 → 0      |
-| **Image principale chargée en dernier** (accueil, listes)                                       | Image de la 1re bannière et 2 premières cartes des listes chargées en priorité                                         | Accueil : 2,5 s → 1,3 s |
-| Ajouter un favori ou au panier **redessinait toutes les cartes** de la page                     | Actions du panier dans un contexte qui ne change jamais ; chaque cœur ne suit que son produit (`useSyncExternalStore`) | Accueil : blocage −15 % |
-| Menu de tri affiché seulement après le JavaScript (décalage 0,16 mesuré en CI sur la recherche) | Menu rendu dès le HTML : paramètres fournis par le serveur                                                             | Décalages 0,16 → 0,01   |
-| Accueil trop chargé                                                                             | Rangées de 10 produits (au lieu de 12) et 12 produits en bas de page (au lieu de 18)                                   | Blocage −10 %           |
+| Problème                                                                                                                                                                              | Correction                                                                                                                                     | Effet                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| **Texte qui saute** à l'arrivée de la police : sur Android et en CI, la police de secours est plus large, les cartes et la barre de tri changeaient de hauteur (décalage 0,13 à 0,23) | Police servie par `next/font` (préchargée) ; cartes produits, barre de tri et titre de recherche à **hauteur fixe**, quelle que soit la police | Décalages ≈ 0           |
+| Le squelette du panier était réutilisé pour le contenu (saut de 257 px)                                                                                                               | Hauteur réservée + éléments distincts                                                                                                          | Décalages 0,23 → 0      |
+| **Image principale chargée en dernier** (accueil, listes)                                                                                                                             | Image de la 1re bannière et 2 premières cartes des listes chargées en priorité                                                                 | Accueil : 2,5 s → 1,3 s |
+| Ajouter un favori ou au panier **redessinait toutes les cartes** de la page                                                                                                           | Actions du panier dans un contexte qui ne change jamais ; chaque cœur ne suit que son produit (`useSyncExternalStore`)                         | Accueil : blocage −15 % |
+| Menu de tri affiché seulement après le JavaScript (décalage 0,16 mesuré en CI sur la recherche)                                                                                       | Menu rendu dès le HTML : paramètres fournis par le serveur                                                                                     | Une cause de moins      |
+| Accueil trop chargé                                                                                                                                                                   | Rangées de 10 produits (au lieu de 12) et 12 produits en bas de page (au lieu de 18)                                                           | Blocage −10 %           |
 
 ## 3. S2-T09 — Dépendances
 

@@ -100,14 +100,14 @@ export function ProductCard({
         )}
         <FavoriteButton item={toFavorite(product)} className="absolute bottom-1.5 right-1.5 z-10" />
         {product.stock <= 0 && (
-          <span className="bg-ink-900/85 pointer-events-none absolute inset-x-0 bottom-0 py-1 text-center text-xs font-semibold text-white">
+          <span className="bg-ink-900/85 pointer-events-none absolute bottom-2 left-1 rounded px-2 py-1 text-xs font-semibold text-white">
             Rupture de stock
           </span>
         )}
       </div>
 
       <div className="flex flex-1 flex-col gap-1 px-0.5 pt-2.5">
-        <h3 className="text-ink-800 line-clamp-2 min-h-[2.5rem] text-[0.85rem] leading-5">
+        <h3 className="text-ink-800 line-clamp-2 h-10 text-[0.85rem] leading-5">
           <Link
             href={href}
             className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
@@ -126,11 +126,11 @@ export function ProductCard({
           />
         </div>
         {product.stock > 0 && (
-          <p className="text-forest-700 flex items-center gap-1 text-[0.72rem] font-medium">
-            <Truck className="size-3.5" aria-hidden />
-            {product.stock <= 5
-              ? `Plus que ${product.stock} en stock`
-              : "Livré en 24–48 h à Libreville"}
+          <p className="text-forest-700 flex min-w-0 items-center gap-1 text-[0.72rem] font-medium">
+            <Truck className="size-3.5 shrink-0" aria-hidden />
+            <span className="truncate">
+              {product.stock <= 5 ? `Plus que ${product.stock} en stock` : "Livré en 24–48 h"}
+            </span>
           </p>
         )}
       </div>

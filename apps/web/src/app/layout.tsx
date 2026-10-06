@@ -10,16 +10,15 @@ import { SITE, siteUrl } from "@/lib/site";
 
 /**
  * Archivo à largeur variable (licence OFL, fichier dans app/fonts) : texte normal, titres élargis, prix condensés.
- * next/font la précharge : elle arrive en même temps que la feuille de style. « block » : le texte attend la police
- * (quelques dixièmes de seconde) au lieu de s'afficher dans une autre police puis de sauter — sur Android, la police
- * de secours n'a pas les mêmes dimensions et les titres changeaient de nombre de lignes (budget S2-T08, CLS).
- * Mesuré : premier affichage inchangé (≈ 1,1 s en 3G).
+ * next/font la précharge et calcule une police de secours aux dimensions proches. Les blocs sensibles
+ * (cartes produits, barre de tri, titres de liste) ont une hauteur fixe : l'arrivée de la police ne fait
+ * rien sauter, même sur Android où la police de secours est différente (budget S2-T08, CLS).
  */
 const archivo = localFont({
   src: "./fonts/archivo-latin-wdth.woff2",
   weight: "100 900",
   style: "normal",
-  display: "block",
+  display: "swap",
   variable: "--font-archivo",
   adjustFontFallback: "Arial",
   declarations: [{ prop: "font-stretch", value: "62% 125%" }],

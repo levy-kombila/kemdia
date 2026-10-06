@@ -54,7 +54,7 @@ export default async function SearchPage({ searchParams }: Props) {
     <div className="container-page space-y-3 py-4">
       <Breadcrumbs items={[{ label: q ? "Recherche" : "Tous les produits" }]} />
       <header className="rounded-xl bg-white px-5 py-4">
-        <h1 className="text-2xl font-extrabold sm:text-3xl">
+        <h1 className="truncate text-2xl font-extrabold sm:text-3xl">
           {q ? `Résultats pour « ${q} »` : "Tous nos produits"}
         </h1>
       </header>

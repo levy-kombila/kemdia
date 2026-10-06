@@ -21,7 +21,7 @@ export function SortSelect({
   const router = useRouter();
 
   return (
-    <label className="flex items-center gap-2 text-sm">
+    <label className="flex shrink-0 items-center gap-2 text-sm">
       <span className="text-ink-500 sr-only sm:not-sr-only">Trier par</span>
       <select
         value={value}
@@ -31,7 +31,7 @@ export function SortSelect({
           const qs = sp.toString();
           router.push(qs ? `${basePath}?${qs}` : basePath);
         }}
-        className="border-ink-200 focus:border-brand-500 h-10 rounded-full border bg-white px-3 font-medium focus:outline-none sm:px-4"
+        className="border-ink-200 focus:border-brand-500 h-10 w-28 rounded-full border bg-white px-3 font-medium focus:outline-none sm:w-auto sm:px-4"
       >
         {Object.entries(options).map(([k, label]) => (
           <option key={k} value={k}>
