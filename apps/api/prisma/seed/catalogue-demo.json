@@ -241,14 +241,6 @@
       "image": null
     },
     {
-      "id": "53",
-      "name": "Fitness",
-      "slug": "sport-fitness",
-      "parentId": "52",
-      "icon": "dumbbell",
-      "image": null
-    },
-    {
       "id": "73",
       "name": "Luminaires",
       "slug": "decoration-luminaires",
@@ -894,6 +886,14 @@
       "slug": "fitness-accessoires-fitness",
       "parentId": "53",
       "icon": "weight-hanging",
+      "image": null
+    },
+    {
+      "id": "53",
+      "name": "Fitness",
+      "slug": "sport-fitness",
+      "parentId": "102",
+      "icon": "dumbbell",
       "image": null
     }
   ],

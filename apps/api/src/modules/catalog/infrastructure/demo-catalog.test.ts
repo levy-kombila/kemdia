@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { InMemoryCategories, InMemoryProducts } from "../../../../test/catalog/in-memory.js";
+import { CategoryTree } from "../domain/category.js";
 import { importCatalog, prepareDemoCatalog, uuidV5, type DemoCatalog } from "./demo-catalog.js";
 
 const data = JSON.parse(
@@ -19,6 +20,23 @@ describe("Catalogue de démonstration", () => {
     expect(prepared.categories).toHaveLength(112);
     expect(prepared.products).toHaveLength(50);
     expect(prepared.products.every(({ product }) => product.variants.length === 1)).toBe(true);
+  });
+
+  it("BR-005 : 3 niveaux au plus ; Fitness rangé sous Sport & Loisirs avec ses 7 produits", () => {
+    const { categories, products } = prepareDemoCatalog(data);
+    const tree = new CategoryTree(categories);
+    const depth = (id: string) => tree.path(id).length;
+    expect(Math.max(...categories.map((c) => depth(c.id)))).toBe(3);
+    const fitness = tree.bySlugOrNull("sport-fitness");
+    expect(tree.path(fitness?.id ?? "").map((c) => c.name)).toEqual(["Sport & Loisirs", "Fitness"]);
+    expect(tree.children(fitness?.id ?? "").map((c) => c.name)).toEqual([
+      "Musculation",
+      "Yoga",
+      "Cardio",
+      "Accessoires fitness",
+    ]);
+    const inFitness = new Set(tree.descendantIds(fitness?.id ?? ""));
+    expect(products.filter(({ product }) => inFitness.has(product.categoryId))).toHaveLength(7);
   });
 
   it("identifiants stables d'une exécution à l'autre (import relançable)", () => {

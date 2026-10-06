@@ -8,12 +8,13 @@
 
 ### Catalogue et vendeurs
 
-| ID     | Règle                                                                                                                                                                                                 | Module           | Sprint  |
-| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ------- |
-| BR-001 | Un produit indisponible ou à stock nul ne peut ni être ajouté au panier, ni commandé. ✅ S3 : `Product.checkOrderable`, `CatalogService.checkAvailability` (testés) ; branchement sur le panier au S5 | catalog, orders  | S3 · S5 |
-| BR-002 | Un vendeur ne peut pas supprimer un produit lié à une commande en cours ; le produit est seulement désactivé.                                                                                         | catalog          | S6      |
-| BR-003 | Tout produit d'un vendeur tiers est **validé par un administrateur** avant d'être visible.                                                                                                            | catalog, vendors | S6      |
-| BR-004 | Les prix sont des **entiers en FCFA** ; tout montant est **recalculé par le serveur** (jamais lu depuis le navigateur).                                                                               | orders, payments | S5      |
+| ID     | Règle                                                                                                                                                                                                                                                      | Module           | Sprint  |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ------- |
+| BR-001 | Un produit indisponible ou à stock nul ne peut ni être ajouté au panier, ni commandé. ✅ S3 : `Product.checkOrderable`, `CatalogService.checkAvailability` (testés) ; branchement sur le panier au S5                                                      | catalog, orders  | S3 · S5 |
+| BR-002 | Un vendeur ne peut pas supprimer un produit lié à une commande en cours ; le produit est seulement désactivé.                                                                                                                                              | catalog          | S6      |
+| BR-003 | Tout produit d'un vendeur tiers est **validé par un administrateur** avant d'être visible.                                                                                                                                                                 | catalog, vendors | S6      |
+| BR-004 | Les prix sont des **entiers en FCFA** ; tout montant est **recalculé par le serveur** (jamais lu depuis le navigateur).                                                                                                                                    | orders, payments | S5      |
+| BR-005 | Les catégories ont **3 niveaux au plus** (rayon › sous-rayon › catégorie). ✅ S3 : vérifié par le domaine (`MAX_CATEGORY_DEPTH`) et par la base (déclencheur `categories_depth_check`, qui refuse aussi les boucles). Décision du 2026-10-06 (question 8). | catalog          | S3      |
 
 ### Commandes
 
@@ -82,5 +83,6 @@
 5. **Transporteur** : COMAT confirmé ? mode d'échange (API, fichier, WhatsApp) ?
 6. **TVA** : seuil et modalités à valider avec un expert-comptable gabonais.
 7. **Mobile Money** : agrégateur unique (qui gère Airtel + Moov) ou intégration directe de chaque opérateur ?
-8. **Profondeur des catégories** : le cahier (F1) prévoit 3 niveaux, mais le catalogue de démonstration en a 4
-   (Mode › Sport › Fitness › Yoga, Cardio…). Règle provisoire : **4 niveaux** (`MAX_CATEGORY_DEPTH`). Garder 4 ou réorganiser en 3 ?
+8. ~~**Profondeur des catégories**~~ — ✅ **Tranchée le 2026-10-06 : 3 niveaux au plus** (règle BR-005).
+   Le rayon « Mode › Sport › Fitness » était mal classé : « Fitness » et ses sous-catégories (Musculation, Yoga, Cardio,
+   Accessoires fitness — 7 produits) sont déplacés sous « Sport & Loisirs ». Les adresses des pages ne changent pas.

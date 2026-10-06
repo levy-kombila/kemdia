@@ -107,3 +107,49 @@ ALTER TABLE "catalog"."product_variants"
 -- Une catégorie ne peut pas être sa propre parente
 ALTER TABLE "catalog"."categories"
     ADD CONSTRAINT "categories_parent_check" CHECK ("parent_id" IS NULL OR "parent_id" <> "id");
+
+-- BR-005 : 3 niveaux de catégories au plus, et aucune boucle (catégorie placée sous sa propre descendante).
+-- Une contrainte CHECK ne voit qu'une ligne : un déclencheur parcourt les parents et les sous-catégories.
+CREATE FUNCTION "catalog"."check_category_depth"() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+    max_depth CONSTANT integer := 3;
+    ancestors integer := 0;
+    ancestor uuid := NEW."parent_id";
+    height integer;
+BEGIN
+    -- Un seul changement d'arborescence à la fois : deux déplacements simultanés ne peuvent pas contourner la règle
+    PERFORM pg_advisory_xact_lock(hashtext('catalog.categories'));
+
+    -- Niveau du nouvel emplacement : on remonte les parents
+    WHILE ancestor IS NOT NULL LOOP
+        IF ancestor = NEW."id" THEN
+            RAISE EXCEPTION 'catégorie « % » : elle ne peut pas être placée sous sa propre sous-catégorie', NEW."slug"
+                USING ERRCODE = 'check_violation', CONSTRAINT = 'categories_depth_check';
+        END IF;
+        ancestors := ancestors + 1;
+        EXIT WHEN ancestors > max_depth;
+        SELECT "parent_id" INTO ancestor FROM "catalog"."categories" WHERE "id" = ancestor;
+    END LOOP;
+
+    -- Hauteur des sous-catégories qui suivent la catégorie (cas d'un déplacement)
+    WITH RECURSIVE "descendants" AS (
+        SELECT "id", 1 AS "level" FROM "catalog"."categories" WHERE "parent_id" = NEW."id"
+        UNION ALL
+        SELECT c."id", d."level" + 1
+        FROM "catalog"."categories" c JOIN "descendants" d ON c."parent_id" = d."id"
+        WHERE d."level" < max_depth
+    )
+    SELECT COALESCE(MAX("level"), 0) INTO height FROM "descendants";
+
+    IF ancestors + 1 + height > max_depth THEN
+        RAISE EXCEPTION 'catégorie « % » : % niveaux au plus (BR-005)', NEW."slug", max_depth
+            USING ERRCODE = 'check_violation', CONSTRAINT = 'categories_depth_check';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER "categories_depth_check"
+    BEFORE INSERT OR UPDATE OF "parent_id" ON "catalog"."categories"
+    FOR EACH ROW EXECUTE FUNCTION "catalog"."check_category_depth"();

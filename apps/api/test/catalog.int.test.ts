@@ -98,15 +98,14 @@ describe("Catalogue (intégration PostgreSQL)", () => {
     );
     const view = await service.getCategory("fitness-yoga");
     expect(view?.path.map((c) => c.slug)).toEqual([
-      "mode",
-      "mode-sport",
+      "sport-loisirs",
       "sport-fitness",
       "fitness-yoga",
     ]);
   });
 
   it("une catégorie inclut les produits de ses sous-catégories (comme le site)", async () => {
-    for (const slug of ["high-tech", "mode", "mode-sport", "sport-fitness", "fitness-yoga"]) {
+    for (const slug of ["high-tech", "mode", "sport-loisirs", "sport-fitness", "fitness-yoga"]) {
       const expected = data.products.filter((p) => legacyDescendants(slug).has(p.categoryId));
       expect(
         expected.length,
@@ -279,6 +278,44 @@ describe("Catalogue (intégration PostgreSQL)", () => {
       await expect(
         prisma.$executeRaw`UPDATE "catalog"."product_variants" SET "compare_at_price" = 1 WHERE "id" = ${id}::uuid`,
       ).rejects.toThrow(/compare_at_price_check/);
+    });
+
+    describe("BR-005 : 3 niveaux de catégories au plus (déclencheur SQL)", () => {
+      const idOf = async (slug: string) =>
+        (await prisma.category.findUniqueOrThrow({ where: { slug } })).id;
+
+      it("refuse un 4e niveau", async () => {
+        const parent = await idOf("fitness-yoga");
+        await expect(
+          prisma.$executeRaw`INSERT INTO "catalog"."categories" ("id", "slug", "name", "icon", "parent_id", "updated_at")
+            VALUES ('9a000000-0000-4000-8000-000000000001', 'quatrieme-niveau', 'Trop profond', 'tag', ${parent}::uuid, now())`,
+        ).rejects.toThrow(/3 niveaux au plus/);
+      });
+
+      it("refuse de déplacer un rayon si ses sous-catégories dépasseraient 3 niveaux", async () => {
+        const fitness = await idOf("sport-fitness");
+        const camping = await idOf("sport-loisirs-camping");
+        await expect(
+          prisma.category.update({ where: { id: fitness }, data: { parentId: camping } }),
+        ).rejects.toThrow(/3 niveaux au plus/);
+      });
+
+      it("refuse une boucle (catégorie placée sous sa propre sous-catégorie)", async () => {
+        const loisirs = await idOf("sport-loisirs");
+        const yoga = await idOf("fitness-yoga");
+        await expect(
+          prisma.category.update({ where: { id: loisirs }, data: { parentId: yoga } }),
+        ).rejects.toThrow(/propre sous-catégorie/);
+      });
+
+      it("accepte un déplacement qui reste dans la limite", async () => {
+        const yoga = await idOf("fitness-yoga");
+        const fitness = await idOf("sport-fitness");
+        const loisirs = await idOf("sport-loisirs");
+        await prisma.category.update({ where: { id: yoga }, data: { parentId: loisirs } });
+        await prisma.category.update({ where: { id: yoga }, data: { parentId: fitness } });
+        expect((await idOf("fitness-yoga")) === yoga).toBe(true);
+      });
     });
 
     it("suppression d'une catégorie qui contient des produits", async () => {

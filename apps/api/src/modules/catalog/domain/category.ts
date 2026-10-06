@@ -2,10 +2,10 @@ import { CatalogError } from "./catalog-error.js";
 import { assertSlug, assertUuid, requiredText } from "./values.js";
 
 /**
- * Profondeur maximale de l'arborescence. Le cahier (F1) parle de 3 niveaux, mais le catalogue de démonstration
- * en compte 4 (Mode › Sport › Fitness › Yoga…) : la règle est fixée à 4 en attendant la décision de l'équipe.
+ * BR-005 : 3 niveaux de catégories au plus (rayon › sous-rayon › catégorie), décision de l'équipe du 2026-10-06.
+ * Aussi garanti par la base (déclencheur `categories_depth_check`, migration `catalogue`).
  */
-export const MAX_CATEGORY_DEPTH = 4;
+export const MAX_CATEGORY_DEPTH = 3;
 
 export interface CategoryProps {
   id: string;
