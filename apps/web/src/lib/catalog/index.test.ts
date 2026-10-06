@@ -8,6 +8,7 @@ const connection = vi.fn(() => Promise.resolve());
 vi.mock("next/server", () => ({ connection }));
 
 const KEY = "k".repeat(40);
+const API = "http://api.invalid:4000";
 
 async function load(env: Record<string, string | undefined>) {
   vi.resetModules();
@@ -44,14 +45,14 @@ describe("catalogue des pages", () => {
 
   it("API_URL définie : l'API seule — si elle tombe, erreur (pas de catalogue de secours)", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const fetch = vi.fn(() => Promise.reject(new TypeError("fetch failed")));
-    vi.stubGlobal("fetch", fetch);
-    const catalog = await load({ API_URL: "http://api.invalid:4000", API_INTERNAL_KEY: KEY });
-    await expect(catalog.getCategoryTree()).rejects.toBeInstanceOf(catalog.CatalogUnavailableError);
-    expect(fetch).toHaveBeenCalledWith(
-      "http://api.invalid:4000/api/v1/categories",
-      expect.anything(),
+    const fetch = vi.fn<(url: string) => Promise<Response>>(() =>
+      Promise.reject(new TypeError("fetch failed")),
     );
+    vi.stubGlobal("fetch", fetch);
+    const catalog = await load({ API_URL: API, API_INTERNAL_KEY: KEY });
+    await expect(catalog.getCategoryTree()).rejects.toBeInstanceOf(catalog.CatalogUnavailableError);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(String(fetch.mock.calls[0]?.[0])).toBe(`${API}/api/v1/categories`);
   });
 
   it("APP_ENV=production sans API_URL : aucune lecture possible", async () => {

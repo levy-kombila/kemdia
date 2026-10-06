@@ -5,3 +5,6 @@
 # (pas de force push). Toute autre clé, dans un autre commit ou fichier, reste détectée.
 c10280f758bf8ff7e64789e1efaf90e60ac973d2:apps/api/test/catalog-http.int.test.ts:generic-api-key:34
 c10280f758bf8ff7e64789e1efaf90e60ac973d2:apps/api/test/catalog-http.test.ts:generic-api-key:35
+# S3-T05 (PR #22) : faux positif — la règle générique a pris l'adresse de test « http://api.invalid:4000/api/v1/categories »
+# pour une clé. Aucune valeur secrète ; ligne réécrite dans le commit suivant.
+a568709fd95b361b4300bd5558bfe09ec0a62e9c:apps/web/src/lib/catalog/index.test.ts:generic-api-key:52
