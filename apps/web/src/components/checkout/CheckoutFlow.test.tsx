@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Providers } from "@/components/providers/Providers";
@@ -77,7 +77,10 @@ describe("<CheckoutFlow />", { timeout: 15_000 }, () => {
       await screen.findByText(/Merci Marie, votre commande est confirmée/),
     ).toBeInTheDocument();
     expect(screen.getByText(/KMD-DEMO-/)).toBeInTheDocument();
-    expect(JSON.parse(localStorage.getItem("kemdia.cart.v2") ?? "{}").lines).toEqual([]);
+    // Le panier vidé est enregistré par un effet, juste après l'affichage de la confirmation
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem("kemdia.cart.v2") ?? "{}").lines).toEqual([]),
+    );
   });
 
   it("refuse un numéro d'un autre opérateur et le paiement à la livraison au-delà du plafond", async () => {
