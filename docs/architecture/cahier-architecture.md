@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués  |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests      |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                       |
+| **1.2** | 2026-10-06 | S3     | §3.5 base de données (ADR-0008) ; §3.4 dossier `database/`, `DATABASE_*` ; §4, §6.3, §7 job PostgreSQL, §8, §9 tests d'intégration          |
 | **1.1** | 2026-10-06 | S3     | §3.4 socle de l'API (`apps/api`, ADR-0007) ; §4 versions du backend ; §6.3 sécurité de l'API (ancien §6.3 → §6.4) ; §7 et §9 tests de l'API |
 | **0.9** | 2026-10-06 | S2     | §5.8 favoris, partage et aperçus, page vendeur ; §5.2 rendu à la demande (`SITE_URL`) ; §7 et §9 tests de bout en bout                      |
 | **0.8** | 2026-10-05 | S2     | §5.7 tunnel de commande (port `OrderClient`, données envoyées) ; §6.2 mesures du tunnel                                                     |
@@ -121,7 +122,7 @@ flowchart TB
     subgraph Serveur
       web[apps/web<br/>Next.js 16 — Node 22]
       api[apps/api<br/>NestJS — S3]
-      db[(PostgreSQL — S3)]
+      db[(PostgreSQL 18 — S3)]
       cache[(Redis — sessions, limitation de débit — S4)]
     end
     ui -- HTTPS --> web
@@ -134,7 +135,8 @@ flowchart TB
 **État au Sprint 1** : seul `apps/web` existe ; le catalogue provient d'un fichier de démonstration
 lu côté serveur par `src/lib/catalog.ts`, qui sera remplacé par des appels à l'API sans modifier les composants.
 
-**État au S3-T01** : `apps/api` existe (socle, contrôle de santé, aucune route métier) ; le site ne l'appelle pas encore (S3-T05).
+**État au S3-T02** : `apps/api` existe (socle, contrôle de santé, aucune route métier) et se connecte à PostgreSQL ;
+le schéma `catalog` est créé mais vide (tables au S3-T03) ; le site n'appelle pas encore l'API (S3-T05).
 
 ### 3.3 Modules du backend (cible MVP)
 
@@ -173,9 +175,15 @@ apps/api/
 │   ├── app.module.ts         Assemblage : configuration, journaux, santé, puis les modules métier
 │   ├── config/               Schéma Zod des variables d'environnement (loadConfig) + jeton APP_CONFIG
 │   ├── http/                 Réglages HTTP communs (configure-app), journaux, format des erreurs
+│   ├── database/             Connexion PostgreSQL (PrismaService) et santé de la base (S3-T02)
+│   ├── generated/            Client Prisma généré (pnpm generate) — hors Git
 │   ├── health/               GET /api/health
 │   └── modules/              Modules métier (catalog au S3-T03) — organisation : modules/README.md
-├── test/                     Tests HTTP (Supertest) et test d'architecture
+├── prisma/
+│   ├── schema/               main.prisma + un fichier par module (catalog.prisma…)
+│   └── migrations/           Historique des migrations SQL (un seul pour tous les modules)
+├── prisma.config.ts          Emplacements du schéma et des migrations, adresse de la base
+├── test/                     Tests HTTP, tests d'architecture (code et schéma Prisma), intégration (*.int.test.ts)
 └── .env.example              Liste commentée des variables
 ```
 
@@ -198,33 +206,67 @@ Un autre module n'entre que par `index.ts`.
 
 **Configuration** (vérifiée au démarrage ; liste complète dans `apps/api/.env.example`) :
 
-| Variable       | Défaut         | Règle en production                       |
-| -------------- | -------------- | ----------------------------------------- |
-| `NODE_ENV`     | `development`  | `production`                              |
-| `APP_ENV`      | `local`        | `demo`, `staging` ou `production`         |
-| `APP_VERSION`  | `dev`          | **Obligatoire** (fournie par le pipeline) |
-| `HOST`, `PORT` | `0.0.0.0:4000` | —                                         |
-| `LOG_LEVEL`    | `info`         | `debug` et `trace` **interdits**          |
-| `CORS_ORIGINS` | vide (fermé)   | HTTPS uniquement                          |
-| `TRUST_PROXY`  | `0`            | `1` derrière Caddy                        |
+| Variable                        | Défaut                          | Règle en production                                                    |
+| ------------------------------- | ------------------------------- | ---------------------------------------------------------------------- |
+| `NODE_ENV`                      | `development`                   | `production`                                                           |
+| `APP_ENV`                       | `local`                         | `demo`, `staging` ou `production`                                      |
+| `APP_VERSION`                   | `dev`                           | **Obligatoire** (fournie par le pipeline)                              |
+| `HOST`, `PORT`                  | `0.0.0.0:4000`                  | —                                                                      |
+| `LOG_LEVEL`                     | `info`                          | `debug` et `trace` **interdits**                                       |
+| `CORS_ORIGINS`                  | vide (fermé)                    | HTTPS uniquement                                                       |
+| `TRUST_PROXY`                   | `0`                             | `1` derrière Caddy                                                     |
+| `DATABASE_URL`                  | base locale de `docker compose` | **Obligatoire**, adresse de développement refusée ; jamais journalisée |
+| `DATABASE_POOL_MAX`             | `10`                            | 1 à 50                                                                 |
+| `DATABASE_STATEMENT_TIMEOUT_MS` | `10000`                         | 100 à 60 000                                                           |
 
 Une valeur invalide arrête l'API (code de sortie 1) avec la liste des variables en cause, **sans afficher leur valeur**.
 
+### 3.5 Base de données (S3-T02)
+
+Décision : [ADR-0008](adr/0008-postgresql-prisma.md) — guide pratique : [base-de-donnees.md](../guides/base-de-donnees.md).
+
+```mermaid
+flowchart LR
+    subgraph api[apps/api]
+      infra[infrastructure/ d'un module] --> ps[PrismaService<br/>adaptateur pg]
+      health[/api/health/] --> dh[DatabaseHealth<br/>SELECT 1 ≤ 2 s]
+      dh --> ps
+    end
+    ps -->|≤ 10 connexions<br/>requête ≤ 10 s| pg
+    subgraph pg[(PostgreSQL 18 — base « kemdia »)]
+      catalog[schéma catalog]
+      futurs[identity · orders · payments<br/>vendors · shipping — S4 à S7]
+      pub[public : suivi des migrations]
+    end
+```
+
+| Règle                                                                                         | Vérifiée par                                   |
+| --------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Un fichier Prisma par module ; chaque modèle dans le schéma PostgreSQL du module (`@@schema`) | `test/prisma-schema.test.ts`                   |
+| Aucune relation vers un autre module : on stocke un UUID                                      | `test/prisma-schema.test.ts`                   |
+| Seule la couche `infrastructure/` d'un module utilise Prisma                                  | `test/architecture.test.ts`                    |
+| Toute modification du schéma a sa migration                                                   | CI : `db:deploy` puis `db:check` sur base vide |
+| Une migration fusionnée n'est jamais modifiée ; on en ajoute une nouvelle                     | Revue de code                                  |
+
+**Environnements** : poste → `docker compose up -d db` (accessible seulement depuis le poste) ; CI → base éphémère par exécution ;
+démo → base Render gratuite (S3-T07) ; production → serveur (S7). Les migrations sont appliquées par `pnpm db:deploy`
+avant le démarrage de la nouvelle version (intégré au déploiement au S3-T06 / T07).
+
 ## 4. Choix technologiques
 
-| Couche    | Choix                                            | Version     | Justification                                                                                        |
-| --------- | ------------------------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------- |
-| Langage   | TypeScript (strict)                              | 5.9         | Un seul langage front/back — [ADR-0002](adr/0002-stack-typescript-nextjs.md)                         |
-| Frontend  | Next.js (App Router) + React                     | 16.3 / 19.2 | SSR/SSG, SEO, Server Components                                                                      |
-| Style     | Tailwind CSS                                     | 4           | Design tokens centralisés, CSS final minimal                                                         |
-| Icônes    | lucide-react                                     | —           | Seules les icônes utilisées sont embarquées                                                          |
-| Polices   | Inter + Montserrat (auto-hébergées, @fontsource) | —           | Aucune requête vers Google : vie privée + CSP stricte                                                |
-| Tests     | Vitest + Testing Library                         | 5           | Rapide, compatible TypeScript                                                                        |
-| Monorepo  | pnpm + Turborepo                                 | 10 / 2      | [ADR-0003](adr/0003-monorepo.md)                                                                     |
-| Conteneur | Docker (Node 22 Alpine, utilisateur non-root)    | —           | Même artefact en préprod et prod                                                                     |
-| CI/CD     | GitHub Actions                                   | —           | Intégré au dépôt                                                                                     |
-| Backend   | NestJS (modules ES, Express 5) + Zod + pino      | 12 / 4 / 10 | S3 — [ADR-0006](adr/0006-monolithe-modulaire-7-modules.md), [ADR-0007](adr/0007-socle-api-nestjs.md) |
-| Base 🔜   | PostgreSQL + Prisma (un schéma par module)       | —           | S3-T02                                                                                               |
+| Couche    | Choix                                                       | Version     | Justification                                                                                        |
+| --------- | ----------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------- |
+| Langage   | TypeScript (strict)                                         | 5.9         | Un seul langage front/back — [ADR-0002](adr/0002-stack-typescript-nextjs.md)                         |
+| Frontend  | Next.js (App Router) + React                                | 16.3 / 19.2 | SSR/SSG, SEO, Server Components                                                                      |
+| Style     | Tailwind CSS                                                | 4           | Design tokens centralisés, CSS final minimal                                                         |
+| Icônes    | lucide-react                                                | —           | Seules les icônes utilisées sont embarquées                                                          |
+| Polices   | Inter + Montserrat (auto-hébergées, @fontsource)            | —           | Aucune requête vers Google : vie privée + CSP stricte                                                |
+| Tests     | Vitest + Testing Library                                    | 5           | Rapide, compatible TypeScript                                                                        |
+| Monorepo  | pnpm + Turborepo                                            | 10 / 2      | [ADR-0003](adr/0003-monorepo.md)                                                                     |
+| Conteneur | Docker (Node 22 Alpine, utilisateur non-root)               | —           | Même artefact en préprod et prod                                                                     |
+| CI/CD     | GitHub Actions                                              | —           | Intégré au dépôt                                                                                     |
+| Backend   | NestJS (modules ES, Express 5) + Zod + pino                 | 12 / 4 / 10 | S3 — [ADR-0006](adr/0006-monolithe-modulaire-7-modules.md), [ADR-0007](adr/0007-socle-api-nestjs.md) |
+| Base      | PostgreSQL + Prisma (adaptateur `pg`), un schéma par module | 18 / 7.10   | S3 — [ADR-0008](adr/0008-postgresql-prisma.md)                                                       |
 
 ## 5. Architecture du frontend (`apps/web`)
 
@@ -418,20 +460,24 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 
 ### 6.3 Sécurité de l'API (S3-T01)
 
-| Mesure                                                                                                          | Où                               | Faille(s) de l'ancien projet évitée(s) |
-| --------------------------------------------------------------------------------------------------------------- | -------------------------------- | -------------------------------------- |
-| Configuration validée au démarrage ; valeurs jamais affichées ; `debug` interdit en production                  | `config/env.ts`                  | CRIT-02 (secrets), mauvaise config     |
-| CSP `default-src 'none'; frame-ancestors 'none'`, HSTS, `nosniff`, `X-Frame-Options: DENY`, sans `X-Powered-By` | `http/configure-app.ts`          | LOW-03, empreinte technologique        |
-| CORS fermé par défaut ; origines explicites, HTTPS en production                                                | `http/configure-app.ts`          | Appels depuis un site tiers            |
-| Corps JSON limité à 100 Ko                                                                                      | `http/configure-app.ts`          | Déni de service                        |
-| Erreurs imprévues : message générique (détail dans les journaux) ; 404 sans recopier l'adresse                  | `http/problem-details.filter.ts` | Fuite d'informations, XSS réfléchie    |
-| Journaux sans paramètres d'URL, sans corps ni en-têtes ; champs sensibles masqués ; identifiant de requête      | `http/logging.ts`                | Données personnelles dans les journaux |
-| Couches et modules isolés (test d'architecture)                                                                 | `test/architecture.test.ts`      | Couplage, contournement des règles     |
+| Mesure                                                                                                                                        | Où                                               | Faille(s) de l'ancien projet évitée(s) |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------- |
+| Configuration validée au démarrage ; valeurs jamais affichées ; `debug` interdit en production                                                | `config/env.ts`                                  | CRIT-02 (secrets), mauvaise config     |
+| CSP `default-src 'none'; frame-ancestors 'none'`, HSTS, `nosniff`, `X-Frame-Options: DENY`, sans `X-Powered-By`                               | `http/configure-app.ts`                          | LOW-03, empreinte technologique        |
+| CORS fermé par défaut ; origines explicites, HTTPS en production                                                                              | `http/configure-app.ts`                          | Appels depuis un site tiers            |
+| Corps JSON limité à 100 Ko                                                                                                                    | `http/configure-app.ts`                          | Déni de service                        |
+| Erreurs imprévues : message générique (détail dans les journaux) ; 404 sans recopier l'adresse                                                | `http/problem-details.filter.ts`                 | Fuite d'informations, XSS réfléchie    |
+| Journaux sans paramètres d'URL, sans corps ni en-têtes ; champs sensibles masqués ; identifiant de requête                                    | `http/logging.ts`                                | Données personnelles dans les journaux |
+| Couches et modules isolés (test d'architecture)                                                                                               | `test/architecture.test.ts`                      | Couplage, contournement des règles     |
+| `DATABASE_URL` jamais journalisée ; mot de passe masqué dans les messages du pilote ; adresse de développement refusée en production (S3-T02) | `config/env.ts`, `database/`                     | CRIT-02 (identifiants exposés)         |
+| Requêtes SQL paramétrées (Prisma), testé avec une valeur hostile ; requête limitée à 10 s ; ≤ 10 connexions (S3-T02)                          | `database/prisma.service.ts`, test d'intégration | CRIT-04 (injection), déni de service   |
+| Base locale accessible seulement depuis le poste (`127.0.0.1`), authentification SCRAM-SHA-256 (S3-T02)                                       | `docker-compose.yml`                             | Base exposée sur le réseau             |
 
 ### 6.4 Prévu 🔜
 
 - S4 : CSP à _nonce_ via `proxy.ts`, cookies de session `HttpOnly; Secure; SameSite=Lax`, protection CSRF, limitation de débit.
 - S5 : signature des webhooks Mobile Money, idempotence des paiements, transactions SQL pour stock et coupons.
+- S7 : deux rôles PostgreSQL (migrations / application sans droit de modifier les tables), connexion chiffrée selon l'hébergement, sauvegardes chiffrées testées.
 
 ## 7. DevOps — CI/CD
 
@@ -442,10 +488,12 @@ flowchart LR
     subgraph ci[CI — chaque PR et main]
       direction TB
       q[format · lint · types · tests · build]
+      d[API : migrations + intégration<br/>PostgreSQL 18 éphémère]
       e[parcours de bout en bout<br/>accessibilité · budget de performance]
       i[image Docker + scan Trivy]
       s[Gitleaks · pnpm audit · Semgrep · ShellCheck]
       q --> e --> i
+      d --> i
     end
     ci -->|fusion main| pub[(GHCR web:sha-…)]
     pub -->|auto| stg[STAGING + test de fumée]
@@ -454,17 +502,18 @@ flowchart LR
     prod -. échec .-> rb[retour arrière auto]
 ```
 
-| Fichier                          | Rôle                                                                                              |
-| -------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `.github/workflows/ci.yml`       | Qualité → bout en bout → image → scan → publication GHCR + Docker Hub (main) → staging + démo     |
-| `.github/workflows/release.yml`  | Tag `vX.Y.Z` → promotion de l'image testée → Release GitHub → production                          |
-| `.github/workflows/_deploy.yml`  | Déploiement réutilisable : SSH restreint, test de fumée, retour arrière                           |
-| `.github/workflows/security.yml` | Gitleaks, pnpm audit, Semgrep, ShellCheck ; CodeQL si dépôt public ; chaque lundi                 |
-| `.github/dependabot.yml`         | Mises à jour hebdomadaires (npm, actions épinglées par SHA, image Docker)                         |
-| `apps/web/Dockerfile`            | Multi-étapes, `standalone`, non-root, sans npm, healthcheck `/api/health`                         |
-| `apps/api/`                      | Lint, types, tests (avec couverture) et build dans la même étape « qualité » que le site (S3-T01) |
-| `deploy/`                        | Scripts et configuration serveur (voir §8)                                                        |
-| `.husky/pre-commit`              | Formatage automatique avant chaque commit                                                         |
+| Fichier                           | Rôle                                                                                              |
+| --------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `.github/workflows/ci.yml`        | Qualité → bout en bout → image → scan → publication GHCR + Docker Hub (main) → staging + démo     |
+| `.github/workflows/release.yml`   | Tag `vX.Y.Z` → promotion de l'image testée → Release GitHub → production                          |
+| `.github/workflows/_deploy.yml`   | Déploiement réutilisable : SSH restreint, test de fumée, retour arrière                           |
+| `.github/workflows/security.yml`  | Gitleaks, pnpm audit, Semgrep, ShellCheck ; CodeQL si dépôt public ; chaque lundi                 |
+| `.github/dependabot.yml`          | Mises à jour hebdomadaires (npm, actions épinglées par SHA, image Docker)                         |
+| `apps/web/Dockerfile`             | Multi-étapes, `standalone`, non-root, sans npm, healthcheck `/api/health`                         |
+| `apps/api/`                       | Lint, types, tests (avec couverture) et build dans la même étape « qualité » que le site (S3-T01) |
+| Job « migrations et intégration » | Base PostgreSQL 18 éphémère : `db:deploy`, `db:check` (migrations = schéma), `test:int` (S3-T02)  |
+| `deploy/`                         | Scripts et configuration serveur (voir §8)                                                        |
+| `.husky/pre-commit`               | Formatage automatique avant chaque commit                                                         |
 
 **Principes** : _build once, deploy many_ · déploiement par digest immuable · actions épinglées par SHA ·
 aucun secret dans Git · tout changement passe par une PR.
@@ -499,18 +548,20 @@ flowchart TB
 | Environnements       | `demo` (Render Free, public, auto à chaque fusion) · `staging` (auto, protégé) · `production` (tag de version)     |
 | Fiabilité            | Healthcheck, `compose up --wait`, test de fumée, retour arrière automatique, verrou anti-déploiements concurrents  |
 | Traçabilité          | Release GitHub par version, résumé de chaque déploiement dans Actions, `/opt/kemdia/deploy.log`                    |
-| À venir              | PostgreSQL + sauvegardes chiffrées (S3), surveillance et alertes (S7), _blue/green_ sans coupure (S7)              |
+| Base de données      | PostgreSQL 18 ([§3.5](#35-base-de-données-s3-t02)) : démo Render au S3-T07, serveur de production au S7            |
+| À venir              | Sauvegardes chiffrées et testées (S7), surveillance et alertes (S7), _blue/green_ sans coupure (S7)                |
 
 ## 9. Qualité et tests
 
-| Niveau              | Outil                                                 | État S1                                                                                                                                                                          |
-| ------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unitaires (logique) | Vitest                                                | 78 tests : formatage, livraison (dont dates), panier, catalogue, paramètres d'URL, identité (S2)                                                                                 |
-| Composants          | Testing Library                                       | 16 tests : carte produit, saisie OTP, parcours d'identité, carrousel, barre d'onglets (S2)                                                                                       |
-| Bout en bout        | Playwright + axe-core                                 | 16 scénarios × 2 appareils (téléphone Pixel 7, ordinateur) : achat complet, filtres, favoris, partage, vendeur, en-têtes de sécurité, XSS, accessibilité WCAG AA de 7 pages (S2) |
-| Performance         | Playwright + Web Vitals (Chrome DevTools)             | 5 pages, médiane de 3 chargements à froid en 3G : premier affichage, plus grand élément, décalages, blocage, poids ; tableau dans le résumé de la CI (S2-T08)                    |
-| API (S3)            | Vitest + Supertest                                    | 35 tests : configuration, journaux, en-têtes de sécurité, CORS, format des erreurs, versionnement des routes, architecture (S3-T01)                                              |
-| Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                                                                                                                               |
+| Niveau              | Outil                                                 | État S1                                                                                                                                                                                |
+| ------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unitaires (logique) | Vitest                                                | 78 tests : formatage, livraison (dont dates), panier, catalogue, paramètres d'URL, identité (S2)                                                                                       |
+| Composants          | Testing Library                                       | 16 tests : carte produit, saisie OTP, parcours d'identité, carrousel, barre d'onglets (S2)                                                                                             |
+| Bout en bout        | Playwright + axe-core                                 | 16 scénarios × 2 appareils (téléphone Pixel 7, ordinateur) : achat complet, filtres, favoris, partage, vendeur, en-têtes de sécurité, XSS, accessibilité WCAG AA de 7 pages (S2)       |
+| Performance         | Playwright + Web Vitals (Chrome DevTools)             | 5 pages, médiane de 3 chargements à froid en 3G : premier affichage, plus grand élément, décalages, blocage, poids ; tableau dans le résumé de la CI (S2-T08)                          |
+| API (S3)            | Vitest + Supertest                                    | 49 tests : configuration, journaux, en-têtes de sécurité, CORS, format des erreurs, versionnement des routes, santé de la base, architecture du code et du schéma Prisma (S3-T01, T02) |
+| API — intégration   | Vitest + vraie base PostgreSQL 18                     | 6 tests : santé, schémas créés, requête trop longue interrompue, injection SQL, base injoignable → 503 sans fuite (S3-T02)                                                             |
+| Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                                                                                                                                     |
 
 ## 10. Glossaire
 

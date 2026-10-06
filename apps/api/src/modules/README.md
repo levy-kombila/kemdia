@@ -23,4 +23,16 @@ Le test `test/architecture.test.ts` échoue si :
 
 1. `domain/` importe un framework (`@nestjs/*`, Prisma, Express, Zod…) ou une autre couche ;
 2. `application/` importe `infrastructure/`, `interface/`, Prisma ou Express ;
-3. un module importe un fichier d'un autre module autrement que par son `index.ts`.
+3. un module importe un fichier d'un autre module autrement que par son `index.ts` ;
+4. une autre couche qu'`infrastructure/` importe la base (`src/database`, client Prisma généré).
+
+## Données du module (PostgreSQL)
+
+Chaque module a **son fichier Prisma** (`prisma/schema/<module>.prisma`) et **son schéma PostgreSQL** du même nom
+([ADR-0008](../../../../docs/architecture/adr/0008-postgresql-prisma.md)). `test/prisma-schema.test.ts` échoue si :
+
+- un modèle ne porte pas `@@schema("<module>")` ;
+- un modèle a une relation vers le modèle d'un autre module (on stocke son UUID à la place) ;
+- la liste `schemas` de `main.prisma` ne correspond pas aux fichiers de modules.
+
+Guide pratique (migrations, commandes) : [base-de-donnees.md](../../../../docs/guides/base-de-donnees.md).

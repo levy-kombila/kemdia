@@ -3,7 +3,8 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist/**", "coverage/**"] },
+  // src/generated : client Prisma généré (`pnpm generate`), jamais modifié à la main
+  { ignores: ["dist/**", "coverage/**", "src/generated/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {

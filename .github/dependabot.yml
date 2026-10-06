@@ -10,6 +10,8 @@ updates:
     groups:
       next-react:
         patterns: ["next", "react", "react-dom", "eslint-config-next", "@types/react*"]
+      prisma:
+        patterns: ["prisma", "@prisma/*", "pg", "@types/pg"]
       nestjs:
         patterns: ["@nestjs/*", "nestjs-pino", "pino", "pino-http", "pino-pretty", "helmet"]
       tests:

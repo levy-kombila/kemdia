@@ -33,3 +33,6 @@ Thumbs.db
 
 # Résultats de Vitest
 .vitest/
+
+# Client Prisma généré (pnpm --filter @kemdia/api generate)
+apps/api/src/generated/
