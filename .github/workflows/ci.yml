@@ -94,8 +94,14 @@ jobs:
       - name: Appliquer les migrations sur une base vide
         run: pnpm --filter @kemdia/api db:deploy
       - name: Vérifier que les migrations correspondent au schéma Prisma
-        # Code 2 = écart : une modification de prisma/schema n'a pas sa migration (pnpm db:migrate)
-        run: pnpm --filter @kemdia/api db:check
+        # Code 2 = écart : une modification de prisma/schema n'a pas sa migration (pnpm db:migrate).
+        # En cas d'écart, le SQL manquant est affiché en annotation sur la PR.
+        working-directory: apps/api
+        run: |
+          if pnpm db:check; then exit 0; fi
+          pnpm exec prisma migrate diff --from-config-datasource --to-schema prisma/schema --script > /tmp/ecart.sql || true
+          echo "::error title=Migration manquante::Le schéma Prisma et les migrations diffèrent. SQL manquant :%0A$(sed ':a;N;$!ba;s/\n/%0A/g' /tmp/ecart.sql | head -c 3500)"
+          exit 1
       - name: Importer le catalogue de démonstration (vérifie la commande db:seed)
         run: pnpm --filter @kemdia/api db:seed
       - name: Tests d'intégration de l'API (vraie base)
