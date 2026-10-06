@@ -10,9 +10,21 @@ updates:
     groups:
       next-react:
         patterns: ["next", "react", "react-dom", "eslint-config-next", "@types/react*"]
+      nestjs:
+        patterns: ["@nestjs/*", "nestjs-pino", "pino", "pino-http", "pino-pretty", "helmet"]
       tests:
         patterns:
-          ["vitest", "@vitest/*", "@testing-library/*", "jsdom", "@playwright/test", "@axe-core/*"]
+          [
+            "vitest",
+            "@vitest/*",
+            "@testing-library/*",
+            "jsdom",
+            "@playwright/test",
+            "@axe-core/*",
+            "supertest",
+            "@types/supertest",
+            "unplugin-swc",
+          ]
       dev-tools:
         dependency-type: development
         update-types: [minor, patch]

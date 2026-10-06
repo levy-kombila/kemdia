@@ -10,7 +10,8 @@ FROM base AS deps
 WORKDIR /repo
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/web/package.json apps/web/
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+# Seules les dépendances du site sont installées (l'API a sa propre image)
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --filter @kemdia/web
 
 FROM base AS build
 WORKDIR /repo
