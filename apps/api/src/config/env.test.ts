@@ -25,6 +25,8 @@ describe("loadConfig", () => {
       DATABASE_URL: LOCAL_DATABASE_URL,
       DATABASE_POOL_MAX: 10,
       DATABASE_STATEMENT_TIMEOUT_MS: 10_000,
+      RATE_LIMIT_PER_MINUTE: 120,
+      API_DOCS: true,
     });
   });
 
@@ -104,6 +106,33 @@ describe("loadConfig", () => {
           expect.stringMatching(/^DATABASE_STATEMENT_TIMEOUT_MS : /),
         ],
       );
+    });
+  });
+
+  describe("API : limite, clé interne, documentation", () => {
+    it("documentation activée par défaut, sauf en production", () => {
+      expect(loadConfig({}).API_DOCS).toBe(true);
+      expect(
+        loadConfig({
+          NODE_ENV: "production",
+          APP_VERSION: "v1",
+          DATABASE_URL: "postgresql://a:b@db/k",
+        }).API_DOCS,
+      ).toBe(false);
+      expect(loadConfig({ API_DOCS: "false" }).API_DOCS).toBe(false);
+    });
+
+    it("clé interne : 32 caractères au moins, jamais recopiée dans l'erreur", () => {
+      expect(loadConfig({ API_INTERNAL_KEY: "a".repeat(32) }).API_INTERNAL_KEY).toHaveLength(32);
+      const list = problems({ API_INTERNAL_KEY: "courte-et-secrete" });
+      expect(list).toEqual([expect.stringMatching(/^API_INTERNAL_KEY : /)]);
+      expect(list.join()).not.toContain("courte-et-secrete");
+    });
+
+    it("limite de débit bornée", () => {
+      expect(problems({ RATE_LIMIT_PER_MINUTE: "1" })).toEqual([
+        expect.stringMatching(/^RATE_LIMIT_PER_MINUTE/),
+      ]);
     });
   });
 

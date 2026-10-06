@@ -17,6 +17,7 @@ describe("parseProductSearch — validation des recherches (leçon MED-13)", () 
       brands: [],
       inStock: false,
       onlyDeals: false,
+      promotionsOnly: false,
     });
   });
 
@@ -47,6 +48,7 @@ describe("parseProductSearch — validation des recherches (leçon MED-13)", () 
       inStock: true,
       onlyDeals: true,
       minRating: 4,
+      promotionsOnly: false,
     });
   });
 
@@ -70,6 +72,7 @@ describe("parseProductSearch — validation des recherches (leçon MED-13)", () 
       brands: [],
       inStock: false,
       onlyDeals: false,
+      promotionsOnly: false,
     });
   });
 
@@ -82,6 +85,11 @@ describe("parseProductSearch — validation des recherches (leçon MED-13)", () 
     expect(search.page).toBe(MAX_PAGE);
     expect(search.terms).toHaveLength(MAX_TERMS);
     expect(search.brands).toHaveLength(MAX_BRANDS);
+  });
+
+  it("portée « promotions » (page Promotions) : seule valeur reconnue", () => {
+    expect(parseProductSearch({ scope: "promotions" }).promotionsOnly).toBe(true);
+    expect(parseProductSearch({ scope: "tout" }).promotionsOnly).toBe(false);
   });
 
   it("prix maximum inférieur au minimum : ignoré", () => {

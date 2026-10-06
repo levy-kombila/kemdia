@@ -10,10 +10,12 @@ onlyBuiltDependencies:
 # - @swc/core vérifie seulement le binaire natif, déjà fourni par un paquet optionnel ;
 # - prisma / @prisma/engines téléchargent le moteur de migrations, que Prisma récupère de toute façon
 #   à la première commande (pnpm generate, db:migrate…) : l'installation reste rapide et hors réseau.
+# - @scarf/scarf (dépendance de swagger-ui-dist) envoie des statistiques d'installation à un service tiers : bloqué.
 ignoredBuiltDependencies:
   - "@swc/core"
   - "@prisma/engines"
   - prisma
+  - "@scarf/scarf"
 
 # Correctifs de sécurité imposés à des sous-dépendances (pnpm audit) :
 # - outil Prisma 7.10 (CLI uniquement, absent de l'exécution de l'API) : mysql2 3.15 et deepmerge-ts 7

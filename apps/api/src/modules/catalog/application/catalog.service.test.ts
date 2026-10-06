@@ -84,6 +84,31 @@ describe("CatalogService", () => {
     });
   });
 
+  it("page Promotions : liste et compteurs limités aux promotions", async () => {
+    await service.searchProducts({ scope: "promotions" });
+    expect(products.lastCriteria?.onlyDeals).toBe(true);
+    await service.getFacets({ scope: "promotions", onlyDeals: "0" });
+    expect(products.lastCriteria?.onlyDeals).toBe(true);
+  });
+
+  it("compteurs : tranches de prix du site par défaut", async () => {
+    const facets = await service.getFacets({});
+    expect(facets.prices.map((p) => p.key)).toEqual([
+      "moins-50000",
+      "50000-150000",
+      "150000-300000",
+      "plus-300000",
+    ]);
+  });
+
+  it("fil d'Ariane d'une catégorie", async () => {
+    expect((await service.categoryPath(phones.id)).map((c) => c.slug)).toEqual([
+      "high-tech",
+      "telephones",
+    ]);
+    expect(await service.categoryPath("inconnue")).toEqual([]);
+  });
+
   it("BR-001 : disponibilité ligne par ligne", async () => {
     const result = await service.checkAvailability([
       { variantId: ids.v1, quantity: 2 },

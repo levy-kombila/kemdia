@@ -25,6 +25,8 @@ export interface ProductSearchInput {
   inStock?: unknown;
   onlyDeals?: unknown;
   minRating?: unknown;
+  /** « promotions » : liste limitée aux produits en promotion (page Promotions du site), compteurs compris. */
+  scope?: unknown;
 }
 
 export interface ProductSearch {
@@ -39,6 +41,7 @@ export interface ProductSearch {
   inStock: boolean;
   onlyDeals: boolean;
   minRating?: number;
+  promotionsOnly: boolean;
 }
 
 const integer = (value: unknown): number | undefined => {
@@ -88,5 +91,6 @@ export function parseProductSearch(input: ProductSearchInput): ProductSearch {
     inStock: flag(input.inStock),
     onlyDeals: flag(input.onlyDeals),
     ...(minRating !== undefined && minRating >= 1 && minRating <= 5 ? { minRating } : {}),
+    promotionsOnly: input.scope === "promotions",
   };
 }

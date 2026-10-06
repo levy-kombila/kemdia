@@ -64,6 +64,14 @@ export interface PriceRange {
   max: number;
 }
 
+/** Tranches de prix des filtres : mêmes clés et bornes que le site (apps/web/src/lib/filters.ts). */
+export const DEFAULT_PRICE_RANGES: readonly PriceRange[] = Object.freeze([
+  { key: "moins-50000", min: 0, max: 49_999 },
+  { key: "50000-150000", min: 50_000, max: 150_000 },
+  { key: "150000-300000", min: 150_001, max: 300_000 },
+  { key: "plus-300000", min: 300_001, max: 100_000_000 },
+]);
+
 /** Compteurs affichés à côté des filtres (« Beats (3) »), calculés AVANT application des filtres. */
 export interface Facets {
   brands: { name: string; count: number }[];

@@ -3,6 +3,7 @@ import { CategoryTree, type Category, type CategoryNode } from "../domain/catego
 import type { Orderability, Product } from "../domain/product.js";
 import {
   CATEGORY_REPOSITORY,
+  DEFAULT_PRICE_RANGES,
   PRODUCT_REPOSITORY,
   type CategoryRepository,
   type Facets,
@@ -70,6 +71,11 @@ export class CatalogService {
     return (await this.categoryTree()).roots;
   }
 
+  /** Fil d'Ariane d'une catégorie (fiche produit). Vide si la catégorie n'existe plus. */
+  async categoryPath(categoryId: string): Promise<Category[]> {
+    return (await this.categoryTree()).path(categoryId);
+  }
+
   async getCategory(slug: string): Promise<CategoryView | null> {
     const tree = await this.categoryTree();
     const category = tree.bySlugOrNull(slug);
@@ -97,7 +103,10 @@ export class CatalogService {
   }
 
   /** Compteurs des filtres pour la même catégorie / recherche, filtres non appliqués. */
-  async getFacets(input: ProductSearchInput, priceRanges: readonly PriceRange[]): Promise<Facets> {
+  async getFacets(
+    input: ProductSearchInput,
+    priceRanges: readonly PriceRange[] = DEFAULT_PRICE_RANGES,
+  ): Promise<Facets> {
     const search = parseProductSearch(input);
     const criteria = await this.criteria({
       ...search,
@@ -155,7 +164,8 @@ export class CatalogService {
       ...(search.priceMax !== undefined ? { priceMax: search.priceMax } : {}),
       brands: search.brands,
       inStock: search.inStock,
-      onlyDeals: search.onlyDeals,
+      // Page Promotions : la liste de base est déjà limitée aux promotions (compteurs compris)
+      onlyDeals: search.onlyDeals || search.promotionsOnly,
       ...(search.minRating !== undefined ? { minRating: search.minRating } : {}),
     };
   }
