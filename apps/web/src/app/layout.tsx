@@ -1,13 +1,28 @@
-// Archivo à largeur variable : texte en largeur normale, titres élargis, prix condensés (étiquette de marché)
-import "@fontsource-variable/archivo/wdth.css";
 import "./globals.css";
 
 import type { Metadata, Viewport } from "next";
+import localFont from "next/font/local";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { Providers } from "@/components/providers/Providers";
 import { SITE, siteUrl } from "@/lib/site";
+
+/**
+ * Archivo à largeur variable (licence OFL, fichier dans app/fonts) : texte normal, titres élargis, prix condensés.
+ * next/font la précharge et calcule une police de secours aux dimensions proches. Les blocs sensibles
+ * (cartes produits, barre de tri, titres de liste) ont une hauteur fixe : l'arrivée de la police ne fait
+ * rien sauter, même sur Android où la police de secours est différente (budget S2-T08, CLS).
+ */
+const archivo = localFont({
+  src: "./fonts/archivo-latin-wdth.woff2",
+  weight: "100 900",
+  style: "normal",
+  display: "swap",
+  variable: "--font-archivo",
+  adjustFontFallback: "Arial",
+  declarations: [{ prop: "font-stretch", value: "62% 125%" }],
+});
 
 export function generateMetadata(): Metadata {
   return {
@@ -45,7 +60,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="fr-GA">
+    <html lang="fr-GA" className={archivo.variable}>
       <body className="flex min-h-dvh flex-col">
         <a
           href="#contenu"

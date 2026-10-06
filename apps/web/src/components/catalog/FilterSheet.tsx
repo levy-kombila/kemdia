@@ -22,7 +22,7 @@ export function FilterSheet({
       <button
         type="button"
         onClick={() => ref.current?.showModal()}
-        className="border-ink-200 flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-semibold lg:hidden"
+        className="border-ink-200 flex h-10 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold lg:hidden"
       >
         <SlidersHorizontal className="size-4" aria-hidden /> Filtres
         {active > 0 && (

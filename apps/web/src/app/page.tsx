@@ -39,10 +39,10 @@ export default function HomePage() {
   const fashion = mode ? queryProducts({ categoryId: mode.id, pageSize: 1 }).items : [];
   const techShowcase = tech ? queryProducts({ categoryId: tech.id, pageSize: 2 }).items : [];
 
-  const featured = getFeaturedProducts(12);
-  const news = getNewProducts(12);
-  const bestsellers = getBestsellers(12);
-  const more = queryProducts({ pageSize: 18, sort: "nouveautes" }).items;
+  const featured = getFeaturedProducts(10);
+  const news = getNewProducts(10);
+  const bestsellers = getBestsellers(10);
+  const more = queryProducts({ pageSize: 12, sort: "nouveautes" }).items;
 
   return (
     <div className="container-page space-y-3 py-3 sm:space-y-4 lg:py-4">
@@ -53,7 +53,7 @@ export default function HomePage() {
         fashion={fashion}
       />
       <CategoryBubbles items={getCategoryHighlights(12)} />
-      <FlashSales deals={getDeals(12)} />
+      <FlashSales deals={getDeals(10)} />
       <CategoryTiles tiles={getCategoryTiles()} />
 
       {railSection(

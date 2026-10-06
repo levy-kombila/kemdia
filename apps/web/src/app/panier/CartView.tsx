@@ -65,7 +65,8 @@ export function CartView() {
   if (!hydrated) {
     return (
       <div
-        className="h-64 animate-pulse rounded-xl bg-white"
+        key="chargement"
+        className="h-[28rem] animate-pulse rounded-xl bg-white"
         aria-busy="true"
         aria-label="Chargement du panier"
       />
@@ -74,7 +75,10 @@ export function CartView() {
 
   if (state.lines.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-xl bg-white px-6 py-14 text-center">
+      <div
+        key="vide"
+        className="flex flex-col items-center gap-3 rounded-xl bg-white px-6 py-14 text-center"
+      >
         <span className="bg-ink-50 grid size-24 place-items-center rounded-full">
           <ShoppingCart className="text-ink-400 size-11" aria-hidden />
         </span>

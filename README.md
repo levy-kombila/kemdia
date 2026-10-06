@@ -37,7 +37,7 @@ docs/         Planning, rapports de sprint, cahier d'architecture, ADR, guides, 
 - 🏛️ [Cahier d'architecture](docs/architecture/cahier-architecture.md) et [décisions (ADR)](docs/architecture/adr/)
 - 📘 [Comprendre l'architecture (concepts expliqués simplement)](docs/architecture/concepts.md)
 - 📏 [Règles métier et exigences (BR / FR)](docs/architecture/regles-metier.md) · [Synthèse du KSAD](docs/references/ksad-synthese.md)
-- 📝 [Rapports](docs/rapports/) — dernier : [S2-T04 à T07 — favoris, partage, vendeur, tests de bout en bout](docs/rapports/2026-10-06_S2-T04-T07_favoris-partage-vendeur-e2e.md)
+- 📝 [Rapports](docs/rapports/) — dernier : [S2-T08 / T09 — performance et dépendances](docs/rapports/2026-10-06_S2-T08-T09_performance-dependances.md)
 - 🔐 [Politique de sécurité](SECURITY.md) · [Suivi de l'audit de l'ancienne version](docs/securite/heritage-audit-django.md)
 - 🔀 [Workflow Git](docs/guides/workflow-git.md)
 - 🚀 [Déploiement (CI/CD, serveur, mise en production)](docs/guides/deploiement.md)

@@ -31,7 +31,7 @@ export function Price({
   const showOld = oldPrice != null && oldPrice > price;
   return (
     <div className={cn("flex flex-col", className)}>
-      <p className="text-ink-900 flex items-baseline gap-1">
+      <p className="text-ink-900 flex items-baseline gap-1 whitespace-nowrap">
         <span className="sr-only">{formatFCFA(price)}</span>
         <span aria-hidden className={cn("font-price", s.amount)}>
           {digits(price)}
@@ -41,7 +41,7 @@ export function Price({
         </span>
       </p>
       {showOld && (
-        <p className={cn("mt-1 flex flex-wrap items-baseline gap-x-2", s.old)}>
+        <p className={cn("mt-1 flex flex-wrap items-baseline gap-x-2 whitespace-nowrap", s.old)}>
           <span className="text-ink-500 line-through">
             <span className="sr-only">Prix d&apos;origine : </span>
             {formatFCFA(oldPrice)}

@@ -2,7 +2,7 @@
 
 import { Check, ShoppingCart } from "lucide-react";
 import { useState } from "react";
-import { useCart } from "@/components/providers/CartProvider";
+import { useCartActions } from "@/components/providers/CartProvider";
 import { useToast } from "@/components/providers/ToastProvider";
 import { cn } from "@/lib/cn";
 import type { CartLine } from "@/lib/cart";
@@ -28,7 +28,7 @@ export function AddToCartButton({
   onAdded,
   tone = "primary",
 }: Props) {
-  const { add } = useCart();
+  const { add } = useCartActions();
   const { notify } = useToast();
   const [done, setDone] = useState(false);
   const outOfStock = line.maxQuantity <= 0;

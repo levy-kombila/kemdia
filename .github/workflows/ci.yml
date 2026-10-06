@@ -56,10 +56,10 @@ jobs:
           retention-days: 7
 
   e2e:
-    name: Tests de bout en bout (Playwright)
+    name: Tests de bout en bout et performance (Playwright)
     runs-on: ubuntu-latest
     needs: quality
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -76,6 +76,12 @@ jobs:
         run: pnpm build
       - name: Parcours dans un vrai navigateur (téléphone + ordinateur)
         run: pnpm --filter @kemdia/web e2e
+      - name: Budget de performance (téléphone, 3G, cache vide)
+        run: pnpm --filter @kemdia/web perf
+      - name: Tableau des mesures dans le résumé
+        if: always()
+        working-directory: apps/web
+        run: node scripts/perf-summary.mjs >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publier le rapport en cas d'échec (captures, traces)
         if: failure()

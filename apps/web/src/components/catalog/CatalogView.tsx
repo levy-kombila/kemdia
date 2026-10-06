@@ -1,7 +1,7 @@
 import { SlidersHorizontal, X } from "lucide-react";
 import { FilterSheet } from "./FilterSheet";
 import Link from "next/link";
-import { Suspense, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { getFacets, queryProducts, type ProductQuery } from "@/lib/catalog";
 import { countActiveFilters, filtersToParams, parseFilters, PRICE_BUCKETS } from "@/lib/filters";
 import { first, parsePage, parseSort, SORT_OPTIONS } from "@/lib/search-params";
@@ -88,21 +88,27 @@ export function CatalogView({
       </aside>
 
       <div className="min-w-0">
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-white px-4 py-2.5">
-          <p className="text-ink-500 mr-auto text-sm">
-            <strong className="text-ink-900">{result.total}</strong> produit
-            {result.total > 1 ? "s" : ""}
-          </p>
-          <FilterSheet active={active} total={result.total}>
-            {sideTop && <div className="mb-4">{sideTop}</div>}
-            {panel}
-          </FilterSheet>
-          <Suspense>
-            <SortSelect value={sort} options={SORT_OPTIONS} />
-          </Suspense>
+        {/* Barre sur une seule ligne quelle que soit la police (pas de saut à l'arrivée de la police, budget S2-T08) */}
+        <div className="mb-3 rounded-xl bg-white px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <p className="text-ink-500 mr-auto min-w-0 truncate text-sm">
+              <strong className="text-ink-900">{result.total}</strong> produit
+              {result.total > 1 ? "s" : ""}
+            </p>
+            <FilterSheet active={active} total={result.total}>
+              {sideTop && <div className="mb-4">{sideTop}</div>}
+              {panel}
+            </FilterSheet>
+            <SortSelect
+              value={sort}
+              options={SORT_OPTIONS}
+              basePath={basePath}
+              params={{ ...baseParams, ...filtersToParams(filters) }}
+            />
+          </div>
           {chips.length > 0 && (
             <ul
-              className="flex w-full flex-wrap items-center gap-2 pt-1"
+              className="flex w-full flex-wrap items-center gap-2 pt-2.5"
               aria-label="Filtres actifs"
             >
               {chips.map((c) => (

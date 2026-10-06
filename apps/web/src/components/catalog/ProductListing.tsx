@@ -48,8 +48,8 @@ export function ProductListing({ result, sort, basePath, params = {} }: Props) {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-4">
-          {items.map((p) => (
-            <ProductCard key={p.id} product={p} />
+          {items.map((p, i) => (
+            <ProductCard key={p.id} product={p} preloadImage={i < 2} />
           ))}
         </div>
       )}

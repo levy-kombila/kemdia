@@ -34,6 +34,13 @@ type CartApi = {
 
 const CartContext = createContext<CartApi | null>(null);
 
+type CartActions = Pick<CartApi, "add" | "setQuantity" | "remove" | "clear">;
+/**
+ * Actions seules, dans un contexte à part dont la valeur ne change jamais : les dizaines de boutons
+ * « Ajouter au panier » d'une page ne se redessinent pas à chaque modification du panier (budget de performance S2-T08).
+ */
+const CartActionsContext = createContext<CartActions | null>(null);
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(cartReducer, emptyCart);
   const [hydrated, setHydrated] = useState(false);
@@ -92,11 +99,26 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     [state, hydrated, add, setQuantity, remove, clear],
   );
 
-  return <CartContext.Provider value={api}>{children}</CartContext.Provider>;
+  const actions = useMemo<CartActions>(
+    () => ({ add, setQuantity, remove, clear }),
+    [add, setQuantity, remove, clear],
+  );
+
+  return (
+    <CartActionsContext.Provider value={actions}>
+      <CartContext.Provider value={api}>{children}</CartContext.Provider>
+    </CartActionsContext.Provider>
+  );
 }
 
 export function useCart(): CartApi {
   const ctx = useContext(CartContext);
   if (!ctx) throw new Error("useCart doit être utilisé dans <CartProvider>");
+  return ctx;
+}
+
+export function useCartActions(): CartActions {
+  const ctx = useContext(CartActionsContext);
+  if (!ctx) throw new Error("useCartActions doit être utilisé dans <CartProvider>");
   return ctx;
 }
