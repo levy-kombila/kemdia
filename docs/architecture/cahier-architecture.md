@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués  |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests      |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                       |
+| **1.3** | 2026-10-06 | S3     | §3.6 module `catalog` (ADR-0009) : domaine, cas d'utilisation, persistance, import de démonstration ; §2.1 F3 ; §6.3 ; §9 tests             |
 | **1.2** | 2026-10-06 | S3     | §3.5 base de données (ADR-0008) ; §3.4 dossier `database/`, `DATABASE_*` ; §4, §6.3, §7 job PostgreSQL, §8, §9 tests d'intégration          |
 | **1.1** | 2026-10-06 | S3     | §3.4 socle de l'API (`apps/api`, ADR-0007) ; §4 versions du backend ; §6.3 sécurité de l'API (ancien §6.3 → §6.4) ; §7 et §9 tests de l'API |
 | **0.9** | 2026-10-06 | S2     | §5.8 favoris, partage et aperçus, page vendeur ; §5.2 rendu à la demande (`SITE_URL`) ; §7 et §9 tests de bout en bout                      |
@@ -71,7 +72,7 @@ et à un sprint dans [`regles-metier.md`](regles-metier.md). Résumé :
 | --- | ------------------------------------------------------------------------ | ----------------------------------- |
 | F1  | Parcourir le catalogue par catégories (3 niveaux)                        | S1 ✅                               |
 | F2  | Rechercher, filtrer, trier, paginer                                      | S1 ✅ · S2 (filtres) · S3 (serveur) |
-| F3  | Fiche produit (photos, prix, stock, livraison estimée, variantes)        | S1 ✅ · S3 (variantes)              |
+| F3  | Fiche produit (photos, prix, stock, livraison estimée, variantes)        | S1 ✅ · S3 ✅ (variantes, API)      |
 | F4  | Panier                                                                   | S1 ✅ (navigateur) · S5 (serveur)   |
 | F5  | Ville / quartier de livraison au Gabon                                   | S1 ✅                               |
 | F6  | Compte client par e-mail ou téléphone (OTP)                              | S4                                  |
@@ -136,7 +137,8 @@ flowchart TB
 lu côté serveur par `src/lib/catalog.ts`, qui sera remplacé par des appels à l'API sans modifier les composants.
 
 **État au S3-T02** : `apps/api` existe (socle, contrôle de santé, aucune route métier) et se connecte à PostgreSQL ;
-le schéma `catalog` est créé mais vide (tables au S3-T03) ; le site n'appelle pas encore l'API (S3-T05).
+le module `catalog` (S3-T03) lit et écrit catégories, produits et variantes ; ses routes HTTP arrivent au S3-T04,
+et le site l'appellera au S3-T05.
 
 ### 3.3 Modules du backend (cible MVP)
 
@@ -251,6 +253,62 @@ flowchart LR
 **Environnements** : poste → `docker compose up -d db` (accessible seulement depuis le poste) ; CI → base éphémère par exécution ;
 démo → base Render gratuite (S3-T07) ; production → serveur (S7). Les migrations sont appliquées par `pnpm db:deploy`
 avant le démarrage de la nouvelle version (intégré au déploiement au S3-T06 / T07).
+
+### 3.6 Module `catalog` (S3-T03)
+
+Décision : [ADR-0009](adr/0009-modele-catalogue.md). Premier module métier : il sert de modèle aux suivants.
+
+```
+src/modules/catalog/
+├── index.ts                    Port public : CatalogModule, CatalogService et types (seule entrée pour les autres modules)
+├── catalog.module.ts           Branche les ports sur les dépôts Prisma
+├── domain/                     TypeScript pur, sans framework
+│   ├── values.ts               UUID (BR-042), adresse, prix FCFA entiers (BR-004), stock, texte de recherche
+│   ├── category.ts             Catégorie + CategoryTree (parents, boucles, 4 niveaux, descendants, fil d'Ariane)
+│   └── product.ts              Product + variantes (FR-013), prix « à partir de », checkOrderable (BR-001)
+├── application/
+│   ├── ports.ts                CategoryRepository, ProductRepository, critères, pages, compteurs
+│   ├── product-search.ts       Validation des recherches (liste blanche, bornes : leçon MED-13)
+│   └── catalog.service.ts      Lecture du catalogue + checkAvailability (API REST au S3-T04, orders au S5)
+└── infrastructure/
+    ├── prisma-*.repository.ts  SQL via Prisma ; produit + variantes enregistrés en une transaction
+    └── demo-catalog.ts         Import des données de démonstration (UUID v5 stables, relançable)
+```
+
+```mermaid
+erDiagram
+    categories ||--o{ categories : "parent (4 niveaux max)"
+    categories ||--o{ products : contient
+    products ||--|{ product_variants : "1 à 50 variantes"
+    categories {
+      uuid id PK
+      varchar slug UK
+      uuid parent_id FK
+    }
+    products {
+      uuid id PK
+      varchar slug UK
+      enum status "DRAFT, PUBLISHED, ARCHIVED"
+      int price "variante active la moins chere"
+      int compare_at_price
+      text search_text "sans accents"
+    }
+    product_variants {
+      uuid id PK
+      varchar sku UK
+      jsonb attributes "couleur, taille"
+      int price "superieur a 0"
+      int stock "jamais negatif"
+    }
+```
+
+| Opération (`CatalogService`)      | Ce qu'elle fait                                                                                                         |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `getCategoryRoots`, `getCategory` | Arborescence (gardée 60 s en mémoire), fil d'Ariane, sous-catégories                                                    |
+| `getProduct(slug)`                | Fiche produit avec variantes ; brouillons et archives → introuvable                                                     |
+| `searchProducts(paramètres)`      | Catégorie **et sous-catégories**, mots sans accents, prix, marques, stock, promotion, note, 5 tris, pages de 48 au plus |
+| `getFacets(paramètres, tranches)` | Compteurs des filtres, calculés avant application des filtres (comme le site)                                           |
+| `checkAvailability(lignes)`       | BR-001 ligne par ligne : commandable, indisponible, variante inconnue, stock insuffisant (avec la quantité restante)    |
 
 ## 4. Choix technologiques
 
@@ -471,6 +529,10 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 | Couches et modules isolés (test d'architecture)                                                                                               | `test/architecture.test.ts`                      | Couplage, contournement des règles     |
 | `DATABASE_URL` jamais journalisée ; mot de passe masqué dans les messages du pilote ; adresse de développement refusée en production (S3-T02) | `config/env.ts`, `database/`                     | CRIT-02 (identifiants exposés)         |
 | Requêtes SQL paramétrées (Prisma), testé avec une valeur hostile ; requête limitée à 10 s ; ≤ 10 connexions (S3-T02)                          | `database/prisma.service.ts`, test d'intégration | CRIT-04 (injection), déni de service   |
+| Recherche : mots réduits à `[a-z0-9]`, 8 mots et 100 caractères au plus ; pages de 48 au plus ; 10 marques au plus (S3-T03)                   | `catalog/application/product-search.ts`          | MED-13, déni de service                |
+| Contraintes SQL : prix > 0, prix barré > prix, stock ≥ 0 ; catégorie non supprimable si elle contient des produits (S3-T03)                   | migration `catalogue`                            | Montants et stocks incohérents         |
+| Images de produits : chemins `/images/…` uniquement, jamais d'adresse externe (S3-T03)                                                        | `catalog/domain/category.ts`                     | HIGH-03 (SSRF)                         |
+| Tests d'intégration limités aux bases `*_test` (ils vident des tables) (S3-T03)                                                               | `test/integration-db.ts`                         | Perte de données de développement      |
 | Base locale accessible seulement depuis le poste (`127.0.0.1`), authentification SCRAM-SHA-256 (S3-T02)                                       | `docker-compose.yml`                             | Base exposée sur le réseau             |
 
 ### 6.4 Prévu 🔜
@@ -553,15 +615,15 @@ flowchart TB
 
 ## 9. Qualité et tests
 
-| Niveau              | Outil                                                 | État S1                                                                                                                                                                                |
-| ------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unitaires (logique) | Vitest                                                | 78 tests : formatage, livraison (dont dates), panier, catalogue, paramètres d'URL, identité (S2)                                                                                       |
-| Composants          | Testing Library                                       | 16 tests : carte produit, saisie OTP, parcours d'identité, carrousel, barre d'onglets (S2)                                                                                             |
-| Bout en bout        | Playwright + axe-core                                 | 16 scénarios × 2 appareils (téléphone Pixel 7, ordinateur) : achat complet, filtres, favoris, partage, vendeur, en-têtes de sécurité, XSS, accessibilité WCAG AA de 7 pages (S2)       |
-| Performance         | Playwright + Web Vitals (Chrome DevTools)             | 5 pages, médiane de 3 chargements à froid en 3G : premier affichage, plus grand élément, décalages, blocage, poids ; tableau dans le résumé de la CI (S2-T08)                          |
-| API (S3)            | Vitest + Supertest                                    | 49 tests : configuration, journaux, en-têtes de sécurité, CORS, format des erreurs, versionnement des routes, santé de la base, architecture du code et du schéma Prisma (S3-T01, T02) |
-| API — intégration   | Vitest + vraie base PostgreSQL 18                     | 6 tests : santé, schémas créés, requête trop longue interrompue, injection SQL, base injoignable → 503 sans fuite (S3-T02)                                                             |
-| Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                                                                                                                                     |
+| Niveau              | Outil                                                 | État S1                                                                                                                                                                                                                                                                     |
+| ------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unitaires (logique) | Vitest                                                | 78 tests : formatage, livraison (dont dates), panier, catalogue, paramètres d'URL, identité (S2)                                                                                                                                                                            |
+| Composants          | Testing Library                                       | 16 tests : carte produit, saisie OTP, parcours d'identité, carrousel, barre d'onglets (S2)                                                                                                                                                                                  |
+| Bout en bout        | Playwright + axe-core                                 | 16 scénarios × 2 appareils (téléphone Pixel 7, ordinateur) : achat complet, filtres, favoris, partage, vendeur, en-têtes de sécurité, XSS, accessibilité WCAG AA de 7 pages (S2)                                                                                            |
+| Performance         | Playwright + Web Vitals (Chrome DevTools)             | 5 pages, médiane de 3 chargements à froid en 3G : premier affichage, plus grand élément, décalages, blocage, poids ; tableau dans le résumé de la CI (S2-T08)                                                                                                               |
+| API (S3)            | Vitest + Supertest                                    | 94 tests (dont 45 sur le catalogue : domaine, BR-001, recherche, import — S3-T03) : configuration, journaux, en-têtes de sécurité, CORS, format des erreurs, versionnement des routes, santé de la base, architecture du code et du schéma Prisma (S3-T01, T02)             |
+| API — intégration   | Vitest + vraie base PostgreSQL 18                     | 23 tests, dont 17 sur le catalogue : listes, recherche, filtres, tri, compteurs **comparés à la logique du site**, BR-001, contraintes SQL (S3-T03) ; et : santé, schémas créés, requête trop longue interrompue, injection SQL, base injoignable → 503 sans fuite (S3-T02) |
+| Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                                                                                                                                                                                                                          |
 
 ## 10. Glossaire
 

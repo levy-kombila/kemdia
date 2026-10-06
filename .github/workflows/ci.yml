@@ -70,14 +70,15 @@ jobs:
         env:
           POSTGRES_USER: kemdia
           POSTGRES_PASSWORD: kemdia_ci
-          POSTGRES_DB: kemdia
+          # Nom en « _test » : seule sorte de base que les tests d'intégration acceptent de vider
+          POSTGRES_DB: kemdia_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U kemdia -d kemdia"
+          --health-cmd "pg_isready -U kemdia -d kemdia_test"
           --health-interval 5s --health-timeout 3s --health-retries 10
     env:
-      DATABASE_URL: postgresql://kemdia:kemdia_ci@localhost:5432/kemdia
+      DATABASE_URL: postgresql://kemdia:kemdia_ci@localhost:5432/kemdia_test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -95,6 +96,8 @@ jobs:
       - name: Vérifier que les migrations correspondent au schéma Prisma
         # Code 2 = écart : une modification de prisma/schema n'a pas sa migration (pnpm db:migrate)
         run: pnpm --filter @kemdia/api db:check
+      - name: Importer le catalogue de démonstration (vérifie la commande db:seed)
+        run: pnpm --filter @kemdia/api db:seed
       - name: Tests d'intégration de l'API (vraie base)
         run: pnpm --filter @kemdia/api test:int
 

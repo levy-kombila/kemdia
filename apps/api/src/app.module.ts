@@ -5,6 +5,7 @@ import type { AppConfig } from "./config/env.js";
 import { DatabaseModule } from "./database/database.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { loggerParams } from "./http/logging.js";
+import { CatalogModule } from "./modules/catalog/index.js";
 
 /**
  * Module racine : il assemble les briques techniques et, à partir du S3-T03, les modules métier
@@ -20,6 +21,7 @@ export class AppModule {
         LoggerModule.forRoot(loggerParams(config)),
         DatabaseModule,
         HealthModule,
+        CatalogModule,
       ],
     };
   }
