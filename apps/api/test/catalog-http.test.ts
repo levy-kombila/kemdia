@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { randomBytes } from "node:crypto";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { Test } from "@nestjs/testing";
 import request from "supertest";
@@ -32,7 +33,8 @@ import { InMemoryCategories, InMemoryProducts } from "./catalog/in-memory.js";
  * Chaque réponse est confrontée au schéma publié dans la documentation OpenAPI (test de contrat).
  * Le SQL réel est testé dans test/catalog.int.test.ts.
  */
-const INTERNAL_KEY = "cle-interne-de-test-0123456789abcdef";
+// Clé tirée au hasard à chaque exécution : aucune clé n'est écrite dans le code
+const INTERNAL_KEY = randomBytes(32).toString("base64url");
 
 const root = createCategory({
   id: ids.category,

@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { Test } from "@nestjs/testing";
@@ -31,7 +32,8 @@ import { testDatabaseUrl } from "./integration-db.js";
  * Test de contrat sur la vraie base : l'API complète (catalogue de démonstration importé) renvoie,
  * pour TOUTES les catégories et TOUS les produits, des réponses conformes à la documentation OpenAPI.
  */
-const INTERNAL_KEY = "cle-interne-integration-0123456789";
+// Clé tirée au hasard à chaque exécution : aucune clé n'est écrite dans le code
+const INTERNAL_KEY = randomBytes(32).toString("base64url");
 const data = JSON.parse(
   readFileSync(new URL("../prisma/seed/catalogue-demo.json", import.meta.url), "utf8"),
 ) as DemoCatalog;
