@@ -1,21 +1,46 @@
+# Mises à jour automatiques (S2-T09). Chaque PR passe par toute la CI (tests, bout en bout, performance, sécurité).
 version: 2
 updates:
   - package-ecosystem: npm
     directory: "/"
-    schedule: { interval: weekly, day: monday }
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Africa/Libreville }
     open-pull-requests-limit: 5
+    labels: [dependencies]
+    commit-message: { prefix: "chore(deps)" }
     groups:
       next-react:
         patterns: ["next", "react", "react-dom", "eslint-config-next", "@types/react*"]
+      tests:
+        patterns:
+          ["vitest", "@vitest/*", "@testing-library/*", "jsdom", "@playwright/test", "@axe-core/*"]
       dev-tools:
         dependency-type: development
-  # Met aussi à jour les SHA épinglés des actions GitHub
+        update-types: [minor, patch]
+    ignore:
+      # Types Node alignés sur la version d'exécution (Node 22 LTS) : majeure décidée à la main
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # Changements majeurs évalués au Sprint 3 (voir planning) : TypeScript 7, ESLint 10
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+
+  # Met aussi à jour les SHA épinglés des actions GitHub (une seule PR groupée)
   - package-ecosystem: github-actions
     directory: "/"
-    schedule: { interval: weekly }
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Africa/Libreville }
+    labels: [dependencies]
+    commit-message: { prefix: "ci(deps)" }
+    groups:
+      actions:
+        patterns: ["*"]
+
   - package-ecosystem: docker
     directory: "/apps/web"
-    schedule: { interval: weekly }
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Africa/Libreville }
+    labels: [dependencies]
+    commit-message: { prefix: "chore(docker)" }
     ignore:
       # On reste sur Node.js LTS (22) : les versions majeures se décident manuellement
       - dependency-name: node

@@ -6,11 +6,27 @@ import { formatFCFA } from "@/lib/format";
 import type { Category, Product } from "@/lib/types";
 import { HeroCarousel } from "./HeroCarousel";
 
-function ProductDisc({ product, className }: { product: Product; className?: string }) {
+function ProductDisc({
+  product,
+  className,
+  preload = false,
+}: {
+  product: Product;
+  className?: string;
+  /** Image de la 1re bannière : chargée en priorité (c'est le plus grand élément affiché, LCP) */
+  preload?: boolean;
+}) {
   return (
     <div className={`absolute overflow-hidden rounded-full bg-white shadow-xl ${className ?? ""}`}>
       {product.images[0] && (
-        <Image src={product.images[0]} alt="" fill sizes="220px" className="object-contain p-3" />
+        <Image
+          src={product.images[0]}
+          alt=""
+          fill
+          sizes="(min-width: 1280px) 256px, (min-width: 640px) 224px, 160px"
+          preload={preload}
+          className="object-contain p-3"
+        />
       )}
     </div>
   );
@@ -59,6 +75,7 @@ export function Hero({
       </div>
       {techDeals[0] && (
         <ProductDisc
+          preload
           product={techDeals[0]}
           className="-right-6 top-6 size-40 sm:right-10 sm:size-56 xl:size-64"
         />

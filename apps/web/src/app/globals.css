@@ -6,8 +6,8 @@
  */
 @theme {
   /* Une seule famille, trois largeurs : texte (100), titres élargis (112), prix condensés (78) */
-  --font-sans: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
 
   --color-brand-50: #fff1f2;
   --color-brand-100: #ffe1e3;

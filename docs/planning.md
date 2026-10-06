@@ -24,13 +24,14 @@ Mobile Money (Moov, Airtel) et paiement à la livraison, lancement visé **fin 2
 
 ### Jalons
 
-| Jalon  | Contenu                                                                         | Visé                       |
-| ------ | ------------------------------------------------------------------------------- | -------------------------- |
-| v0.1.0 | Site vitrine + CI/CD + démo publique                                            | ✅ S1                      |
-| v0.3.0 | Catalogue servi par l'API et PostgreSQL                                         | fin S3                     |
-| v0.5.0 | Premier achat de bout en bout en environnement de test (Mobile Money _sandbox_) | fin S5                     |
-| v0.7.0 | Vendeurs partenaires opérationnels                                              | fin S6                     |
-| v1.0.0 | Lancement public                                                                | S8 (fin 2027 au plus tard) |
+| Jalon  | Contenu                                                                                              | Visé                       |
+| ------ | ---------------------------------------------------------------------------------------------------- | -------------------------- |
+| v0.1.0 | Site vitrine + CI/CD + démo publique                                                                 | ✅ S1                      |
+| v0.2.0 | Parcours client complet en démonstration : compte, commande, favoris, partage, tests de bout en bout | ✅ S2 (à étiqueter)        |
+| v0.3.0 | Catalogue servi par l'API et PostgreSQL                                                              | fin S3                     |
+| v0.5.0 | Premier achat de bout en bout en environnement de test (Mobile Money _sandbox_)                      | fin S5                     |
+| v0.7.0 | Vendeurs partenaires opérationnels                                                                   | fin S6                     |
+| v1.0.0 | Lancement public                                                                                     | S8 (fin 2027 au plus tard) |
 
 ### Actions hors code (équipe Kemdia) — à lancer tôt
 
@@ -97,21 +98,22 @@ Ces démarches prennent souvent plusieurs mois et **bloquent** des sprints si el
 | S2-T05 | Partage **WhatsApp** + aperçus OpenGraph soignés par produit                                                           | ✅     |
 | S2-T06 | Page « Devenir vendeur » (présentation de l'offre marketplace)                                                         | ✅     |
 | S2-T07 | Tests de bout en bout Playwright dans la CI (parcours d'achat sur mobile)                                              | ✅     |
-| S2-T08 | Budget de performance (Lighthouse CI) : pages critiques < 2 s en 3G simulée                                            | ⏳     |
-| S2-T09 | Fermeture de la dette S1 : PR Dependabot obsolètes, mise à jour Dependabot npm                                         | ⏳     |
+| S2-T08 | Budget de performance : pages clés mesurées en 3G sur téléphone à chaque PR (premier affichage < 2 s)                  | ✅     |
+| S2-T09 | Fermeture de la dette S1 : PR Dependabot obsolètes, configuration Dependabot, mises à jour sûres                       | ✅     |
 | S2-T10 | Refonte visuelle « place de marché » : accueil, fiche produit, barre mobile, connexion, listes, panier                 | ✅     |
 
 ## S3 — Backend : socle et module `catalog`
 
-| ID     | Tâche                                                                                              |
-| ------ | -------------------------------------------------------------------------------------------------- |
-| S3-T01 | `apps/api` NestJS, architecture hexagonale, configuration validée au démarrage                     |
-| S3-T02 | PostgreSQL en local via `docker compose` (parité avec la production), Prisma, un schéma par module |
-| S3-T03 | Module `catalog` : catégories, produits, **variantes**, stock, UUID (BR-001, BR-042, FR-013)       |
-| S3-T04 | API REST `/api/v1` documentée (OpenAPI), limitation de débit                                       |
-| S3-T05 | Le site lit l'API au lieu du fichier de démonstration (`lib/catalog.ts`)                           |
-| S3-T06 | CI : tests d'intégration avec une base PostgreSQL éphémère, image Docker de l'API                  |
-| S3-T07 | Démo Render : API + base de données gratuite                                                       |
+| ID     | Tâche                                                                                                    |
+| ------ | -------------------------------------------------------------------------------------------------------- |
+| S3-T01 | `apps/api` NestJS, architecture hexagonale, configuration validée au démarrage                           |
+| S3-T02 | PostgreSQL en local via `docker compose` (parité avec la production), Prisma, un schéma par module       |
+| S3-T03 | Module `catalog` : catégories, produits, **variantes**, stock, UUID (BR-001, BR-042, FR-013)             |
+| S3-T04 | API REST `/api/v1` documentée (OpenAPI), limitation de débit                                             |
+| S3-T05 | Le site lit l'API au lieu du fichier de démonstration (`lib/catalog.ts`)                                 |
+| S3-T06 | CI : tests d'intégration avec une base PostgreSQL éphémère, image Docker de l'API                        |
+| S3-T07 | Démo Render : API + base de données gratuite                                                             |
+| S3-T08 | Dette : blocage de l'accueil ramené à 300 ms (chargement progressif), ESLint 10, évaluation TypeScript 7 |
 
 ## S4 à S8 — grandes lignes
 

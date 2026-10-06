@@ -23,10 +23,19 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   projects: [
-    { name: "mobile", use: { ...devices["Pixel 7"] } },
+    { name: "mobile", use: { ...devices["Pixel 7"] }, testIgnore: /performance\.spec\.ts/ },
     {
       name: "ordinateur",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1366, height: 900 } },
+      testIgnore: /performance\.spec\.ts/,
+    },
+    // Budget de performance : téléphone en 3G, cache vide (voir e2e/performance.spec.ts)
+    {
+      name: "performance",
+      use: { ...devices["Pixel 7"] },
+      testMatch: /performance\.spec\.ts/,
+      fullyParallel: false,
+      retries: 1,
     },
   ],
   // Le site doit avoir été construit avant (pnpm build) ; on le démarre comme en production.

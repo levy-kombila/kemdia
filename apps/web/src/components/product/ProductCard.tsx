@@ -60,10 +60,13 @@ export function ProductCard({
   product,
   badge,
   rank,
+  preloadImage = false,
 }: {
   product: Product;
   badge?: CardBadge;
   rank?: number;
+  /** Cartes visibles dès l'ouverture d'une liste : photo chargée en priorité (LCP) */
+  preloadImage?: boolean;
 }) {
   const discount = discountPercent(product.price, product.oldPrice);
   const href = `/produit/${product.slug}`;
@@ -79,6 +82,7 @@ export function ProductCard({
             alt=""
             fill
             sizes="(min-width: 1280px) 15vw, (min-width: 1024px) 20vw, (min-width: 640px) 30vw, 46vw"
+            preload={preloadImage}
             className="object-contain p-1.5 transition-transform duration-300 group-hover:scale-[1.04]"
           />
         </Link>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Heart } from "lucide-react";
-import { useFavorites } from "@/components/providers/FavoritesProvider";
+import { useIsFavorite } from "@/components/providers/FavoritesProvider";
 import { useToast } from "@/components/providers/ToastProvider";
 import { cn } from "@/lib/cn";
 import type { Favorite } from "@/lib/favorites";
@@ -14,9 +14,8 @@ type Props = {
 
 /** Cœur « ajouter aux favoris » : sur la carte produit (pastille) ou sur la fiche (bouton avec texte). */
 export function FavoriteButton({ item, variant = "overlay", className }: Props) {
-  const { has, toggle, hydrated } = useFavorites();
+  const { active, toggle } = useIsFavorite(item.productId);
   const { notify } = useToast();
-  const active = hydrated && has(item.productId);
 
   function onClick() {
     const added = toggle(item);

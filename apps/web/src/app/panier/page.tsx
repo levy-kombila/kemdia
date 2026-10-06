@@ -13,7 +13,10 @@ export default function CartPage() {
     <div className="container-page space-y-3 py-4 pb-24 lg:pb-4">
       <Breadcrumbs items={[{ label: "Panier" }]} />
       <h1 className="sr-only">Mon panier</h1>
-      <CartView />
+      {/* Hauteur réservée : le panier (lu dans le navigateur) ne pousse pas les suggestions en s'affichant (CLS) */}
+      <div className="min-h-[28rem]">
+        <CartView />
+      </div>
       <section aria-labelledby="suggestions" className="rounded-xl bg-white px-3 pb-3 pt-4 sm:px-5">
         <SectionHeader
           id="suggestions"
