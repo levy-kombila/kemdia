@@ -2,6 +2,10 @@ import type { AppConfig } from "../../../config/env.js";
 import type { OtpChannel } from "../domain/identifier.js";
 import type { OtpSender } from "../application/ports.js";
 import { ConsoleOtpSender } from "./console-otp-sender.js";
+import { BrevoTransport } from "./email/brevo-transport.js";
+import { EmailOtpSender } from "./email/email-otp-sender.js";
+import type { FetchLike } from "./email/http-mail.js";
+import { MailpitTransport } from "./email/mailpit-transport.js";
 
 /** Aucun canal : tout envoi est refusé (« CANAL_INDISPONIBLE ») au lieu de partir n'importe où. */
 export class NoOtpSender implements OtpSender {
@@ -11,13 +15,39 @@ export class NoOtpSender implements OtpSender {
   }
 }
 
+type SenderConfig = Pick<
+  AppConfig,
+  | "APP_ENV"
+  | "NODE_ENV"
+  | "EMAIL_TRANSPORT"
+  | "MAILPIT_URL"
+  | "BREVO_API_KEY"
+  | "EMAIL_FROM"
+  | "EMAIL_FROM_NAME"
+>;
+
 /**
- * Choix de l'adaptateur d'envoi des codes.
- * - Poste de développement et tests (APP_ENV=local, NODE_ENV≠production) : codes écrits dans le terminal.
- * - Partout ailleurs (démo, préproduction, production) : jamais la console. Tant que l'adaptateur e-mail
- *   (S4-T02) n'est pas branché, aucun envoi n'est possible ; le SMS attend le choix du client.
+ * Choix de l'envoi des codes (EMAIL_TRANSPORT, ADR-0016). La configuration refuse déjà « console » hors du poste ;
+ * on revérifie ici : un code ne doit JAMAIS finir dans les journaux d'un serveur.
  */
-export function createOtpSender(config: Pick<AppConfig, "APP_ENV" | "NODE_ENV">): OtpSender {
-  if (config.APP_ENV === "local" && config.NODE_ENV !== "production") return new ConsoleOtpSender();
-  return new NoOtpSender();
+export function createOtpSender(config: SenderConfig, fetchImpl: FetchLike = fetch): OtpSender {
+  const from = { from: config.EMAIL_FROM, fromName: config.EMAIL_FROM_NAME };
+  switch (config.EMAIL_TRANSPORT) {
+    case "console":
+      return config.APP_ENV === "local" && config.NODE_ENV !== "production"
+        ? new ConsoleOtpSender()
+        : new NoOtpSender();
+    case "mailpit":
+      return new EmailOtpSender(
+        new MailpitTransport({ url: config.MAILPIT_URL, ...from }, fetchImpl),
+      );
+    case "brevo":
+      return config.BREVO_API_KEY
+        ? new EmailOtpSender(
+            new BrevoTransport({ apiKey: config.BREVO_API_KEY, ...from }, fetchImpl),
+          )
+        : new NoOtpSender();
+    case "none":
+      return new NoOtpSender();
+  }
 }

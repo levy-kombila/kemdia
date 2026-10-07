@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { Logger } from "@nestjs/common";
+import { describe, expect, it, vi } from "vitest";
 import {
   FakeClock,
   InMemoryOtpChallenges,
@@ -42,7 +43,7 @@ describe("OtpService", () => {
       resendInSeconds: 60,
     });
     expect(sender.sent).toEqual([
-      { channel: "email", to: "awa@exemple.ga", code: "123456", purpose: "signup" },
+      { kind: "code", channel: "email", to: "awa@exemple.ga", code: "123456", purpose: "signup" },
     ]);
     expect(JSON.stringify(challenges.rows)).not.toContain("123456");
   });
@@ -86,7 +87,7 @@ describe("OtpService", () => {
   it("5 envois par heure au plus vers une même adresse", async () => {
     const { service, clock } = setup();
     for (let i = 0; i < OTP_MAX_SENDS_PER_HOUR; i++) {
-      await service.issue(i % 2 ? "reset" : "signup", EMAIL);
+      await service.issue("signup", EMAIL);
       clock.advance(OTP_RESEND_DELAY_MS);
     }
     await expect(service.issue("signup", EMAIL)).rejects.toMatchObject({ code: "TROP_D_ENVOIS" });
@@ -95,6 +96,58 @@ describe("OtpService", () => {
     ).resolves.toBeDefined();
     clock.advance(60 * 60_000);
     await expect(service.issue("signup", EMAIL)).resolves.toBeDefined();
+  });
+
+  it("alerte ou rien à la place du code, mais les limites comptent pareil", async () => {
+    const { service, sender, challenges, clock } = setup();
+    await service.issue("signup", EMAIL, "signup-alert");
+    expect(sender.sent).toEqual([{ kind: "signup-alert", channel: "email", to: "awa@exemple.ga" }]);
+    clock.advance(OTP_RESEND_DELAY_MS);
+    await service.issue("signup", EMAIL, "none");
+    expect(sender.sent).toHaveLength(1);
+    expect(challenges.rows).toHaveLength(2);
+  });
+
+  it("indique quand réessayer (en-tête Retry-After)", async () => {
+    const { service, clock } = setup();
+    await service.issue("signup", EMAIL);
+    clock.advance(20_000);
+    await expect(service.issue("signup", EMAIL)).rejects.toMatchObject({
+      code: "ENVOI_TROP_RAPPROCHE",
+      retryAfterSeconds: 40,
+    });
+    for (let i = 1; i < OTP_MAX_SENDS_PER_HOUR; i++) {
+      clock.advance(OTP_RESEND_DELAY_MS);
+      await service.issue("signup", EMAIL);
+    }
+    clock.advance(OTP_RESEND_DELAY_MS);
+    // Premier envoi il y a 20 s + 5 × 60 s = 320 s : possible de nouveau dans 3600 - 320 = 3280 s
+    await expect(service.issue("signup", EMAIL)).rejects.toMatchObject({
+      code: "TROP_D_ENVOIS",
+      retryAfterSeconds: 3280,
+    });
+  });
+
+  it("fournisseur en panne : la réponse ne change pas (envoi après la réponse), l'échec est journalisé", async () => {
+    const { service, sender } = setup();
+    const warn = vi.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
+    sender.send = () => Promise.reject(new Error("Brevo : réponse HTTP 401"));
+    await expect(service.issue("signup", EMAIL)).resolves.toMatchObject({ channel: "email" });
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(warn).toHaveBeenCalledWith(
+      "envoi email vers aw•••@exemple.ga impossible : Brevo : réponse HTTP 401",
+    );
+    warn.mockRestore();
+  });
+
+  it("limites par usage : des inscriptions ne bloquent pas le mot de passe oublié", async () => {
+    const { service, clock } = setup();
+    for (let i = 0; i < OTP_MAX_SENDS_PER_HOUR; i++) {
+      await service.issue("signup", EMAIL);
+      clock.advance(OTP_RESEND_DELAY_MS);
+    }
+    await expect(service.issue("signup", EMAIL)).rejects.toMatchObject({ code: "TROP_D_ENVOIS" });
+    await expect(service.issue("reset", EMAIL)).resolves.toBeDefined();
   });
 
   describe("vérification", () => {

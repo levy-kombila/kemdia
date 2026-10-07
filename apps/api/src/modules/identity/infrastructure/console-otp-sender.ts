@@ -13,8 +13,14 @@ export class ConsoleOtpSender implements OtpSender {
   readonly channels: readonly OtpChannel[] = ["email", "sms"];
 
   send(message: OtpMessage): Promise<void> {
-    const usage = message.purpose === "signup" ? "inscription" : "mot de passe oublié";
-    this.logger.warn(`[${message.channel}] ${message.to} — code ${usage} : ${message.code}`);
+    if (message.kind === "signup-alert") {
+      this.logger.warn(
+        `[${message.channel}] ${message.to} — alerte : inscription tentée sur un compte existant`,
+      );
+    } else {
+      const usage = message.purpose === "signup" ? "inscription" : "mot de passe oublié";
+      this.logger.warn(`[${message.channel}] ${message.to} — code ${usage} : ${message.code}`);
+    }
     return Promise.resolve();
   }
 }

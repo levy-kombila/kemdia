@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués  |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests      |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                       |
+| **2.2** | 2026-10-07 | S4     | Inscription et e-mails (ADR-0016) : §3.4 variables e-mail, §3.7 routes `/auth/signup`, §3.9 tickets et envoi, §6.3                          |
 | **2.1** | 2026-10-07 | S4     | Fondations du module `identity` (ADR-0015) : §3.4 `SMS_ENABLED`, §3.5, §3.9 (nouvelle), §5.4 SMS différé, §6.3, §6.4                        |
 | **2.0** | 2026-10-07 | S3     | Fin du Sprint 3 (v0.3.0) : démo avec `CATALOG_TIMEOUT_MS=90000` (§5.9) ; rapport de clôture                                                 |
 | **1.9** | 2026-10-07 | S3     | Dette S3-T08 : mode fichier retiré (§3.2, §5.9), accueil chargé zone par zone (§5.2), TypeScript 6 / ESLint 10 (§4, ADR-0014), §7, §9       |
@@ -243,6 +244,10 @@ Un autre module n'entre que par `index.ts`.
 | `API_INTERNAL_KEY`              | aucune                          | Secret du serveur (32 à 128 caractères) ; jamais dans Git              |
 | `API_DOCS`                      | `true` (dév.)                   | `false` par défaut                                                     |
 | `SMS_ENABLED`                   | `false`                         | `true` seulement quand un fournisseur SMS est branché (ADR-0015)       |
+| `EMAIL_TRANSPORT`               | `console` (poste) / `none`      | `brevo` sur la démo ; `console` refusé hors du poste (ADR-0016)        |
+| `MAILPIT_URL`                   | `http://localhost:8025`         | — (boîte de test locale ; interdite en production)                     |
+| `BREVO_API_KEY`                 | aucune                          | **Secret** ; obligatoire avec `brevo`                                  |
+| `EMAIL_FROM`, `EMAIL_FROM_NAME` | `no-reply@kemdia.local`, Kemdia | Avec `brevo` : adresse vérifiée dans Brevo (obligatoire)               |
 
 Une valeur invalide arrête l'API (code de sortie 1) avec la liste des variables en cause, **sans afficher leur valeur**.
 
@@ -350,6 +355,9 @@ Décision : [ADR-0010](adr/0010-api-rest-openapi.md). Description complète : [`
 | `GET /api/v1/products/facets`           | Compteurs des filtres (mêmes paramètres)                                                 | 60 s  | 120/min/IP |
 | `GET /api/v1/products/{slug}`           | Fiche produit, variantes actives et leur stock ; 404 si brouillon ou archivé             | 60 s  | 120/min/IP |
 | `POST /api/v1/availability`             | BR-001 ligne par ligne (ne modifie rien)                                                 | aucun | 30/min/IP  |
+| `POST /api/v1/auth/signup`              | Inscription : ticket + code ; **même réponse** si l'adresse a un compte (S4-T02)         | aucun | 10/min/IP  |
+| `POST /api/v1/auth/signup/verify`       | Ticket + code → compte créé, déjà vérifié (BR-041)                                       | aucun | 10/min/IP  |
+| `POST /api/v1/auth/signup/resend`       | Nouveau code (60 s entre deux, 5 par heure)                                              | aucun | 10/min/IP  |
 | `GET /api/health`                       | État de l'API et de la base                                                              | aucun | aucune     |
 | `GET /api/v1/openapi.json`, `/api/docs` | Documentation (si `API_DOCS`, désactivée par défaut en production)                       | 5 min | aucune     |
 
@@ -368,6 +376,9 @@ flowchart LR
 et les identifiants de démonstration (UUID v5). Le paquet est compilé à l'installation (`prepare`) et par Turborepo (`^build`).
 Le paramètre `badge` (`featured`, `new`, `bestseller`) et le tri `ventes` ont été ajoutés pour l'accueil ; chaque produit de liste porte
 sa **variante par défaut** (`variantId`, `stock`) et `variantCount` (contrat 1.1.0).
+
+**Erreurs métier (S4-T02)** : champ `code` stable dans les Problem Details (`CODE_INVALIDE`, `CODE_EXPIRE`, `ENVOI_TROP_RAPPROCHE`…,
+liste `IDENTITY_ERROR_CODES` du contrat) et en-tête `Retry-After` pour les limites ; contrat 1.2.0.
 
 **Limitation de débit** : par adresse IP (`req.ip`, qui ne croit `X-Forwarded-For` que derrière un relais déclaré par `TRUST_PROXY`).
 Le serveur du site présente la clé `API_INTERNAL_KEY` et n'est pas limité : il sert tous les visiteurs depuis une seule adresse.
@@ -414,22 +425,29 @@ src/modules/identity/
 │   ├── password-policy.ts           8 à 128 caractères, lettre + chiffre, mots de passe courants ; prénom et nom
 │   ├── account.ts                   Compte : en attente → actif après vérification (BR-041), blocage 3 échecs / 15 min (BR-040)
 │   └── otp.ts                       Code à 6 chiffres : empreinte seulement, 10 min, 5 essais, temps constant
+│   └── signup-ticket.ts             Ticket d'inscription : 32 octets, empreinte SHA-256, 24 h (S4-T02)
 ├── application/
-│   ├── ports.ts                     AccountRepository, OtpChallengeRepository, PasswordHasher, OtpSender, Clock
-│   └── otp.service.ts               Envoi (60 s entre deux, 5 par heure, SMS seulement si SMS_ENABLED) et vérification
+│   ├── ports.ts                     Dépôts (comptes, codes, tickets), PasswordHasher, OtpSender, Clock
+│   ├── otp.service.ts               Envoi (60 s entre deux, 5 par heure, SMS seulement si SMS_ENABLED) : code, alerte ou rien ; vérification
+│   └── signup.service.ts            Inscription sans énumération (leurre + alerte) ; compte créé au bon code ; renvoi (S4-T02, ADR-0016)
+├── interface/
+│   ├── identity.controller.ts       POST /auth/signup, /signup/verify, /signup/resend ; 10/min/IP
+│   └── identity-http-errors.ts      Erreur métier → statut HTTP + code + Retry-After
 └── infrastructure/
     ├── argon2-password-hasher.ts    Argon2id (19 Mio, 2 passes)
-    ├── otp-sender.factory.ts        Console sur le poste de développement ; aucun envoi ailleurs tant que l'e-mail (S4-T02) n'est pas branché
+    ├── otp-sender.factory.ts        EMAIL_TRANSPORT : console (poste), Mailpit, Brevo, ou aucun envoi
+    ├── email/                       Modèles d'e-mails (FR, sans lien) ; API web de Mailpit et de Brevo (délai 10 s)
     └── prisma-*.repository.ts       Comptes (identifiant déjà pris → IdentifierTakenError), codes et compteurs d'envoi
 ```
 
 Tables du schéma `identity` :
 
-| Table            | Contenu                                                                                                 | Contraintes SQL ajoutées à la main                                                       |
-| ---------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `accounts`       | Prénom, nom, e-mail et/ou téléphone (uniques), hachage Argon2id, statut, vérifications, échecs, blocage | Au moins un identifiant ; e-mail en minuscules ; téléphone `+2410[67]` ; actif ⇒ vérifié |
-| `otp_challenges` | Usage (inscription / oubli), canal, destination, **empreinte** du code, essais, expiration              | Empreinte hexadécimale de 64 caractères ; 0 à 5 essais                                   |
-| `sessions`       | Compte, **empreinte** du jeton (unique), expiration, dernière activité, révocation                      | Empreinte hexadécimale ; suppression en cascade avec le compte                           |
+| Table            | Contenu                                                                                                       | Contraintes SQL ajoutées à la main                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `accounts`       | Prénom, nom, e-mail et/ou téléphone (uniques), hachage Argon2id, statut, vérifications, échecs, blocage       | Au moins un identifiant ; e-mail en minuscules ; téléphone `+2410[67]` ; actif ⇒ vérifié |
+| `otp_challenges` | Usage (inscription / oubli), canal, destination, **empreinte** du code, essais, expiration                    | Empreinte hexadécimale de 64 caractères ; 0 à 5 essais                                   |
+| `sessions`       | Compte, **empreinte** du jeton (unique), expiration, dernière activité, révocation                            | Empreinte hexadécimale ; suppression en cascade avec le compte                           |
+| `signup_tickets` | **Empreinte** du ticket, destination, inscription (prénom, nom, hachage ; vide = leurre), expiration (S4-T02) | Empreinte hexadécimale ; inscription complète ou vide ; une seule par destination        |
 
 ## 4. Choix technologiques
 
@@ -691,29 +709,33 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 
 ### 6.3 Sécurité de l'API (S3-T01)
 
-| Mesure                                                                                                                                                                                   | Où                                               | Faille(s) de l'ancien projet évitée(s)                 |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------ |
-| Configuration validée au démarrage ; valeurs jamais affichées ; `debug` interdit en production                                                                                           | `config/env.ts`                                  | CRIT-02 (secrets), mauvaise config                     |
-| CSP `default-src 'none'; frame-ancestors 'none'`, HSTS, `nosniff`, `X-Frame-Options: DENY`, sans `X-Powered-By`                                                                          | `http/configure-app.ts`                          | LOW-03, empreinte technologique                        |
-| CORS fermé par défaut ; origines explicites, HTTPS en production                                                                                                                         | `http/configure-app.ts`                          | Appels depuis un site tiers                            |
-| Corps JSON limité à 100 Ko                                                                                                                                                               | `http/configure-app.ts`                          | Déni de service                                        |
-| Erreurs imprévues : message générique (détail dans les journaux) ; 404 sans recopier l'adresse                                                                                           | `http/problem-details.filter.ts`                 | Fuite d'informations, XSS réfléchie                    |
-| Journaux sans paramètres d'URL, sans corps ni en-têtes ; champs sensibles masqués ; identifiant de requête                                                                               | `http/logging.ts`                                | Données personnelles dans les journaux                 |
-| Couches et modules isolés (test d'architecture)                                                                                                                                          | `test/architecture.test.ts`                      | Couplage, contournement des règles                     |
-| `DATABASE_URL` jamais journalisée ; mot de passe masqué dans les messages du pilote ; adresse de développement refusée en production (S3-T02)                                            | `config/env.ts`, `database/`                     | CRIT-02 (identifiants exposés)                         |
-| Requêtes SQL paramétrées (Prisma), testé avec une valeur hostile ; requête limitée à 10 s ; ≤ 10 connexions (S3-T02)                                                                     | `database/prisma.service.ts`, test d'intégration | CRIT-04 (injection), déni de service                   |
-| Recherche : mots réduits à `[a-z0-9]`, 8 mots et 100 caractères au plus ; pages de 48 au plus ; 10 marques au plus (S3-T03)                                                              | `catalog/application/product-search.ts`          | MED-13, déni de service                                |
-| Contraintes SQL : prix > 0, prix barré > prix, stock ≥ 0 ; catégorie non supprimable si elle contient des produits ; déclencheur : 3 niveaux au plus et aucune boucle (BR-005) (S3-T03)  | migration `catalogue`                            | Montants et stocks incohérents                         |
-| Images de produits : chemins `/images/…` uniquement, jamais d'adresse externe (S3-T03)                                                                                                   | `catalog/domain/category.ts`                     | HIGH-03 (SSRF)                                         |
-| Tests d'intégration limités aux bases `*_test` (ils vident des tables) (S3-T03)                                                                                                          | `test/integration-db.ts`                         | Perte de données de développement                      |
-| Limitation de débit par IP (120/min, 30/min pour la disponibilité), 429 en français + `Retry-After` ; clé interne du site comparée en temps constant (S3-T04)                            | `http/rate-limit.ts`                             | Déni de service, force brute                           |
-| Image de l'API : non-root, lecture seule, sans npm ; moteur de migrations téléchargé à la construction ; scannée par Trivy ; migrations refusées si la configuration est fausse (S3-T06) | `apps/api/Dockerfile`, `database/migrate.ts`     | Image vulnérable, base de développement en production  |
-| Corps de requête validés par schéma, champs inconnus refusés (S3-T04)                                                                                                                    | `packages/contracts/src/schemas.ts`              | Injection de champs (ex. un prix envoyé par le client) |
-| Page de documentation : fichiers servis par l'API (liste fermée), CSP propre, désactivée par défaut en production ; télémétrie `@scarf/scarf` bloquée (S3-T04)                           | `docs/`                                          | Script tiers, fuite d'informations                     |
-| Base locale accessible seulement depuis le poste (`127.0.0.1`), authentification SCRAM-SHA-256 (S3-T02)                                                                                  | `docker-compose.yml`                             | Base exposée sur le réseau                             |
-| Mots de passe hachés en Argon2id (OWASP) ; règles vérifiées par le serveur (S4-T01)                                                                                                      | `identity/infrastructure`, `identity/domain`     | Mots de passe faibles ou mal stockés                   |
-| Codes à usage unique : tirage cryptographique, empreinte seulement, 10 min, 5 essais, dernier code seul valable, 60 s et 5 par heure (S4-T01)                                            | `identity/domain/otp.ts`, `otp.service.ts`       | HIGH-11 (vérification contournable), force brute       |
-| Jamais de code écrit dans les journaux hors du poste de développement ; SMS refusé tant que `SMS_ENABLED=false` (S4-T01)                                                                 | `identity/infrastructure/otp-sender.factory.ts`  | Fuite de codes, coûts imprévus                         |
+| Mesure                                                                                                                                                                                     | Où                                                           | Faille(s) de l'ancien projet évitée(s)                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------ |
+| Configuration validée au démarrage ; valeurs jamais affichées ; `debug` interdit en production                                                                                             | `config/env.ts`                                              | CRIT-02 (secrets), mauvaise config                     |
+| CSP `default-src 'none'; frame-ancestors 'none'`, HSTS, `nosniff`, `X-Frame-Options: DENY`, sans `X-Powered-By`                                                                            | `http/configure-app.ts`                                      | LOW-03, empreinte technologique                        |
+| CORS fermé par défaut ; origines explicites, HTTPS en production                                                                                                                           | `http/configure-app.ts`                                      | Appels depuis un site tiers                            |
+| Corps JSON limité à 100 Ko                                                                                                                                                                 | `http/configure-app.ts`                                      | Déni de service                                        |
+| Erreurs imprévues : message générique (détail dans les journaux) ; 404 sans recopier l'adresse                                                                                             | `http/problem-details.filter.ts`                             | Fuite d'informations, XSS réfléchie                    |
+| Journaux sans paramètres d'URL, sans corps ni en-têtes ; champs sensibles masqués ; identifiant de requête                                                                                 | `http/logging.ts`                                            | Données personnelles dans les journaux                 |
+| Couches et modules isolés (test d'architecture)                                                                                                                                            | `test/architecture.test.ts`                                  | Couplage, contournement des règles                     |
+| `DATABASE_URL` jamais journalisée ; mot de passe masqué dans les messages du pilote ; adresse de développement refusée en production (S3-T02)                                              | `config/env.ts`, `database/`                                 | CRIT-02 (identifiants exposés)                         |
+| Requêtes SQL paramétrées (Prisma), testé avec une valeur hostile ; requête limitée à 10 s ; ≤ 10 connexions (S3-T02)                                                                       | `database/prisma.service.ts`, test d'intégration             | CRIT-04 (injection), déni de service                   |
+| Recherche : mots réduits à `[a-z0-9]`, 8 mots et 100 caractères au plus ; pages de 48 au plus ; 10 marques au plus (S3-T03)                                                                | `catalog/application/product-search.ts`                      | MED-13, déni de service                                |
+| Contraintes SQL : prix > 0, prix barré > prix, stock ≥ 0 ; catégorie non supprimable si elle contient des produits ; déclencheur : 3 niveaux au plus et aucune boucle (BR-005) (S3-T03)    | migration `catalogue`                                        | Montants et stocks incohérents                         |
+| Images de produits : chemins `/images/…` uniquement, jamais d'adresse externe (S3-T03)                                                                                                     | `catalog/domain/category.ts`                                 | HIGH-03 (SSRF)                                         |
+| Tests d'intégration limités aux bases `*_test` (ils vident des tables) (S3-T03)                                                                                                            | `test/integration-db.ts`                                     | Perte de données de développement                      |
+| Limitation de débit par IP (120/min, 30/min pour la disponibilité), 429 en français + `Retry-After` ; clé interne du site comparée en temps constant (S3-T04)                              | `http/rate-limit.ts`                                         | Déni de service, force brute                           |
+| Image de l'API : non-root, lecture seule, sans npm ; moteur de migrations téléchargé à la construction ; scannée par Trivy ; migrations refusées si la configuration est fausse (S3-T06)   | `apps/api/Dockerfile`, `database/migrate.ts`                 | Image vulnérable, base de développement en production  |
+| Corps de requête validés par schéma, champs inconnus refusés (S3-T04)                                                                                                                      | `packages/contracts/src/schemas.ts`                          | Injection de champs (ex. un prix envoyé par le client) |
+| Page de documentation : fichiers servis par l'API (liste fermée), CSP propre, désactivée par défaut en production ; télémétrie `@scarf/scarf` bloquée (S3-T04)                             | `docs/`                                                      | Script tiers, fuite d'informations                     |
+| Base locale accessible seulement depuis le poste (`127.0.0.1`), authentification SCRAM-SHA-256 (S3-T02)                                                                                    | `docker-compose.yml`                                         | Base exposée sur le réseau                             |
+| Mots de passe hachés en Argon2id (OWASP) ; règles vérifiées par le serveur (S4-T01)                                                                                                        | `identity/infrastructure`, `identity/domain`                 | Mots de passe faibles ou mal stockés                   |
+| Codes à usage unique : tirage cryptographique, empreinte seulement, 10 min, 5 essais, dernier code seul valable, 60 s et 5 par heure (S4-T01)                                              | `identity/domain/otp.ts`, `otp.service.ts`                   | HIGH-11 (vérification contournable), force brute       |
+| Inscription sans énumération : même réponse, mêmes limites, même durée (hachage systématique) si l'adresse a un compte ; alerte au titulaire (S4-T02)                                      | `identity/application/signup.service.ts`                     | Énumération des comptes                                |
+| Essais de code comptés en une requête, limites d'envoi sous verrou par adresse : des demandes simultanées ne les contournent pas (S4-T02)                                                  | `identity/infrastructure/prisma-otp-challenge.repository.ts` | Force brute en parallèle, bombardement d'e-mails       |
+| Ticket d'inscription (empreinte seulement) portant l'inscription ; compte créé au bon code : une deuxième inscription ne peut pas faire valider son mot de passe par le titulaire (S4-T02) | `identity/domain/signup-ticket.ts`                           | Détournement d'inscription                             |
+| E-mails sans lien ni image, sans donnée saisie ; clé Brevo jamais journalisée, erreurs réduites au statut HTTP (S4-T02)                                                                    | `identity/infrastructure/email/`                             | Hameçonnage, injection, fuite de secret                |
+| Jamais de code écrit dans les journaux hors du poste de développement ; SMS refusé tant que `SMS_ENABLED=false` (S4-T01)                                                                   | `identity/infrastructure/otp-sender.factory.ts`              | Fuite de codes, coûts imprévus                         |
 
 ### 6.4 Prévu 🔜
 

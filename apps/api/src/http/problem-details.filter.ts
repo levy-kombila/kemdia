@@ -7,6 +7,7 @@ import {
   Logger,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
+import { BusinessException } from "./business-exception.js";
 
 /** Réponse d'erreur au format standard « Problem Details » (RFC 9457). */
 export interface ProblemDetails {
@@ -14,6 +15,8 @@ export interface ProblemDetails {
   title: string;
   status: number;
   detail?: string;
+  /** Code d'erreur métier stable (erreurs prévues des modules, ex. « CODE_INVALIDE ») */
+  code?: string;
   requestId?: string;
 }
 
@@ -24,8 +27,10 @@ const TITLES: Partial<Record<number, string>> = {
   404: "Ressource introuvable",
   405: "Méthode non autorisée",
   409: "Conflit",
+  410: "Ressource expirée",
   413: "Requête trop volumineuse",
   415: "Format non pris en charge",
+  423: "Compte bloqué",
   422: "Données invalides",
   429: "Trop de requêtes",
   500: "Erreur interne",
@@ -60,10 +65,19 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       requestId: req.id,
     };
 
-    const detail = status < 500 ? safeDetail(exception, status) : undefined;
+    const detail =
+      status < 500 || exception instanceof BusinessException
+        ? safeDetail(exception, status)
+        : undefined;
     if (detail) problem.detail = detail;
+    if (exception instanceof BusinessException) {
+      problem.code = exception.code;
+      if (exception.retryAfterSeconds !== undefined) {
+        res.setHeader("Retry-After", String(Math.max(1, Math.ceil(exception.retryAfterSeconds))));
+      }
+    }
 
-    if (status >= 500) {
+    if (status >= 500 && !(exception instanceof BusinessException)) {
       this.logger.error(
         { err: exception, requestId: req.id },
         exception instanceof Error ? exception.message : "Erreur inconnue",
@@ -87,6 +101,7 @@ function statusFromBodyParser(exception: unknown): number {
 
 /** Message d'une erreur prévue, sauf les messages automatiques qui recopient l'URL (« Cannot GET /… »). */
 function safeDetail(exception: unknown, status: number): string | undefined {
+  if (exception instanceof BusinessException) return exception.message;
   if (status === 404 || !(exception instanceof HttpException)) return undefined;
   const body = exception.getResponse();
   const message =

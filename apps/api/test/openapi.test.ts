@@ -23,9 +23,12 @@ describe("Description OpenAPI", () => {
     for (const ref of refs) expect(schemas, ref).toContain(ref);
   });
 
-  it("documente toutes les routes du catalogue", () => {
+  it("documente toutes les routes", () => {
     expect(Object.keys(document.paths as object).sort()).toEqual([
       "/api/health",
+      "/api/v1/auth/signup",
+      "/api/v1/auth/signup/resend",
+      "/api/v1/auth/signup/verify",
       "/api/v1/availability",
       "/api/v1/categories",
       "/api/v1/categories/{slug}",

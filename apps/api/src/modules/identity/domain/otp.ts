@@ -90,17 +90,30 @@ export class OtpChallenge {
     );
   }
 
+  /** État du défi à cet instant : encore utilisable, périmé (expiré ou déjà utilisé), ou essais épuisés. */
+  state(now: Date): "usable" | "expired" | "too-many-attempts" {
+    if (this.props.consumedAt !== null || this.props.expiresAt <= now) return "expired";
+    if (this.props.attempts >= OTP_MAX_ATTEMPTS) return "too-many-attempts";
+    return "usable";
+  }
+
+  /** Le code proposé est-il le bon ? Comparaison en temps constant ; ne compte pas l'essai (voir OtpService). */
+  matches(code: string): boolean {
+    const proposed = Buffer.from(hashOtpCode(this.props.id, code), "hex");
+    const expected = Buffer.from(this.props.codeHash, "hex");
+    return proposed.length === expected.length && timingSafeEqual(proposed, expected);
+  }
+
   /**
-   * Vérifie un code proposé. Chaque essai compte, même le bon (il consomme alors le défi).
+   * Vérifie un code proposé (règle complète, en mémoire). Chaque essai compte, même le bon (il consomme alors le défi).
+   * Le service, lui, compte l'essai DANS LA BASE en une seule requête : des essais simultanés ne passent pas la limite.
    * Comparaison en temps constant : la durée ne révèle rien du code.
    */
   check(code: string, now: Date): OtpCheck {
-    if (this.props.consumedAt !== null || this.props.expiresAt <= now) return "expired";
-    if (this.props.attempts >= OTP_MAX_ATTEMPTS) return "too-many-attempts";
+    const state = this.state(now);
+    if (state !== "usable") return state;
     this.props.attempts += 1;
-    const proposed = Buffer.from(hashOtpCode(this.props.id, code), "hex");
-    const expected = Buffer.from(this.props.codeHash, "hex");
-    if (proposed.length === expected.length && timingSafeEqual(proposed, expected)) {
+    if (this.matches(code)) {
       this.props.consumedAt = now;
       return "ok";
     }

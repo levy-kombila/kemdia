@@ -28,6 +28,17 @@ export interface AccountProps {
   createdAt: Date;
 }
 
+const invalidName = () =>
+  new IdentityError(
+    "NOM_INVALIDE",
+    "prénom et nom : 2 à 60 lettres (espaces, apostrophes et tirets permis)",
+  );
+
+/** Vérifie prénom et nom sans créer de compte (contrôle fait avant toute recherche en base). */
+export function assertValidNames(firstName: string, lastName: string): void {
+  if (!normalizeName(firstName) || !normalizeName(lastName)) throw invalidName();
+}
+
 export class Account {
   private constructor(private props: AccountProps) {}
 
@@ -42,12 +53,7 @@ export class Account {
   }): Account {
     const firstName = normalizeName(input.firstName);
     const lastName = normalizeName(input.lastName);
-    if (!firstName || !lastName) {
-      throw new IdentityError(
-        "NOM_INVALIDE",
-        "prénom et nom : 2 à 60 lettres (espaces, apostrophes et tirets permis)",
-      );
-    }
+    if (!firstName || !lastName) throw invalidName();
     return new Account({
       id: input.id,
       firstName,

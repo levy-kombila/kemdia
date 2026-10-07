@@ -30,6 +30,23 @@ function toDomain(row: AccountRow): Account {
   });
 }
 
+/** Colonnes modifiables (ni l'identifiant ni la date de création). */
+function writable(account: Account) {
+  const s = account.snapshot();
+  return {
+    firstName: s.firstName,
+    lastName: s.lastName,
+    email: s.email,
+    phone: s.phone,
+    passwordHash: s.passwordHash,
+    status: TO_DB[s.status],
+    emailVerifiedAt: s.emailVerifiedAt,
+    phoneVerifiedAt: s.phoneVerifiedAt,
+    failedLogins: s.failedLogins,
+    lockedUntil: s.lockedUntil,
+  };
+}
+
 @Injectable()
 export class PrismaAccountRepository implements AccountRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -48,8 +65,8 @@ export class PrismaAccountRepository implements AccountRepository {
   }
 
   async save(account: Account): Promise<void> {
-    const { id, createdAt, status, ...rest } = account.snapshot();
-    const data = { ...rest, status: TO_DB[status] };
+    const { id, createdAt } = account.snapshot();
+    const data = writable(account);
     try {
       await this.prisma.account.upsert({
         where: { id },
