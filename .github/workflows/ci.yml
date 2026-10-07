@@ -670,9 +670,10 @@ jobs:
         run: |
           . "$RUNNER_TEMP/render.sh"
           wait_version "$DEMO_API_URL"
-          body=$(curl -fsS --max-time 30 "$DEMO_API_URL/api/health")
+          # Retentées comme pour le site : Render peut répondre 502 juste après la bascule
+          body=$(curl -fsS --retry 5 --retry-delay 15 --retry-all-errors --max-time 30 "$DEMO_API_URL/api/health")
           echo "$body" | grep -q '"database":"ok"' || { echo "::error::API en ligne mais base indisponible : $body"; exit 1; }
-          [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$DEMO_API_URL/api/v1/categories")" = "200" ]
+          curl -fsS -o /dev/null --retry 5 --retry-delay 15 --retry-all-errors --max-time 30 "$DEMO_API_URL/api/v1/categories"
 
       # 2. Puis le site
       - name: Déployer le site
@@ -703,18 +704,21 @@ jobs:
         env:
           API_READY: ${{ steps.api.outputs.ready }}
         run: |
-          headers=$(curl -fsS -o /dev/null -D - --max-time 90 "$DEMO_URL/")
+          # Juste après la bascule vers la nouvelle version, Render peut répondre 502 quelques secondes
+          # (l'ancienne instance s'arrête) : chaque requête est retentée, 5 fois au plus, toutes les 15 s.
+          get() { curl -fsS --retry 5 --retry-delay 15 --retry-all-errors "$@"; }
+          headers=$(get -o /dev/null -D - --max-time 90 "$DEMO_URL/")
           for h in content-security-policy strict-transport-security x-frame-options; do
             echo "$headers" | grep -qi "^$h:" || { echo "::error::En-tête manquant : $h"; exit 1; }
           done
-          curl -fsS --max-time 90 "$DEMO_URL/" | grep -q "Kemdia"
-          health=$(curl -fsS --max-time 30 "$DEMO_URL/api/health")
+          get --max-time 90 "$DEMO_URL/" | grep -q "Kemdia"
+          health=$(get --max-time 30 "$DEMO_URL/api/health")
           source=$(echo "$health" | jq -r '.catalog // "inconnu"')
           if [ "$API_READY" = "true" ] && [ "$source" != "api" ]; then
             echo "::error::Le site de démo ne lit pas l'API (catalogue : $source). Vérifier API_URL et API_INTERNAL_KEY sur Render."
             exit 1
           fi
-          curl -fsS --max-time 90 "$DEMO_URL/produit/apple-google-pixel-modern-blanc" | grep -q "Apple Google Pixel Modern Blanc"
+          get --max-time 90 "$DEMO_URL/produit/apple-google-pixel-modern-blanc" | grep -q "Apple Google Pixel Modern Blanc"
           {
             echo "### Démo publique en ligne : $DEMO_URL (\`$VERSION\`)"
             echo "- Catalogue lu dans : **$source**"
