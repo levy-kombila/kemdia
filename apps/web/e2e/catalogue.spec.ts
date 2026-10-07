@@ -59,3 +59,19 @@ test("favoris : le cœur ajoute le produit à la page Mes favoris", async ({ pag
   await page.getByRole("button", { name: `Retirer « ${title} » des favoris` }).click();
   await expect(page.getByRole("heading", { name: "Aucun favori pour le moment" })).toBeVisible();
 });
+
+test("accueil : les cartes du bas de page, rendues interactives à l'approche, fonctionnent (S3-T08)", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const grid = page.locator('section[aria-labelledby="tous-produits"]');
+  // Contenu présent dans le HTML dès le chargement (référencement), même avant d'être interactif
+  await expect(grid.getByRole("article").first()).toBeAttached();
+  await grid.scrollIntoViewIfNeeded();
+  const heart = grid.getByRole("button", { name: /Ajouter .* aux favoris/ }).first();
+  const title = (await heart.getAttribute("aria-label"))!.match(/« (.*) »/)![1]!;
+  await heart.click();
+  await expect(
+    grid.getByRole("button", { name: `Retirer « ${title} » des favoris` }),
+  ).toHaveAttribute("aria-pressed", "true");
+});

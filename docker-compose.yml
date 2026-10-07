@@ -1,8 +1,8 @@
 # Environnement local (voir docs/guides/base-de-donnees.md) :
 #   docker compose up -d db          PostgreSQL seul, pour développer l'API (pnpm dev)
-#   docker compose up --build web    le site comme en production (catalogue de démonstration)
 #   docker compose up --build        tout : base → migrations → API → site, avec les images de production (S3-T06)
-# Pour que le site lise l'API : API_INTERNAL_KEY=<clé> dans un fichier .env à la racine (jamais dans Git).
+# Le site lit toujours l'API (S3-T08) : API_INTERNAL_KEY=<clé> OBLIGATOIRE dans un fichier .env à la racine
+# (jamais dans Git) ; sans elle, le site refuse de démarrer avec un message.
 services:
   web:
     build:
@@ -14,9 +14,13 @@ services:
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
       # L'image fixe APP_ENV=production par défaut, qui exige l'API : ici on est sur le poste.
       APP_ENV: local
-      # Clé définie dans le .env de la racine → le site lit l'API ci-dessous ; sinon : catalogue de démonstration
-      API_URL: ${API_INTERNAL_KEY:+http://api:4000}
+      # Clé du .env de la racine, partagée avec l'API ci-dessous
+      API_URL: http://api:4000
+      # Sans clé, le site refuse de démarrer avec un message clair (pas de `:?` ici : `up -d db` doit marcher sans .env)
       API_INTERNAL_KEY: ${API_INTERNAL_KEY:-}
+    depends_on:
+      api:
+        condition: service_healthy
     read_only: true
     tmpfs:
       - /tmp

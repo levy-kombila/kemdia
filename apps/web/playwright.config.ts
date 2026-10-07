@@ -32,7 +32,9 @@ export default defineConfig({
     // Budget de performance : téléphone en 3G, cache vide (voir e2e/performance.spec.ts)
     {
       name: "performance",
-      use: { ...devices["Pixel 7"] },
+      // Pas de trace ni de capture pendant la mesure : l'enregistrement Playwright occupe le fil principal
+      // du navigateur et gonflait le « blocage » mesuré (~+200 ms sur l'accueil, constaté au S3-T08).
+      use: { ...devices["Pixel 7"], trace: "off", screenshot: "off", video: "off" },
       testMatch: /performance\.spec\.ts/,
       fullyParallel: false,
       retries: 1,
@@ -49,10 +51,10 @@ export default defineConfig({
         env: {
           SITE_URL: "https://kemdia.example",
           APP_ENV: "e2e",
-          // S3-T05 : en CI, le site lit la vraie API (E2E_API_URL) ; sans elle, le fichier de démonstration
-          ...(process.env.E2E_API_URL
-            ? { API_URL: process.env.E2E_API_URL, API_INTERNAL_KEY: process.env.E2E_API_KEY ?? "" }
-            : {}),
+          // Le site lit toujours l'API (S3-T08) : en CI, celle du job ; sur le poste, celle de `pnpm dev`
+          // (même clé que apps/api/.env, voir README). Sans elles, le serveur refuse de démarrer.
+          API_URL: process.env.E2E_API_URL ?? "http://localhost:4000",
+          API_INTERNAL_KEY: process.env.E2E_API_KEY ?? process.env.API_INTERNAL_KEY ?? "",
         },
       },
 });

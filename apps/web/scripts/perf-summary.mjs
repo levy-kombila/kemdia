@@ -16,6 +16,17 @@ if (results.length === 0) {
 }
 const order = ["Accueil", "Catégorie", "Fiche produit", "Recherche", "Panier"];
 results.sort((a, b) => order.indexOf(a.page) - order.indexOf(b.page));
+
+// --annotations : une ligne par page, en annotation GitHub (lisible dans la PR et par l'API GitHub, S3-T08)
+if (process.argv.includes("--annotations")) {
+  for (const r of results) {
+    console.log(
+      `::notice title=Performance — ${r.page}::premier affichage ${r.fcp} ms · plus grand élément ${r.lcp} ms · ` +
+        `décalages ${r.cls} · blocage ${r.tbt} ms (budget ${r.budget.tbt}) · JS ${r.jsKb} Ko · total ${r.totalKb} Ko`,
+    );
+  }
+  process.exit(0);
+}
 const cell = (v, max, soft = false) =>
   v <= max ? `${v} / ${max}` : `**${v}** / ${max} ${soft ? "⚠️" : "❌"}`;
 const { network, cpu } = results[0];

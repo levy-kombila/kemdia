@@ -9,10 +9,9 @@ import type {
 
 /**
  * Port du catalogue côté site (architecture hexagonale) : ce dont les pages ont besoin, sans dire d'où ça vient.
- * Deux adaptateurs, choisis au démarrage (lib/config/catalog-source.ts) :
- * - api-catalog.ts : l'API Kemdia (`/api/v1`) ;
- * - file-catalog.ts : le fichier de démonstration (développement sans base, jusqu'au S3-T08).
- * Les deux renvoient les objets du contrat partagé (@kemdia/contracts) : les pages ne voient pas la différence.
+ * Un seul adaptateur depuis le S3-T08 : api-catalog.ts, l'API Kemdia (`/api/v1`), configuré au démarrage
+ * (lib/config/catalog-source.ts). Le port reste : les pages ne dépendent que des objets du contrat (@kemdia/contracts),
+ * et les tests peuvent fournir un faux catalogue.
  */
 export interface CatalogPort {
   categoryTree(): Promise<CategoryNode[]>;

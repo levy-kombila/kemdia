@@ -22,12 +22,8 @@ type Budget = typeof BUDGET;
 
 /** Pages d'arrivée (liens WhatsApp, Google) + panier. Les exceptions sont justifiées et suivies comme dette. */
 const PAGES: { name: string; path: string; override?: Partial<Budget>; why?: string }[] = [
-  {
-    name: "Accueil",
-    path: "/",
-    override: { tbt: 650 },
-    why: "≈ 50 cartes produits à rendre interactives ; objectif 300 ms avec le chargement progressif de l'API (S3)",
-  },
+  // Accueil : budget commun depuis le S3-T08 (zones chargées progressivement, mise en page différée hors écran)
+  { name: "Accueil", path: "/" },
   { name: "Catégorie", path: "/categorie/high-tech" },
   { name: "Fiche produit", path: "/produit/apple-google-pixel-modern-blanc" },
   { name: "Recherche", path: "/recherche?q=noir" },

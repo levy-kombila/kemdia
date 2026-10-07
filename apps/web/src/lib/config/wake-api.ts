@@ -5,7 +5,7 @@ import type { CatalogSource } from "./catalog-source";
  * Quand un visiteur réveille le site, l'API dort encore : le site la réveille aussitôt, au démarrage,
  * sans attendre la première page. On gagne le temps de démarrage du site sur celui de l'API.
  *
- * Seulement avec `APP_ENV=demo` et un catalogue lu dans l'API. Ne bloque jamais le démarrage :
+ * Seulement avec `APP_ENV=demo`. Ne bloque jamais le démarrage :
  * la requête part en arrière-plan, et un échec est simplement noté dans le journal.
  * `/api/health` est public : aucune clé n'est envoyée.
  */
@@ -18,7 +18,7 @@ export async function wakeCatalogApi(
   source: CatalogSource,
   options: { fetch?: Fetch; log?: (message: string) => void } = {},
 ): Promise<"skipped" | "awake" | "failed"> {
-  if (appEnv !== "demo" || source.kind !== "api") return "skipped";
+  if (appEnv !== "demo") return "skipped";
   const { fetch: fetchImpl = fetch, log = console.log } = options;
   const started = Date.now();
   try {

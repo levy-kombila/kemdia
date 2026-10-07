@@ -103,8 +103,9 @@ pnpm dev
 
 Ouvrez <http://localhost:3000> 🎉
 
-Le site lit alors le **fichier de démonstration**. Pour l'API et la base (à partir du Sprint 3), suivez
-[base-de-donnees.md](base-de-donnees.md) (§1 à §3 : démarrer PostgreSQL, importer le catalogue, brancher le site sur l'API).
+Depuis le S3-T08, le site lit **toujours** le catalogue dans l'API : avant `pnpm dev`, suivez
+[base-de-donnees.md](base-de-donnees.md) (§1 à §3 : démarrer PostgreSQL, importer le catalogue, mettre la clé interne).
+Sans `API_URL` ni clé, le site refuse de démarrer et nomme la variable manquante.
 
 **Après chaque `git pull`** : relancez `pnpm install` (nouvelles dépendances, client Prisma régénéré).
 

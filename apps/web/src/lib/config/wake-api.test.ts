@@ -3,7 +3,6 @@ import type { CatalogSource } from "./catalog-source";
 import { wakeCatalogApi } from "./wake-api";
 
 const API: CatalogSource = {
-  kind: "api",
   url: "https://kemdia-api.onrender.com",
   key: "k".repeat(40),
   timeoutMs: 60_000,
@@ -21,12 +20,11 @@ describe("Réveil de l'API au démarrage du site (démo Render, S3-T07)", () => 
     expect(log).toHaveBeenCalledWith(expect.stringMatching(/prête en/));
   });
 
-  it("rien hors démo, ni en mode fichier", async () => {
+  it("rien hors démo", async () => {
     const fetch = vi.fn();
     for (const env of [undefined, "local", "staging", "production"]) {
       await expect(wakeCatalogApi(env, API, { fetch })).resolves.toBe("skipped");
     }
-    await expect(wakeCatalogApi("demo", { kind: "file" }, { fetch })).resolves.toBe("skipped");
     expect(fetch).not.toHaveBeenCalled();
   });
 

@@ -33,14 +33,15 @@ en `apps/api/.env` et modifier `DATABASE_URL`. Le fichier `.env` n'est **jamais*
 
 ## 3. Brancher le site sur l'API (S3-T05)
 
-Sans réglage, le site lit le **fichier de démonstration**. Pour qu'il lise l'API (et donc la base) :
+Le site lit **toujours** le catalogue dans l'API (le fichier de démonstration a été retiré au S3-T08).
+Il lui faut l'adresse de l'API et une clé partagée ; sans elles, il refuse de démarrer :
 
 1. Générer une clé (une seule fois) :
    ```bash
    node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
    ```
 2. Copier `apps/api/.env.example` en `apps/api/.env` et y mettre `API_INTERNAL_KEY=<la clé>`.
-3. Copier `apps/web/.env.example` en `apps/web/.env.local`, décommenter `API_URL=http://localhost:4000` et `API_INTERNAL_KEY=<la même clé>`.
+3. Copier `apps/web/.env.example` en `apps/web/.env.local` et y mettre `API_INTERNAL_KEY=<la même clé>` (`API_URL=http://localhost:4000` y est déjà).
 4. `pnpm dev`. Le terminal du site affiche `Kemdia — catalogue : API http://localhost:4000`.
 
 Sous **PowerShell**, écrire ces fichiers en ASCII (sinon Windows ajoute des caractères invisibles en tête de fichier et la variable n'est pas lue) :
@@ -52,7 +53,7 @@ Set-Content -Encoding ascii apps\web\.env.local "API_URL=http://localhost:4000`n
 ```
 
 Si l'API est arrêtée, les pages du catalogue affichent « Une erreur est survenue » : c'est voulu, le site ne bascule **jamais**
-tout seul sur le fichier ([ADR-0011](../architecture/adr/0011-site-branche-api.md)). Pour revenir au fichier : retirer `API_URL` de `apps/web/.env.local`.
+sur des données de secours ([ADR-0011](../architecture/adr/0011-site-branche-api.md)). Relancer l'API (`pnpm dev`) suffit.
 
 ## 4. Tout lancer avec les images de production (S3-T06)
 
@@ -64,7 +65,7 @@ pnpm --filter @kemdia/api db:seed   # dans un autre terminal, une fois : catalog
 ```
 
 - `api-migrate` applique les migrations puis s'arrête (« exited with code 0 ») ; l'API ne démarre qu'après.
-- Le site lit l'API si `API_INTERNAL_KEY=<clé>` est dans un fichier `.env` **à la racine** du dépôt ; sinon il lit le fichier de démonstration.
+- Le site a besoin de `API_INTERNAL_KEY=<clé>` dans un fichier `.env` **à la racine** du dépôt ; sans elle, il refuse de démarrer (le reste démarre).
   PowerShell (clé générée comme au §3) : `Add-Content -Encoding ascii .env "API_INTERNAL_KEY=$cle"`.
 - Dans l'image, les migrations se lancent avec `node dist/database/migrate.js` : c'est ce que fera chaque déploiement, avant la nouvelle API.
 

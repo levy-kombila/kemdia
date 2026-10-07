@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués  |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests      |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                       |
+| **1.9** | 2026-10-07 | S3     | Dette S3-T08 : mode fichier retiré (§3.2, §5.9), accueil chargé zone par zone (§5.2), TypeScript 6 / ESLint 10 (§4, ADR-0014), §7, §9       |
 | **1.8** | 2026-10-07 | S3     | Démo Render avec l'API et une base Neon (ADR-0013) : §3.2, §3.5, §3.8 démarrage de démo, §5.9, §7 jobs image de l'API et démo, §8, §9       |
 | **1.7** | 2026-10-06 | S3     | Image Docker de l'API et migrations au déploiement (ADR-0012) : §3.5, §3.8 (nouvelle), §6.3, §7 job « image de l'API », §8, §9              |
 | **1.6** | 2026-10-06 | S3     | Le site lit l'API (ADR-0011) : §3.2, §3.7 contrat `packages/contracts`, §5.1, §5.2, §5.7 panier par variante, §5.9 (nouvelle), §6.2, §7, §9 |
@@ -151,6 +152,9 @@ le navigateur ne l'appelle jamais directement. Le fichier de démonstration ne s
 **État au S3-T07** : la démo publique fait tourner les **trois** conteneurs — site et API sur Render Free, PostgreSQL sur Neon Free —
 ([ADR-0013](adr/0013-demo-render-api-neon.md), §8). Sur Render gratuit, le site appelle l'API par son **adresse publique** (HTTPS + clé interne) :
 un service gratuit ne reçoit pas de trafic privé. Le fichier de démonstration ne sert plus qu'au développement sans base (retrait au S3-T08).
+
+**État au S3-T08** : le site lit **toujours** l'API, dans tous les environnements (développement compris) ; sans `API_URL` ni clé,
+il refuse de démarrer. Les données de démonstration ne servent plus qu'à remplir la base (`db:seed`, démo Render).
 
 ### 3.3 Modules du backend (cible MVP)
 
@@ -395,21 +399,22 @@ flowchart LR
 
 ## 4. Choix technologiques
 
-| Couche    | Choix                                                                  | Version     | Justification                                                                                        |
-| --------- | ---------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------- |
-| Langage   | TypeScript (strict)                                                    | 5.9         | Un seul langage front/back — [ADR-0002](adr/0002-stack-typescript-nextjs.md)                         |
-| Frontend  | Next.js (App Router) + React                                           | 16.3 / 19.2 | SSR/SSG, SEO, Server Components                                                                      |
-| Style     | Tailwind CSS                                                           | 4           | Design tokens centralisés, CSS final minimal                                                         |
-| Icônes    | lucide-react                                                           | —           | Seules les icônes utilisées sont embarquées                                                          |
-| Polices   | Inter + Montserrat (auto-hébergées, @fontsource)                       | —           | Aucune requête vers Google : vie privée + CSP stricte                                                |
-| Tests     | Vitest + Testing Library                                               | 5           | Rapide, compatible TypeScript                                                                        |
-| Monorepo  | pnpm + Turborepo                                                       | 10 / 2      | [ADR-0003](adr/0003-monorepo.md)                                                                     |
-| Conteneur | Docker (Node 22 Alpine, utilisateur non-root)                          | —           | Même artefact en préprod et prod                                                                     |
-| CI/CD     | GitHub Actions                                                         | —           | Intégré au dépôt                                                                                     |
-| Backend   | NestJS (modules ES, Express 5) + Zod + pino                            | 12 / 4 / 10 | S3 — [ADR-0006](adr/0006-monolithe-modulaire-7-modules.md), [ADR-0007](adr/0007-socle-api-nestjs.md) |
-| Base      | PostgreSQL + Prisma (adaptateur `pg`), un schéma par module            | 18 / 7.10   | S3 — [ADR-0008](adr/0008-postgresql-prisma.md)                                                       |
-| API       | OpenAPI 3.1 (depuis Zod), Swagger UI auto-hébergé, `@nestjs/throttler` | 3.1 / 5 / 6 | S3-T04 — [ADR-0010](adr/0010-api-rest-openapi.md)                                                    |
-| Contrat   | Paquet `@kemdia/contracts` (Zod), partagé par l'API et le site         | 4           | S3-T05 — [ADR-0011](adr/0011-site-branche-api.md)                                                    |
+| Couche    | Choix                                                                  | Version     | Justification                                                                                                                                                     |
+| --------- | ---------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Langage   | TypeScript (strict)                                                    | 6.0         | Un seul langage front/back — [ADR-0002](adr/0002-stack-typescript-nextjs.md) ; 6.0 « pont » vers la 7 ([ADR-0014](adr/0014-versions-outils-typescript-eslint.md)) |
+| Frontend  | Next.js (App Router) + React                                           | 16.3 / 19.2 | SSR/SSG, SEO, Server Components                                                                                                                                   |
+| Style     | Tailwind CSS                                                           | 4           | Design tokens centralisés, CSS final minimal                                                                                                                      |
+| Icônes    | lucide-react                                                           | —           | Seules les icônes utilisées sont embarquées                                                                                                                       |
+| Polices   | Inter + Montserrat (auto-hébergées, @fontsource)                       | —           | Aucune requête vers Google : vie privée + CSP stricte                                                                                                             |
+| Tests     | Vitest + Testing Library                                               | 5           | Rapide, compatible TypeScript                                                                                                                                     |
+| Qualité   | ESLint (configuration « à plat »)                                      | 10 / 9      | 10 pour l'API et le contrat, 9 pour le site tant que `eslint-config-next` ne suit pas ([ADR-0014](adr/0014-versions-outils-typescript-eslint.md))                 |
+| Monorepo  | pnpm + Turborepo                                                       | 10 / 2      | [ADR-0003](adr/0003-monorepo.md)                                                                                                                                  |
+| Conteneur | Docker (Node 22 Alpine, utilisateur non-root)                          | —           | Même artefact en préprod et prod                                                                                                                                  |
+| CI/CD     | GitHub Actions                                                         | —           | Intégré au dépôt                                                                                                                                                  |
+| Backend   | NestJS (modules ES, Express 5) + Zod + pino                            | 12 / 4 / 10 | S3 — [ADR-0006](adr/0006-monolithe-modulaire-7-modules.md), [ADR-0007](adr/0007-socle-api-nestjs.md)                                                              |
+| Base      | PostgreSQL + Prisma (adaptateur `pg`), un schéma par module            | 18 / 7.10   | S3 — [ADR-0008](adr/0008-postgresql-prisma.md)                                                                                                                    |
+| API       | OpenAPI 3.1 (depuis Zod), Swagger UI auto-hébergé, `@nestjs/throttler` | 3.1 / 5 / 6 | S3-T04 — [ADR-0010](adr/0010-api-rest-openapi.md)                                                                                                                 |
+| Contrat   | Paquet `@kemdia/contracts` (Zod), partagé par l'API et le site         | 4           | S3-T05 — [ADR-0011](adr/0011-site-branche-api.md)                                                                                                                 |
 
 ## 5. Architecture du frontend (`apps/web`)
 
@@ -459,12 +464,22 @@ packages/contracts/          Schémas Zod et constantes partagés avec l'API ; d
 | Compte, favoris, commande, pages d'identité | Statique (build)                                 | Contenu identique pour tous ; panier et favoris remplis côté navigateur |
 | Toute page qui lit le catalogue (S3-T05)    | À la demande (`connection()`)                    | Aucun appel à l'API pendant `next build` (§5.9) ; cache de 60 s         |
 | Accueil, fiche produit                      | À la demande (S2-T05)                            | Liens absolus des aperçus WhatsApp tirés de `SITE_URL` au démarrage     |
+| Accueil — bas de page (S3-T08)              | Zones `<Suspense>` envoyées au fil de l'eau      | Haut de page envoyé sans attendre ; voir ci-dessous                     |
 | Aperçus `opengraph-image`                   | À la demande (S3-T05)                            | Image 1200 × 630 ; prix lu dans l'API                                   |
 | Catégorie, recherche, promotions            | Dynamique                                        | Dépend de `?tri=`, `?page=` et des filtres                              |
 | Infos                                       | Statique, liste fermée (`dynamicParams = false`) | Toute autre URL → 404                                                   |
 
 Composants **serveur** par défaut ; seuls les éléments interactifs sont des composants **client**
 (`"use client"`) : panier, mini-panier, menu, modale de ville, galerie, compte à rebours, tri.
+
+**Accueil allégé (S3-T08)** — ~50 cartes produits sous la ligne de flottaison bloquaient le téléphone au chargement :
+
+| Technique                                                  | Effet                                                                                                                                                       |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Une zone `<Suspense>` par section (`HomeSections.tsx`)     | Le haut de page part sans attendre les rangées du bas                                                                                                       |
+| `content-visibility: auto` (sections du bas, pied de page) | Le navigateur ne calcule leur mise en page qu'à l'approche ; hauteur réservée (`contain-intrinsic-size`)                                                    |
+| Hydratation à la demande (`HydrateWhenVisible`)            | Le HTML est là dès le début (référencement), React ne le rend interactif qu'à 400 px de l'écran ou au focus clavier ; navigation côté client : rendu direct |
+| Un lien de moins par carte                                 | L'image n'a plus son propre lien : celui du titre couvre déjà toute la carte                                                                                |
 
 ### 5.3 Correspondance avec l'ancien projet Django
 
@@ -580,19 +595,18 @@ Décision : [ADR-0011](adr/0011-site-branche-api.md).
 flowchart LR
     pages[Pages et en-tête] --> idx[lib/catalog/index.ts<br/>connection + garde de build]
     idx --> port{{CatalogPort}}
-    port -->|API_URL définie| api[api-catalog.ts<br/>HTTP + clé interne<br/>délai, cache 60 s, contrat vérifié]
-    port -->|API_URL absente, hors production| file[file-catalog.ts<br/>@kemdia/contracts/demo]
+    port --> api[api-catalog.ts<br/>HTTP + clé interne<br/>délai, cache 60 s, contrat vérifié]
     api --> v1[(API /api/v1)]
 ```
 
-| Configuration (au démarrage)                 | Comportement                                                                                                 |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `API_URL` + `API_INTERNAL_KEY`               | Catalogue lu dans l'API **uniquement** ; API muette, en retard ou réponse hors contrat → page d'erreur (500) |
-| `API_URL` absente                            | Fichier de démonstration (développement sans base ; retrait prévu au S3-T08)                                 |
-| `APP_ENV=production` sans `API_URL`          | **Le serveur refuse de démarrer** (code 1, message en français)                                              |
-| Clé sans `API_URL`, adresse ou clé invalides | Refus de démarrer                                                                                            |
+| Configuration (au démarrage)                          | Comportement                                                                                  |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `API_URL` + `API_INTERNAL_KEY`                        | Catalogue lu dans l'API ; API muette, en retard ou réponse hors contrat → page d'erreur (500) |
+| `API_URL` ou clé absente (tout environnement, S3-T08) | **Le serveur refuse de démarrer** (code 1, message en français nommant la variable)           |
+| Adresse ou clé invalides                              | Refus de démarrer                                                                             |
 
-- **Jamais de bascule automatique** de l'API vers le fichier : une panne doit se voir, pas afficher de faux prix.
+- **Un seul adaptateur** depuis le S3-T08 (le mode fichier est retiré). Jamais de données de secours : une panne doit se voir, pas afficher de faux prix.
+  Les tests du site utilisent une fausse API en mémoire (`lib/catalog/test-fake-api.ts`).
 - **Construction** : `lib/catalog` appelle `connection()` (la page devient dynamique) puis refuse toute lecture si `NEXT_PHASE` est la construction.
   Une page qui tenterait de lire le catalogue au build fait donc échouer `next build` avec un message renvoyant à l'ADR-0011.
 - **En-tête** : rendu sur toutes les pages, il affiche un menu des catégories vide si l'API est indisponible (et seulement dans ce cas) ;
@@ -600,7 +614,7 @@ flowchart LR
 - **Panier** (`kemdia.cart.v2`) : une ligne = une variante ; les paniers `v1` sont effacés au chargement. Les **favoris** restent par produit (UUID).
 - Variables : `API_URL`, `API_INTERNAL_KEY` (secret), `CATALOG_TIMEOUT_MS` (5000 par défaut, 90 000 au plus) — voir `apps/web/.env.example`.
 - **Démo Render (S3-T07)** : au démarrage, le site réveille l'API en arrière-plan (`lib/config/wake-api.ts`, seulement avec `APP_ENV=demo`) ;
-  `CATALOG_TIMEOUT_MS=60000` laisse au premier visiteur le temps du réveil. `/api/health` du site indique la source (`"catalog": "api"` ou `"file"`).
+  `CATALOG_TIMEOUT_MS=60000` laisse au premier visiteur le temps du réveil. `/api/health` du site indique `"catalog": "api"` (toujours, depuis le S3-T08 ; gardé pour le contrôle de la démo).
 
 ## 6. Sécurité
 
@@ -706,7 +720,7 @@ flowchart LR
 | Job « image de l'API » (S3-T06)   | Construction, Trivy, migrations sur une base **vide** puis relance, refus d'une configuration fausse, API en lecture seule → `database: ok`, publication GHCR (main) |
 | Job « image de l'API » (S3-T07)   | Démarrage de démo sur une base **vide** (migrations + 50 produits + API), redémarrage sans doublon, refus hors démo ; publication Docker Hub publique (main)         |
 | Job « démo » (S3-T07)             | Render : API d'abord (version + `database: ok`), puis site (version, en-têtes, fiche produit, `catalog: "api"`) ; chaque partie ignorée sans son deploy hook         |
-| Job « image » (S3-T05)            | L'image démarre dans les 3 configurations : production sans API (refus), démo (fichier), API muette (500)                                                            |
+| Job « image » (S3-T05, S3-T08)    | Sans API, l'image refuse de démarrer (production comme démo) ; API muette → page d'erreur (500), jamais de catalogue de secours                                      |
 | `deploy/`                         | Scripts et configuration serveur (voir §8)                                                                                                                           |
 | `.husky/pre-commit`               | Formatage automatique avant chaque commit                                                                                                                            |
 
@@ -774,8 +788,8 @@ flowchart LR
 | Unitaires (logique) | Vitest                                                | 78 tests : formatage, livraison (dont dates), panier, catalogue, paramètres d'URL, identité (S2)                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Composants          | Testing Library                                       | 16 tests : carte produit, saisie OTP, parcours d'identité, carrousel, barre d'onglets (S2)                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Bout en bout        | Playwright + axe-core                                 | 16 scénarios × 2 appareils (téléphone Pixel 7, ordinateur) : achat complet, filtres, favoris, partage, vendeur, en-têtes de sécurité, XSS, accessibilité WCAG AA de 7 pages (S2) ; **contre la vraie API** depuis le S3-T05                                                                                                                                                                                                                                                                                        |
-| Performance         | Playwright + Web Vitals (Chrome DevTools)             | 5 pages, médiane de 3 chargements à froid en 3G : premier affichage, plus grand élément, décalages, blocage, poids ; tableau dans le résumé de la CI (S2-T08)                                                                                                                                                                                                                                                                                                                                                      |
-| Site — catalogue    | Vitest                                                | S3-T05 : 147 tests du site au total (+27), dont 31 sur la lecture du catalogue : configuration (les 3 cas : API, fichier, production sans API refusée), adaptateur HTTP (délai, 404, réponse hors contrat, cache, clé interne), adaptateur fichier (mêmes résultats que l'API), garde de construction ; panier par variante (`kemdia.cart.v2`)                                                                                                                                                                     |
+| Performance         | Playwright + Web Vitals (Chrome DevTools)             | 5 pages, médiane de 3 chargements à froid en 3G : premier affichage, plus grand élément, décalages, blocage, poids ; tableau dans le résumé de la CI et annotations (S2-T08) ; **S3-T08** : budget commun pour l'accueil (blocage ≤ 300 ms, indicatif), mesure sans trace Playwright (elle gonflait le blocage)                                                                                                                                                                                                    |
+| Site — catalogue    | Vitest                                                | S3-T08 : 143 tests du site ; lecture du catalogue testée contre une **fausse API en mémoire** (sélections de l'accueil, ronds, tuiles, produits similaires, plan du site) ; configuration (refus sans API dans tout environnement) ; adaptateur HTTP (délai, 404, réponse hors contrat, cache, clé interne), garde de construction ; hydratation à la demande ; panier par variante (`kemdia.cart.v2`)                                                                                                             |
 | Contrat partagé     | Vitest                                                | 8 tests (S3-T05) : schémas, OpenAPI, identifiants de démonstration stables ; l'API vérifie que ses règles (quantité maximale) sont celles du contrat                                                                                                                                                                                                                                                                                                                                                               |
 | API (S3)            | Vitest + Supertest                                    | 134 tests (S3-T06 : script de migration — configuration vérifiée, aucune valeur affichée, échec et délai ; S3-T05 : paramètre `badge`, tri `ventes`, alignement sur le contrat ; S3-T04 : routes HTTP, contrat, limitation de débit, documentation OpenAPI ; dont 46 sur le catalogue : domaine, BR-001, recherche, import — S3-T03) : configuration, journaux, en-têtes de sécurité, CORS, format des erreurs, versionnement des routes, santé de la base, architecture du code et du schéma Prisma (S3-T01, T02) |
 | API — intégration   | Vitest + vraie base PostgreSQL 18                     | 35 tests (S3-T05 : badges, tri `ventes`, variante par défaut d'une liste), dont 6 de contrat HTTP sur la vraie base (S3-T04 : chaque catégorie, chaque produit, chaque page validés par leur schéma) et 21 sur le catalogue : listes, recherche, filtres, tri, compteurs **comparés à la logique du site**, BR-001, contraintes SQL, 3 niveaux de catégories (S3-T03) ; et : santé, schémas créés, requête trop longue interrompue, injection SQL, base injoignable → 503 sans fuite (S3-T02)                      |

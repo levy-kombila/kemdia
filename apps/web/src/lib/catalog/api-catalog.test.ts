@@ -1,11 +1,10 @@
 import type { ProductPage } from "@kemdia/contracts";
-import { createFileCatalog } from "./file-catalog";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CACHE_TTL_MS, createApiCatalog } from "./api-catalog";
 import { CatalogUnavailableError } from "./port";
+import { FAKE_PRODUCTS } from "./test-fake-api";
 
 const KEY = "cle-interne-de-test-".padEnd(40, "x");
-const file = createFileCatalog();
 
 type Call = { url: string; init: RequestInit };
 
@@ -22,8 +21,14 @@ function fakeFetch(respond: (url: string) => Response | Promise<Response>) {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
-async function page(): Promise<ProductPage> {
-  return file.products({ pageSize: 2 });
+function page(): Promise<ProductPage> {
+  return Promise.resolve({
+    items: FAKE_PRODUCTS.slice(0, 2),
+    page: 1,
+    pageSize: 2,
+    total: FAKE_PRODUCTS.length,
+    totalPages: 5,
+  });
 }
 
 afterEach(() => vi.restoreAllMocks());

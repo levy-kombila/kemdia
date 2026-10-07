@@ -13,38 +13,37 @@ const problems = (env: Record<string, string | undefined>): readonly string[] =>
   return [];
 };
 
-describe("Source du catalogue choisie au démarrage (S3-T05)", () => {
-  it("cas 1 — API_URL définie : l'API uniquement", () => {
+describe("Configuration du catalogue au démarrage (S3-T05, mode fichier retiré au S3-T08)", () => {
+  it("API_URL + clé : l'API, adresse normalisée", () => {
     expect(
       resolveCatalogSource({
         API_URL: "http://api:4000/",
         API_INTERNAL_KEY: KEY,
         APP_ENV: "production",
       }),
-    ).toEqual({ kind: "api", url: "http://api:4000", key: KEY, timeoutMs: 5_000 });
+    ).toEqual({ url: "http://api:4000", key: KEY, timeoutMs: 5_000 });
   });
 
-  it("cas 2 — API_URL absente : le fichier de démonstration (sauf en production)", () => {
-    for (const APP_ENV of [undefined, "local", "e2e", "demo", "staging"]) {
-      expect(resolveCatalogSource({ APP_ENV })).toEqual({ kind: "file" });
+  it("API_URL absente : refus de démarrer dans TOUS les environnements (plus de fichier de démonstration)", () => {
+    for (const APP_ENV of [undefined, "local", "e2e", "demo", "staging", "production"]) {
+      expect(() => resolveCatalogSource({ APP_ENV, API_INTERNAL_KEY: KEY })).toThrow(
+        SiteConfigError,
+      );
+      expect(problems({ APP_ENV, API_INTERNAL_KEY: KEY })).toEqual([
+        expect.stringMatching(/^API_URL : obligatoire \(adresse de l'API/),
+      ]);
     }
     // Variable vide = absente
-    expect(resolveCatalogSource({ API_URL: "  " })).toEqual({ kind: "file" });
+    expect(problems({ API_URL: "  ", API_INTERNAL_KEY: KEY })).toHaveLength(1);
   });
 
-  it("cas 3 — APP_ENV=production sans API_URL : le site refuse de démarrer", () => {
-    expect(() => resolveCatalogSource({ APP_ENV: "production" })).toThrow(SiteConfigError);
-    expect(problems({ APP_ENV: "production" })).toEqual([
-      "API_URL : obligatoire en production (le fichier de démonstration y est interdit)",
-    ]);
-  });
-
-  it("la clé interne est obligatoire avec l'API, et inutile sans elle", () => {
+  it("clé interne absente : refus ; rien du tout : les deux variables sont nommées", () => {
     expect(problems({ API_URL: "http://api:4000" })).toEqual([
-      expect.stringMatching(/^API_INTERNAL_KEY : obligatoire avec API_URL/),
+      expect.stringMatching(/^API_INTERNAL_KEY : obligatoire/),
     ]);
-    expect(problems({ API_INTERNAL_KEY: KEY })).toEqual([
-      expect.stringMatching(/^API_INTERNAL_KEY définie sans API_URL/),
+    expect(problems({})).toEqual([
+      expect.stringMatching(/^API_URL : /),
+      expect.stringMatching(/^API_INTERNAL_KEY : /),
     ]);
   });
 
@@ -75,6 +74,5 @@ describe("Source du catalogue choisie au démarrage (S3-T05)", () => {
     );
     expect(text).toBe("API http://api:4000 (délai 5000 ms)");
     expect(text).not.toContain(KEY);
-    expect(describeCatalogSource({ kind: "file" })).toMatch(/fichier de démonstration/);
   });
 });
