@@ -4,14 +4,13 @@ import { z } from "zod";
 z.config(z.locales.fr());
 
 /**
- * D'où le site lit le catalogue (décision S3-T05, ADR-0011). Choisi UNE fois, au démarrage du serveur :
+ * Où le site lit le catalogue (ADR-0011, mode fichier retiré au S3-T08) : **toujours dans l'API**.
+ * La configuration est vérifiée UNE fois, au démarrage du serveur :
  *
- * | Configuration                        | Source                                                          |
- * | ------------------------------------ | --------------------------------------------------------------- |
- * | `API_URL` définie                    | l'API, uniquement. Si elle ne répond pas : page d'erreur.        |
- * |                                      | Jamais de bascule automatique sur le fichier.                    |
- * | `API_URL` absente                    | le fichier de démonstration (développement sans base)            |
- * | `API_URL` absente, `APP_ENV=production` | le site REFUSE de démarrer                                    |
+ * | Configuration                    | Résultat                                                          |
+ * | -------------------------------- | ----------------------------------------------------------------- |
+ * | `API_URL` + `API_INTERNAL_KEY`   | le catalogue est lu dans l'API ; si elle ne répond pas : erreur   |
+ * | l'une des deux absente           | le serveur REFUSE de démarrer (message en français)               |
  *
  * Les messages d'erreur nomment les variables, jamais leur valeur (la clé est un secret).
  */
@@ -19,8 +18,7 @@ z.config(z.locales.fr());
 export const APP_ENVS = ["local", "e2e", "demo", "staging", "production"] as const;
 export type AppEnv = (typeof APP_ENVS)[number];
 
-export type CatalogSource =
-  { kind: "api"; url: string; key: string; timeoutMs: number } | { kind: "file" };
+export type CatalogSource = { url: string; key: string; timeoutMs: number };
 
 export class SiteConfigError extends Error {
   constructor(readonly problems: readonly string[]) {
@@ -65,28 +63,16 @@ export function resolveCatalogSource(env: Record<string, string | undefined>): C
       parsed.error.issues.map((i) => `${i.path.join(".") || "(racine)"} : ${i.message}`),
     );
   }
-  const { APP_ENV, API_URL, API_INTERNAL_KEY, CATALOG_TIMEOUT_MS } = parsed.data;
+  const { API_URL, API_INTERNAL_KEY, CATALOG_TIMEOUT_MS } = parsed.data;
 
-  if (!API_URL) {
-    if (APP_ENV === "production") {
-      throw new SiteConfigError([
-        "API_URL : obligatoire en production (le fichier de démonstration y est interdit)",
-      ]);
-    }
-    if (API_INTERNAL_KEY) {
-      throw new SiteConfigError([
-        "API_INTERNAL_KEY définie sans API_URL : configuration incomplète (ajoutez API_URL ou retirez la clé)",
-      ]);
-    }
-    return { kind: "file" };
-  }
-  if (!API_INTERNAL_KEY) {
-    throw new SiteConfigError([
-      "API_INTERNAL_KEY : obligatoire avec API_URL (sans elle, tous les visiteurs partagent la limite de débit de l'API)",
-    ]);
-  }
+  const missing = [
+    !API_URL &&
+      "API_URL : obligatoire (adresse de l'API, ex. http://localhost:4000 — voir README, « Démarrage rapide »)",
+    !API_INTERNAL_KEY &&
+      "API_INTERNAL_KEY : obligatoire (même clé que dans apps/api/.env ; sans elle, tous les visiteurs partagent la limite de débit de l'API)",
+  ].filter((problem): problem is string => Boolean(problem));
+  if (!API_URL || !API_INTERNAL_KEY) throw new SiteConfigError(missing);
   return {
-    kind: "api",
     url: new URL(API_URL).href.replace(/\/+$/, ""),
     key: API_INTERNAL_KEY,
     timeoutMs: CATALOG_TIMEOUT_MS,
@@ -95,7 +81,5 @@ export function resolveCatalogSource(env: Record<string, string | undefined>): C
 
 /** Description lisible, sans secret, pour le journal de démarrage. */
 export function describeCatalogSource(source: CatalogSource): string {
-  return source.kind === "api"
-    ? `API ${source.url} (délai ${source.timeoutMs} ms)`
-    : "fichier de démonstration (aucune API)";
+  return `API ${source.url} (délai ${source.timeoutMs} ms)`;
 }

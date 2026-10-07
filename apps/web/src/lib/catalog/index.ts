@@ -12,7 +12,6 @@ import {
 import { connection } from "next/server";
 import { catalogSource } from "@/lib/config/server-config";
 import { createApiCatalog } from "./api-catalog";
-import { createFileCatalog } from "./file-catalog";
 import type { CatalogPort } from "./port";
 
 /**
@@ -32,8 +31,7 @@ async function catalog(): Promise<CatalogPort> {
   await connection();
   if (process.env.NEXT_PHASE === "phase-production-build") throw new Error(BUILD_READ_ERROR);
   if (!instance) {
-    const source = catalogSource();
-    instance = source.kind === "api" ? createApiCatalog(source) : createFileCatalog();
+    instance = createApiCatalog(catalogSource());
   }
   return instance;
 }

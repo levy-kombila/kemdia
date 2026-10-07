@@ -49,10 +49,10 @@ export default defineConfig({
         env: {
           SITE_URL: "https://kemdia.example",
           APP_ENV: "e2e",
-          // S3-T05 : en CI, le site lit la vraie API (E2E_API_URL) ; sans elle, le fichier de démonstration
-          ...(process.env.E2E_API_URL
-            ? { API_URL: process.env.E2E_API_URL, API_INTERNAL_KEY: process.env.E2E_API_KEY ?? "" }
-            : {}),
+          // Le site lit toujours l'API (S3-T08) : en CI, celle du job ; sur le poste, celle de `pnpm dev`
+          // (même clé que apps/api/.env, voir README). Sans elles, le serveur refuse de démarrer.
+          API_URL: process.env.E2E_API_URL ?? "http://localhost:4000",
+          API_INTERNAL_KEY: process.env.E2E_API_KEY ?? process.env.API_INTERNAL_KEY ?? "",
         },
       },
 });

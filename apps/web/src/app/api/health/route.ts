@@ -1,5 +1,3 @@
-import { catalogSource } from "@/lib/config/server-config";
-
 /**
  * Point de contrôle de santé, utilisé par :
  * - le healthcheck Docker (le conteneur est « healthy » seulement s'il répond) ;
@@ -15,7 +13,8 @@ export function GET() {
       status: "ok",
       version: process.env.APP_VERSION ?? "dev",
       environment: process.env.APP_ENV ?? "local",
-      catalog: catalogSource().kind,
+      // Toujours « api » depuis le S3-T08 (mode fichier retiré) ; gardé pour le contrôle de la démo dans la CI
+      catalog: "api",
     },
     { headers: { "Cache-Control": "no-store" } },
   );

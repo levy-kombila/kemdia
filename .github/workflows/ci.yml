@@ -289,26 +289,22 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
-      - name: Démarrer l'image dans les 3 configurations du catalogue (S3-T05)
+      - name: Démarrer l'image dans les configurations du catalogue (S3-T05, S3-T08)
         run: |
           wait_up() { for i in $(seq 1 40); do curl -fsS "$1/api/health" >/dev/null 2>&1 && return 0; sleep 1; done; return 1; }
 
-          echo "Cas 3 — APP_ENV=production sans API_URL : le site doit refuser de démarrer"
-          set +e
-          timeout 60 docker run --rm -e APP_ENV=production kemdia-web:scan > cas3.log 2>&1
-          code=$?
-          set -e
-          cat cas3.log
-          [ "$code" -eq 1 ]
-          grep -q "API_URL : obligatoire en production" cas3.log
+          echo "Cas 2 et 3 — sans API_URL (production comme démo) : le site doit refuser de démarrer"
+          for env in production demo; do
+            set +e
+            timeout 60 docker run --rm -e APP_ENV=$env kemdia-web:scan > "sans-api-$env.log" 2>&1
+            code=$?
+            set -e
+            cat "sans-api-$env.log"
+            [ "$code" -eq 1 ]
+            grep -q "API_URL : obligatoire" "sans-api-$env.log"
+          done
 
-          echo "Cas 2 — sans API_URL (démo) : catalogue de démonstration"
-          docker run -d --name cas2 -p 3102:3000 -e APP_ENV=demo kemdia-web:scan
-          wait_up http://127.0.0.1:3102
-          curl -fsS http://127.0.0.1:3102/produit/apple-google-pixel-modern-blanc | grep -q "Apple Google Pixel Modern Blanc"
-          docker logs cas2 | grep -q "catalogue : fichier de démonstration"
-
-          echo "Cas 1 — API_URL définie mais injoignable : page d'erreur, jamais le fichier"
+          echo "Cas 1 — API_URL définie mais injoignable : page d'erreur, jamais de catalogue de secours"
           docker run -d --name cas1 -p 3101:3000 -e APP_ENV=staging \
             -e API_URL=http://127.0.0.1:9 -e API_INTERNAL_KEY="$(openssl rand -hex 32)" kemdia-web:scan
           wait_up http://127.0.0.1:3101
@@ -316,7 +312,7 @@ jobs:
           echo "statut : $status"
           [ "$status" = "500" ]
           if grep -q "Apple Google Pixel Modern Blanc" cas1.html; then echo "::error::produit affiché sans API"; exit 1; fi
-          echo "### Image : les 3 cas de configuration du catalogue sont vérifiés" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Image : sans API le site refuse de démarrer ; API muette → page d'erreur" >> "$GITHUB_STEP_SUMMARY"
 
       # 2. Publier (main uniquement) — le cache rend cette étape quasi instantanée
       # Une seule construction poussée vers GHCR ET Docker Hub : même digest partout

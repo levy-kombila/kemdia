@@ -9,16 +9,26 @@ Plateforme e-commerce pour le Gabon — paiement Mobile Money, livraison dans 13
 
 Prérequis : Node.js 22, pnpm 10 (guide Windows : [docs/guides/installation-windows.md](docs/guides/installation-windows.md)).
 
+**Une seule fois** — le site lit toujours le catalogue dans l'API (S3-T08), qui a besoin de sa base :
+
+1. Copier les modèles de configuration (PowerShell compris, une commande par ligne) :
+   `copy apps/api/.env.example apps/api/.env` puis `copy apps/web/.env.example apps/web/.env.local`
+2. Générer une clé : `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`,
+   et la coller dans **les deux** fichiers, sur la ligne `API_INTERNAL_KEY=` (jamais dans Git).
+   Version PowerShell qui écrit les deux fichiers d'un coup : [base-de-donnees.md §3](docs/guides/base-de-donnees.md#3-brancher-le-site-sur-lapi-s3-t05).
+
+Puis, à chaque fois (Docker Desktop lancé) :
+
 ```bash
 pnpm install
-docker compose up -d db                     # PostgreSQL 18 (Docker Desktop requis)
-pnpm --filter @kemdia/api db:deploy         # crée les tables
+docker compose up -d db                     # PostgreSQL 18
+pnpm --filter @kemdia/api db:deploy         # crée ou met à jour les tables
+pnpm --filter @kemdia/api db:seed           # catalogue de démonstration (relançable sans doublon)
 pnpm dev          # site http://localhost:3000 + API http://localhost:4000/api/health
 ```
 
-Le site fonctionne seul (fichier de démonstration). Pour qu'il lise **l'API** (S3-T05) : `pnpm --filter @kemdia/api db:seed`,
-puis mettre la **même clé** `API_INTERNAL_KEY` dans `apps/api/.env` et `apps/web/.env.local`, avec `API_URL=http://localhost:4000`
-dans `apps/web/.env.local` (modèle : `apps/web/.env.example`). Guide : [docs/guides/base-de-donnees.md](docs/guides/base-de-donnees.md).
+Sans `API_URL` ou sans la clé, le site refuse de démarrer et nomme la variable manquante.
+Guide : [docs/guides/base-de-donnees.md](docs/guides/base-de-donnees.md).
 
 | Commande                                             | Rôle                                                                     |
 | ---------------------------------------------------- | ------------------------------------------------------------------------ |
