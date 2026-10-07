@@ -137,13 +137,13 @@ Les étapes 1 et 2 (site seul) ont été faites au S1. Pour une installation neu
 
 Render → service **`kemdia`** (le site) → **Environment** → ajoutez :
 
-| Nom                  | Valeur                                                |
-| -------------------- | ----------------------------------------------------- |
-| `API_URL`            | `https://kemdia-api.onrender.com` (sans `/` final)    |
-| `API_INTERNAL_KEY`   | **la même clé** que dans le service de l'API (secret) |
-| `CATALOG_TIMEOUT_MS` | `60000` (l'API peut mettre ~1 min à se réveiller)     |
+| Nom                  | Valeur                                                                                             |
+| -------------------- | -------------------------------------------------------------------------------------------------- |
+| `API_URL`            | `https://kemdia-api.onrender.com` (sans `/` final)                                                 |
+| `API_INTERNAL_KEY`   | **la même clé** que dans le service de l'API (secret)                                              |
+| `CATALOG_TIMEOUT_MS` | `90000` (le maximum : l'API peut mettre plus d'1 min à se réveiller, migrations et import compris) |
 
-Enregistrez : Render redémarre le site. Dans ses **Logs** : `Kemdia — catalogue : API https://kemdia-api.onrender.com (délai 60000 ms)`
+Enregistrez : Render redémarre le site. Dans ses **Logs** : `Kemdia — catalogue : API https://kemdia-api.onrender.com (délai 90000 ms)`
 puis `Kemdia — réveil de l'API : prête en … s`. Et `https://kemdia.onrender.com/api/health` contient `"catalog":"api"`.
 
 ### 6. Relier Render au pipeline GitHub
@@ -175,7 +175,7 @@ Le résumé du job affiche l'adresse et la source du catalogue.
 | Logs de l'API : `DATABASE_URL : obligatoire en production`                         | Variable `DATABASE_URL` absente ou vide                                                                                           |
 | Logs de l'API : `Migrations de la base : ÉCHEC`                                    | Adresse Neon fausse, `-pooler` dans l'adresse, ou projet Neon supprimé. Recopier l'adresse directe (étape 3)                      |
 | Render : _image pull failed_ sur l'API                                             | Le dépôt Docker Hub `kemdia-api` est privé : le rendre public (étape 1.4)                                                         |
-| Site : « Une erreur est survenue » à la première visite                            | L'API se réveillait encore : cliquer **Réessayer** au bout d'une minute. Vérifier `CATALOG_TIMEOUT_MS=60000` sur le site          |
+| Site : « Une erreur est survenue » à la première visite                            | L'API se réveillait encore : cliquer **Réessayer** au bout d'une minute. Vérifier `CATALOG_TIMEOUT_MS=90000` sur le site          |
 | Site : erreur sur toutes les pages, logs `[catalogue] … API injoignable`           | `API_URL` fausse, ou clés différentes entre le site et l'API                                                                      |
 | CI : `Le site de démo ne lit pas l'API (catalogue : file)`                         | `API_URL` / `API_INTERNAL_KEY` absentes dans le service du site (étape 5)                                                         |
 | CI : `The requested URL returned error: 502` juste après le déploiement            | Bascule de Render vers la nouvelle version : la CI retente 5 fois (15 s d'écart). Si ça persiste, voir les **Logs** du service    |
