@@ -381,12 +381,26 @@ jobs:
           --health-interval 5s --health-timeout 3s --health-retries 10
     env:
       PUBLISH: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
+      # Docker Hub (S3-T07) : image PUBLIQUE de l'API, tirée par la démo Render sans identifiants.
+      # Mêmes réglages que l'image du site ; dépôt « <utilisateur>/kemdia-api » par défaut.
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_API_REPO: ${{ vars.DOCKERHUB_API_REPO || 'kemdia-api' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - id: meta
-        name: Nom de l'image
-        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}/api" >> "$GITHUB_OUTPUT"
+        name: Noms et étiquettes de l'image
+        run: |
+          ghcr="ghcr.io/${GITHUB_REPOSITORY,,}/api"
+          tags="$ghcr:sha-$GITHUB_SHA"$'\n'"$ghcr:main"
+          if [ -n "$DOCKERHUB_USERNAME" ]; then
+            dockerhub="docker.io/${DOCKERHUB_USERNAME,,}/${DOCKERHUB_API_REPO,,}"
+            tags="$tags"$'\n'"$dockerhub:sha-$GITHUB_SHA"$'\n'"$dockerhub:main"$'\n'"$dockerhub:latest"
+          fi
+          {
+            echo "image=$ghcr"
+            echo "tags<<EOF"; echo "$tags"; echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -397,6 +411,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Connexion à Docker Hub
+        if: env.PUBLISH == 'true' && env.DOCKERHUB_USERNAME != ''
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }} # jeton d'accès Docker Hub, jamais le mot de passe du compte
 
       # 1. Construire l'image localement et la vérifier AVANT toute publication
       - name: Construire l'image
@@ -478,12 +499,57 @@ jobs:
             echo "- Taille : $((size / 1024 / 1024)) Mo"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Démarrage de la démo Render, avec l'image seule (S3-T07)
+        env:
+          ADMIN: postgresql://kemdia:kemdia_ci@127.0.0.1:5432/kemdia
+          DB: postgresql://kemdia:kemdia_ci@127.0.0.1:5432/kemdia_demo
+        run: |
+          # Base VIDE, comme une base Neon toute neuve : la démo doit tout créer seule
+          psql "$ADMIN" -c 'CREATE DATABASE kemdia_demo'
+          demo() {
+            docker run -d --name "$1" --network host --read-only --tmpfs /tmp --cap-drop ALL \
+              --security-opt no-new-privileges -e APP_ENV=demo -e PORT=4001 -e DATABASE_URL="$DB" \
+              kemdia-api:scan node dist/database/start-demo.js
+          }
+          ready() { for i in $(seq 1 60); do curl -fsS http://127.0.0.1:4001/api/health > demo.json 2>/dev/null && return 0; sleep 1; done; return 1; }
+
+          echo "1. Refusée hors démo : rien n'est lancé"
+          if docker run --rm --network host -e APP_ENV=staging -e DATABASE_URL="$DB" kemdia-api:scan \
+               node dist/database/start-demo.js > refus-demo.log 2>&1; then
+            echo "::error::le démarrage de démo aurait dû être refusé"; exit 1
+          fi
+          grep -q "APP_ENV doit valoir « demo »" refus-demo.log
+          [ "$(psql "$DB" -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'catalog'")" -eq 0 ]
+
+          echo "2. Premier démarrage : migrations, import de démonstration, puis l'API"
+          demo demo1
+          ready
+          cat demo.json; echo
+          grep -q '"environment":"demo"' demo.json
+          grep -q '"database":"ok"' demo.json
+          docker logs demo1 2>&1 | grep -q "la base est à jour"
+          docker logs demo1 2>&1 | grep -q "Catalogue de démonstration importé : 112 catégories, 50 produits"
+          [ "$(psql "$DB" -tAc 'SELECT count(*) FROM catalog.products')" -eq 50 ]
+          curl -fsS http://127.0.0.1:4001/api/v1/products/apple-google-pixel-modern-blanc | grep -q "Apple Google Pixel Modern Blanc"
+
+          echo "3. Réveil (redémarrage) : rien à migrer, import relancé sans doublon"
+          docker rm -f demo1 >/dev/null
+          demo demo2
+          ready
+          [ "$(psql "$DB" -tAc 'SELECT count(*) FROM catalog.products')" -eq 50 ]
+          [ "$(psql "$DB" -tAc 'SELECT count(*) FROM catalog.categories')" -eq 112 ]
+          docker logs demo2 2>&1 | grep "Catalogue de démonstration importé"
+          docker rm -f demo2 >/dev/null
+          echo "- Démo Render : migrations + import + API sur une base vide, puis redémarrage sans doublon" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Journal de l'API en cas d'échec
         if: failure()
-        run: docker logs api 2>&1 | tail -n 100 || true
+        run: |
+          for c in api demo1 demo2; do docker logs "$c" 2>&1 | tail -n 100 || true; done
 
       # 2. Publier (main uniquement) — le cache rend cette étape quasi instantanée
-      - name: Publier l'image (GHCR)
+      # Une seule construction poussée vers GHCR ET Docker Hub (S3-T07) : même digest partout
+      - name: Publier l'image (GHCR + Docker Hub)
         id: push
         if: env.PUBLISH == 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -491,9 +557,7 @@ jobs:
           context: .
           file: apps/api/Dockerfile
           push: true
-          tags: |
-            ${{ steps.meta.outputs.image }}:sha-${{ github.sha }}
-            ${{ steps.meta.outputs.image }}:main
+          tags: ${{ steps.meta.outputs.tags }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -509,6 +573,12 @@ jobs:
           {
             echo "### Image de l'API publiée"
             echo "- GHCR : \`$IMAGE:sha-$GITHUB_SHA\` (digest \`$DIGEST\`)"
+            if [ -n "$DOCKERHUB_USERNAME" ]; then
+              repo="${DOCKERHUB_USERNAME,,}/${DOCKERHUB_API_REPO,,}"
+              echo "- Docker Hub : \`$repo:latest\` — https://hub.docker.com/r/$repo (doit être **publique** pour la démo Render)"
+            else
+              echo "- Docker Hub : non configuré : DOCKERHUB_USERNAME introuvable (ni variable ni secret)"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   deploy-staging:
@@ -529,30 +599,86 @@ jobs:
       url: ${{ vars.STAGING_URL }}
     secrets: inherit
 
-  # Démo publique gratuite (Render, offre Free) : même image que staging, déployée par digest.
-  # Ignorée tant que le secret RENDER_DEPLOY_HOOK_URL n'est pas défini (voir docs/guides/demo-gratuite.md).
+  # Démo publique gratuite (Render, offre Free) : mêmes images que staging, déployées par digest.
+  # D'abord l'API (S3-T07), puis le site. Chaque partie est ignorée tant que son deploy hook n'est pas défini
+  # (voir docs/guides/demo-gratuite.md).
   deploy-demo:
     name: Déploiement DÉMO (Render)
-    needs: image
+    needs: [image, image-api]
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     concurrency:
       group: deploy-demo
       cancel-in-progress: true
     env:
       HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+      API_HOOK: ${{ secrets.RENDER_API_DEPLOY_HOOK_URL }}
       DEMO_URL: ${{ vars.DEMO_URL }}
+      DEMO_API_URL: ${{ vars.DEMO_API_URL }}
       GHCR_IMAGE: ${{ needs.image.outputs.image }}
       DIGEST: ${{ needs.image.outputs.digest }}
+      GHCR_API_IMAGE: ${{ needs.image-api.outputs.image }}
+      API_DIGEST: ${{ needs.image-api.outputs.digest }}
       # Recalculé ici : GitHub supprime les sorties de job qui contiennent un secret
       DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_REPO: ${{ vars.DOCKERHUB_REPO || 'kemdia' }}
+      DOCKERHUB_API_REPO: ${{ vars.DOCKERHUB_API_REPO || 'kemdia-api' }}
       VERSION: sha-${{ github.sha }}
     steps:
-      - name: Déclencher le déploiement
-        id: trigger
+      - name: Préparer
         run: |
+          # Déclenche un deploy hook Render avec l'image à servir (URL secrète : jamais affichée)
+          cat > "$RUNNER_TEMP/render.sh" <<'SCRIPT'
+          trigger() {
+            local hook="$1" image="$2" img sep='?'
+            img=$(jq -rn --arg v "$image" '$v|@uri')
+            case "$hook" in *\?*) sep='&';; esac
+            curl -fsS -X POST -o /dev/null "${hook}${sep}imgURL=${img}"
+            echo "Déploiement demandé : $image"
+          }
+          # Attend que /api/health renvoie la version du commit (démarrage à froid possible : ~1 min)
+          wait_version() {
+            local url="$1" body
+            for i in $(seq 1 45); do
+              body=$(curl -fsS --max-time 90 "$url/api/health" || true)
+              if echo "$body" | grep -q "\"version\":\"$VERSION\""; then echo "✅ $url : $body"; return 0; fi
+              echo "… tentative $i : ${body:-pas de réponse}"; sleep 20
+            done
+            echo "::error::$url ne sert pas encore $VERSION après ~15 min (voir le tableau de bord Render)."
+            return 1
+          }
+          SCRIPT
+
+      # 1. L'API d'abord : le nouveau site ne doit jamais parler à une ancienne API
+      - name: Déployer l'API
+        id: api
+        run: |
+          . "$RUNNER_TEMP/render.sh"
+          if [ -z "$API_HOOK" ]; then
+            echo "::notice::API de démo ignorée : le secret RENDER_API_DEPLOY_HOOK_URL n'est pas défini."
+            echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ -z "$DOCKERHUB_USERNAME" ]; then
+            echo "::error::La démo de l'API tire l'image publique de Docker Hub : DOCKERHUB_USERNAME est requis."; exit 1
+          fi
+          trigger "$API_HOOK" "docker.io/${DOCKERHUB_USERNAME,,}/${DOCKERHUB_API_REPO,,}@$API_DIGEST"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Attendre l'API (migrations + import de démonstration au démarrage)
+        if: steps.api.outputs.ready == 'true' && env.DEMO_API_URL != ''
+        run: |
+          . "$RUNNER_TEMP/render.sh"
+          wait_version "$DEMO_API_URL"
+          body=$(curl -fsS --max-time 30 "$DEMO_API_URL/api/health")
+          echo "$body" | grep -q '"database":"ok"' || { echo "::error::API en ligne mais base indisponible : $body"; exit 1; }
+          [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$DEMO_API_URL/api/v1/categories")" = "200" ]
+
+      # 2. Puis le site
+      - name: Déployer le site
+        id: web
+        run: |
+          . "$RUNNER_TEMP/render.sh"
           if [ -z "$HOOK" ]; then
             echo "::notice::Démo ignorée : le secret RENDER_DEPLOY_HOOK_URL n'est pas défini."
             echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0
@@ -563,32 +689,34 @@ jobs:
           else
             IMAGE="$GHCR_IMAGE@$DIGEST"
           fi
-          img=$(jq -rn --arg v "$IMAGE" '$v|@uri')
-          sep='?'; case "$HOOK" in *\?*) sep='&';; esac
-          # L'URL du hook est secrète : curl en mode silencieux, jamais affichée
-          curl -fsS -X POST -o /dev/null "${HOOK}${sep}imgURL=${img}"
+          trigger "$HOOK" "$IMAGE"
           echo "ready=true" >> "$GITHUB_OUTPUT"
-          echo "Déploiement demandé : $IMAGE"
 
-      - name: Attendre la nouvelle version (démarrage à froid possible)
-        if: steps.trigger.outputs.ready == 'true' && env.DEMO_URL != ''
+      - name: Attendre la nouvelle version du site
+        if: steps.web.outputs.ready == 'true' && env.DEMO_URL != ''
         run: |
-          for i in $(seq 1 40); do
-            body=$(curl -fsS --max-time 60 "$DEMO_URL/api/health" || true)
-            if echo "$body" | grep -q "\"version\":\"$VERSION\""; then
-              echo "✅ Démo à jour : $body"; exit 0
-            fi
-            echo "… tentative $i : ${body:-pas de réponse}"; sleep 20
-          done
-          echo "::error::La démo ne sert pas encore $VERSION après ~15 min (voir le tableau de bord Render)."
-          exit 1
+          . "$RUNNER_TEMP/render.sh"
+          wait_version "$DEMO_URL"
 
-      - name: Vérifier la page d'accueil et les en-têtes de sécurité
-        if: steps.trigger.outputs.ready == 'true' && env.DEMO_URL != ''
+      - name: Vérifier la page d'accueil, les en-têtes de sécurité et la source du catalogue
+        if: steps.web.outputs.ready == 'true' && env.DEMO_URL != ''
+        env:
+          API_READY: ${{ steps.api.outputs.ready }}
         run: |
-          headers=$(curl -fsS -o /dev/null -D - --max-time 30 "$DEMO_URL/")
+          headers=$(curl -fsS -o /dev/null -D - --max-time 90 "$DEMO_URL/")
           for h in content-security-policy strict-transport-security x-frame-options; do
             echo "$headers" | grep -qi "^$h:" || { echo "::error::En-tête manquant : $h"; exit 1; }
           done
-          curl -fsS --max-time 30 "$DEMO_URL/" | grep -q "Kemdia"
-          echo "### Démo publique en ligne : $DEMO_URL (\`$VERSION\`)" >> "$GITHUB_STEP_SUMMARY"
+          curl -fsS --max-time 90 "$DEMO_URL/" | grep -q "Kemdia"
+          health=$(curl -fsS --max-time 30 "$DEMO_URL/api/health")
+          source=$(echo "$health" | jq -r '.catalog // "inconnu"')
+          if [ "$API_READY" = "true" ] && [ "$source" != "api" ]; then
+            echo "::error::Le site de démo ne lit pas l'API (catalogue : $source). Vérifier API_URL et API_INTERNAL_KEY sur Render."
+            exit 1
+          fi
+          curl -fsS --max-time 90 "$DEMO_URL/produit/apple-google-pixel-modern-blanc" | grep -q "Apple Google Pixel Modern Blanc"
+          {
+            echo "### Démo publique en ligne : $DEMO_URL (\`$VERSION\`)"
+            echo "- Catalogue lu dans : **$source**"
+            if [ -n "$DEMO_API_URL" ] && [ "$API_READY" = "true" ]; then echo "- API : $DEMO_API_URL"; fi
+          } >> "$GITHUB_STEP_SUMMARY"

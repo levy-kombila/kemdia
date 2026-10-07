@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués  |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests      |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                       |
+| **1.8** | 2026-10-07 | S3     | Démo Render avec l'API et une base Neon (ADR-0013) : §3.2, §3.5, §3.8 démarrage de démo, §5.9, §7 jobs image de l'API et démo, §8, §9       |
 | **1.7** | 2026-10-06 | S3     | Image Docker de l'API et migrations au déploiement (ADR-0012) : §3.5, §3.8 (nouvelle), §6.3, §7 job « image de l'API », §8, §9              |
 | **1.6** | 2026-10-06 | S3     | Le site lit l'API (ADR-0011) : §3.2, §3.7 contrat `packages/contracts`, §5.1, §5.2, §5.7 panier par variante, §5.9 (nouvelle), §6.2, §7, §9 |
 | **1.5** | 2026-10-06 | S3     | §3.7 API REST `/api/v1` et documentation OpenAPI (ADR-0010) ; §3.4 `docs/`, variables ; §4 ; §6.3 limitation de débit ; §9 tests de contrat |
@@ -147,6 +148,10 @@ exposé en HTTP sous `/api/v1` (S3-T04, §3.7) ; le site l'appellera au S3-T05.
 **État au S3-T05** : le serveur du site lit le catalogue **dans l'API** (§5.9, [ADR-0011](adr/0011-site-branche-api.md)) ;
 le navigateur ne l'appelle jamais directement. Le fichier de démonstration ne sert plus qu'à la démo Render, jusqu'au S3-T07.
 
+**État au S3-T07** : la démo publique fait tourner les **trois** conteneurs — site et API sur Render Free, PostgreSQL sur Neon Free —
+([ADR-0013](adr/0013-demo-render-api-neon.md), §8). Sur Render gratuit, le site appelle l'API par son **adresse publique** (HTTPS + clé interne) :
+un service gratuit ne reçoit pas de trafic privé. Le fichier de démonstration ne sert plus qu'au développement sans base (retrait au S3-T08).
+
 ### 3.3 Modules du backend (cible MVP)
 
 Monolithe modulaire NestJS, architecture hexagonale, un schéma PostgreSQL par module
@@ -263,8 +268,10 @@ flowchart LR
 | Une migration ne casse pas la version précédente de l'API (« ajouter d'abord, supprimer plus tard ») | Revue de code (retour arrière possible)        |
 
 **Environnements** : poste → `docker compose up -d db` (accessible seulement depuis le poste) ; CI → base éphémère par exécution ;
-démo → base Render gratuite (S3-T07) ; production → serveur (S7). En ligne, les migrations sont appliquées par **l'image de l'API**
+démo → **Neon Free** (PostgreSQL 18, Francfort, S3-T07) ; production → serveur (S7). En ligne, les migrations sont appliquées par **l'image de l'API**
 (`node dist/database/migrate.js`) avant le démarrage de la nouvelle version (§3.8) ; sur le poste, `pnpm db:deploy` reste disponible.
+**Exception de la démo** : sans commande avant déploiement sur Render gratuit, migrations et import de démonstration sont lancés au démarrage
+du conteneur (`start-demo.js`, refusé hors `APP_ENV=demo`, [ADR-0013](adr/0013-demo-render-api-neon.md)).
 
 ### 3.6 Module `catalog` (S3-T03)
 
@@ -376,14 +383,15 @@ flowchart LR
     a --> pg
 ```
 
-| Élément    | Valeur                                                                                                                            |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Base       | `node:22-alpine` mis à jour, sans npm ni corepack                                                                                 |
-| Contenu    | `dist/`, dépendances de production, `prisma/schema`, `prisma/migrations`, `prisma.config.ts`, moteur `/app/engines/schema-engine` |
-| Exécution  | Utilisateur `kemdia` (1001), fichiers en lecture seule, port 4000, `HEALTHCHECK` sur `/api/health` (base comprise)                |
-| Variables  | Celles de l'API (`apps/api/.env.example`) ; l'image fixe `NODE_ENV=production`, `APP_ENV=production` et `APP_VERSION` (sha)       |
-| Migrations | Même image, même configuration ; vérifiée comme au démarrage de l'API ; ne fait rien si la base est à jour ; verrou PostgreSQL    |
-| Local      | `docker compose up --build` : `db` → `api-migrate` → `api` (port 4000) → `web` (lit l'API si `API_INTERNAL_KEY` est dans `.env`)  |
+| Élément       | Valeur                                                                                                                            |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Base          | `node:22-alpine` mis à jour, sans npm ni corepack                                                                                 |
+| Contenu       | `dist/`, dépendances de production, `prisma/schema`, `prisma/migrations`, `prisma.config.ts`, moteur `/app/engines/schema-engine` |
+| Exécution     | Utilisateur `kemdia` (1001), fichiers en lecture seule, port 4000, `HEALTHCHECK` sur `/api/health` (base comprise)                |
+| Variables     | Celles de l'API (`apps/api/.env.example`) ; l'image fixe `NODE_ENV=production`, `APP_ENV=production` et `APP_VERSION` (sha)       |
+| Migrations    | Même image, même configuration ; vérifiée comme au démarrage de l'API ; ne fait rien si la base est à jour ; verrou PostgreSQL    |
+| Local         | `docker compose up --build` : `db` → `api-migrate` → `api` (port 4000) → `web` (lit l'API si `API_INTERNAL_KEY` est dans `.env`)  |
+| Démo (S3-T07) | `node dist/database/start-demo.js` : migrations → import de démonstration (`demo-import.js`) → API. Refusé si `APP_ENV` ≠ `demo`  |
 
 ## 4. Choix technologiques
 
@@ -580,7 +588,7 @@ flowchart LR
 | Configuration (au démarrage)                 | Comportement                                                                                                 |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `API_URL` + `API_INTERNAL_KEY`               | Catalogue lu dans l'API **uniquement** ; API muette, en retard ou réponse hors contrat → page d'erreur (500) |
-| `API_URL` absente                            | Fichier de démonstration (démo Render jusqu'au S3-T07, développement sans base)                              |
+| `API_URL` absente                            | Fichier de démonstration (développement sans base ; retrait prévu au S3-T08)                                 |
 | `APP_ENV=production` sans `API_URL`          | **Le serveur refuse de démarrer** (code 1, message en français)                                              |
 | Clé sans `API_URL`, adresse ou clé invalides | Refus de démarrer                                                                                            |
 
@@ -590,7 +598,9 @@ flowchart LR
 - **En-tête** : rendu sur toutes les pages, il affiche un menu des catégories vide si l'API est indisponible (et seulement dans ce cas) ;
   la page elle-même affiche l'erreur.
 - **Panier** (`kemdia.cart.v2`) : une ligne = une variante ; les paniers `v1` sont effacés au chargement. Les **favoris** restent par produit (UUID).
-- Variables : `API_URL`, `API_INTERNAL_KEY` (secret), `CATALOG_TIMEOUT_MS` (5000 par défaut) — voir `apps/web/.env.example`.
+- Variables : `API_URL`, `API_INTERNAL_KEY` (secret), `CATALOG_TIMEOUT_MS` (5000 par défaut, 90 000 au plus) — voir `apps/web/.env.example`.
+- **Démo Render (S3-T07)** : au démarrage, le site réveille l'API en arrière-plan (`lib/config/wake-api.ts`, seulement avec `APP_ENV=demo`) ;
+  `CATALOG_TIMEOUT_MS=60000` laisse au premier visiteur le temps du réveil. `/api/health` du site indique la source (`"catalog": "api"` ou `"file"`).
 
 ## 6. Sécurité
 
@@ -694,6 +704,8 @@ flowchart LR
 | Job « bout en bout » (S3-T05)     | Site construit avec une API **injoignable**, puis parcours et performance contre la vraie API (PostgreSQL 18, clé éphémère) ; aucune réponse 429 tolérée             |
 | `apps/api/Dockerfile` (S3-T06)    | Image de l'API : multi-étapes, dépendances de production seules, non-root, moteur de migrations embarqué                                                             |
 | Job « image de l'API » (S3-T06)   | Construction, Trivy, migrations sur une base **vide** puis relance, refus d'une configuration fausse, API en lecture seule → `database: ok`, publication GHCR (main) |
+| Job « image de l'API » (S3-T07)   | Démarrage de démo sur une base **vide** (migrations + 50 produits + API), redémarrage sans doublon, refus hors démo ; publication Docker Hub publique (main)         |
+| Job « démo » (S3-T07)             | Render : API d'abord (version + `database: ok`), puis site (version, en-têtes, fiche produit, `catalog: "api"`) ; chaque partie ignorée sans son deploy hook         |
 | Job « image » (S3-T05)            | L'image démarre dans les 3 configurations : production sans API (refus), démo (fichier), API muette (500)                                                            |
 | `deploy/`                         | Scripts et configuration serveur (voir §8)                                                                                                                           |
 | `.husky/pre-commit`               | Formatage automatique avant chaque commit                                                                                                                            |
@@ -724,16 +736,36 @@ flowchart TB
     deploy -->|pull par digest| ghcr[(GHCR)]
 ```
 
-| Élément              | Choix                                                                                                                            |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Hébergement          | VPS Ubuntu 24.04 (2 vCPU / 4 Go), Europe de l'Ouest — à réévaluer avec l'APDPVP pour les données personnelles (S7)               |
-| Conteneur applicatif | Lecture seule, `cap_drop: ALL`, `no-new-privileges`, 512 Mo max, logs bornés                                                     |
-| Environnements       | `demo` (Render Free, public, auto à chaque fusion) · `staging` (auto, protégé) · `production` (tag de version)                   |
-| Fiabilité            | Healthcheck, `compose up --wait`, test de fumée, retour arrière automatique, verrou anti-déploiements concurrents                |
-| Traçabilité          | Release GitHub par version, résumé de chaque déploiement dans Actions, `/opt/kemdia/deploy.log`                                  |
-| Base de données      | PostgreSQL 18 ([§3.5](#35-base-de-données-s3-t02)) : démo Render au S3-T07, serveur de production au S7                          |
-| API                  | Image publiée sur GHCR à chaque fusion (S3-T06, §3.8) ; mise en ligne : démo au S3-T07, serveur au S7 (avec `API_URL` côté site) |
-| À venir              | Sauvegardes chiffrées et testées (S7), surveillance et alertes (S7), _blue/green_ sans coupure (S7)                              |
+| Élément              | Choix                                                                                                                  |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Hébergement          | VPS Ubuntu 24.04 (2 vCPU / 4 Go), Europe de l'Ouest — à réévaluer avec l'APDPVP pour les données personnelles (S7)     |
+| Conteneur applicatif | Lecture seule, `cap_drop: ALL`, `no-new-privileges`, 512 Mo max, logs bornés                                           |
+| Environnements       | `demo` (Render Free, public, auto à chaque fusion) · `staging` (auto, protégé) · `production` (tag de version)         |
+| Fiabilité            | Healthcheck, `compose up --wait`, test de fumée, retour arrière automatique, verrou anti-déploiements concurrents      |
+| Traçabilité          | Release GitHub par version, résumé de chaque déploiement dans Actions, `/opt/kemdia/deploy.log`                        |
+| Base de données      | PostgreSQL 18 ([§3.5](#35-base-de-données-s3-t02)) : démo sur **Neon Free** (S3-T07), serveur de production au S7      |
+| API                  | Image sur GHCR et Docker Hub (public) à chaque fusion (§3.8) ; **démo en ligne** (S3-T07, Render Free) ; serveur au S7 |
+| À venir              | Sauvegardes chiffrées et testées (S7), surveillance et alertes (S7), _blue/green_ sans coupure (S7)                    |
+
+### Démo publique (S3-T07)
+
+Décision : [ADR-0013](adr/0013-demo-render-api-neon.md). Guide pas à pas : [demo-gratuite.md](../guides/demo-gratuite.md).
+
+```mermaid
+flowchart LR
+    v((Visiteur)) -->|HTTPS| web[Render Free — kemdia<br/>image levy2025/kemdia]
+    web -->|HTTPS public + x-kemdia-internal-key| api[Render Free — kemdia-api<br/>image levy2025/kemdia-api<br/>start-demo.js]
+    api -->|TLS, connexion directe| neon[(Neon Free<br/>PostgreSQL 18 — Francfort)]
+    gha[GitHub Actions] -->|1. hook + digest| api
+    gha -->|2. hook + digest| web
+```
+
+| Élément            | Valeur                                                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Démarrage de l'API | Docker Command `node dist/database/start-demo.js` : migrations → import de démonstration (~1 s) → API ; échec → l'API ne démarre pas |
+| Secrets            | `DATABASE_URL`, `API_INTERNAL_KEY` : variables des services Render ; GitHub ne connaît que les deploy hooks                          |
+| Veille             | Site et API s'endorment après 15 min ; le site réveille l'API à son démarrage ; délai du catalogue 60 s sur la démo                  |
+| Limites            | Première visite après une pause : 1 à 2 min ; API publique (pas de réseau privé en gratuit) ; `TRUST_PROXY=0`                        |
 
 ## 9. Qualité et tests
 
@@ -747,6 +779,7 @@ flowchart TB
 | Contrat partagé     | Vitest                                                | 8 tests (S3-T05) : schémas, OpenAPI, identifiants de démonstration stables ; l'API vérifie que ses règles (quantité maximale) sont celles du contrat                                                                                                                                                                                                                                                                                                                                                               |
 | API (S3)            | Vitest + Supertest                                    | 134 tests (S3-T06 : script de migration — configuration vérifiée, aucune valeur affichée, échec et délai ; S3-T05 : paramètre `badge`, tri `ventes`, alignement sur le contrat ; S3-T04 : routes HTTP, contrat, limitation de débit, documentation OpenAPI ; dont 46 sur le catalogue : domaine, BR-001, recherche, import — S3-T03) : configuration, journaux, en-têtes de sécurité, CORS, format des erreurs, versionnement des routes, santé de la base, architecture du code et du schéma Prisma (S3-T01, T02) |
 | API — intégration   | Vitest + vraie base PostgreSQL 18                     | 35 tests (S3-T05 : badges, tri `ventes`, variante par défaut d'une liste), dont 6 de contrat HTTP sur la vraie base (S3-T04 : chaque catégorie, chaque produit, chaque page validés par leur schéma) et 21 sur le catalogue : listes, recherche, filtres, tri, compteurs **comparés à la logique du site**, BR-001, contraintes SQL, 3 niveaux de catégories (S3-T03) ; et : santé, schémas créés, requête trop longue interrompue, injection SQL, base injoignable → 503 sans fuite (S3-T02)                      |
+| Démo (S3-T07)       | Vitest + CI (image réelle, base vide)                 | 9 tests unitaires de l'API (démarrage de démo : ordre, refus hors démo, arrêt sur échec ; import : environnements permis, aucune valeur affichée) et 3 du site (réveil de l'API) ; en CI, l'image démarre en mode démo sur une base **vide** (50 produits servis), redémarre sans doublon et refuse `APP_ENV=staging` ; après chaque fusion, la démo en ligne est vérifiée (versions, `database: ok`, `catalog: "api"`)                                                                                            |
 | Statique            | ESLint (règles Next + React Hooks), TypeScript strict | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ## 10. Glossaire

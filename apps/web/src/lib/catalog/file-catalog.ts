@@ -21,7 +21,7 @@ import type { CatalogPort } from "./port";
 /**
  * Adaptateur « fichier » : le catalogue de démonstration, servi avec les MÊMES règles que l'API
  * (sous-catégories comprises, recherche mot par mot sans accents, filtres, tris, compteurs, identifiants).
- * Utilisé seulement si API_URL est absente (démo publique jusqu'au S3-T07). À supprimer au S3-T07.
+ * Utilisé seulement si API_URL est absente (développement sans base). Suppression prévue au S3-T08 (ADR-0013).
  */
 
 /** Même normalisation que la recherche de l'API (domaine `searchable`) : minuscules, sans accents ni ponctuation. */
