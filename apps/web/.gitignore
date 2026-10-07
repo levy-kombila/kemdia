@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# Modèle sans secret, à copier en .env.local (S3-T07 : il manquait dans Git)
+!.env.example
 
 # vercel
 .vercel

@@ -1,6 +1,6 @@
 # ADR-0012 — Image Docker de l'API et migrations au déploiement
 
-- **Statut** : Accepté
+- **Statut** : Accepté — exception pour la démo gratuite seulement : [ADR-0013](0013-demo-render-api-neon.md) (migrations et import au démarrage)
 - **Date** : 2026-10-06
 - **Tâche** : S3-T06
 
@@ -46,4 +46,4 @@ Contraintes :
 - ➕ `docker compose up --build` lance tout le système en local avec les images de production (base → migrations → API → site).
 - ➖ Image assez lourde (l'outil Prisma et sa console d'administration pèsent ~200 Mo) ; sans effet sur la mémoire utilisée par l'API.
 - ➖ Écrire une migration demande de la discipline (« ajouter d'abord, supprimer plus tard ») : rappelé dans le guide de la base.
-- ➖ L'import des données de démonstration (`db:seed`) n'est pas dans l'image (il dépend d'outils de développement) : à traiter au S3-T07.
+- ➖ L'import des données de démonstration (`db:seed`) n'est pas dans l'image (il dépend d'outils de développement) : traité au S3-T07 (`dist/database/demo-import.js`, ADR-0013).

@@ -10,7 +10,7 @@ z.config(z.locales.fr());
  * | ------------------------------------ | --------------------------------------------------------------- |
  * | `API_URL` définie                    | l'API, uniquement. Si elle ne répond pas : page d'erreur.        |
  * |                                      | Jamais de bascule automatique sur le fichier.                    |
- * | `API_URL` absente                    | le fichier de démonstration (jusqu'au S3-T07)                    |
+ * | `API_URL` absente                    | le fichier de démonstration (développement sans base)            |
  * | `API_URL` absente, `APP_ENV=production` | le site REFUSE de démarrer                                    |
  *
  * Les messages d'erreur nomment les variables, jamais leur valeur (la clé est un secret).
@@ -48,7 +48,9 @@ const schema = z.object({
     .string()
     .regex(/^[A-Za-z0-9_-]{32,128}$/, "32 à 128 caractères parmi A-Z, a-z, 0-9, « - » et « _ »")
     .optional(),
-  CATALOG_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(5_000),
+  // Jusqu'à 90 s pour la démo Render (S3-T07) : l'API gratuite peut mettre ~1 min à se réveiller.
+  // En staging et en production, garder la valeur par défaut (5 s) : une panne doit se voir vite.
+  CATALOG_TIMEOUT_MS: z.coerce.number().int().min(500).max(90_000).default(5_000),
 });
 
 /** Lit la configuration (fonction pure : testée sans serveur). Lève une `SiteConfigError` si elle est fausse. */

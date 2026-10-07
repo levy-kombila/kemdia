@@ -1,46 +1,54 @@
-# Démo publique gratuite — Render
+# Démo publique gratuite — Render + Neon
 
-Objectif : un lien public (ex. `https://kemdia.onrender.com`) pour montrer le site à n'importe qui,
-**sans serveur payant**, mis à jour **automatiquement** à chaque fusion dans `main`.
+Objectif : un lien public (ex. `https://kemdia.onrender.com`) pour montrer **le vrai système** à n'importe qui —
+le site, l'API et une base PostgreSQL — **sans serveur payant**, mis à jour **automatiquement** à chaque fusion dans `main`.
 
-C'est le même principe DevOps que pour staging/production : la CI construit, scanne et publie l'image Docker sur GHCR,
-puis la démo reçoit **exactement cette image** (par digest), et un test vérifie que la bonne version répond.
+C'est le même principe DevOps que pour staging/production : la CI construit, scanne et publie les images Docker,
+puis la démo reçoit **exactement ces images** (par digest), et des tests vérifient que la bonne version répond.
+Décisions : [ADR-0013](../architecture/adr/0013-demo-render-api-neon.md) (démo avec API, S3-T07).
 
 ```mermaid
 flowchart LR
-    merge[Fusion dans main] --> ci[CI : tests + image scannée]
-    ci --> hub[(Docker Hub<br/>levy2025/kemdia)]
-    ci --> ghcr[(GHCR<br/>privé)]
-    ci -->|deploy hook + digest| render[Render Free<br/>kemdia.onrender.com]
-    hub -->|pull public| render
-    render -->|/api/health = sha du commit ?| ok[✅ résumé dans Actions]
+    merge[Fusion dans main] --> ci[CI : tests + images scannées]
+    ci --> hub[(Docker Hub public<br/>levy2025/kemdia<br/>levy2025/kemdia-api)]
+    ci -->|1. hook API + digest| api[Render Free<br/>kemdia-api.onrender.com]
+    ci -->|2. hook site + digest| web[Render Free<br/>kemdia.onrender.com]
+    hub --> api
+    hub --> web
+    web -->|HTTPS + clé interne| api
+    api -->|migrations + import démo<br/>au démarrage| neon[(Neon Free<br/>PostgreSQL 18, Francfort)]
+    web -->|/api/health : bonne version,<br/>catalogue = api ?| ok[✅ résumé dans Actions]
 ```
 
 ## Limites de l'offre gratuite (à connaître avant de partager le lien)
 
-- Le service **s'endort après 15 min sans visite** : la première visite suivante prend **environ 1 minute**.
-  Prévenez vos interlocuteurs, ou ouvrez le lien vous-même juste avant une présentation.
-- 750 heures d'instance par mois et par espace de travail (suffisant pour un service de démo).
+- Chaque service **s'endort après 15 min sans visite**. La première visite suivante réveille le site, qui réveille l'API :
+  compter **1 à 2 minutes**. Ouvrez le lien vous-même juste avant une présentation.
+- 750 heures d'instance par mois pour tout le compte Render : suffisant car les deux services dorment la plupart du temps.
+- Base Neon gratuite : 1 Go, 100 heures de calcul par mois, s'endort après 5 min (réveil en moins d'une seconde).
 - Données de démonstration uniquement : **aucune vraie donnée client** sur cet environnement.
-- Source : [documentation Render — Free instances](https://render.com/docs/free).
+- Sources : [Render — Free instances](https://render.com/docs/free), [Neon — Pricing](https://neon.com/pricing).
 
-## Où est l'image Docker ?
+## Où sont les images Docker ?
 
 Le pipeline publie **la même image** (même digest) à deux endroits :
 
-| Registre                  | Adresse                                                                  | Visibilité                                                                     |
-| ------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| **Docker Hub**            | `levy2025/kemdia` — <https://hub.docker.com/r/levy2025/kemdia>           | **Publique** : Render (et n'importe qui) peut la télécharger sans mot de passe |
-| GitHub Container Registry | `ghcr.io/levy-kombila/kemdia/web` — onglet **Packages** du profil GitHub | Privée, utilisée pour staging/production                                       |
+| Image | Docker Hub (**public**, utilisé par Render)                            | GHCR (privé, staging/production)  |
+| ----- | ---------------------------------------------------------------------- | --------------------------------- |
+| Site  | `levy2025/kemdia` — <https://hub.docker.com/r/levy2025/kemdia>         | `ghcr.io/levy-kombila/kemdia/web` |
+| API   | `levy2025/kemdia-api` — <https://hub.docker.com/r/levy2025/kemdia-api> | `ghcr.io/levy-kombila/kemdia/api` |
 
 Étiquettes : `latest` et `main` (dernière version de `main`), `sha-<commit>` (une par version, pour revenir en arrière).
 
-> L'image ne contient aucun secret (configuration par variables d'environnement) ni donnée réelle :
-> la rendre publique sur Docker Hub ne pose pas de problème de sécurité. Le code source, lui, reste privé.
+> Les images ne contiennent aucun secret (configuration par variables d'environnement) ni donnée réelle :
+> les rendre publiques sur Docker Hub ne pose pas de problème de sécurité. Le code source, lui, reste privé.
 
-## Mise en place (≈ 15 minutes, une seule fois)
+## Mise en place
 
-### 1. Publier l'image sur Docker Hub
+Les étapes 1 et 2 (site seul) ont été faites au S1. Pour une installation neuve, tout faire dans l'ordre.
+**Pour passer la démo existante sur l'API (S3-T07) : étapes 3 à 6.**
+
+### 1. Publier les images sur Docker Hub
 
 1. Sur <https://hub.docker.com>, connecté avec `levy2025` : avatar → **Account settings → Personal access tokens → Generate new token**.
    Nom : `github-actions-kemdia`, permissions **Read & Write**, expiration 90 jours. **Copiez le jeton** (affiché une seule fois).
@@ -54,10 +62,12 @@ Le pipeline publie **la même image** (même digest) à deux endroits :
 > Le nom d'utilisateur peut aller dans **Variables** (conseillé : il n'est pas secret et reste lisible dans les résumés)
 > ou dans **Secrets** (il apparaîtra alors masqué `***`). Le **jeton**, lui, est toujours un _Secret_.
 
-3. _Actions → CI/CD → Run workflow_ sur `main`. Quand le job **Image Docker** est vert, son résumé affiche le lien Docker Hub
-   et l'image apparaît sur <https://hub.docker.com/repositories/levy2025>.
+3. _Actions → CI/CD → Run workflow_ sur `main`. Quand les jobs **Image Docker** et **Image Docker de l'API** sont verts,
+   leurs résumés affichent les liens Docker Hub.
+4. **Vérifiez que `levy2025/kemdia-api` est public** : <https://hub.docker.com/repositories/levy2025> → `kemdia-api` →
+   **Settings → Visibility settings → Make public** (Docker Hub peut créer les nouveaux dépôts en privé, selon le réglage du compte).
 
-### 2. Créer le service sur Render
+### 2. Créer le service du site sur Render
 
 1. Créez un compte sur <https://render.com> (gratuit, sans carte bancaire pour l'offre Free).
 2. **New → Web Service → Existing Image**.
@@ -68,36 +78,123 @@ Le pipeline publie **la même image** (même digest) à deux endroits :
    `SITE_URL` sert aux aperçus WhatsApp / Facebook (liens absolus) ; elle est lue au démarrage, sans reconstruire l'image.
 7. **Advanced → Health Check Path** : `/api/health`
 8. **Deploy Web Service**. Au bout de 2–3 minutes, le site répond sur l'adresse affichée en haut de la page.
+9. **Settings → Deploy Hook** : copiez l'URL (elle contient une clé secrète), et **Auto-Deploy : No** (c'est le pipeline qui décide).
 
-### 3. Relier Render au pipeline GitHub
+### 3. Créer la base sur Neon (≈ 5 minutes)
 
-Sur Render, dans le service → **Settings → Deploy Hook** → copiez l'URL (elle contient une clé secrète).
+1. Créez un compte sur <https://neon.com> (offre **Free**, sans carte bancaire).
+2. **New project** : nom `kemdia-demo`, **Postgres version 18**, région **AWS Europe Central 1 (Frankfurt)** — la même que Render.
+3. Sur la page du projet → **Connect** : désactivez **Connection pooling** (on veut la connexion **directe**, sans `-pooler` dans l'adresse),
+   puis copiez l'adresse. Elle ressemble à :
+
+   ```
+   postgresql://neondb_owner:<mot de passe>@ep-xxxx-xxxx.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+   ```
+
+4. **Retirez `&channel_binding=require`** à la fin (gardez `?sslmode=require`) : tous les outils de l'API ne le comprennent pas.
+5. Gardez cette adresse pour l'étape 4 **seulement** : elle contient un mot de passe. Jamais dans Git, un message, un ticket ou une capture.
+
+> Pas besoin de créer les tables : l'API le fait elle-même au démarrage (migrations), puis importe le catalogue de démonstration.
+
+### 4. Créer le service de l'API sur Render
+
+1. Générez la **clé interne** partagée entre le site et l'API (PowerShell ou n'importe quel terminal) :
+
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+   ```
+
+2. Render → **New → Web Service → Existing Image** : `docker.io/levy2025/kemdia-api:latest`, **No credential**.
+3. Nom : `kemdia-api` (adresse `https://kemdia-api.onrender.com`, ou proche). Région **Frankfurt**, instance **Free**.
+4. **Environment variables** :
+
+| Nom                 | Valeur                                       | Remarque                                                    |
+| ------------------- | -------------------------------------------- | ----------------------------------------------------------- |
+| `APP_ENV`           | `demo`                                       | **Obligatoire** : sans lui, le démarrage de démo est refusé |
+| `PORT`              | `4000`                                       |                                                             |
+| `DATABASE_URL`      | l'adresse Neon de l'étape 3                  | **Secret**                                                  |
+| `DATABASE_POOL_MAX` | `5`                                          | Peu de connexions suffisent pour une démo                   |
+| `API_INTERNAL_KEY`  | la clé générée au point 1                    | **Secret** — la même valeur ira dans le service du site     |
+| `API_DOCS`          | `false` (ou `true` pour montrer `/api/docs`) | Facultatif ; désactivée par défaut, comme en production     |
+
+5. **Advanced** :
+   - **Docker Command** : `node dist/database/start-demo.js`
+     (migrations → import du catalogue de démonstration → API ; ne fonctionne qu'avec `APP_ENV=demo`) ;
+   - **Health Check Path** : `/api/health`.
+6. **Deploy Web Service**. Dans **Logs**, vous devez voir dans l'ordre :
+
+   ```
+   Migrations de la base : terminées, la base est à jour.
+   Catalogue de démonstration importé : 112 catégories, 50 produits (… s).
+   API Kemdia sha-… prête sur le port 4000 (demo)
+   ```
+
+   Puis `https://kemdia-api.onrender.com/api/health` répond `"database":"ok"`.
+
+7. **Settings → Deploy Hook** : copiez l'URL ; **Auto-Deploy : No**.
+
+### 5. Brancher le site sur l'API
+
+Render → service **`kemdia`** (le site) → **Environment** → ajoutez :
+
+| Nom                  | Valeur                                                |
+| -------------------- | ----------------------------------------------------- |
+| `API_URL`            | `https://kemdia-api.onrender.com` (sans `/` final)    |
+| `API_INTERNAL_KEY`   | **la même clé** que dans le service de l'API (secret) |
+| `CATALOG_TIMEOUT_MS` | `60000` (l'API peut mettre ~1 min à se réveiller)     |
+
+Enregistrez : Render redémarre le site. Dans ses **Logs** : `Kemdia — catalogue : API https://kemdia-api.onrender.com (délai 60000 ms)`
+puis `Kemdia — réveil de l'API : prête en … s`. Et `https://kemdia.onrender.com/api/health` contient `"catalog":"api"`.
+
+### 6. Relier Render au pipeline GitHub
 
 Sur GitHub → dépôt `kemdia` → **Settings → Secrets and variables → Actions** :
 
-| Type     | Nom                      | Valeur                                                                   |
-| -------- | ------------------------ | ------------------------------------------------------------------------ |
-| Secret   | `RENDER_DEPLOY_HOOK_URL` | l'URL du deploy hook                                                     |
-| Variable | `DEMO_URL`               | l'adresse du service, ex. `https://kemdia.onrender.com` (sans `/` final) |
+| Type     | Nom                          | Valeur                                                                     |
+| -------- | ---------------------------- | -------------------------------------------------------------------------- |
+| Secret   | `RENDER_DEPLOY_HOOK_URL`     | le deploy hook du **site** (déjà présent depuis le S1)                     |
+| Secret   | `RENDER_API_DEPLOY_HOOK_URL` | le deploy hook de **l'API** (étape 4)                                      |
+| Variable | `DEMO_URL`                   | l'adresse du site, ex. `https://kemdia.onrender.com` (sans `/` final)      |
+| Variable | `DEMO_API_URL`               | l'adresse de l'API, ex. `https://kemdia-api.onrender.com` (sans `/` final) |
 
-Désactivez le redéploiement automatique de Render (**Settings → Auto-Deploy : No**) : c'est le pipeline qui décide quand déployer.
+### 7. Vérifier
 
-### 4. Vérifier
+Fusionnez n'importe quelle PR dans `main` (ou _Actions → CI/CD → Run workflow_ sur `main`). Le job **Déploiement DÉMO (Render)** :
 
-Fusionnez n'importe quelle PR dans `main` (ou _Actions → CI/CD → Run workflow_ sur `main`).
-Le job **Déploiement DÉMO (Render)** déclenche Render avec le digest de l'image, attend que `/api/health`
-renvoie la version du commit, puis contrôle la page d'accueil et les en-têtes de sécurité.
+1. déclenche l'**API** avec le digest de son image, attend que `/api/health` renvoie la version du commit et `database: ok` ;
+2. déclenche **le site**, attend sa version ;
+3. contrôle la page d'accueil, les en-têtes de sécurité, une fiche produit, et que le site lit bien l'API (`catalog: "api"`).
+
+Le résumé du job affiche l'adresse et la source du catalogue.
+
+## En cas de problème
+
+| Symptôme                                                                           | Cause probable et solution                                                                                               |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Logs de l'API : `Démarrage de démonstration refusé : APP_ENV doit valoir « demo »` | Ajouter `APP_ENV=demo` dans les variables du service de l'API                                                            |
+| Logs de l'API : `DATABASE_URL : obligatoire en production`                         | Variable `DATABASE_URL` absente ou vide                                                                                  |
+| Logs de l'API : `Migrations de la base : ÉCHEC`                                    | Adresse Neon fausse, `-pooler` dans l'adresse, ou projet Neon supprimé. Recopier l'adresse directe (étape 3)             |
+| Render : _image pull failed_ sur l'API                                             | Le dépôt Docker Hub `kemdia-api` est privé : le rendre public (étape 1.4)                                                |
+| Site : « Une erreur est survenue » à la première visite                            | L'API se réveillait encore : cliquer **Réessayer** au bout d'une minute. Vérifier `CATALOG_TIMEOUT_MS=60000` sur le site |
+| Site : erreur sur toutes les pages, logs `[catalogue] … API injoignable`           | `API_URL` fausse, ou clés différentes entre le site et l'API                                                             |
+| CI : `Le site de démo ne lit pas l'API (catalogue : file)`                         | `API_URL` / `API_INTERNAL_KEY` absentes dans le service du site (étape 5)                                                |
+
+**Changer la clé interne** : générer une nouvelle valeur, la mettre **dans les deux services** (API puis site). **Changer le mot de passe Neon** :
+Neon → **Roles → Reset password**, puis mettre la nouvelle adresse dans `DATABASE_URL` de l'API.
 
 ## Sécurité
 
-| Point              | Mesure                                                                                                                |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| Jeton Docker Hub   | Utilisé uniquement par la CI (secret GitHub, masqué dans les journaux), expiration 90 jours, révocable sur Docker Hub |
-| URL du deploy hook | Secret GitHub, jamais affichée dans les journaux                                                                      |
-| Image              | Même image que staging/production : scannée par Trivy, utilisateur non-root, en-têtes de sécurité                     |
-| Données            | Démonstration uniquement ; ne jamais brancher la future base de production sur cet environnement                      |
+| Point                | Mesure                                                                                                                |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Jeton Docker Hub     | Utilisé uniquement par la CI (secret GitHub, masqué dans les journaux), expiration 90 jours, révocable sur Docker Hub |
+| URL des deploy hooks | Secrets GitHub, jamais affichées dans les journaux                                                                    |
+| Adresse de la base   | Uniquement dans Render (variable du service API) ; jamais affichée par l'API (ni par Prisma : `<REDACTED>`)           |
+| Clé interne          | Uniquement dans Render (deux services) ; le site l'envoie en en-tête, jamais au navigateur                            |
+| Images               | Mêmes images que staging/production : scannées par Trivy, utilisateur non-root, en-têtes de sécurité                  |
+| Démarrage de démo    | Refusé si `APP_ENV` ≠ `demo` : impossible d'importer les données de démo ou de migrer au démarrage ailleurs           |
+| Données              | Démonstration uniquement ; ne jamais brancher la future base de production sur cet environnement                      |
 
 ## Et ensuite ?
 
-La démo Render sert à montrer le site. Pour la vraie production (pas de mise en veille, domaine `kemdia.ga`,
-données réelles), suivez [deploiement.md](deploiement.md) avec un VPS.
+La démo sert à montrer le site. Pour la vraie production (pas de mise en veille, domaine `kemdia.ga`,
+données réelles, migrations lancées **avant** l'API), suivez [deploiement.md](deploiement.md) avec un VPS (S7).

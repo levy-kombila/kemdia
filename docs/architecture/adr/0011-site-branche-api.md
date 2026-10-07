@@ -1,6 +1,6 @@
 # ADR-0011 — Le site lit l'API : source choisie au démarrage, contrat partagé, panier par variante
 
-- **Statut** : Accepté
+- **Statut** : Accepté — complété par l'[ADR-0013](0013-demo-render-api-neon.md) (S3-T07) : la démo lit l'API ; le mode fichier reste pour le développement jusqu'au S3-T08
 - **Date** : 2026-10-06
 - **Tâche** : S3-T05
 
@@ -49,4 +49,4 @@ La démo Render n'a pas encore de base de données (S3-T07) : le fichier de dém
 - ➕ Un changement de contrat casse à la fois l'API et le site à la compilation ou dans les tests.
 - ➖ Toutes les pages du catalogue sont rendues à la demande : quelques millisecondes par page grâce au cache.
 - ➖ Les paniers et favoris enregistrés avant cette version sont vidés (une seule fois).
-- ➖ Le mode fichier duplique la logique de recherche de l'API (`file-catalog.ts`) ; il disparaît au S3-T07.
+- ➖ Le mode fichier duplique la logique de recherche de l'API (`file-catalog.ts`) ; prévu pour le S3-T07, son retrait est reporté au S3-T08 (ADR-0013).
