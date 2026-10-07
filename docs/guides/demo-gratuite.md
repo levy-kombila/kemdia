@@ -169,15 +169,17 @@ Le résumé du job affiche l'adresse et la source du catalogue.
 
 ## En cas de problème
 
-| Symptôme                                                                           | Cause probable et solution                                                                                               |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Logs de l'API : `Démarrage de démonstration refusé : APP_ENV doit valoir « demo »` | Ajouter `APP_ENV=demo` dans les variables du service de l'API                                                            |
-| Logs de l'API : `DATABASE_URL : obligatoire en production`                         | Variable `DATABASE_URL` absente ou vide                                                                                  |
-| Logs de l'API : `Migrations de la base : ÉCHEC`                                    | Adresse Neon fausse, `-pooler` dans l'adresse, ou projet Neon supprimé. Recopier l'adresse directe (étape 3)             |
-| Render : _image pull failed_ sur l'API                                             | Le dépôt Docker Hub `kemdia-api` est privé : le rendre public (étape 1.4)                                                |
-| Site : « Une erreur est survenue » à la première visite                            | L'API se réveillait encore : cliquer **Réessayer** au bout d'une minute. Vérifier `CATALOG_TIMEOUT_MS=60000` sur le site |
-| Site : erreur sur toutes les pages, logs `[catalogue] … API injoignable`           | `API_URL` fausse, ou clés différentes entre le site et l'API                                                             |
-| CI : `Le site de démo ne lit pas l'API (catalogue : file)`                         | `API_URL` / `API_INTERNAL_KEY` absentes dans le service du site (étape 5)                                                |
+| Symptôme                                                                           | Cause probable et solution                                                                                                        |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Logs de l'API : `Démarrage de démonstration refusé : APP_ENV doit valoir « demo »` | Ajouter `APP_ENV=demo` dans les variables du service de l'API                                                                     |
+| Logs de l'API : `DATABASE_URL : obligatoire en production`                         | Variable `DATABASE_URL` absente ou vide                                                                                           |
+| Logs de l'API : `Migrations de la base : ÉCHEC`                                    | Adresse Neon fausse, `-pooler` dans l'adresse, ou projet Neon supprimé. Recopier l'adresse directe (étape 3)                      |
+| Render : _image pull failed_ sur l'API                                             | Le dépôt Docker Hub `kemdia-api` est privé : le rendre public (étape 1.4)                                                         |
+| Site : « Une erreur est survenue » à la première visite                            | L'API se réveillait encore : cliquer **Réessayer** au bout d'une minute. Vérifier `CATALOG_TIMEOUT_MS=60000` sur le site          |
+| Site : erreur sur toutes les pages, logs `[catalogue] … API injoignable`           | `API_URL` fausse, ou clés différentes entre le site et l'API                                                                      |
+| CI : `Le site de démo ne lit pas l'API (catalogue : file)`                         | `API_URL` / `API_INTERNAL_KEY` absentes dans le service du site (étape 5)                                                         |
+| CI : `The requested URL returned error: 502` juste après le déploiement            | Bascule de Render vers la nouvelle version : la CI retente 5 fois (15 s d'écart). Si ça persiste, voir les **Logs** du service    |
+| Adresse `https://kemdia.onrender.com` → « Not Found »                              | Le nom était pris : Render a donné une autre adresse (ex. `kemdia-1.onrender.com`). Mettre la bonne dans `SITE_URL` et `DEMO_URL` |
 
 **Changer la clé interne** : générer une nouvelle valeur, la mettre **dans les deux services** (API puis site). **Changer le mot de passe Neon** :
 Neon → **Roles → Reset password**, puis mettre la nouvelle adresse dans `DATABASE_URL` de l'API.
