@@ -28,6 +28,7 @@ describe("loadConfig", () => {
       DATABASE_STATEMENT_TIMEOUT_MS: 10_000,
       RATE_LIMIT_PER_MINUTE: 120,
       API_DOCS: true,
+      SMS_ENABLED: false,
     });
   });
 
@@ -121,6 +122,12 @@ describe("loadConfig", () => {
         }).API_DOCS,
       ).toBe(false);
       expect(loadConfig({ API_DOCS: "false" }).API_DOCS).toBe(false);
+    });
+
+    it("SMS désactivé par défaut (aucun fournisseur choisi), activable par SMS_ENABLED=true", () => {
+      expect(loadConfig({}).SMS_ENABLED).toBe(false);
+      expect(loadConfig({ SMS_ENABLED: "true" }).SMS_ENABLED).toBe(true);
+      expect(problems({ SMS_ENABLED: "oui" })).toEqual([expect.stringMatching(/^SMS_ENABLED : /)]);
     });
 
     it("clé interne : 32 caractères au moins, jamais recopiée dans l'erreur", () => {

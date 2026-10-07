@@ -10,6 +10,7 @@ import { HealthModule } from "./health/health.module.js";
 import { loggerParams } from "./http/logging.js";
 import { KemdiaThrottlerGuard, throttlerOptions } from "./http/rate-limit.js";
 import { CatalogModule } from "./modules/catalog/index.js";
+import { IdentityModule } from "./modules/identity/index.js";
 
 /**
  * Module racine : il assemble les briques techniques et, à partir du S3-T03, les modules métier
@@ -27,6 +28,7 @@ export class AppModule {
         DatabaseModule,
         HealthModule,
         CatalogModule,
+        IdentityModule,
         // Documentation (/api/docs, /api/v1/openapi.json) : désactivée par défaut en production
         ...(config.API_DOCS ? [DocsModule] : []),
       ],

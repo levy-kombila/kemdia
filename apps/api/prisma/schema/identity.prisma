@@ -1,0 +1,93 @@
+// Module identity : comptes, codes à usage unique, sessions (S4-T01, ADR-0015).
+// Chaque modèle de ce fichier porte @@schema("identity").
+// Règles complémentaires posées en SQL dans la migration (Prisma ne sait pas les décrire) :
+// un e-mail ou un téléphone obligatoire, e-mail en minuscules, téléphone au format +2410[67]XXXXXXX,
+// compteurs >= 0, code à 6 chiffres sous forme d'empreinte SHA-256 seulement.
+
+/// Statut d'un compte : PENDING (identifiant pas encore vérifié, BR-041), ACTIVE, DISABLED (fermé par l'équipe).
+enum AccountStatus {
+  PENDING
+  ACTIVE
+  DISABLED
+
+  @@map("account_status")
+  @@schema("identity")
+}
+
+/// Usage d'un code : SIGNUP (vérifier l'identifiant à l'inscription), RESET (mot de passe oublié, FR-012).
+enum OtpPurpose {
+  SIGNUP
+  RESET
+
+  @@map("otp_purpose")
+  @@schema("identity")
+}
+
+/// Canal d'envoi d'un code.
+enum OtpChannel {
+  EMAIL
+  SMS
+
+  @@map("otp_channel")
+  @@schema("identity")
+}
+
+/// Compte client (FR-001). Mot de passe : hachage Argon2id uniquement.
+model Account {
+  /// BR-042 : identifiant public UUID
+  id              String        @id @db.Uuid
+  firstName       String        @map("first_name") @db.VarChar(60)
+  lastName        String        @map("last_name") @db.VarChar(60)
+  email           String?       @unique @db.VarChar(254)
+  phone           String?       @unique @db.VarChar(13)
+  passwordHash    String        @map("password_hash") @db.VarChar(255)
+  status          AccountStatus @default(PENDING)
+  emailVerifiedAt DateTime?     @map("email_verified_at") @db.Timestamptz(3)
+  phoneVerifiedAt DateTime?     @map("phone_verified_at") @db.Timestamptz(3)
+  /// BR-040 : échecs de connexion consécutifs ; au 3ᵉ, `lockedUntil` = maintenant + 15 min
+  failedLogins    Int           @default(0) @map("failed_logins")
+  lockedUntil     DateTime?     @map("locked_until") @db.Timestamptz(3)
+  sessions        Session[]
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("accounts")
+  @@schema("identity")
+}
+
+/// Code à usage unique envoyé par e-mail ou SMS. Le code n'est jamais enregistré, seulement son empreinte.
+/// Les limites d'envoi (60 s, 5 par heure) se comptent sur cette table (ADR-0015 : pas de Redis).
+model OtpChallenge {
+  id          String     @id @db.Uuid
+  purpose     OtpPurpose
+  channel     OtpChannel
+  /// Identifiant normalisé (e-mail en minuscules ou +241…), même sans compte (pas de fuite d'existence)
+  destination String     @db.VarChar(254)
+  codeHash    String     @map("code_hash") @db.Char(64)
+  attempts    Int        @default(0)
+  expiresAt   DateTime   @map("expires_at") @db.Timestamptz(3)
+  consumedAt  DateTime?  @map("consumed_at") @db.Timestamptz(3)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([destination, createdAt])
+  @@map("otp_challenges")
+  @@schema("identity")
+}
+
+/// Session ouverte (S4-T03). Le cookie porte un jeton aléatoire ; la base n'en garde que l'empreinte SHA-256.
+model Session {
+  id         String    @id @db.Uuid
+  accountId  String    @map("account_id") @db.Uuid
+  account    Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique @map("token_hash") @db.Char(64)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+  /// Navigateur résumé (« Chrome sur Android »), pour la liste des appareils connectés
+  userAgent  String?   @map("user_agent") @db.VarChar(200)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([accountId])
+  @@map("sessions")
+  @@schema("identity")
+}

@@ -65,6 +65,11 @@ const envSchema = z
       .optional(),
     /** Documentation interactive (/api/docs) et description OpenAPI. Par défaut : activée sauf en production. */
     API_DOCS: z.enum(["true", "false"]).optional(),
+    /**
+     * Vérification par SMS (S4, ADR-0015). `false` tant que le client n'a pas choisi de fournisseur :
+     * le site affiche l'option téléphone comme « bientôt disponible » et l'API refuse d'envoyer un SMS.
+     */
+    SMS_ENABLED: z.enum(["true", "false"]).default("false"),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== "production") return;
@@ -100,7 +105,9 @@ const envSchema = z
 
 type ParsedEnv = z.output<typeof envSchema>;
 
-export type AppConfig = Readonly<Omit<ParsedEnv, "API_DOCS"> & { API_DOCS: boolean }>;
+export type AppConfig = Readonly<
+  Omit<ParsedEnv, "API_DOCS" | "SMS_ENABLED"> & { API_DOCS: boolean; SMS_ENABLED: boolean }
+>;
 
 /** Erreur de configuration : liste des variables en cause, sans leurs valeurs. */
 export class ConfigError extends Error {
@@ -135,9 +142,10 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     });
     throw new ConfigError(problems);
   }
-  const { API_DOCS, ...rest } = result.data;
+  const { API_DOCS, SMS_ENABLED, ...rest } = result.data;
   return Object.freeze({
     ...rest,
+    SMS_ENABLED: SMS_ENABLED === "true",
     API_DOCS: API_DOCS === undefined ? rest.NODE_ENV !== "production" : API_DOCS === "true",
   });
 }
