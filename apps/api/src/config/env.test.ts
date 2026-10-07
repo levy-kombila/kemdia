@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { ConfigError, LOCAL_DATABASE_URL, loadConfig } from "./env.js";
 
@@ -165,5 +166,13 @@ describe("loadConfig", () => {
         expect.stringMatching(/^LOG_LEVEL : .*interdits en production/),
       ]);
     });
+  });
+});
+
+describe("outil Prisma (prisma.config.ts)", () => {
+  it("même base par défaut que l'API hors production : `pnpm db:deploy` marche sans DATABASE_URL dans .env", () => {
+    const config = readFileSync(new URL("../../prisma.config.ts", import.meta.url), "utf8");
+    expect(config).toContain(`"${LOCAL_DATABASE_URL}"`);
+    expect(config).toMatch(/NODE_ENV === "production"\s*\?\s*undefined/);
   });
 });

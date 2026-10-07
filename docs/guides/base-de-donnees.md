@@ -48,9 +48,12 @@ Sous **PowerShell**, écrire ces fichiers en ASCII (sinon Windows ajoute des car
 
 ```powershell
 $cle = node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
-Set-Content -Encoding ascii apps\api\.env "API_INTERNAL_KEY=$cle"
+Add-Content -Encoding ascii apps\api\.env "API_INTERNAL_KEY=$cle"
 Set-Content -Encoding ascii apps\web\.env.local "API_URL=http://localhost:4000`nAPI_INTERNAL_KEY=$cle"
 ```
+
+`Add-Content` **ajoute** la clé à `apps\api\.env` sans effacer ce qui s'y trouve déjà (par exemple `DATABASE_URL` avec le port 5433, voir
+« En cas de problème »). N'utilisez pas `Set-Content` sur ce fichier : il le remplacerait entièrement.
 
 Si l'API est arrêtée, les pages du catalogue affichent « Une erreur est survenue » : c'est voulu, le site ne bascule **jamais**
 sur des données de secours ([ADR-0011](../architecture/adr/0011-site-branche-api.md)). Relancer l'API (`pnpm dev`) suffit.
@@ -125,6 +128,7 @@ pnpm --filter @kemdia/api test:int
 | `port is already allocated` ou `An attempt was made to access a socket in a way forbidden` (Windows) | Le port 5432 est occupé ou **réservé par Windows** (Hyper-V/WSL). Utiliser 5433 : créer `.env` à la racine avec `POSTGRES_PORT=5433`, et `apps/api/.env` avec `DATABASE_URL=postgresql://kemdia:kemdia@localhost:5433/kemdia` (voir ci-dessous) |
 | `/api/health` répond 503                                                                             | `docker compose up -d db`, puis attendre « healthy »                                                                                                                                                                                            |
 | `password authentication failed`                                                                     | Base créée avant avec d'autres identifiants : `docker compose down -v` (⚠️ efface les données locales) puis `up -d db`                                                                                                                          |
+| `P1000` (import ou API) alors que la base tourne                                                     | Mauvais port : la base écoute sur 5433 (voir ci-dessous) mais `apps/api/.env` ne contient plus `DATABASE_URL`. Vérifier avec `docker compose ps`, puis rajouter la ligne `DATABASE_URL`                                                         |
 | Prisma n'arrive pas à télécharger son moteur                                                         | Connexion coupée ou filtrée vers `binaries.prisma.sh` : réessayer, ou définir `PRISMA_ENGINES_MIRROR`                                                                                                                                           |
 | `Cannot find module '…/generated/prisma/…'`                                                          | Client non généré : relancer `pnpm install` (ou `pnpm --filter @kemdia/api generate`)                                                                                                                                                           |
 | `prisma n'est pas reconnu…`                                                                          | Toujours passer par pnpm : `pnpm --filter @kemdia/api db:deploy`, jamais `prisma` seul                                                                                                                                                          |
