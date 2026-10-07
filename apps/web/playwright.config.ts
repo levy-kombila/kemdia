@@ -32,7 +32,9 @@ export default defineConfig({
     // Budget de performance : téléphone en 3G, cache vide (voir e2e/performance.spec.ts)
     {
       name: "performance",
-      use: { ...devices["Pixel 7"] },
+      // Pas de trace ni de capture pendant la mesure : l'enregistrement Playwright occupe le fil principal
+      // du navigateur et gonflait le « blocage » mesuré (~+200 ms sur l'accueil, constaté au S3-T08).
+      use: { ...devices["Pixel 7"], trace: "off", screenshot: "off", video: "off" },
       testMatch: /performance\.spec\.ts/,
       fullyParallel: false,
       retries: 1,

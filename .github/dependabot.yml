@@ -34,7 +34,8 @@ updates:
       # Types Node alignés sur la version d'exécution (Node 22 LTS) : majeure décidée à la main
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
-      # Changements majeurs évalués au Sprint 3 (voir planning) : TypeScript 7, ESLint 10
+      # Majeures décidées à la main (ADR-0014) : TypeScript 7 attend la 7.1 et la compatibilité de typescript-eslint ;
+      # ESLint 10 pour le site attend eslint-config-next (l'API et le contrat y sont déjà)
       - dependency-name: typescript
         update-types: ["version-update:semver-major"]
       - dependency-name: eslint

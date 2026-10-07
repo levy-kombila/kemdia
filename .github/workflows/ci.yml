@@ -197,7 +197,9 @@ jobs:
       - name: Tableau des mesures dans le résumé
         if: always()
         working-directory: apps/web
-        run: node scripts/perf-summary.mjs >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          node scripts/perf-summary.mjs >> "$GITHUB_STEP_SUMMARY"
+          node scripts/perf-summary.mjs --annotations
 
       - name: Journal de l'API en cas d'échec
         if: failure()

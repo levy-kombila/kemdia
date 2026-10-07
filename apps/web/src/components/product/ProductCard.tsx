@@ -82,8 +82,10 @@ export function ProductCard({
   return (
     <article className="group relative flex h-full flex-col rounded-xl bg-white p-2.5 ring-1 ring-black/5 transition-shadow hover:shadow-[var(--shadow-card-hover)]">
       <div className="relative aspect-square overflow-hidden rounded-lg bg-white">
-        {/* Lien positionné : c'est le parent direct de l'image `fill` (exigence de next/image) */}
-        <Link href={href} tabIndex={-1} aria-hidden className="absolute inset-0">
+        {/* Conteneur positionné de l'image `fill` (exigence de next/image). Pas de lien ici : celui du titre
+            couvre déjà toute la carte (after:inset-0). Un lien de moins par carte = moins de travail au chargement
+            (S3-T08 : ~60 composants Link de moins sur l'accueil). */}
+        <span className="absolute inset-0">
           <Image
             src={image}
             alt=""
@@ -92,7 +94,7 @@ export function ProductCard({
             preload={preloadImage}
             className="object-contain p-1.5 transition-transform duration-300 group-hover:scale-[1.04]"
           />
-        </Link>
+        </span>
 
         {discount && <DiscountSticker percent={discount} className="absolute left-1 top-1.5" />}
         {label && (

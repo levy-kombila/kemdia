@@ -29,7 +29,8 @@ const BADGES = [
 
 export function Footer() {
   return (
-    <footer className="bg-ink-900 mt-16 text-white/70">
+    // Hors écran à l'ouverture de toutes les pages : mise en page calculée à l'approche (S3-T08)
+    <footer className="bg-ink-900 mt-16 text-white/70 [contain-intrinsic-size:auto_68rem] [content-visibility:auto]">
       <div className="border-b border-white/10">
         <div className="container-page grid grid-cols-2 gap-4 py-6 md:grid-cols-4">
           {BADGES.map(({ icon: Icon, text }) => (
