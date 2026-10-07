@@ -152,7 +152,7 @@ export class PrismaProductRepository implements ProductRepository {
     ]);
     return {
       brands: brands
-        .map((b) => ({ name: b.brand as string, count: (b._count as { _all: number })._all }))
+        .map((b) => ({ name: b.brand as string, count: b._count._all }))
         .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "fr")),
       prices: priceRanges.map((range, i) => ({ key: range.key, count: prices[i] as number })),
       inStock,
