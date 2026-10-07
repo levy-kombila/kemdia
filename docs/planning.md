@@ -9,18 +9,18 @@ Mobile Money (Moov, Airtel) et paiement à la livraison, lancement visé **fin 2
 
 ## Vue d'ensemble
 
-| Sprint    | Objectif                                                                                                | Statut      |
-| --------- | ------------------------------------------------------------------------------------------------------- | ----------- |
-| **S0**    | Décision de réécriture, choix de la stack, poste de travail                                             | ✅ Terminé  |
-| **S1**    | Fondations frontend + DevOps (CI/CD, sécurité, démo publique)                                           | ✅ Terminé  |
-| **S2**    | Intégration du KSAD + finitions frontend (comptes, tunnel de commande, filtres, tests E2E)              | ✅ Terminé  |
-| **S3**    | Backend NestJS + PostgreSQL, module `catalog`, site branché sur l'API                                   | 🚧 En cours |
-| **S4**    | Module `identity` : comptes par e-mail ou téléphone (OTP), sécurité de connexion                        | ⏳          |
-| **S5**    | Modules `orders` + `payments` : commande, Mobile Money, paiement à la livraison                         | ⏳          |
-| **S6**    | Module `vendors` + back-office : boutiques, KYC, modération, commissions                                | ⏳          |
-| **S7**    | Module `shipping` (transporteur) + préproduction (serveur, surveillance, sauvegardes, test d'intrusion) | ⏳          |
-| **S8**    | Bêta fermée (vendeurs partenaires + testeurs) puis lancement Gabon 🇬🇦                                   | ⏳          |
-| Après MVP | Affiliation, application mobile, suivi GPS, Kemdia Pay v2                                               | —           |
+| Sprint    | Objectif                                                                                                | Statut     |
+| --------- | ------------------------------------------------------------------------------------------------------- | ---------- |
+| **S0**    | Décision de réécriture, choix de la stack, poste de travail                                             | ✅ Terminé |
+| **S1**    | Fondations frontend + DevOps (CI/CD, sécurité, démo publique)                                           | ✅ Terminé |
+| **S2**    | Intégration du KSAD + finitions frontend (comptes, tunnel de commande, filtres, tests E2E)              | ✅ Terminé |
+| **S3**    | Backend NestJS + PostgreSQL, module `catalog`, site branché sur l'API                                   | ✅ Terminé |
+| **S4**    | Module `identity` : comptes par e-mail ou téléphone (OTP), sécurité de connexion                        | ⏳         |
+| **S5**    | Modules `orders` + `payments` : commande, Mobile Money, paiement à la livraison                         | ⏳         |
+| **S6**    | Module `vendors` + back-office : boutiques, KYC, modération, commissions                                | ⏳         |
+| **S7**    | Module `shipping` (transporteur) + préproduction (serveur, surveillance, sauvegardes, test d'intrusion) | ⏳         |
+| **S8**    | Bêta fermée (vendeurs partenaires + testeurs) puis lancement Gabon 🇬🇦                                   | ⏳         |
+| Après MVP | Affiliation, application mobile, suivi GPS, Kemdia Pay v2                                               | —          |
 
 ### Jalons
 
@@ -28,7 +28,7 @@ Mobile Money (Moov, Airtel) et paiement à la livraison, lancement visé **fin 2
 | ------ | ---------------------------------------------------------------------------------------------------- | -------------------------- |
 | v0.1.0 | Site vitrine + CI/CD + démo publique                                                                 | ✅ S1                      |
 | v0.2.0 | Parcours client complet en démonstration : compte, commande, favoris, partage, tests de bout en bout | ✅ S2                      |
-| v0.3.0 | Catalogue servi par l'API et PostgreSQL                                                              | fin S3                     |
+| v0.3.0 | Catalogue servi par l'API et PostgreSQL                                                              | ✅ S3                      |
 | v0.5.0 | Premier achat de bout en bout en environnement de test (Mobile Money _sandbox_)                      | fin S5                     |
 | v0.7.0 | Vendeurs partenaires opérationnels                                                                   | fin S6                     |
 | v1.0.0 | Lancement public                                                                                     | S8 (fin 2027 au plus tard) |
@@ -102,7 +102,7 @@ Ces démarches prennent souvent plusieurs mois et **bloquent** des sprints si el
 | S2-T09 | Fermeture de la dette S1 : PR Dependabot obsolètes, configuration Dependabot, mises à jour sûres                       | ✅     |
 | S2-T10 | Refonte visuelle « place de marché » : accueil, fiche produit, barre mobile, connexion, listes, panier                 | ✅     |
 
-## S3 — Backend : socle et module `catalog` 🚧
+## S3 — Backend : socle et module `catalog` ✅
 
 | ID     | Tâche                                                                                                                                | Statut |
 | ------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------ |
@@ -121,5 +121,5 @@ Ces démarches prennent souvent plusieurs mois et **bloquent** des sprints si el
 - **S5 `orders` + `payments`** : panier serveur (et vérification du panier par `POST /availability` au passage en caisse), réservation de stock atomique (BR-012), coupons (BR-030), paiement à la livraison sous conditions (BR-011),
   adaptateurs Moov / Airtel en _sandbox_, webhooks signés, idempotence, factures (FR-015).
 - **S6 `vendors` + back-office** : boutique, KYC (BR-024), modération des produits (BR-003), commandes vendeur (BR-013), commissions (BR-020), modération des avis.
-- **S7 `shipping` + préproduction** : transporteur, commission logistique (BR-021), serveur durci, surveillance, sauvegardes chiffrées testées, test d'intrusion, conformité.
+- **S7 `shipping` + préproduction** : transporteur, commission logistique (BR-021), serveur durci, surveillance, sauvegardes chiffrées testées, test d'intrusion, conformité. Dette S3 : blocage de l'accueil ramené sous 300 ms (387 ms en CI à la fin du S3).
 - **S8** : bêta fermée avec les vendeurs partenaires, corrections, lancement.
