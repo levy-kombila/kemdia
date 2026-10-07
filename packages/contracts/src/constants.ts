@@ -55,3 +55,30 @@ export const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 /** Format des adresses lisibles (slug). */
 export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+// --- Identité (S4) ---
+
+/**
+ * Codes d'erreur métier de l'identité, renvoyés dans le champ `code` des erreurs (Problem Details).
+ * Le site choisit son message à partir de ce code, jamais à partir du texte.
+ */
+export const IDENTITY_ERROR_CODES = [
+  "IDENTIFIANT_INVALIDE",
+  "NOM_INVALIDE",
+  "MOT_DE_PASSE_FAIBLE",
+  "CANAL_INDISPONIBLE",
+  "ENVOI_TROP_RAPPROCHE",
+  "TROP_D_ENVOIS",
+  "CODE_INVALIDE",
+  "CODE_EXPIRE",
+  "TROP_D_ESSAIS",
+  "COMPTE_BLOQUE",
+] as const;
+export type IdentityErrorCode = (typeof IDENTITY_ERROR_CODES)[number];
+
+/** Code à usage unique : 6 chiffres. */
+export const OTP_CODE_PATTERN = /^\d{6}$/;
+/** Ticket d'inscription : 32 octets en base64url (43 caractères). */
+export const SIGNUP_TICKET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+/** Canaux d'envoi des codes. */
+export const OTP_CHANNELS = ["email", "sms"] as const;

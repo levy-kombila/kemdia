@@ -108,14 +108,17 @@ Les étapes 1 et 2 (site seul) ont été faites au S1. Pour une installation neu
 3. Nom : `kemdia-api` (adresse `https://kemdia-api.onrender.com`, ou proche). Région **Frankfurt**, instance **Free**.
 4. **Environment variables** :
 
-| Nom                 | Valeur                                       | Remarque                                                    |
-| ------------------- | -------------------------------------------- | ----------------------------------------------------------- |
-| `APP_ENV`           | `demo`                                       | **Obligatoire** : sans lui, le démarrage de démo est refusé |
-| `PORT`              | `4000`                                       |                                                             |
-| `DATABASE_URL`      | l'adresse Neon de l'étape 3                  | **Secret**                                                  |
-| `DATABASE_POOL_MAX` | `5`                                          | Peu de connexions suffisent pour une démo                   |
-| `API_INTERNAL_KEY`  | la clé générée au point 1                    | **Secret** — la même valeur ira dans le service du site     |
-| `API_DOCS`          | `false` (ou `true` pour montrer `/api/docs`) | Facultatif ; désactivée par défaut, comme en production     |
+| Nom                 | Valeur                                       | Remarque                                                          |
+| ------------------- | -------------------------------------------- | ----------------------------------------------------------------- |
+| `APP_ENV`           | `demo`                                       | **Obligatoire** : sans lui, le démarrage de démo est refusé       |
+| `PORT`              | `4000`                                       |                                                                   |
+| `DATABASE_URL`      | l'adresse Neon de l'étape 3                  | **Secret**                                                        |
+| `DATABASE_POOL_MAX` | `5`                                          | Peu de connexions suffisent pour une démo                         |
+| `API_INTERNAL_KEY`  | la clé générée au point 1                    | **Secret** — la même valeur ira dans le service du site           |
+| `API_DOCS`          | `false` (ou `true` pour montrer `/api/docs`) | Facultatif ; désactivée par défaut, comme en production           |
+| `EMAIL_TRANSPORT`   | `brevo`                                      | Envoi des codes par e-mail (S4-T02) — voir [emails.md](emails.md) |
+| `BREVO_API_KEY`     | la clé d'API Brevo                           | **Secret**                                                        |
+| `EMAIL_FROM`        | l'adresse d'expédition vérifiée dans Brevo   |                                                                   |
 
 5. **Advanced** :
    - **Docker Command** : `node dist/database/start-demo.js`

@@ -4,5 +4,6 @@
  */
 export { IdentityModule } from "./identity.module.js";
 export { OtpService, type IssuedOtp } from "./application/otp.service.js";
+export { SignupService } from "./application/signup.service.js";
 export type { Identifier, OtpChannel } from "./domain/identifier.js";
 export { IdentityError, type IdentityErrorCode } from "./domain/identity-error.js";

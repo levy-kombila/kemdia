@@ -1,6 +1,7 @@
 import type { Account } from "../domain/account.js";
 import type { Identifier, OtpChannel } from "../domain/identifier.js";
 import type { OtpChallenge, OtpPurpose } from "../domain/otp.js";
+import type { SignupTicket } from "../domain/signup-ticket.js";
 
 /**
  * Ports du module identity (architecture hexagonale) : ce dont les cas d'utilisation ont besoin,
@@ -9,6 +10,7 @@ import type { OtpChallenge, OtpPurpose } from "../domain/otp.js";
 
 export const ACCOUNT_REPOSITORY = Symbol("ACCOUNT_REPOSITORY");
 export const OTP_CHALLENGE_REPOSITORY = Symbol("OTP_CHALLENGE_REPOSITORY");
+export const SIGNUP_TICKET_REPOSITORY = Symbol("SIGNUP_TICKET_REPOSITORY");
 export const PASSWORD_HASHER = Symbol("PASSWORD_HASHER");
 export const OTP_SENDER = Symbol("OTP_SENDER");
 export const IDENTITY_CLOCK = Symbol("IDENTITY_CLOCK");
@@ -38,18 +40,31 @@ export class IdentifierTakenError extends Error {
 }
 
 export interface OtpChallengeRepository {
-  create(challenge: OtpChallenge): Promise<void>;
+  /**
+   * Crée le défi SI les limites d'envoi le permettent, de façon atomique (verrou par destination) :
+   * `check` reçoit les dates des envois de la dernière heure vers cette destination pour cet usage,
+   * et lève une erreur pour refuser. Deux demandes simultanées ne passent jamais ensemble.
+   */
+  createWithinLimits(challenge: OtpChallenge, check: (sentLastHour: Date[]) => void): Promise<void>;
   /**
    * Le DERNIER défi envoyé pour cette destination et cet usage, utilisable ou non (ou `null`).
    * Jamais « le dernier encore utilisable » : un ancien code redeviendrait valable une fois le nouveau utilisé.
    */
   findLatest(destination: string, purpose: OtpPurpose): Promise<OtpChallenge | null>;
-  /** Date du dernier envoi vers cette destination (tous usages confondus), ou `null`. */
-  lastSentAt(destination: string): Promise<Date | null>;
-  /** Nombre de codes envoyés vers cette destination depuis `since`. */
-  countSentSince(destination: string, since: Date): Promise<number>;
-  /** Enregistre le nombre d'essais et la consommation éventuelle. */
-  save(challenge: OtpChallenge): Promise<void>;
+  /**
+   * Compte un essai en UNE requête (`attempts = attempts + 1` si le défi est encore utilisable).
+   * Renvoie le nombre d'essais après celui-ci, ou `null` si le défi n'était plus utilisable.
+   */
+  claimAttempt(id: string, now: Date): Promise<number | null>;
+  /** Marque le défi utilisé, une seule fois : `false` s'il l'était déjà (deux bons essais simultanés). */
+  consume(id: string, now: Date): Promise<boolean>;
+}
+
+export interface SignupTicketRepository {
+  /** Enregistre un ticket et ANNULE les tickets précédents de la même destination (une seule inscription en cours). */
+  replaceForDestination(ticket: SignupTicket): Promise<void>;
+  findByHash(ticketHash: string): Promise<SignupTicket | null>;
+  deleteForDestination(destination: string): Promise<void>;
 }
 
 /** Hachage des mots de passe (Argon2id, ADR-0015). */
@@ -58,15 +73,18 @@ export interface PasswordHasher {
   verify(hash: string, password: string): Promise<boolean>;
 }
 
-export interface OtpMessage {
+/**
+ * Message envoyé à un identifiant :
+ * - `code` : le code à usage unique ;
+ * - `signup-alert` : « quelqu'un a essayé de créer un compte avec votre adresse » (elle a déjà un compte, ADR-0016).
+ */
+export type OtpMessage = {
   channel: OtpChannel;
   /** Identifiant normalisé du destinataire */
   to: string;
-  code: string;
-  purpose: OtpPurpose;
-}
+} & ({ kind: "code"; code: string; purpose: OtpPurpose } | { kind: "signup-alert" });
 
-/** Envoi d'un code : console (développement), e-mail (S4-T02), SMS (quand le client aura choisi un fournisseur). */
+/** Envoi des messages : console (développement), e-mail (S4-T02), SMS (quand le client aura choisi un fournisseur). */
 export interface OtpSender {
   /** Canaux réellement disponibles avec cet adaptateur et cette configuration. */
   readonly channels: readonly OtpChannel[];

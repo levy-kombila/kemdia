@@ -117,7 +117,8 @@ Ces démarches prennent souvent plusieurs mois et **bloquent** des sprints si el
 
 ## S4 — Module `identity` : comptes et connexion ⏳
 
-Décisions : [ADR-0015](architecture/adr/0015-identite-sessions-otp.md) (sessions en base + cookie, Argon2id, codes, SMS différé).
+Décisions : [ADR-0015](architecture/adr/0015-identite-sessions-otp.md) (sessions en base + cookie, Argon2id, codes, SMS différé),
+[ADR-0016](architecture/adr/0016-inscription-tickets-emails.md) (inscription sans énumération, tickets, e-mails).
 
 | ID     | Tâche                                                                                                                      | Statut |
 | ------ | -------------------------------------------------------------------------------------------------------------------------- | ------ |

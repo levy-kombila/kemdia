@@ -29,6 +29,10 @@ describe("loadConfig", () => {
       RATE_LIMIT_PER_MINUTE: 120,
       API_DOCS: true,
       SMS_ENABLED: false,
+      EMAIL_TRANSPORT: "console",
+      MAILPIT_URL: "http://localhost:8025",
+      EMAIL_FROM: "no-reply@kemdia.local",
+      EMAIL_FROM_NAME: "Kemdia",
     });
   });
 
@@ -128,6 +132,38 @@ describe("loadConfig", () => {
       expect(loadConfig({}).SMS_ENABLED).toBe(false);
       expect(loadConfig({ SMS_ENABLED: "true" }).SMS_ENABLED).toBe(true);
       expect(problems({ SMS_ENABLED: "oui" })).toEqual([expect.stringMatching(/^SMS_ENABLED : /)]);
+    });
+
+    it("e-mails : Brevo exige la clé et l'adresse d'expédition ; la clé n'est jamais recopiée", () => {
+      const key = `xkeysib-${"c".repeat(64)}-Secret123456`;
+      expect(problems({ EMAIL_TRANSPORT: "brevo" })).toEqual([
+        expect.stringMatching(/^BREVO_API_KEY : obligatoire/),
+        expect.stringMatching(/^EMAIL_FROM : obligatoire/),
+      ]);
+      const config = loadConfig({
+        EMAIL_TRANSPORT: "brevo",
+        BREVO_API_KEY: key,
+        EMAIL_FROM: "kemdia.demo@gmail.com",
+      });
+      expect(config.EMAIL_TRANSPORT).toBe("brevo");
+      const list = problems({ BREVO_API_KEY: "secret-pas-une-cle-brevo" });
+      expect(list).toEqual([expect.stringMatching(/^BREVO_API_KEY : /)]);
+      expect(list.join()).not.toContain("secret-pas-une-cle-brevo");
+    });
+
+    it("e-mails : par défaut aucun envoi hors du poste ; console et Mailpit interdits en production", () => {
+      const prod = {
+        NODE_ENV: "production",
+        APP_VERSION: "v1",
+        DATABASE_URL: "postgresql://a:b@db/k",
+      };
+      expect(loadConfig({ ...prod, APP_ENV: "demo" }).EMAIL_TRANSPORT).toBe("none");
+      expect(problems({ ...prod, APP_ENV: "demo", EMAIL_TRANSPORT: "console" })).toEqual([
+        expect.stringMatching(/^EMAIL_TRANSPORT : « console » est réservé/),
+      ]);
+      expect(problems({ ...prod, APP_ENV: "production", EMAIL_TRANSPORT: "mailpit" })).toEqual([
+        expect.stringMatching(/^EMAIL_TRANSPORT : « mailpit »/),
+      ]);
     });
 
     it("clé interne : 32 caractères au moins, jamais recopiée dans l'erreur", () => {

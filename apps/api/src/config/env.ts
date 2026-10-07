@@ -70,8 +70,63 @@ const envSchema = z
      * le site affiche l'option téléphone comme « bientôt disponible » et l'API refuse d'envoyer un SMS.
      */
     SMS_ENABLED: z.enum(["true", "false"]).default("false"),
+    /**
+     * Envoi des e-mails (codes, alertes — ADR-0016) :
+     * - `console` : écrits dans le terminal (poste de développement SEULEMENT) ;
+     * - `mailpit` : boîte de test locale (docker compose), http://localhost:8025 ;
+     * - `brevo`   : vrai envoi par l'API de Brevo (démo) ;
+     * - `none`    : aucun envoi possible.
+     * Par défaut : `console` sur le poste, `none` ailleurs.
+     */
+    EMAIL_TRANSPORT: z.enum(["console", "mailpit", "brevo", "none"]).optional(),
+    /** Adresse de Mailpit (API d'envoi). */
+    MAILPIT_URL: z.url({ protocol: /^https?$/ }).default("http://localhost:8025"),
+    /** Clé d'API Brevo. SECRET : uniquement dans les variables du serveur, jamais dans Git ni dans un message. */
+    BREVO_API_KEY: z
+      .string()
+      .regex(/^xkeysib-[A-Za-z0-9-]{20,200}$/, "clé Brevo attendue (commence par « xkeysib- »)")
+      .optional(),
+    /** Adresse d'expédition (pour Brevo : l'adresse vérifiée dans le compte Brevo). */
+    EMAIL_FROM: z.email({ error: "adresse e-mail attendue" }).optional(),
+    EMAIL_FROM_NAME: z
+      .string()
+      .regex(/^[\p{L}\p{N} .'-]{1,40}$/u, "40 caractères au plus : lettres, chiffres, espaces")
+      .default("Kemdia"),
   })
   .superRefine((env, ctx) => {
+    const transport = env.EMAIL_TRANSPORT;
+    const onDevMachine = env.APP_ENV === "local" && env.NODE_ENV !== "production";
+    if (transport === "console" && !onDevMachine) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["EMAIL_TRANSPORT"],
+        message:
+          "« console » est réservé au poste de développement (les codes iraient dans les journaux)",
+      });
+    }
+    if (transport === "mailpit" && env.APP_ENV === "production") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["EMAIL_TRANSPORT"],
+        message: "« mailpit » est une boîte de test : interdit en production",
+      });
+    }
+    if (transport === "brevo") {
+      if (!env.BREVO_API_KEY) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["BREVO_API_KEY"],
+          message: "obligatoire avec EMAIL_TRANSPORT=brevo",
+        });
+      }
+      if (!env.EMAIL_FROM) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["EMAIL_FROM"],
+          message: "obligatoire avec EMAIL_TRANSPORT=brevo (adresse vérifiée dans Brevo)",
+        });
+      }
+    }
     if (env.NODE_ENV !== "production") return;
     // En production, l'image doit indiquer sa version (traçabilité, test de fumée du pipeline)
     if (env.APP_VERSION === "dev") {
@@ -105,9 +160,19 @@ const envSchema = z
 
 type ParsedEnv = z.output<typeof envSchema>;
 
+export type EmailTransport = NonNullable<ParsedEnv["EMAIL_TRANSPORT"]>;
+
 export type AppConfig = Readonly<
-  Omit<ParsedEnv, "API_DOCS" | "SMS_ENABLED"> & { API_DOCS: boolean; SMS_ENABLED: boolean }
+  Omit<ParsedEnv, "API_DOCS" | "SMS_ENABLED" | "EMAIL_TRANSPORT" | "EMAIL_FROM"> & {
+    API_DOCS: boolean;
+    SMS_ENABLED: boolean;
+    EMAIL_TRANSPORT: EmailTransport;
+    EMAIL_FROM: string;
+  }
 >;
+
+/** Adresse d'expédition par défaut hors Brevo (domaine réservé « .local » : jamais livrée sur Internet). */
+export const DEFAULT_EMAIL_FROM = "no-reply@kemdia.local";
 
 /** Erreur de configuration : liste des variables en cause, sans leurs valeurs. */
 export class ConfigError extends Error {
@@ -142,10 +207,13 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     });
     throw new ConfigError(problems);
   }
-  const { API_DOCS, SMS_ENABLED, ...rest } = result.data;
+  const { API_DOCS, SMS_ENABLED, EMAIL_TRANSPORT, EMAIL_FROM, ...rest } = result.data;
+  const onDevMachine = rest.APP_ENV === "local" && rest.NODE_ENV !== "production";
   return Object.freeze({
     ...rest,
     SMS_ENABLED: SMS_ENABLED === "true",
+    EMAIL_TRANSPORT: EMAIL_TRANSPORT ?? (onDevMachine ? "console" : "none"),
+    EMAIL_FROM: EMAIL_FROM ?? DEFAULT_EMAIL_FROM,
     API_DOCS: API_DOCS === undefined ? rest.NODE_ENV !== "production" : API_DOCS === "true",
   });
 }

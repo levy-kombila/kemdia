@@ -1,0 +1,34 @@
+import type { Email } from "./email-templates.js";
+import type { MailTransport } from "./email-otp-sender.js";
+import { postJson, type FetchLike } from "./http-mail.js";
+
+/**
+ * Mailpit : boîte de réception de TEST (docker compose), rien ne part sur Internet.
+ * Les e-mails se lisent sur http://localhost:8025. Envoi par son API web (`POST /api/v1/send`).
+ */
+export class MailpitTransport implements MailTransport {
+  readonly name = "Mailpit";
+
+  constructor(
+    private readonly options: { url: string; from: string; fromName: string },
+    private readonly fetchImpl: FetchLike = fetch,
+  ) {}
+
+  send(email: Email): Promise<void> {
+    return postJson(
+      this.fetchImpl,
+      this.name,
+      new URL("/api/v1/send", this.options.url).href,
+      {},
+      {
+        From: { Email: this.options.from, Name: this.options.fromName },
+        To: [{ Email: email.to }],
+        Subject: email.subject,
+        Text: email.text,
+        HTML: email.html,
+        Tags: ["kemdia"],
+      },
+      [200],
+    );
+  }
+}

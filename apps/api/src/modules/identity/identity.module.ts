@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { APP_CONFIG } from "../../config/config.module.js";
 import type { AppConfig } from "../../config/env.js";
 import { OtpService } from "./application/otp.service.js";
+import { SignupService } from "./application/signup.service.js";
 import {
   ACCOUNT_REPOSITORY,
   IDENTITY_CLOCK,
@@ -9,20 +10,26 @@ import {
   OTP_CHALLENGE_REPOSITORY,
   OTP_SENDER,
   PASSWORD_HASHER,
+  SIGNUP_TICKET_REPOSITORY,
   type IdentityOptions,
 } from "./application/ports.js";
 import { Argon2PasswordHasher } from "./infrastructure/argon2-password-hasher.js";
 import { createOtpSender } from "./infrastructure/otp-sender.factory.js";
 import { PrismaAccountRepository } from "./infrastructure/prisma-account.repository.js";
 import { PrismaOtpChallengeRepository } from "./infrastructure/prisma-otp-challenge.repository.js";
+import { PrismaSignupTicketRepository } from "./infrastructure/prisma-signup-ticket.repository.js";
+import { IdentityController } from "./interface/identity.controller.js";
 
 /**
  * Module identity (S4, ADR-0015) : comptes, codes à usage unique, sessions.
- * S4-T01 pose les fondations (domaine, tables, hachage, codes) ; les routes arrivent avec S4-T02 et S4-T03.
+ * Routes : interface/identity.controller.ts (`/api/v1/auth/…`) — inscription au S4-T02, connexion au S4-T03.
  */
 @Module({
+  controllers: [IdentityController],
   providers: [
     OtpService,
+    SignupService,
+    { provide: SIGNUP_TICKET_REPOSITORY, useClass: PrismaSignupTicketRepository },
     { provide: ACCOUNT_REPOSITORY, useClass: PrismaAccountRepository },
     { provide: OTP_CHALLENGE_REPOSITORY, useClass: PrismaOtpChallengeRepository },
     { provide: PASSWORD_HASHER, useClass: Argon2PasswordHasher },

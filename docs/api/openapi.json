@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "1.1.0",
-    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`)."
+    "version": "1.2.0",
+    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message."
   },
   "servers": [
     {
@@ -15,6 +15,10 @@
     {
       "name": "Catalogue",
       "description": "Catégories, produits, variantes, disponibilité (module catalog)"
+    },
+    {
+      "name": "Identité",
+      "description": "Inscription et vérification par code (module identity) ; appelées par le serveur du site"
     },
     {
       "name": "Supervision",
@@ -561,6 +565,218 @@
           }
         }
       }
+    },
+    "/api/v1/auth/signup": {
+      "post": {
+        "tags": ["Identité"],
+        "summary": "Inscription : envoie un code et renvoie un ticket",
+        "description": "Réponse **identique** que l'identifiant ait déjà un compte ou non : dans ce cas, rien n'est modifié et le titulaire reçoit une alerte au lieu d'un code.\n\nAucun compte n'est créé ici : le compte naît, déjà vérifié, quand le bon code revient (`/signup/verify`).\n\nLe `ticket` renvoyé est exigé pour vérifier le code ou en redemander un ; une nouvelle inscription avec le même identifiant annule les tickets précédents.\n\nL'e-mail part après la réponse : un échec d'envoi n'apparaît pas ici (l'utilisateur redemande un code).\n\nLe SMS est refusé (`CANAL_INDISPONIBLE`) tant que `SMS_ENABLED=false`.",
+        "operationId": "signup",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Code envoyé (ou alerte au titulaire)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignupStarted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps de requête invalide (champ manquant, inconnu ou mal formé)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`IDENTIFIANT_INVALIDE`, `NOM_INVALIDE`, `MOT_DE_PASSE_FAIBLE` ou `CANAL_INDISPONIBLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de demandes : `ENVOI_TROP_RAPPROCHE` (60 s entre deux codes), `TROP_D_ENVOIS` (5 par heure), `TROP_D_ESSAIS` (5 essais : redemander un code) ou limite par adresse IP",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes avant de réessayer (limites d'envoi et par adresse IP ; absent pour `TROP_D_ESSAIS`)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/signup/verify": {
+      "post": {
+        "tags": ["Identité"],
+        "summary": "Vérifie le code : le compte est créé, déjà vérifié (BR-041)",
+        "operationId": "verifySignup",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupVerifyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Compte actif",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignupVerified"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps de requête invalide (champ manquant, inconnu ou mal formé)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`CODE_EXPIRE` : ticket inconnu, expiré ou remplacé par une nouvelle inscription",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`CODE_INVALIDE` : code incorrect (chaque essai compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de demandes : `ENVOI_TROP_RAPPROCHE` (60 s entre deux codes), `TROP_D_ENVOIS` (5 par heure), `TROP_D_ESSAIS` (5 essais : redemander un code) ou limite par adresse IP",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes avant de réessayer (limites d'envoi et par adresse IP ; absent pour `TROP_D_ESSAIS`)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/signup/resend": {
+      "post": {
+        "tags": ["Identité"],
+        "summary": "Envoie un nouveau code pour une inscription en cours (l'ancien ne vaut plus rien)",
+        "operationId": "resendSignupCode",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupResendRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Nouveau code envoyé",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignupStarted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps de requête invalide (champ manquant, inconnu ou mal formé)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`CODE_EXPIRE` : ticket inconnu, expiré ou remplacé par une nouvelle inscription",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de demandes : `ENVOI_TROP_RAPPROCHE` (60 s entre deux codes), `TROP_D_ENVOIS` (5 par heure), `TROP_D_ESSAIS` (5 essais : redemander un code) ou limite par adresse IP",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes avant de réessayer (limites d'envoi et par adresse IP ; absent pour `TROP_D_ESSAIS`)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -879,6 +1095,22 @@
             "description": "Explication destinée au client (erreurs prévues uniquement)",
             "type": "string"
           },
+          "code": {
+            "description": "Code d'erreur métier stable (ex. « CODE_INVALIDE ») : le site choisit son message à partir de lui",
+            "type": "string",
+            "enum": [
+              "IDENTIFIANT_INVALIDE",
+              "NOM_INVALIDE",
+              "MOT_DE_PASSE_FAIBLE",
+              "CANAL_INDISPONIBLE",
+              "ENVOI_TROP_RAPPROCHE",
+              "TROP_D_ENVOIS",
+              "CODE_INVALIDE",
+              "CODE_EXPIRE",
+              "TROP_D_ESSAIS",
+              "COMPTE_BLOQUE"
+            ]
+          },
           "requestId": {
             "description": "Identifiant à communiquer au support (en-tête X-Request-Id)",
             "type": "string"
@@ -1164,6 +1396,105 @@
         ],
         "additionalProperties": false,
         "description": "Produit dans une liste (carte produit)"
+      },
+      "SignupRequest": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "lastName": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "identifier": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Adresse e-mail ou mobile gabonais (06… / 07…)"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "8 à 128 caractères, une lettre et un chiffre"
+          },
+          "acceptTerms": {
+            "type": "boolean",
+            "const": true,
+            "description": "Acceptation des conditions générales"
+          }
+        },
+        "required": ["firstName", "lastName", "identifier", "password", "acceptTerms"],
+        "additionalProperties": false,
+        "description": "Inscription (FR-001). Les règles détaillées sont vérifiées par le serveur (erreur 422 avec un code)."
+      },
+      "SignupResendRequest": {
+        "type": "object",
+        "properties": {
+          "ticket": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Ticket d'inscription, à garder côté serveur du site (cookie HttpOnly) ; jamais affiché"
+          }
+        },
+        "required": ["ticket"],
+        "additionalProperties": false
+      },
+      "SignupStarted": {
+        "type": "object",
+        "properties": {
+          "ticket": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Ticket d'inscription, à garder côté serveur du site (cookie HttpOnly) ; jamais affiché"
+          },
+          "channel": {
+            "type": "string",
+            "enum": ["email", "sms"]
+          },
+          "sentTo": {
+            "type": "string",
+            "description": "Destination masquée (« aw•••@exemple.ga »)"
+          },
+          "resendInSeconds": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Délai avant de pouvoir redemander un code"
+          }
+        },
+        "required": ["ticket", "channel", "sentTo", "resendInSeconds"],
+        "additionalProperties": false,
+        "description": "Code envoyé. Réponse IDENTIQUE que l'identifiant ait déjà un compte ou non (le titulaire reçoit alors une alerte)."
+      },
+      "SignupVerified": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "active"
+          }
+        },
+        "required": ["status"],
+        "additionalProperties": false,
+        "description": "Compte vérifié (BR-041) : la connexion est possible"
+      },
+      "SignupVerifyRequest": {
+        "type": "object",
+        "properties": {
+          "ticket": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Ticket d'inscription, à garder côté serveur du site (cookie HttpOnly) ; jamais affiché"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^\\d{6}$",
+            "description": "Code à 6 chiffres"
+          }
+        },
+        "required": ["ticket", "code"],
+        "additionalProperties": false
       },
       "Variant": {
         "type": "object",

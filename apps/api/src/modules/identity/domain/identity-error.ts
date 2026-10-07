@@ -16,6 +16,8 @@ export class IdentityError extends Error {
   constructor(
     readonly code: IdentityErrorCode,
     message: string,
+    /** Quand réessayer, en secondes (limites d'envoi) : renvoyé dans l'en-tête HTTP `Retry-After`. */
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = "IdentityError";

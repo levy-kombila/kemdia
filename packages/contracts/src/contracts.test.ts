@@ -3,6 +3,8 @@ import {
   MAX_PAGE_SIZE,
   PRICE_RANGES,
   ProductSummarySchema,
+  SignupRequestSchema,
+  SignupVerifyRequestSchema,
   openApiComponentSchemas,
   productQueryParams,
 } from "./index.js";
@@ -80,8 +82,33 @@ describe("schémas", () => {
       "ProductDetail",
       "ProductPage",
       "ProductSummary",
+      "SignupRequest",
+      "SignupResendRequest",
+      "SignupStarted",
+      "SignupVerified",
+      "SignupVerifyRequest",
       "Variant",
     ]);
+  });
+
+  it("inscription : conditions acceptées obligatoires, champs inconnus refusés, code à 6 chiffres", () => {
+    const body = {
+      firstName: "Awa",
+      lastName: "Ndong",
+      identifier: "awa@exemple.ga",
+      password: "Mangue2026",
+    };
+    expect(SignupRequestSchema.safeParse({ ...body, acceptTerms: true }).success).toBe(true);
+    expect(SignupRequestSchema.safeParse({ ...body, acceptTerms: false }).success).toBe(false);
+    expect(
+      SignupRequestSchema.safeParse({ ...body, acceptTerms: true, role: "admin" }).success,
+    ).toBe(false);
+    const ticket = "a".repeat(43);
+    expect(SignupVerifyRequestSchema.safeParse({ ticket, code: "042917" }).success).toBe(true);
+    expect(SignupVerifyRequestSchema.safeParse({ ticket, code: "42917" }).success).toBe(false);
+    expect(SignupVerifyRequestSchema.safeParse({ ticket: "court", code: "042917" }).success).toBe(
+      false,
+    );
   });
 });
 

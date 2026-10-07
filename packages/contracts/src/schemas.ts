@@ -1,8 +1,12 @@
 import { z } from "zod";
 import {
   AVAILABILITY_REASONS,
+  IDENTITY_ERROR_CODES,
   MAX_AVAILABILITY_LINES,
   MAX_ORDER_QUANTITY,
+  OTP_CHANNELS,
+  OTP_CODE_PATTERN,
+  SIGNUP_TICKET_PATTERN,
   SLUG_PATTERN,
 } from "./constants.js";
 
@@ -34,6 +38,12 @@ export const ProblemDetailsSchema = z
       .string()
       .optional()
       .describe("Explication destinée au client (erreurs prévues uniquement)"),
+    code: z
+      .enum(IDENTITY_ERROR_CODES)
+      .optional()
+      .describe(
+        "Code d'erreur métier stable (ex. « CODE_INVALIDE ») : le site choisit son message à partir de lui",
+      ),
     requestId: z
       .string()
       .optional()
@@ -226,6 +236,60 @@ export const AvailabilityResponseSchema = z
   })
   .meta({ id: "AvailabilityResponse" });
 export type AvailabilityResponse = z.infer<typeof AvailabilityResponseSchema>;
+
+// --- Identité : inscription (S4-T02) ---
+
+const ticket = z
+  .string()
+  .regex(SIGNUP_TICKET_PATTERN)
+  .describe(
+    "Ticket d'inscription, à garder côté serveur du site (cookie HttpOnly) ; jamais affiché",
+  );
+
+export const SignupRequestSchema = z
+  .strictObject({
+    firstName: z.string().max(100),
+    lastName: z.string().max(100),
+    identifier: z.string().max(300).describe("Adresse e-mail ou mobile gabonais (06… / 07…)"),
+    password: z.string().max(200).describe("8 à 128 caractères, une lettre et un chiffre"),
+    acceptTerms: z.literal(true).describe("Acceptation des conditions générales"),
+  })
+  .meta({
+    id: "SignupRequest",
+    description:
+      "Inscription (FR-001). Les règles détaillées sont vérifiées par le serveur (erreur 422 avec un code).",
+  });
+export type SignupRequest = z.infer<typeof SignupRequestSchema>;
+
+export const SignupStartedSchema = z
+  .object({
+    ticket,
+    channel: z.enum(OTP_CHANNELS),
+    sentTo: z.string().describe("Destination masquée (« aw•••@exemple.ga »)"),
+    resendInSeconds: z.int().positive().describe("Délai avant de pouvoir redemander un code"),
+  })
+  .meta({
+    id: "SignupStarted",
+    description:
+      "Code envoyé. Réponse IDENTIQUE que l'identifiant ait déjà un compte ou non (le titulaire reçoit alors une alerte).",
+  });
+export type SignupStarted = z.infer<typeof SignupStartedSchema>;
+
+export const SignupVerifyRequestSchema = z
+  .strictObject({ ticket, code: z.string().regex(OTP_CODE_PATTERN).describe("Code à 6 chiffres") })
+  .meta({ id: "SignupVerifyRequest" });
+export type SignupVerifyRequest = z.infer<typeof SignupVerifyRequestSchema>;
+
+export const SignupVerifiedSchema = z.object({ status: z.literal("active") }).meta({
+  id: "SignupVerified",
+  description: "Compte vérifié (BR-041) : la connexion est possible",
+});
+export type SignupVerified = z.infer<typeof SignupVerifiedSchema>;
+
+export const SignupResendRequestSchema = z
+  .strictObject({ ticket })
+  .meta({ id: "SignupResendRequest" });
+export type SignupResendRequest = z.infer<typeof SignupResendRequestSchema>;
 
 type JsonSchema = Record<string, unknown>;
 

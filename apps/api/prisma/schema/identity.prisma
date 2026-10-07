@@ -74,6 +74,25 @@ model OtpChallenge {
   @@schema("identity")
 }
 
+/// Ticket d'inscription (S4-T02, ADR-0016) : seule son empreinte SHA-256 est gardée.
+/// Il porte l'inscription (prénom, nom, hachage du mot de passe) : le compte n'est créé qu'à la vérification du code.
+/// Inscription vide : ticket « leurre » (l'adresse a déjà un compte), qui ne valide jamais rien.
+/// Une seule inscription en cours par destination : une nouvelle annule les précédentes.
+model SignupTicket {
+  id           String   @id @db.Uuid
+  ticketHash   String   @unique @map("ticket_hash") @db.Char(64)
+  destination  String   @db.VarChar(254)
+  firstName    String?  @map("first_name") @db.VarChar(60)
+  lastName     String?  @map("last_name") @db.VarChar(60)
+  passwordHash String?  @map("password_hash") @db.VarChar(255)
+  expiresAt    DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([destination])
+  @@map("signup_tickets")
+  @@schema("identity")
+}
+
 /// Session ouverte (S4-T03). Le cookie porte un jeton aléatoire ; la base n'en garde que l'empreinte SHA-256.
 model Session {
   id         String    @id @db.Uuid

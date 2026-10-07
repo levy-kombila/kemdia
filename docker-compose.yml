@@ -1,6 +1,7 @@
 # Environnement local (voir docs/guides/base-de-donnees.md) :
 #   docker compose up -d db          PostgreSQL seul, pour développer l'API (pnpm dev)
 #   docker compose up --build        tout : base → migrations → API → site, avec les images de production (S3-T06)
+#   docker compose up -d mailpit     boîte de réception de test : e-mails lisibles sur http://localhost:8025 (S4-T02)
 # Le site lit toujours l'API (S3-T08) : API_INTERNAL_KEY=<clé> OBLIGATOIRE dans un fichier .env à la racine
 # (jamais dans Git) ; sans elle, le site refuse de démarrer avec un message.
 services:
@@ -60,12 +61,17 @@ services:
       <<: *api-env
       API_INTERNAL_KEY: ${API_INTERNAL_KEY:-}
       API_DOCS: "true"
+      # Codes et alertes envoyés à Mailpit (rien ne part sur Internet)
+      EMAIL_TRANSPORT: mailpit
+      MAILPIT_URL: http://mailpit:8025
     ports:
       # Même port que `pnpm dev` : arrêter l'un avant de lancer l'autre
       - "127.0.0.1:4000:4000"
     depends_on:
       api-migrate:
         condition: service_completed_successfully
+      mailpit:
+        condition: service_started
     read_only: true
     tmpfs:
       - /tmp
@@ -100,6 +106,23 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
+
+  # Mailpit : fausse boîte aux lettres pour le développement (S4-T02, ADR-0016). Tout e-mail envoyé par l'API
+  # y arrive, quel que soit le destinataire ; rien ne part sur Internet. Lecture : http://localhost:8025
+  mailpit:
+    # v1.31 : corrige les failles de déni de service de 2026 (CVE-2026-67447 et suivantes)
+    image: axllent/mailpit:v1.31.4
+    environment:
+      # Taille maximale d'un message, en Mo (nos e-mails font quelques Ko)
+      MP_MAX_MESSAGE_SIZE: 1
+      TZ: Africa/Libreville
+    ports:
+      # 127.0.0.1 : interface web et API d'envoi accessibles seulement depuis ce poste.
+      # L'API Kemdia envoie par l'API web de Mailpit : le port SMTP (1025) n'est pas ouvert.
+      - "127.0.0.1:8025:8025"
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
 volumes:
