@@ -16,6 +16,7 @@ Prérequis : Node.js 22, pnpm 10 (guide Windows : [docs/guides/installation-wind
 2. Générer une clé : `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`,
    et la coller dans **les deux** fichiers, sur la ligne `API_INTERNAL_KEY=` (jamais dans Git).
    Version PowerShell qui écrit les deux fichiers d'un coup : [base-de-donnees.md §3](docs/guides/base-de-donnees.md#3-brancher-le-site-sur-lapi-s3-t05).
+   Ne jamais **remplacer** `apps/api/.env` s'il existe déjà (il peut contenir `DATABASE_URL`, par exemple pour le port 5433) : y **ajouter** la ligne.
 
 Puis, à chaque fois (Docker Desktop lancé) :
 
