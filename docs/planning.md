@@ -41,7 +41,7 @@ Ces démarches prennent souvent plusieurs mois et **bloquent** des sprints si el
 | -------------------------------------------------------------------------------------------------------------------- | -------- | ------------- |
 | Changer les secrets de l'ancien projet Django, archiver l'ancien dépôt                                               | Sécurité | 🔴 immédiat   |
 | Compte marchand + accès API **Airtel Money** et **Moov Money** (ou agrégateur)                                       | S5       | 🔴 maintenant |
-| Fournisseur SMS pour les codes OTP                                                                                   | S4       | 🟠 avant S4   |
+| Fournisseur SMS pour les codes OTP — **décision du client** (note remise le 2026-10-07) ; en attendant : e-mail seul | S4 · S8  | 🟠            |
 | Partenariat transporteur (COMAT ou autre) : tarifs, échange de données                                               | S7       | 🟠            |
 | Recrutement des 50 vendeurs partenaires, conditions de commission                                                    | S6 · S8  | 🟠            |
 | Nom de domaine, entité juridique (RCCM, NIF), CGV, mentions légales, déclaration APDPVP                              | S7       | 🟠            |
@@ -115,9 +115,23 @@ Ces démarches prennent souvent plusieurs mois et **bloquent** des sprints si el
 | S3-T07 | Démo Render : API + base de données gratuite (Neon), migrations et import au démarrage (ADR-0013)                                    | ✅     |
 | S3-T08 | Dette : accueil allégé (blocage visé 300 ms), TypeScript 6.0 et ESLint 10 (API, contrat) — ADR-0014, retrait du mode fichier du site | ✅     |
 
-## S4 à S8 — grandes lignes
+## S4 — Module `identity` : comptes et connexion ⏳
 
-- **S4 `identity` + `notifications`** : e-mail ou téléphone + OTP (BR-041), Argon2id, cookies sécurisés, blocage après 3 échecs (BR-040), RBAC, journal d'audit.
+Décisions : [ADR-0015](architecture/adr/0015-identite-sessions-otp.md) (sessions en base + cookie, Argon2id, codes, SMS différé).
+
+| ID     | Tâche                                                                                                                      | Statut |
+| ------ | -------------------------------------------------------------------------------------------------------------------------- | ------ |
+| S4-T01 | Fondations `identity` : schéma `identity`, comptes, Argon2id, codes à usage unique, port d'envoi, `SMS_ENABLED` (ADR-0015) | ✅     |
+| S4-T02 | Inscription + vérification par code (BR-041, HIGH-11) ; envoi par e-mail (Mailpit en local, offre gratuite sur la démo)    | ⏳     |
+| S4-T03 | Connexion, sessions (cookie `HttpOnly` posé par le site), déconnexion, blocage après 3 échecs (BR-040)                     | ⏳     |
+| S4-T04 | Mot de passe oublié (FR-012)                                                                                               | ⏳     |
+| S4-T05 | Site branché sur l'API (adaptateur `AuthClient`) ; option téléphone « bientôt disponible »                                 | ⏳     |
+| S4-T06 | Rôles (RBAC) et journal d'audit                                                                                            | ⏳     |
+| S4-T07 | CSRF, CSP à _nonce_, limitation par compte (HIGH-16, MED-05)                                                               | ⏳     |
+| S4-T08 | Démo + dette, clôture du sprint (v0.4.0)                                                                                   | ⏳     |
+
+## S5 à S8 — grandes lignes
+
 - **S5 `orders` + `payments`** : panier serveur (et vérification du panier par `POST /availability` au passage en caisse), réservation de stock atomique (BR-012), coupons (BR-030), paiement à la livraison sous conditions (BR-011),
   adaptateurs Moov / Airtel en _sandbox_, webhooks signés, idempotence, factures (FR-015).
 - **S6 `vendors` + back-office** : boutique, KYC (BR-024), modération des produits (BR-003), commandes vendeur (BR-013), commissions (BR-020), modération des avis.

@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués  |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests      |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                       |
+| **2.1** | 2026-10-07 | S4     | Fondations du module `identity` (ADR-0015) : §3.4 `SMS_ENABLED`, §3.5, §3.9 (nouvelle), §5.4 SMS différé, §6.3, §6.4                        |
 | **2.0** | 2026-10-07 | S3     | Fin du Sprint 3 (v0.3.0) : démo avec `CATALOG_TIMEOUT_MS=90000` (§5.9) ; rapport de clôture                                                 |
 | **1.9** | 2026-10-07 | S3     | Dette S3-T08 : mode fichier retiré (§3.2, §5.9), accueil chargé zone par zone (§5.2), TypeScript 6 / ESLint 10 (§4, ADR-0014), §7, §9       |
 | **1.8** | 2026-10-07 | S3     | Démo Render avec l'API et une base Neon (ADR-0013) : §3.2, §3.5, §3.8 démarrage de démo, §5.9, §7 jobs image de l'API et démo, §8, §9       |
@@ -241,6 +242,7 @@ Un autre module n'entre que par `index.ts`.
 | `RATE_LIMIT_PER_MINUTE`         | `120`                           | 10 à 10 000                                                            |
 | `API_INTERNAL_KEY`              | aucune                          | Secret du serveur (32 à 128 caractères) ; jamais dans Git              |
 | `API_DOCS`                      | `true` (dév.)                   | `false` par défaut                                                     |
+| `SMS_ENABLED`                   | `false`                         | `true` seulement quand un fournisseur SMS est branché (ADR-0015)       |
 
 Une valeur invalide arrête l'API (code de sortie 1) avec la liste des variables en cause, **sans afficher leur valeur**.
 
@@ -258,7 +260,8 @@ flowchart LR
     ps -->|≤ 10 connexions<br/>requête ≤ 10 s| pg
     subgraph pg[(PostgreSQL 18 — base « kemdia »)]
       catalog[schéma catalog]
-      futurs[identity · orders · payments<br/>vendors · shipping — S4 à S7]
+      identity[schéma identity — S4]
+      futurs[orders · payments<br/>vendors · shipping — S5 à S7]
       pub[public : suivi des migrations]
     end
 ```
@@ -398,6 +401,36 @@ flowchart LR
 | Local         | `docker compose up --build` : `db` → `api-migrate` → `api` (port 4000) → `web` (lit l'API si `API_INTERNAL_KEY` est dans `.env`)  |
 | Démo (S3-T07) | `node dist/database/start-demo.js` : migrations → import de démonstration (`demo-import.js`) → API. Refusé si `APP_ENV` ≠ `demo`  |
 
+### 3.9 Module `identity` (S4-T01)
+
+Décision : [ADR-0015](adr/0015-identite-sessions-otp.md). Même organisation que `catalog` (§3.6) ; les routes arrivent au S4-T02 et S4-T03.
+
+```
+src/modules/identity/
+├── index.ts                         Port public : IdentityModule, OtpService, IdentityError
+├── identity.module.ts               Branche les ports ; choisit l'envoi des codes selon l'environnement
+├── domain/                          TypeScript pur
+│   ├── identifier.ts                E-mail ou mobile gabonais normalisé (+2410[67]…), masquage (FR-004)
+│   ├── password-policy.ts           8 à 128 caractères, lettre + chiffre, mots de passe courants ; prénom et nom
+│   ├── account.ts                   Compte : en attente → actif après vérification (BR-041), blocage 3 échecs / 15 min (BR-040)
+│   └── otp.ts                       Code à 6 chiffres : empreinte seulement, 10 min, 5 essais, temps constant
+├── application/
+│   ├── ports.ts                     AccountRepository, OtpChallengeRepository, PasswordHasher, OtpSender, Clock
+│   └── otp.service.ts               Envoi (60 s entre deux, 5 par heure, SMS seulement si SMS_ENABLED) et vérification
+└── infrastructure/
+    ├── argon2-password-hasher.ts    Argon2id (19 Mio, 2 passes)
+    ├── otp-sender.factory.ts        Console sur le poste de développement ; aucun envoi ailleurs tant que l'e-mail (S4-T02) n'est pas branché
+    └── prisma-*.repository.ts       Comptes (identifiant déjà pris → IdentifierTakenError), codes et compteurs d'envoi
+```
+
+Tables du schéma `identity` :
+
+| Table            | Contenu                                                                                                 | Contraintes SQL ajoutées à la main                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `accounts`       | Prénom, nom, e-mail et/ou téléphone (uniques), hachage Argon2id, statut, vérifications, échecs, blocage | Au moins un identifiant ; e-mail en minuscules ; téléphone `+2410[67]` ; actif ⇒ vérifié |
+| `otp_challenges` | Usage (inscription / oubli), canal, destination, **empreinte** du code, essais, expiration              | Empreinte hexadécimale de 64 caractères ; 0 à 5 essais                                   |
+| `sessions`       | Compte, **empreinte** du jeton (unique), expiration, dernière activité, révocation                      | Empreinte hexadécimale ; suppression en cascade avec le compte                           |
+
 ## 4. Choix technologiques
 
 | Couche    | Choix                                                                  | Version     | Justification                                                                                                                                                     |
@@ -512,7 +545,9 @@ flowchart LR
 | Mot de passe oublié | Identifiant → code → nouveau mot de passe                                              | FR-012             |
 
 Numéros acceptés : mobiles gabonais à 9 chiffres `06…` (Moov) et `07…` (Airtel), avec ou sans `+241` ;
-forme enregistrée `+241077123456` (à confirmer avec le fournisseur SMS au S4).
+forme enregistrée `+241077123456`. L'API applique les mêmes règles (§3.9, test `identity-alignment`).
+**SMS différé** ([ADR-0015](adr/0015-identite-sessions-otp.md)) : tant que le client n'a pas choisi de fournisseur, `SMS_ENABLED=false`
+et l'option téléphone sera affichée « bientôt disponible » (S4-T05) ; l'inscription se fait par e-mail.
 
 ### 5.5 Charte graphique (tokens `globals.css`)
 
@@ -676,10 +711,13 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 | Corps de requête validés par schéma, champs inconnus refusés (S3-T04)                                                                                                                    | `packages/contracts/src/schemas.ts`              | Injection de champs (ex. un prix envoyé par le client) |
 | Page de documentation : fichiers servis par l'API (liste fermée), CSP propre, désactivée par défaut en production ; télémétrie `@scarf/scarf` bloquée (S3-T04)                           | `docs/`                                          | Script tiers, fuite d'informations                     |
 | Base locale accessible seulement depuis le poste (`127.0.0.1`), authentification SCRAM-SHA-256 (S3-T02)                                                                                  | `docker-compose.yml`                             | Base exposée sur le réseau                             |
+| Mots de passe hachés en Argon2id (OWASP) ; règles vérifiées par le serveur (S4-T01)                                                                                                      | `identity/infrastructure`, `identity/domain`     | Mots de passe faibles ou mal stockés                   |
+| Codes à usage unique : tirage cryptographique, empreinte seulement, 10 min, 5 essais, dernier code seul valable, 60 s et 5 par heure (S4-T01)                                            | `identity/domain/otp.ts`, `otp.service.ts`       | HIGH-11 (vérification contournable), force brute       |
+| Jamais de code écrit dans les journaux hors du poste de développement ; SMS refusé tant que `SMS_ENABLED=false` (S4-T01)                                                                 | `identity/infrastructure/otp-sender.factory.ts`  | Fuite de codes, coûts imprévus                         |
 
 ### 6.4 Prévu 🔜
 
-- S4 : CSP à _nonce_ via `proxy.ts`, cookies de session `HttpOnly; Secure; SameSite=Lax`, protection CSRF, limitation de débit.
+- S4 : sessions en base + cookie `HttpOnly; Secure; SameSite=Lax` (S4-T03), CSP à _nonce_ via `proxy.ts`, protection CSRF, limitation par compte (S4-T07).
 - S5 : signature des webhooks Mobile Money, idempotence des paiements, transactions SQL pour stock et coupons.
 - S7 : deux rôles PostgreSQL (migrations / application sans droit de modifier les tables), connexion chiffrée selon l'hébergement, sauvegardes chiffrées testées.
 
