@@ -4,9 +4,16 @@ import {
   type Clock,
   type OtpChallengeRepository,
   type OtpMessage,
+  type LoginGuardRepository,
   type OtpSender,
+  type SessionRepository,
   type SignupTicketRepository,
 } from "../../src/modules/identity/application/ports.js";
+import {
+  nextGuardState,
+  type LoginGuardState,
+} from "../../src/modules/identity/domain/login-guard.js";
+import type { Session } from "../../src/modules/identity/domain/session.js";
 import type { SignupTicket } from "../../src/modules/identity/domain/signup-ticket.js";
 import { Account } from "../../src/modules/identity/domain/account.js";
 import type { Identifier, OtpChannel } from "../../src/modules/identity/domain/identifier.js";
@@ -118,6 +125,8 @@ export class InMemorySignupTickets implements SignupTicketRepository {
 export const fakeHasher = {
   hash: (password: string) => Promise.resolve(`hash:${password}`),
   verify: (hash: string, password: string) => Promise.resolve(hash === `hash:${password}`),
+  /** Hachage factice : ne correspond à aucun mot de passe */
+  dummyHash: "hash:\u0000factice",
 };
 
 export class FakeClock implements Clock {
@@ -127,5 +136,54 @@ export class FakeClock implements Clock {
   }
   advance(ms: number): void {
     this.current = new Date(this.current.getTime() + ms);
+  }
+}
+
+/** BR-040 en mémoire : même règle (`nextGuardState`) que la requête SQL. */
+export class InMemoryLoginGuards implements LoginGuardRepository {
+  readonly rows = new Map<string, LoginGuardState>();
+  claim(identifier: string, now: Date): Promise<LoginGuardState> {
+    const next = nextGuardState(this.rows.get(identifier) ?? null, now);
+    this.rows.set(identifier, next);
+    return Promise.resolve({ ...next });
+  }
+  lock(identifier: string, until: Date): Promise<void> {
+    const row = this.rows.get(identifier);
+    if (row && (!row.lockedUntil || row.lockedUntil < until)) row.lockedUntil = until;
+    return Promise.resolve();
+  }
+  reset(identifier: string, now: Date): Promise<void> {
+    const row = this.rows.get(identifier);
+    if (row && (!row.lockedUntil || row.lockedUntil <= now)) this.rows.delete(identifier);
+    return Promise.resolve();
+  }
+}
+
+export class InMemorySessions implements SessionRepository {
+  rows: Session[] = [];
+  create(session: Session): Promise<void> {
+    this.rows.push({ ...session });
+    return Promise.resolve();
+  }
+  findByTokenHash(tokenHash: string): Promise<Session | null> {
+    const row = this.rows.find((s) => s.tokenHash === tokenHash);
+    return Promise.resolve(row ? { ...row } : null);
+  }
+  renew(id: string, expiresAt: Date, lastSeenAt: Date): Promise<void> {
+    const row = this.rows.find((s) => s.id === id && s.revokedAt === null);
+    if (row) Object.assign(row, { expiresAt, lastSeenAt });
+    return Promise.resolve();
+  }
+  revoke(id: string, now: Date): Promise<void> {
+    const row = this.rows.find((s) => s.id === id && s.revokedAt === null);
+    if (row) row.revokedAt = now;
+    return Promise.resolve();
+  }
+  revokeAllForAccount(accountId: string, now: Date): Promise<number> {
+    const rows = this.rows.filter(
+      (s) => s.accountId === accountId && s.revokedAt === null && s.expiresAt > now,
+    );
+    rows.forEach((s) => (s.revokedAt = now));
+    return Promise.resolve(rows.length);
   }
 }

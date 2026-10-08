@@ -1,17 +1,49 @@
-import { Body, Controller, Header, HttpCode, HttpStatus, Post } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
+import type { Request } from "express";
 import { Throttle } from "@nestjs/throttler";
 import {
+  LoginRequestSchema,
   SignupRequestSchema,
   SignupResendRequestSchema,
   SignupVerifyRequestSchema,
+  type CurrentSession as CurrentSessionView,
+  type LoginRequest,
+  type LogoutAll,
+  type OpenedSession as OpenedSessionView,
   type SignupRequest,
   type SignupResendRequest,
   type SignupStarted,
   type SignupVerified,
   type SignupVerifyRequest,
 } from "@kemdia/contracts";
+import { LoginService } from "../application/login.service.js";
+import {
+  SessionService,
+  type AuthenticatedSession,
+  type OpenedSession,
+} from "../application/session.service.js";
 import { SignupService } from "../application/signup.service.js";
 import { withIdentityErrors } from "./identity-http-errors.js";
+import { bearerToken, CurrentSession, SessionGuard } from "./session.guard.js";
+
+function presentOpened(opened: OpenedSession): OpenedSessionView {
+  return {
+    token: opened.token,
+    expiresAt: opened.expiresAt.toISOString(),
+    account: opened.account,
+  };
+}
 
 /**
  * Routes de l'identité (`/api/v1/auth/…`). Appelées par le SERVEUR du site (S4-T05), jamais directement
@@ -19,12 +51,19 @@ import { withIdentityErrors } from "./identity-http-errors.js";
  * Jamais mises en cache. Documentation : identity.openapi.ts.
  *
  * Limite par adresse IP plus stricte que le reste de l'API (10 par minute) ; les limites par adresse e-mail
- * ou numéro (60 s, 5 par heure) s'appliquent en plus, quel que soit l'appelant.
+ * ou numéro (60 s, 5 par heure) et le blocage après 3 essais de connexion s'appliquent en plus, quel que soit l'appelant.
+ *
+ * Le serveur du site transmet le navigateur du visiteur dans `X-Kemdia-User-Agent` (liste « mes appareils ») :
+ * l'en-tête User-Agent reçu par l'API serait celui du site.
  */
 @Controller("auth")
 @Throttle({ default: { limit: 10, ttl: 60_000 } })
 export class IdentityController {
-  constructor(private readonly signup: SignupService) {}
+  constructor(
+    private readonly signup: SignupService,
+    private readonly login: LoginService,
+    private readonly sessions: SessionService,
+  ) {}
 
   /** FR-001 : crée le compte en attente et envoie le code (réponse identique si le compte existe déjà). */
   @Post("signup")
@@ -41,15 +80,60 @@ export class IdentityController {
     );
   }
 
-  /** BR-041 : le bon code rend le compte actif. */
+  /** BR-041 : le bon code crée le compte et connecte directement le client. */
   @Post("signup/verify")
   @HttpCode(HttpStatus.OK)
   @Header("Cache-Control", "no-store")
   async verify(
     @Body({ schema: SignupVerifyRequestSchema }) body: SignupVerifyRequest,
+    @Headers("x-kemdia-user-agent") userAgent?: string,
   ): Promise<SignupVerified> {
-    await withIdentityErrors(() => this.signup.verify(body.ticket, body.code));
-    return { status: "active" };
+    const opened = await withIdentityErrors(() =>
+      this.signup.verify(body.ticket, body.code, userAgent),
+    );
+    return { status: "active", ...presentOpened(opened) };
+  }
+
+  /** FR-004 : connexion par e-mail ou téléphone ; BR-040 : 3 essais puis 15 minutes, compté par identifiant. */
+  @Post("login")
+  @HttpCode(HttpStatus.OK)
+  @Header("Cache-Control", "no-store")
+  async signIn(
+    @Body({ schema: LoginRequestSchema }) body: LoginRequest,
+    @Headers("x-kemdia-user-agent") userAgent?: string,
+  ): Promise<OpenedSessionView> {
+    const opened = await withIdentityErrors(() =>
+      this.login.login({ identifier: body.identifier, password: body.password, userAgent }),
+    );
+    return presentOpened(opened);
+  }
+
+  /** La session présentée (en-tête Authorization) est-elle valable ? La prolonge au passage. */
+  @Get("session")
+  @Header("Cache-Control", "no-store")
+  // Appelée à chaque page par le site : la limite générale de l'API, pas celle des connexions
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  @UseGuards(SessionGuard)
+  current(@CurrentSession() session: AuthenticatedSession): CurrentSessionView {
+    return { expiresAt: session.expiresAt.toISOString(), account: session.account };
+  }
+
+  /** Déconnexion : la session est fermée tout de suite. Toujours 204, même pour un jeton déjà fermé. */
+  @Post("logout")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Header("Cache-Control", "no-store")
+  async logout(@Req() req: Request): Promise<void> {
+    const token = bearerToken(req);
+    if (token) await this.sessions.logout(token);
+  }
+
+  /** « Déconnecter tous mes appareils » (celui-ci compris). */
+  @Post("logout-all")
+  @HttpCode(HttpStatus.OK)
+  @Header("Cache-Control", "no-store")
+  @UseGuards(SessionGuard)
+  async logoutAll(@CurrentSession() session: AuthenticatedSession): Promise<LogoutAll> {
+    return { revoked: await this.sessions.logoutAll(session.account.id) };
   }
 
   @Post("signup/resend")

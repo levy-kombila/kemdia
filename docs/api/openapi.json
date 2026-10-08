@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message."
   },
   "servers": [
@@ -637,8 +637,20 @@
     "/api/v1/auth/signup/verify": {
       "post": {
         "tags": ["Identité"],
-        "summary": "Vérifie le code : le compte est créé, déjà vérifié (BR-041)",
+        "summary": "Vérifie le code : le compte est créé, déjà vérifié (BR-041), et le client est connecté",
         "operationId": "verifySignup",
+        "parameters": [
+          {
+            "name": "X-Kemdia-User-Agent",
+            "in": "header",
+            "required": false,
+            "description": "Navigateur du visiteur, transmis par le serveur du site (liste « mes appareils »)",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -651,7 +663,7 @@
         },
         "responses": {
           "200": {
-            "description": "Compte actif",
+            "description": "Compte actif et session ouverte (jeton à garder dans un cookie HttpOnly)",
             "content": {
               "application/json": {
                 "schema": {
@@ -777,10 +789,276 @@
           }
         }
       }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["Identité"],
+        "summary": "Connexion par e-mail ou téléphone ; ouvre une session de 30 jours glissants",
+        "description": "Réponses identiques qu'un compte existe ou non : `IDENTIFIANTS_INCORRECTS`, puis `COMPTE_BLOQUE` au 3ᵉ essai (BR-040, 15 minutes).\n\nLe blocage se compte par identifiant, même sans compte. Seul un compte désactivé, avec le bon mot de passe, reçoit `COMPTE_DESACTIVE`.",
+        "operationId": "login",
+        "parameters": [
+          {
+            "name": "X-Kemdia-User-Agent",
+            "in": "header",
+            "required": false,
+            "description": "Navigateur du visiteur, transmis par le serveur du site (liste « mes appareils »)",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session ouverte",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenedSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps de requête invalide (champ manquant, inconnu ou mal formé)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`IDENTIFIANTS_INCORRECTS` : identifiant ou mot de passe incorrect",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`COMPTE_DESACTIVE` : compte fermé par l'équipe Kemdia",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`IDENTIFIANT_INVALIDE` : ni une adresse e-mail ni un mobile gabonais",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de demandes : `ENVOI_TROP_RAPPROCHE` (60 s entre deux codes), `TROP_D_ENVOIS` (5 par heure), `TROP_D_ESSAIS` (5 essais : redemander un code) ou limite par adresse IP",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes avant de réessayer (limites d'envoi et par adresse IP ; absent pour `TROP_D_ESSAIS`)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/session": {
+      "get": {
+        "tags": ["Identité"],
+        "summary": "La session présentée est-elle valable ? (la prolonge au passage, au plus une fois par heure)",
+        "operationId": "currentSession",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session valable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentSession"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de demandes : `ENVOI_TROP_RAPPROCHE` (60 s entre deux codes), `TROP_D_ENVOIS` (5 par heure), `TROP_D_ESSAIS` (5 essais : redemander un code) ou limite par adresse IP",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes avant de réessayer (limites d'envoi et par adresse IP ; absent pour `TROP_D_ESSAIS`)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": ["Identité"],
+        "summary": "Déconnexion : la session est fermée tout de suite",
+        "operationId": "logout",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Session fermée (ou déjà fermée)"
+          },
+          "429": {
+            "description": "Trop de demandes : `ENVOI_TROP_RAPPROCHE` (60 s entre deux codes), `TROP_D_ENVOIS` (5 par heure), `TROP_D_ESSAIS` (5 essais : redemander un code) ou limite par adresse IP",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes avant de réessayer (limites d'envoi et par adresse IP ; absent pour `TROP_D_ESSAIS`)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout-all": {
+      "post": {
+        "tags": ["Identité"],
+        "summary": "Déconnecter tous les appareils du compte (celui-ci compris)",
+        "operationId": "logoutAll",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sessions fermées",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutAll"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de demandes : `ENVOI_TROP_RAPPROCHE` (60 s entre deux codes), `TROP_D_ENVOIS` (5 par heure), `TROP_D_ESSAIS` (5 essais : redemander un code) ou limite par adresse IP",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes avant de réessayer (limites d'envoi et par adresse IP ; absent pour `TROP_D_ESSAIS`)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AccountView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "email": {
+            "type": ["string", "null"]
+          },
+          "phone": {
+            "description": "Format +2410XXXXXXXX",
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["id", "firstName", "lastName", "email", "phone"],
+        "additionalProperties": false,
+        "description": "Le compte de la personne connectée"
+      },
       "AvailabilityRequest": {
         "type": "object",
         "properties": {
@@ -986,6 +1264,22 @@
         "required": ["category", "path", "children"],
         "additionalProperties": false
       },
+      "CurrentSession": {
+        "type": "object",
+        "properties": {
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "account": {
+            "$ref": "#/components/schemas/AccountView"
+          }
+        },
+        "required": ["expiresAt", "account"],
+        "additionalProperties": false,
+        "description": "La session présentée est valable (et prolongée)"
+      },
       "Facets": {
         "type": "object",
         "properties": {
@@ -1075,6 +1369,57 @@
         "additionalProperties": false,
         "description": "État de l'API et de la base de données"
       },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Adresse e-mail ou mobile gabonais"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": ["identifier", "password"],
+        "additionalProperties": false
+      },
+      "LogoutAll": {
+        "type": "object",
+        "properties": {
+          "revoked": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Nombre de sessions fermées"
+          }
+        },
+        "required": ["revoked"],
+        "additionalProperties": false
+      },
+      "OpenedSession": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Jeton de session : à garder dans un cookie HttpOnly côté site, jamais lisible par JavaScript"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "description": "Fin de la session si le client ne revient pas (30 jours glissants)"
+          },
+          "account": {
+            "$ref": "#/components/schemas/AccountView"
+          }
+        },
+        "required": ["token", "expiresAt", "account"],
+        "additionalProperties": false,
+        "description": "Session ouverte (connexion ou inscription vérifiée)"
+      },
       "ProblemDetails": {
         "type": "object",
         "properties": {
@@ -1108,7 +1453,10 @@
               "CODE_INVALIDE",
               "CODE_EXPIRE",
               "TROP_D_ESSAIS",
-              "COMPTE_BLOQUE"
+              "COMPTE_BLOQUE",
+              "IDENTIFIANTS_INCORRECTS",
+              "COMPTE_DESACTIVE",
+              "SESSION_INVALIDE"
             ]
           },
           "requestId": {
@@ -1473,11 +1821,24 @@
           "status": {
             "type": "string",
             "const": "active"
+          },
+          "token": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Jeton de session : à garder dans un cookie HttpOnly côté site, jamais lisible par JavaScript"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "account": {
+            "$ref": "#/components/schemas/AccountView"
           }
         },
-        "required": ["status"],
+        "required": ["status", "token", "expiresAt", "account"],
         "additionalProperties": false,
-        "description": "Compte vérifié (BR-041) : la connexion est possible"
+        "description": "Compte créé et vérifié (BR-041), et client connecté directement"
       },
       "SignupVerifyRequest": {
         "type": "object",
@@ -1563,6 +1924,13 @@
         ],
         "additionalProperties": false,
         "description": "Variante d'un produit, avec son propre stock (FR-013)"
+      }
+    },
+    "securitySchemes": {
+      "session": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Jeton de session (43 caractères) reçu à la connexion ; envoyé par le serveur du site"
       }
     }
   }

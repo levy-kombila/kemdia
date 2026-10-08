@@ -70,14 +70,19 @@ describe("schémas", () => {
 
   it("sont tous exportés pour la documentation OpenAPI", () => {
     expect(Object.keys(openApiComponentSchemas())).toEqual([
+      "AccountView",
       "AvailabilityRequest",
       "AvailabilityResponse",
       "Category",
       "CategoryNode",
       "CategoryTree",
       "CategoryView",
+      "CurrentSession",
       "Facets",
       "Health",
+      "LoginRequest",
+      "LogoutAll",
+      "OpenedSession",
       "ProblemDetails",
       "ProductDetail",
       "ProductPage",

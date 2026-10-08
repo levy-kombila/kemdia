@@ -21,4 +21,10 @@ describe("Argon2PasswordHasher", () => {
   it("hachage abîmé : refus sans exception", async () => {
     await expect(hasher.verify("pas-un-hachage", "Mangue2026")).resolves.toBe(false);
   });
+
+  it("hachage factice : mêmes réglages que les vrais, ne correspond à aucun mot de passe courant", async () => {
+    expect(hasher.dummyHash).toMatch(/^\$argon2id\$v=19\$m=19456,t=2,p=1\$/);
+    await expect(hasher.verify(hasher.dummyHash, "")).resolves.toBe(false);
+    await expect(hasher.verify(hasher.dummyHash, "Mangue2026")).resolves.toBe(false);
+  });
 });

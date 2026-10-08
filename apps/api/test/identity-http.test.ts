@@ -9,6 +9,9 @@ import {
   ProblemDetailsSchema,
   SignupStartedSchema,
   SignupVerifiedSchema,
+  CurrentSessionSchema,
+  LogoutAllSchema,
+  OpenedSessionSchema,
 } from "@kemdia/contracts";
 import { AppModule } from "../src/app.module.js";
 import { loadConfig } from "../src/config/env.js";
@@ -17,7 +20,9 @@ import { configureApp } from "../src/http/configure-app.js";
 import {
   ACCOUNT_REPOSITORY,
   IDENTITY_CLOCK,
+  LOGIN_GUARD_REPOSITORY,
   OTP_CHALLENGE_REPOSITORY,
+  SESSION_REPOSITORY,
   OTP_SENDER,
   PASSWORD_HASHER,
   SIGNUP_TICKET_REPOSITORY,
@@ -26,7 +31,9 @@ import { IDENTITY_ERROR_STATUS } from "../src/modules/identity/interface/identit
 import {
   FakeClock,
   InMemoryAccounts,
+  InMemoryLoginGuards,
   InMemoryOtpChallenges,
+  InMemorySessions,
   InMemorySignupTickets,
   RecordingOtpSender,
   fakeHasher,
@@ -82,6 +89,10 @@ describe("API identité — inscription (HTTP)", () => {
       .useValue(sender)
       .overrideProvider(IDENTITY_CLOCK)
       .useValue(clock)
+      .overrideProvider(SESSION_REPOSITORY)
+      .useValue(new InMemorySessions())
+      .overrideProvider(LOGIN_GUARD_REPOSITORY)
+      .useValue(new InMemoryLoginGuards())
       .compile();
     app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });
     configureApp(app, config);
@@ -112,7 +123,13 @@ describe("API identité — inscription (HTTP)", () => {
       ticket: body.ticket,
       code: sender.lastCode(),
     }).expect(200);
-    expect(matches(SignupVerifiedSchema, verified.body)).toEqual({ status: "active" });
+    const opened = matches(SignupVerifiedSchema, verified.body);
+    expect(opened).toMatchObject({ status: "active", account: { email: "parcours@exemple.ga" } });
+    // Connecté directement : le jeton ouvre la session
+    await request(app.getHttpServer())
+      .get("/api/v1/auth/session")
+      .set("Authorization", `Bearer ${opened.token}`)
+      .expect(200);
     const account = await accounts.findByIdentifier({
       kind: "email",
       value: "parcours@exemple.ga",
@@ -226,6 +243,107 @@ describe("API identité — inscription (HTTP)", () => {
       last = res.status;
     }
     expect(last).toBe(429);
+  });
+
+  describe("connexion et sessions", () => {
+    /** Crée un compte vérifié par le parcours d'inscription, renvoie l'adresse. */
+    async function compte(email: string): Promise<string> {
+      const started = await post("/api/v1/auth/signup", { ...SIGNUP, identifier: email }).expect(
+        202,
+      );
+      const { ticket } = matches(SignupStartedSchema, started.body);
+      await post("/api/v1/auth/signup/verify", { ticket, code: sender.lastCode() }).expect(200);
+      return email;
+    }
+    const get = (url: string, token?: string) => {
+      const r = request(app.getHttpServer()).get(url).set("X-Forwarded-For", `10.3.0.${++ip}`);
+      return token ? r.set("Authorization", `Bearer ${token}`) : r;
+    };
+    const postAuth = (url: string, token: string) =>
+      request(app.getHttpServer())
+        .post(url)
+        .set("X-Forwarded-For", `10.3.0.${++ip}`)
+        .set("Authorization", `Bearer ${token}`);
+
+    it("connexion (200), session lue, déconnexion (204), session refusée ensuite (401)", async () => {
+      const email = await compte("connexion@exemple.ga");
+      const res = await post("/api/v1/auth/login", { identifier: email, password: "Mangue2026" })
+        .set("X-Kemdia-User-Agent", "Chrome sur Android")
+        .expect(200);
+      expect(res.headers["cache-control"]).toBe("no-store");
+      const opened = matches(OpenedSessionSchema, res.body);
+      expect(opened.account).toMatchObject({ email, firstName: "Awa" });
+      expect(JSON.stringify(res.body)).not.toMatch(/hash|Mangue/);
+
+      const current = await get("/api/v1/auth/session", opened.token).expect(200);
+      expect(matches(CurrentSessionSchema, current.body).account.email).toBe(email);
+
+      await postAuth("/api/v1/auth/logout", opened.token).expect(204);
+      const after = await get("/api/v1/auth/session", opened.token).expect(401);
+      expect(codeOf(after.body)).toBe("SESSION_INVALIDE");
+    });
+
+    it("sans jeton, jeton mal formé ou jeton dans un autre format : 401", async () => {
+      expect(codeOf((await get("/api/v1/auth/session").expect(401)).body)).toBe("SESSION_INVALIDE");
+      await get("/api/v1/auth/session", "court").expect(401);
+      await request(app.getHttpServer())
+        .get("/api/v1/auth/session")
+        .set("Authorization", `Basic ${"a".repeat(43)}`)
+        .expect(401);
+      // Déconnexion sans jeton valable : 204 quand même (rien à fermer)
+      await request(app.getHttpServer()).post("/api/v1/auth/logout").expect(204);
+    });
+
+    it("blocage neutre : une adresse inconnue et un vrai compte donnent les mêmes réponses", async () => {
+      const email = await compte("bloque@exemple.ga");
+      const suite = async (identifier: string) => {
+        const out: [number, string | undefined][] = [];
+        for (let i = 0; i < 4; i++) {
+          const r = await post("/api/v1/auth/login", { identifier, password: `faux${i}abc` });
+          out.push([r.status, codeOf(r.body)]);
+        }
+        return out;
+      };
+      const reel = await suite(email);
+      const inconnu = await suite("personne@exemple.ga");
+      expect(reel).toEqual(inconnu);
+      expect(reel).toEqual([
+        [401, "IDENTIFIANTS_INCORRECTS"],
+        [401, "IDENTIFIANTS_INCORRECTS"],
+        [429, "COMPTE_BLOQUE"],
+        [429, "COMPTE_BLOQUE"],
+      ]);
+      const locked = await post("/api/v1/auth/login", {
+        identifier: email,
+        password: "Mangue2026",
+      }).expect(429);
+      expect(locked.headers["retry-after"]).toBe("900");
+    });
+
+    it("déconnecter tous les appareils", async () => {
+      const email = await compte("appareils@exemple.ga");
+      const a = matches(
+        OpenedSessionSchema,
+        (await post("/api/v1/auth/login", { identifier: email, password: "Mangue2026" })).body,
+      );
+      const b = matches(
+        OpenedSessionSchema,
+        (await post("/api/v1/auth/login", { identifier: email, password: "Mangue2026" })).body,
+      );
+      const res = await postAuth("/api/v1/auth/logout-all", a.token).expect(200);
+      // 3 sessions : celle de l'inscription et les deux connexions
+      expect(matches(LogoutAllSchema, res.body).revoked).toBe(3);
+      await get("/api/v1/auth/session", b.token).expect(401);
+    });
+
+    it("corps de connexion invalide : 400", async () => {
+      await post("/api/v1/auth/login", { identifier: "a@b.ga" }).expect(400);
+      await post("/api/v1/auth/login", {
+        identifier: "a@b.ga",
+        password: "x",
+        role: "admin",
+      }).expect(400);
+    });
   });
 
   it("chaque code d'erreur du contrat a un statut HTTP", () => {

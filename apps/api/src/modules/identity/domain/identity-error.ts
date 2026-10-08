@@ -9,7 +9,10 @@ export type IdentityErrorCode =
   | "CODE_INVALIDE"
   | "CODE_EXPIRE"
   | "TROP_D_ESSAIS"
-  | "COMPTE_BLOQUE";
+  | "COMPTE_BLOQUE"
+  | "IDENTIFIANTS_INCORRECTS"
+  | "COMPTE_DESACTIVE"
+  | "SESSION_INVALIDE";
 
 /** Une règle de l'identité n'est pas respectée. Le message est lisible par un humain, en français. */
 export class IdentityError extends Error {

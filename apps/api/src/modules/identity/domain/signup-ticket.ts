@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { SECRET_PATTERN, hashSecret } from "./secret.js";
 
 /**
  * Ticket d'inscription (ADR-0016) : secret aléatoire remis à celui qui remplit le formulaire d'inscription,
@@ -13,12 +13,10 @@ import { createHash } from "node:crypto";
  */
 export const SIGNUP_TICKET_TTL_MS = 24 * 60 * 60_000;
 /** 32 octets en base64url */
-export const SIGNUP_TICKET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+export const SIGNUP_TICKET_PATTERN = SECRET_PATTERN;
 
 /** Empreinte enregistrée en base : le ticket lui-même n'est jamais conservé. */
-export function hashSignupTicket(ticket: string): string {
-  return createHash("sha256").update(ticket).digest("hex");
-}
+export const hashSignupTicket = hashSecret;
 
 export interface SignupTicket {
   id: string;

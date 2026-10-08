@@ -6,6 +6,7 @@ import {
   MAX_ORDER_QUANTITY,
   OTP_CHANNELS,
   OTP_CODE_PATTERN,
+  SESSION_TOKEN_PATTERN,
   SIGNUP_TICKET_PATTERN,
   SLUG_PATTERN,
 } from "./constants.js";
@@ -280,11 +281,70 @@ export const SignupVerifyRequestSchema = z
   .meta({ id: "SignupVerifyRequest" });
 export type SignupVerifyRequest = z.infer<typeof SignupVerifyRequestSchema>;
 
-export const SignupVerifiedSchema = z.object({ status: z.literal("active") }).meta({
-  id: "SignupVerified",
-  description: "Compte vérifié (BR-041) : la connexion est possible",
-});
+// --- Identité : compte et session (S4-T03) ---
+
+export const AccountViewSchema = z
+  .object({
+    id: uuid,
+    firstName: z.string(),
+    lastName: z.string(),
+    email: z.string().nullable(),
+    phone: z.string().nullable().describe("Format +2410XXXXXXXX"),
+  })
+  .meta({ id: "AccountView", description: "Le compte de la personne connectée" });
+export type AccountView = z.infer<typeof AccountViewSchema>;
+
+const sessionToken = z
+  .string()
+  .regex(SESSION_TOKEN_PATTERN)
+  .describe(
+    "Jeton de session : à garder dans un cookie HttpOnly côté site, jamais lisible par JavaScript",
+  );
+
+export const OpenedSessionSchema = z
+  .object({
+    token: sessionToken,
+    expiresAt: z.iso
+      .datetime()
+      .describe("Fin de la session si le client ne revient pas (30 jours glissants)"),
+    account: AccountViewSchema,
+  })
+  .meta({
+    id: "OpenedSession",
+    description: "Session ouverte (connexion ou inscription vérifiée)",
+  });
+export type OpenedSession = z.infer<typeof OpenedSessionSchema>;
+
+export const SignupVerifiedSchema = z
+  .object({
+    status: z.literal("active"),
+    token: sessionToken,
+    expiresAt: z.iso.datetime(),
+    account: AccountViewSchema,
+  })
+  .meta({
+    id: "SignupVerified",
+    description: "Compte créé et vérifié (BR-041), et client connecté directement",
+  });
 export type SignupVerified = z.infer<typeof SignupVerifiedSchema>;
+
+export const LoginRequestSchema = z
+  .strictObject({
+    identifier: z.string().max(300).describe("Adresse e-mail ou mobile gabonais"),
+    password: z.string().max(200),
+  })
+  .meta({ id: "LoginRequest" });
+export type LoginRequest = z.infer<typeof LoginRequestSchema>;
+
+export const CurrentSessionSchema = z
+  .object({ expiresAt: z.iso.datetime(), account: AccountViewSchema })
+  .meta({ id: "CurrentSession", description: "La session présentée est valable (et prolongée)" });
+export type CurrentSession = z.infer<typeof CurrentSessionSchema>;
+
+export const LogoutAllSchema = z
+  .object({ revoked: z.int().nonnegative().describe("Nombre de sessions fermées") })
+  .meta({ id: "LogoutAll" });
+export type LogoutAll = z.infer<typeof LogoutAllSchema>;
 
 export const SignupResendRequestSchema = z
   .strictObject({ ticket })

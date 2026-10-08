@@ -5,11 +5,9 @@ import { normalizeName } from "./password-policy.js";
 /**
  * Compte client (FR-001). Le mot de passe n'est connu que sous forme de hachage Argon2id (ADR-0015).
  *
- * BR-040 : après 3 échecs de connexion, le compte est bloqué 15 minutes.
- * BR-041 : connexion impossible tant que l'identifiant n'est pas vérifié par un code.
+ * BR-041 : un compte n'existe qu'une fois son identifiant vérifié par un code (ADR-0016).
+ * BR-040 (3 échecs → 15 minutes) se compte par IDENTIFIANT, compte ou pas : voir login-guard.ts (ADR-0017).
  */
-export const MAX_FAILED_LOGINS = 3;
-export const LOCK_DURATION_MS = 15 * 60_000;
 
 export type AccountStatus = "pending" | "active" | "disabled";
 
@@ -23,6 +21,7 @@ export interface AccountProps {
   status: AccountStatus;
   emailVerifiedAt: Date | null;
   phoneVerifiedAt: Date | null;
+  /** Colonnes du S4-T01 qui ne servent plus (le blocage est dans login_guards, ADR-0017) ; supprimées au S4-T08. */
   failedLogins: number;
   lockedUntil: Date | null;
   createdAt: Date;
@@ -37,6 +36,14 @@ const invalidName = () =>
 /** Vérifie prénom et nom sans créer de compte (contrôle fait avant toute recherche en base). */
 export function assertValidNames(firstName: string, lastName: string): void {
   if (!normalizeName(firstName) || !normalizeName(lastName)) throw invalidName();
+}
+
+export interface AccountView {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
 }
 
 export class Account {
@@ -105,29 +112,23 @@ export class Account {
     return this.props.emailVerifiedAt !== null || this.props.phoneVerifiedAt !== null;
   }
 
-  isLocked(now: Date): boolean {
-    return this.props.lockedUntil !== null && this.props.lockedUntil > now;
+  isActive(): boolean {
+    return this.props.status === "active";
   }
 
-  /** BR-040 : un échec de plus ; au 3ᵉ, blocage de 15 minutes et remise à zéro du compteur. */
-  recordFailedLogin(now: Date): void {
-    if (this.isLocked(now)) return;
-    this.props.failedLogins += 1;
-    if (this.props.failedLogins >= MAX_FAILED_LOGINS) {
-      this.props.lockedUntil = new Date(now.getTime() + LOCK_DURATION_MS);
-      this.props.failedLogins = 0;
-    }
-  }
-
-  /** Connexion réussie : compteur remis à zéro. */
-  recordSuccessfulLogin(): void {
-    this.props.failedLogins = 0;
-    this.props.lockedUntil = null;
-  }
-
-  /** Mot de passe changé (mot de passe oublié, S4-T04) : le blocage éventuel est levé. */
+  /** Mot de passe changé (mot de passe oublié, S4-T04). */
   changePassword(passwordHash: string): void {
     this.props.passwordHash = passwordHash;
-    this.recordSuccessfulLogin();
+  }
+
+  /** Ce que le titulaire voit de son compte (jamais le hachage du mot de passe). */
+  view(): AccountView {
+    return {
+      id: this.props.id,
+      firstName: this.props.firstName,
+      lastName: this.props.lastName,
+      email: this.props.email,
+      phone: this.props.phone,
+    };
   }
 }

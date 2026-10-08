@@ -5,5 +5,8 @@
 export { IdentityModule } from "./identity.module.js";
 export { OtpService, type IssuedOtp } from "./application/otp.service.js";
 export { SignupService } from "./application/signup.service.js";
+export { SessionService, type AuthenticatedSession } from "./application/session.service.js";
+export { SessionGuard, CurrentSession } from "./interface/session.guard.js";
+export type { AccountView } from "./domain/account.js";
 export type { Identifier, OtpChannel } from "./domain/identifier.js";
 export { IdentityError, type IdentityErrorCode } from "./domain/identity-error.js";

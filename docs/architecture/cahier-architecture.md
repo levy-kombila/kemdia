@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués  |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests      |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                       |
+| **2.3** | 2026-10-08 | S4     | Connexion et sessions (ADR-0017) : §3.7 routes `/auth/login`, `/session`, `/logout` ; §3.9 blocage par identifiant, sessions, ménage ; §6.3 |
 | **2.2** | 2026-10-07 | S4     | Inscription et e-mails (ADR-0016) : §3.4 variables e-mail, §3.7 routes `/auth/signup`, §3.9 tickets et envoi, §6.3                          |
 | **2.1** | 2026-10-07 | S4     | Fondations du module `identity` (ADR-0015) : §3.4 `SMS_ENABLED`, §3.5, §3.9 (nouvelle), §5.4 SMS différé, §6.3, §6.4                        |
 | **2.0** | 2026-10-07 | S3     | Fin du Sprint 3 (v0.3.0) : démo avec `CATALOG_TIMEOUT_MS=90000` (§5.9) ; rapport de clôture                                                 |
@@ -347,19 +348,22 @@ erDiagram
 Décision : [ADR-0010](adr/0010-api-rest-openapi.md). Description complète : [`docs/api/openapi.json`](../api/openapi.json)
 (OpenAPI 3.1, générée depuis les schémas Zod) ; page interactive `/api/docs` en développement.
 
-| Route                                   | Rôle                                                                                     | Cache | Limite     |
-| --------------------------------------- | ---------------------------------------------------------------------------------------- | ----- | ---------- |
-| `GET /api/v1/categories`                | Arborescence complète (3 niveaux)                                                        | 60 s  | 120/min/IP |
-| `GET /api/v1/categories/{slug}`         | Catégorie, fil d'Ariane, sous-catégories ; 404 si inconnue                               | 60 s  | 120/min/IP |
-| `GET /api/v1/products`                  | Liste paginée : `category`, `q`, `sort`, `page`, `pageSize`, filtres, `scope=promotions` | 60 s  | 120/min/IP |
-| `GET /api/v1/products/facets`           | Compteurs des filtres (mêmes paramètres)                                                 | 60 s  | 120/min/IP |
-| `GET /api/v1/products/{slug}`           | Fiche produit, variantes actives et leur stock ; 404 si brouillon ou archivé             | 60 s  | 120/min/IP |
-| `POST /api/v1/availability`             | BR-001 ligne par ligne (ne modifie rien)                                                 | aucun | 30/min/IP  |
-| `POST /api/v1/auth/signup`              | Inscription : ticket + code ; **même réponse** si l'adresse a un compte (S4-T02)         | aucun | 10/min/IP  |
-| `POST /api/v1/auth/signup/verify`       | Ticket + code → compte créé, déjà vérifié (BR-041)                                       | aucun | 10/min/IP  |
-| `POST /api/v1/auth/signup/resend`       | Nouveau code (60 s entre deux, 5 par heure)                                              | aucun | 10/min/IP  |
-| `GET /api/health`                       | État de l'API et de la base                                                              | aucun | aucune     |
-| `GET /api/v1/openapi.json`, `/api/docs` | Documentation (si `API_DOCS`, désactivée par défaut en production)                       | 5 min | aucune     |
+| Route                                     | Rôle                                                                                                   | Cache | Limite     |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----- | ---------- |
+| `GET /api/v1/categories`                  | Arborescence complète (3 niveaux)                                                                      | 60 s  | 120/min/IP |
+| `GET /api/v1/categories/{slug}`           | Catégorie, fil d'Ariane, sous-catégories ; 404 si inconnue                                             | 60 s  | 120/min/IP |
+| `GET /api/v1/products`                    | Liste paginée : `category`, `q`, `sort`, `page`, `pageSize`, filtres, `scope=promotions`               | 60 s  | 120/min/IP |
+| `GET /api/v1/products/facets`             | Compteurs des filtres (mêmes paramètres)                                                               | 60 s  | 120/min/IP |
+| `GET /api/v1/products/{slug}`             | Fiche produit, variantes actives et leur stock ; 404 si brouillon ou archivé                           | 60 s  | 120/min/IP |
+| `POST /api/v1/availability`               | BR-001 ligne par ligne (ne modifie rien)                                                               | aucun | 30/min/IP  |
+| `POST /api/v1/auth/signup`                | Inscription : ticket + code ; **même réponse** si l'adresse a un compte (S4-T02)                       | aucun | 10/min/IP  |
+| `POST /api/v1/auth/signup/verify`         | Ticket + code → compte créé, déjà vérifié, **et session ouverte** (BR-041)                             | aucun | 10/min/IP  |
+| `POST /api/v1/auth/signup/resend`         | Nouveau code (60 s entre deux, 5 par heure)                                                            | aucun | 10/min/IP  |
+| `POST /api/v1/auth/login`                 | Connexion ; 3 essais puis 15 min par identifiant, même réponse si l'adresse n'a pas de compte (S4-T03) | aucun | 10/min/IP  |
+| `GET /api/v1/auth/session`                | Session présentée (`Authorization: Bearer`) valable ? La prolonge                                      | aucun | 120/min/IP |
+| `POST /api/v1/auth/logout`, `/logout-all` | Fermer cette session, ou toutes celles du compte                                                       | aucun | 10/min/IP  |
+| `GET /api/health`                         | État de l'API et de la base                                                                            | aucun | aucune     |
+| `GET /api/v1/openapi.json`, `/api/docs`   | Documentation (si `API_DOCS`, désactivée par défaut en production)                                     | 5 min | aucune     |
 
 ```mermaid
 flowchart LR
@@ -418,26 +422,32 @@ Décision : [ADR-0015](adr/0015-identite-sessions-otp.md). Même organisation qu
 
 ```
 src/modules/identity/
-├── index.ts                         Port public : IdentityModule, OtpService, IdentityError
+├── index.ts                         Port public : IdentityModule, SessionGuard, @CurrentSession, SessionService, IdentityError
 ├── identity.module.ts               Branche les ports ; choisit l'envoi des codes selon l'environnement
 ├── domain/                          TypeScript pur
 │   ├── identifier.ts                E-mail ou mobile gabonais normalisé (+2410[67]…), masquage (FR-004)
 │   ├── password-policy.ts           8 à 128 caractères, lettre + chiffre, mots de passe courants ; prénom et nom
-│   ├── account.ts                   Compte : en attente → actif après vérification (BR-041), blocage 3 échecs / 15 min (BR-040)
-│   └── otp.ts                       Code à 6 chiffres : empreinte seulement, 10 min, 5 essais, temps constant
+│   ├── account.ts                   Compte (créé vérifié, BR-041), vue du titulaire
+│   ├── login-guard.ts               BR-040 par identifiant : 3 essais en 15 min puis 15 min de blocage (S4-T03)
+│   ├── session.ts                   Session : 30 jours glissants, prolongée au plus une fois par heure (S4-T03)
+│   ├── otp.ts                       Code à 6 chiffres : empreinte seulement, 10 min, 5 essais, temps constant
 │   └── signup-ticket.ts             Ticket d'inscription : 32 octets, empreinte SHA-256, 24 h (S4-T02)
 ├── application/
 │   ├── ports.ts                     Dépôts (comptes, codes, tickets), PasswordHasher, OtpSender, Clock
 │   ├── otp.service.ts               Envoi (60 s entre deux, 5 par heure, SMS seulement si SMS_ENABLED) : code, alerte ou rien ; vérification
-│   └── signup.service.ts            Inscription sans énumération (leurre + alerte) ; compte créé au bon code ; renvoi (S4-T02, ADR-0016)
+│   ├── signup.service.ts            Inscription sans énumération (leurre + alerte) ; compte créé au bon code ; renvoi (S4-T02, ADR-0016)
+│   ├── login.service.ts             Connexion sans énumération : essai réservé avant vérification, hachage factice (S4-T03)
+│   └── session.service.ts           Ouvrir, vérifier, prolonger, fermer une session ; « tous mes appareils » (S4-T03)
 ├── interface/
-│   ├── identity.controller.ts       POST /auth/signup, /signup/verify, /signup/resend ; 10/min/IP
+│   ├── identity.controller.ts       /auth/signup, /signup/verify, /signup/resend, /login, /session, /logout, /logout-all
+│   ├── session.guard.ts             SessionGuard (jeton `Authorization: Bearer`) pour toutes les routes protégées
 │   └── identity-http-errors.ts      Erreur métier → statut HTTP + code + Retry-After
 └── infrastructure/
     ├── argon2-password-hasher.ts    Argon2id (19 Mio, 2 passes)
     ├── otp-sender.factory.ts        EMAIL_TRANSPORT : console (poste), Mailpit, Brevo, ou aucun envoi
     ├── email/                       Modèles d'e-mails (FR, sans lien) ; API web de Mailpit et de Brevo (délai 10 s)
-    └── prisma-*.repository.ts       Comptes (identifiant déjà pris → IdentifierTakenError), codes et compteurs d'envoi
+    ├── identity-maintenance.ts      Ménage horaire : sessions, codes, tickets et compteurs périmés
+    └── prisma-*.repository.ts       Comptes, codes, tickets, sessions ; essais de connexion en une requête atomique
 ```
 
 Tables du schéma `identity` :
@@ -447,6 +457,7 @@ Tables du schéma `identity` :
 | `accounts`       | Prénom, nom, e-mail et/ou téléphone (uniques), hachage Argon2id, statut, vérifications, échecs, blocage       | Au moins un identifiant ; e-mail en minuscules ; téléphone `+2410[67]` ; actif ⇒ vérifié |
 | `otp_challenges` | Usage (inscription / oubli), canal, destination, **empreinte** du code, essais, expiration                    | Empreinte hexadécimale de 64 caractères ; 0 à 5 essais                                   |
 | `sessions`       | Compte, **empreinte** du jeton (unique), expiration, dernière activité, révocation                            | Empreinte hexadécimale ; suppression en cascade avec le compte                           |
+| `login_guards`   | Identifiant (compte ou pas), essais, fin du blocage, dernière tentative (S4-T03)                              | Essais ≥ 0 ; écrit seulement par `INSERT … ON CONFLICT DO UPDATE`                        |
 | `signup_tickets` | **Empreinte** du ticket, destination, inscription (prénom, nom, hachage ; vide = leurre), expiration (S4-T02) | Empreinte hexadécimale ; inscription complète ou vide ; une seule par destination        |
 
 ## 4. Choix technologiques
@@ -731,6 +742,8 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 | Base locale accessible seulement depuis le poste (`127.0.0.1`), authentification SCRAM-SHA-256 (S3-T02)                                                                                    | `docker-compose.yml`                                         | Base exposée sur le réseau                             |
 | Mots de passe hachés en Argon2id (OWASP) ; règles vérifiées par le serveur (S4-T01)                                                                                                        | `identity/infrastructure`, `identity/domain`                 | Mots de passe faibles ou mal stockés                   |
 | Codes à usage unique : tirage cryptographique, empreinte seulement, 10 min, 5 essais, dernier code seul valable, 60 s et 5 par heure (S4-T01)                                              | `identity/domain/otp.ts`, `otp.service.ts`                   | HIGH-11 (vérification contournable), force brute       |
+| Connexion sans énumération : blocage BR-040 compté par identifiant (compte ou pas), hachage factice, même message ; essai réservé avant la vérification (S4-T03)                           | `identity/application/login.service.ts`, `login_guards`      | MED-10 (pas de verrouillage), force brute, énumération |
+| Sessions : jeton de 256 bits, empreinte seulement, 30 jours glissants, révocation immédiate, comptes désactivés exclus (S4-T03)                                                            | `identity/application/session.service.ts`                    | Sessions volées ou impossibles à fermer                |
 | Inscription sans énumération : même réponse, mêmes limites, même durée (hachage systématique) si l'adresse a un compte ; alerte au titulaire (S4-T02)                                      | `identity/application/signup.service.ts`                     | Énumération des comptes                                |
 | Essais de code comptés en une requête, limites d'envoi sous verrou par adresse : des demandes simultanées ne les contournent pas (S4-T02)                                                  | `identity/infrastructure/prisma-otp-challenge.repository.ts` | Force brute en parallèle, bombardement d'e-mails       |
 | Ticket d'inscription (empreinte seulement) portant l'inscription ; compte créé au bon code : une deuxième inscription ne peut pas faire valider son mot de passe par le titulaire (S4-T02) | `identity/domain/signup-ticket.ts`                           | Détournement d'inscription                             |

@@ -3,6 +3,7 @@ import {
   FakeClock,
   InMemoryAccounts,
   InMemoryOtpChallenges,
+  InMemorySessions,
   InMemorySignupTickets,
   RecordingOtpSender,
   fakeHasher,
@@ -12,6 +13,7 @@ import { requireIdentifier } from "../domain/identifier.js";
 import { OTP_RESEND_DELAY_MS } from "../domain/otp.js";
 import { SIGNUP_TICKET_TTL_MS } from "../domain/signup-ticket.js";
 import { OtpService } from "./otp.service.js";
+import { SessionService } from "./session.service.js";
 import { SignupService } from "./signup.service.js";
 
 const INPUT = {
@@ -39,9 +41,17 @@ function setup() {
       uuid: () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`,
     },
   );
-  const service = new SignupService(accounts, tickets, fakeHasher, clock, otp);
+  const sessions = new InMemorySessions();
+  const service = new SignupService(
+    accounts,
+    tickets,
+    fakeHasher,
+    clock,
+    otp,
+    new SessionService(sessions, accounts, clock),
+  );
   const account = () => [...accounts.rows.values()][0];
-  return { service, accounts, tickets, challenges, sender, clock, otp, account };
+  return { service, accounts, tickets, challenges, sender, clock, otp, account, sessions };
 }
 
 /** Compte déjà inscrit et vérifié. */
@@ -81,10 +91,16 @@ describe("Inscription (FR-001, BR-041)", () => {
     expect(JSON.stringify(tickets.rows)).not.toContain(started.ticket);
   });
 
-  it("le bon code avec le bon ticket crée le compte, déjà vérifié ; le ticket ne resert pas", async () => {
-    const { service, sender, account, tickets } = setup();
+  it("le bon code avec le bon ticket crée le compte, déjà vérifié, et connecte le client", async () => {
+    const { service, sender, account, tickets, sessions } = setup();
     const { ticket } = await service.start(INPUT);
-    await service.verify(ticket, sender.lastCode());
+    const opened = await service.verify(ticket, sender.lastCode(), "Chrome sur Android");
+    expect(opened.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(opened.account).toMatchObject({ firstName: "Awa", email: "awa@exemple.ga" });
+    expect(sessions.rows).toEqual([
+      expect.objectContaining({ accountId: account()?.id, userAgent: "Chrome sur Android" }),
+    ]);
+    expect(JSON.stringify(sessions.rows)).not.toContain(opened.token);
     expect(account()).toMatchObject({
       status: "active",
       firstName: "Awa",
