@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués  |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests      |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                       |
+| **2.6** | 2026-10-08 | S4     | Rôles et journal d'audit (ADR-0020) : §3.3 module `audit`, §3.5 schéma `audit`, §3.7 routes `/admin`, §3.9 rôles, §3.10 (nouvelle), §6      |
 | **2.5** | 2026-10-08 | S4     | Site branché sur l'identité (ADR-0019) : §5.4 réécrit (actions serveur, cookies, en-tête, Mon compte), §6.2 mesures du site                 |
 | **2.4** | 2026-10-08 | S4     | Mot de passe oublié (ADR-0018) : §3.7 routes `/auth/password/*` ; §3.9 `reset_tickets`, version du mot de passe ; §6.3                      |
 | **2.3** | 2026-10-08 | S4     | Connexion et sessions (ADR-0017) : §3.7 routes `/auth/login`, `/session`, `/logout` ; §3.9 blocage par identifiant, sessions, ménage ; §6.3 |
@@ -178,7 +179,9 @@ flowchart LR
       payments[payments]
       shipping[shipping]
       notif[notifications]
+      audit[audit<br/>journal — S4-T06]
     end
+    identity -->|actions sensibles| audit
     orders -->|prix, stock| catalog
     orders -->|encaisser| payments
     orders -->|expédier| shipping
@@ -187,6 +190,10 @@ flowchart LR
     shipping -->|adaptateur| tr[(Transporteur)]
     api --> db[(PostgreSQL<br/>1 schéma par module)]
 ```
+
+Le module **`audit`** (S4-T06, [ADR-0020](adr/0020-roles-journal-audit.md)) est un module de service : il ne dépend d'aucun autre,
+n'a pas de route, et chaque module y inscrit ses actions sensibles (`AuditLog.record`) dans la même transaction que l'action.
+Les routes protégées par rôle utilisent `@Authorize(…)`, exporté par `identity`.
 
 ### 3.4 Socle de l'API (`apps/api`, S3-T01)
 
@@ -269,6 +276,7 @@ flowchart LR
     subgraph pg[(PostgreSQL 18 — base « kemdia »)]
       catalog[schéma catalog]
       identity[schéma identity — S4]
+      auditdb[schéma audit — S4-T06<br/>ajout seul]
       futurs[orders · payments<br/>vendors · shipping — S5 à S7]
       pub[public : suivi des migrations]
     end
@@ -282,6 +290,10 @@ flowchart LR
 | Toute modification du schéma a sa migration                                                          | CI : `db:deploy` puis `db:check` sur base vide |
 | Une migration fusionnée n'est jamais modifiée ; on en ajoute une nouvelle                            | Revue de code                                  |
 | Une migration ne casse pas la version précédente de l'API (« ajouter d'abord, supprimer plus tard ») | Revue de code (retour arrière possible)        |
+
+**Transaction partagée (S4-T06)** : `TransactionContext` (`src/database/transaction-context.ts`) ouvre une transaction et la rend visible
+à tous les dépôts appelés pendant le travail (AsyncLocalStorage) ; un appel imbriqué rejoint la transaction en cours.
+C'est ce qui permet d'écrire une action (schéma `identity`) et sa trace (schéma `audit`) ensemble ou pas du tout, sans relation entre modules.
 
 **Environnements** : poste → `docker compose up -d db` (accessible seulement depuis le poste) ; CI → base éphémère par exécution ;
 démo → **Neon Free** (PostgreSQL 18, Francfort, S3-T07) ; production → serveur (S7). En ligne, les migrations sont appliquées par **l'image de l'API**
@@ -350,25 +362,28 @@ erDiagram
 Décision : [ADR-0010](adr/0010-api-rest-openapi.md). Description complète : [`docs/api/openapi.json`](../api/openapi.json)
 (OpenAPI 3.1, générée depuis les schémas Zod) ; page interactive `/api/docs` en développement.
 
-| Route                                     | Rôle                                                                                                   | Cache | Limite     |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----- | ---------- |
-| `GET /api/v1/categories`                  | Arborescence complète (3 niveaux)                                                                      | 60 s  | 120/min/IP |
-| `GET /api/v1/categories/{slug}`           | Catégorie, fil d'Ariane, sous-catégories ; 404 si inconnue                                             | 60 s  | 120/min/IP |
-| `GET /api/v1/products`                    | Liste paginée : `category`, `q`, `sort`, `page`, `pageSize`, filtres, `scope=promotions`               | 60 s  | 120/min/IP |
-| `GET /api/v1/products/facets`             | Compteurs des filtres (mêmes paramètres)                                                               | 60 s  | 120/min/IP |
-| `GET /api/v1/products/{slug}`             | Fiche produit, variantes actives et leur stock ; 404 si brouillon ou archivé                           | 60 s  | 120/min/IP |
-| `POST /api/v1/availability`               | BR-001 ligne par ligne (ne modifie rien)                                                               | aucun | 30/min/IP  |
-| `POST /api/v1/auth/signup`                | Inscription : ticket + code ; **même réponse** si l'adresse a un compte (S4-T02)                       | aucun | 10/min/IP  |
-| `POST /api/v1/auth/signup/verify`         | Ticket + code → compte créé, déjà vérifié, **et session ouverte** (BR-041)                             | aucun | 10/min/IP  |
-| `POST /api/v1/auth/signup/resend`         | Nouveau code (60 s entre deux, 5 par heure)                                                            | aucun | 10/min/IP  |
-| `POST /api/v1/auth/login`                 | Connexion ; 3 essais puis 15 min par identifiant, même réponse si l'adresse n'a pas de compte (S4-T03) | aucun | 10/min/IP  |
-| `GET /api/v1/auth/session`                | Session présentée (`Authorization: Bearer`) valable ? La prolonge                                      | aucun | 120/min/IP |
-| `POST /api/v1/auth/logout`, `/logout-all` | Fermer cette session, ou toutes celles du compte                                                       | aucun | 10/min/IP  |
-| `POST /api/v1/auth/password/forgot`       | Mot de passe oublié : ticket + code ; **même réponse, aucun e-mail** sans compte (S4-T04)              | aucun | 10/min/IP  |
-| `POST /api/v1/auth/password/resend`       | Nouveau code (60 s entre deux, 5 par heure)                                                            | aucun | 10/min/IP  |
-| `POST /api/v1/auth/password/reset`        | Ticket + code + nouveau mot de passe → **connecté ici, déconnecté ailleurs**, blocage levé             | aucun | 10/min/IP  |
-| `GET /api/health`                         | État de l'API et de la base                                                                            | aucun | aucune     |
-| `GET /api/v1/openapi.json`, `/api/docs`   | Documentation (si `API_DOCS`, désactivée par défaut en production)                                     | 5 min | aucune     |
+| Route                                                  | Rôle                                                                                                   | Cache | Limite     |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ----- | ---------- |
+| `GET /api/v1/categories`                               | Arborescence complète (3 niveaux)                                                                      | 60 s  | 120/min/IP |
+| `GET /api/v1/categories/{slug}`                        | Catégorie, fil d'Ariane, sous-catégories ; 404 si inconnue                                             | 60 s  | 120/min/IP |
+| `GET /api/v1/products`                                 | Liste paginée : `category`, `q`, `sort`, `page`, `pageSize`, filtres, `scope=promotions`               | 60 s  | 120/min/IP |
+| `GET /api/v1/products/facets`                          | Compteurs des filtres (mêmes paramètres)                                                               | 60 s  | 120/min/IP |
+| `GET /api/v1/products/{slug}`                          | Fiche produit, variantes actives et leur stock ; 404 si brouillon ou archivé                           | 60 s  | 120/min/IP |
+| `POST /api/v1/availability`                            | BR-001 ligne par ligne (ne modifie rien)                                                               | aucun | 30/min/IP  |
+| `POST /api/v1/auth/signup`                             | Inscription : ticket + code ; **même réponse** si l'adresse a un compte (S4-T02)                       | aucun | 10/min/IP  |
+| `POST /api/v1/auth/signup/verify`                      | Ticket + code → compte créé, déjà vérifié, **et session ouverte** (BR-041)                             | aucun | 10/min/IP  |
+| `POST /api/v1/auth/signup/resend`                      | Nouveau code (60 s entre deux, 5 par heure)                                                            | aucun | 10/min/IP  |
+| `POST /api/v1/auth/login`                              | Connexion ; 3 essais puis 15 min par identifiant, même réponse si l'adresse n'a pas de compte (S4-T03) | aucun | 10/min/IP  |
+| `GET /api/v1/auth/session`                             | Session présentée (`Authorization: Bearer`) valable ? La prolonge                                      | aucun | 120/min/IP |
+| `POST /api/v1/auth/logout`, `/logout-all`              | Fermer cette session, ou toutes celles du compte                                                       | aucun | 10/min/IP  |
+| `POST /api/v1/auth/password/forgot`                    | Mot de passe oublié : ticket + code ; **même réponse, aucun e-mail** sans compte (S4-T04)              | aucun | 10/min/IP  |
+| `POST /api/v1/auth/password/resend`                    | Nouveau code (60 s entre deux, 5 par heure)                                                            | aucun | 10/min/IP  |
+| `POST /api/v1/auth/password/reset`                     | Ticket + code + nouveau mot de passe → **connecté ici, déconnecté ailleurs**, blocage levé             | aucun | 10/min/IP  |
+| `POST /api/v1/admin/accounts/lookup`                   | Retrouver un compte par e-mail ou téléphone (dans le corps) — **admin, connexion < 15 min** (S4-T06)   | aucun | 30/min/IP  |
+| `PUT\|DELETE /api/v1/admin/accounts/{id}/roles/{role}` | Accorder / retirer `vendor` ou `moderator` (jamais `admin`, jamais sur soi) — admin, < 15 min          | aucun | 30/min/IP  |
+| `GET /api/v1/admin/audit`                              | Journal d'audit, du plus récent au plus ancien (curseur, filtres) — admin, < 15 min                    | aucun | 30/min/IP  |
+| `GET /api/health`                                      | État de l'API et de la base                                                                            | aucun | aucune     |
+| `GET /api/v1/openapi.json`, `/api/docs`                | Documentation (si `API_DOCS`, désactivée par défaut en production)                                     | 5 min | aucune     |
 
 ```mermaid
 flowchart LR
@@ -388,7 +403,8 @@ sa **variante par défaut** (`variantId`, `stock`) et `variantCount` (contrat 1.
 
 **Erreurs métier (S4-T02)** : champ `code` stable dans les Problem Details (`CODE_INVALIDE`, `CODE_EXPIRE`, `ENVOI_TROP_RAPPROCHE`…,
 liste `IDENTITY_ERROR_CODES` du contrat) et en-tête `Retry-After` pour les limites ; contrat 1.2.0.
-Connexion et sessions : contrat 1.3.0 (S4-T03) ; mot de passe oublié : contrat 1.4.0 (S4-T04).
+Connexion et sessions : contrat 1.3.0 (S4-T03) ; mot de passe oublié : contrat 1.4.0 (S4-T04) ;
+rôles (`roles` dans `AccountView`), administration et journal : contrat 1.5.0 (S4-T06).
 
 **Limitation de débit** : par adresse IP (`req.ip`, qui ne croit `X-Forwarded-For` que derrière un relais déclaré par `TRUST_PROXY`).
 Le serveur du site présente la clé `API_INTERNAL_KEY` et n'est pas limité : il sert tous les visiteurs depuis une seule adresse.
@@ -437,6 +453,7 @@ src/modules/identity/
 │   ├── login-guard.ts               BR-040 par identifiant : 3 essais en 15 min puis 15 min de blocage (S4-T03)
 │   ├── session.ts                   Session : 30 jours glissants, prolongée au plus une fois par heure (S4-T03)
 │   ├── otp.ts                       Code à 6 chiffres : empreinte seulement, 10 min, 5 essais, temps constant
+│   ├── role.ts                      Rôles cumulables, hiérarchie, qui peut accorder quoi (CRIT-06), connexion < 15 min (S4-T06)
 │   ├── signup-ticket.ts             Ticket d'inscription : 32 octets, empreinte SHA-256, 24 h (S4-T02)
 │   └── reset-ticket.ts              Ticket de mot de passe oublié : 32 octets, empreinte SHA-256, 1 h (S4-T04)
 ├── application/
@@ -445,29 +462,72 @@ src/modules/identity/
 │   ├── signup.service.ts            Inscription sans énumération (leurre + alerte) ; compte créé au bon code ; renvoi (S4-T02, ADR-0016)
 │   ├── login.service.ts             Connexion sans énumération : essai réservé avant vérification, hachage factice (S4-T03)
 │   ├── session.service.ts           Ouvrir, vérifier, prolonger, fermer une session ; « tous mes appareils » (S4-T03)
-│   └── password-reset.service.ts    Mot de passe oublié sans énumération (leurre, aucun e-mail) ; changement en une transaction (S4-T04, ADR-0018)
+│   ├── password-reset.service.ts    Mot de passe oublié sans énumération (leurre, aucun e-mail) ; changement en une transaction (S4-T04, ADR-0018)
+│   └── role.service.ts              Accorder / retirer un rôle + ligne d'audit en une transaction ; commande serveur `admin` (S4-T06)
 ├── interface/
 │   ├── identity.controller.ts       /auth/signup…, /login, /session, /logout, /logout-all, /password/forgot, /resend, /reset
 │   ├── session.guard.ts             SessionGuard (jeton `Authorization: Bearer`) pour toutes les routes protégées
+│   ├── role.guard.ts                @Authorize(rôle, { recentLogin }) = SessionGuard + RoleGuard, fermée par défaut (S4-T06)
+│   ├── admin.controller.ts          /admin/accounts/lookup, /admin/accounts/{id}/roles/{role}, /admin/audit (S4-T06)
 │   └── identity-http-errors.ts      Erreur métier → statut HTTP + code + Retry-After
 └── infrastructure/
     ├── argon2-password-hasher.ts    Argon2id (19 Mio, 2 passes)
     ├── otp-sender.factory.ts        EMAIL_TRANSPORT : console (poste), Mailpit, Brevo, ou aucun envoi
     ├── email/                       Modèles d'e-mails (FR, sans lien) ; API web de Mailpit et de Brevo (délai 10 s)
     ├── identity-maintenance.ts      Ménage horaire : sessions, codes, tickets et compteurs périmés
-    └── prisma-*.repository.ts       Comptes, codes, tickets, sessions ; essais de connexion en une requête atomique
+    ├── prisma-role.repository.ts    Rôles : statut du compte relu sous verrou (FOR SHARE), ajout sans doublon (S4-T06)
+    └── prisma-*.repository.ts       Comptes (avec leurs rôles), codes, tickets, sessions ; essais de connexion en une requête atomique
 ```
 
 Tables du schéma `identity` :
 
-| Table            | Contenu                                                                                                         | Contraintes SQL ajoutées à la main                                                         |
-| ---------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `accounts`       | Prénom, nom, e-mail et/ou téléphone (uniques), hachage Argon2id, version du mot de passe, statut, vérifications | Au moins un identifiant ; e-mail en minuscules ; téléphone `+2410[67]` ; actif ⇒ vérifié   |
-| `otp_challenges` | Usage (inscription / oubli), canal, destination, **empreinte** du code, essais, expiration                      | Empreinte hexadécimale de 64 caractères ; 0 à 5 essais                                     |
-| `sessions`       | Compte, **empreinte** du jeton (unique), expiration, dernière activité, révocation, version du mot de passe     | Empreinte hexadécimale ; suppression en cascade avec le compte                             |
-| `reset_tickets`  | **Empreinte** du ticket, destination, compte (vide = leurre), expiration (S4-T04)                               | Empreinte hexadécimale ; expiration après création ; suppression en cascade avec le compte |
-| `login_guards`   | Identifiant (compte ou pas), essais, fin du blocage, dernière tentative (S4-T03)                                | Essais ≥ 0 ; écrit seulement par `INSERT … ON CONFLICT DO UPDATE`                          |
-| `signup_tickets` | **Empreinte** du ticket, destination, inscription (prénom, nom, hachage ; vide = leurre), expiration (S4-T02)   | Empreinte hexadécimale ; inscription complète ou vide ; une seule par destination          |
+| Table            | Contenu                                                                                                                | Contraintes SQL ajoutées à la main                                                                |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `accounts`       | Prénom, nom, e-mail et/ou téléphone (uniques), hachage Argon2id, version du mot de passe, statut, vérifications        | Au moins un identifiant ; e-mail en minuscules ; téléphone `+2410[67]` ; actif ⇒ vérifié          |
+| `otp_challenges` | Usage (inscription / oubli), canal, destination, **empreinte** du code, essais, expiration                             | Empreinte hexadécimale de 64 caractères ; 0 à 5 essais                                            |
+| `sessions`       | Compte, **empreinte** du jeton (unique), expiration, dernière activité, révocation, version du mot de passe            | Empreinte hexadécimale ; suppression en cascade avec le compte                                    |
+| `reset_tickets`  | **Empreinte** du ticket, destination, compte (vide = leurre), expiration (S4-T04)                                      | Empreinte hexadécimale ; expiration après création ; suppression en cascade avec le compte        |
+| `login_guards`   | Identifiant (compte ou pas), essais, fin du blocage, dernière tentative (S4-T03)                                       | Essais ≥ 0 ; écrit seulement par `INSERT … ON CONFLICT DO UPDATE`                                 |
+| `signup_tickets` | **Empreinte** du ticket, destination, inscription (prénom, nom, hachage ; vide = leurre), expiration (S4-T02)          | Empreinte hexadécimale ; inscription complète ou vide ; une seule par destination                 |
+| `account_roles`  | Compte, rôle (`VENDOR`, `MODERATOR`, `ADMIN`), date, administrateur qui l'a accordé (vide = commande serveur) (S4-T06) | Un rôle par ligne (clé compte + rôle) ; jamais accordé par son titulaire ; cascade avec le compte |
+
+**Rôles (S4-T06, [ADR-0020](adr/0020-roles-journal-audit.md))** : `client` (tout compte actif, jamais stocké), `vendor`, `moderator`, `admin`,
+cumulables ; `admin` a les droits de `moderator`. Un administrateur accorde ou retire `vendor` / `moderator` à un autre compte ; `admin`
+s'accorde seulement par la commande serveur :
+
+```bash
+pnpm --filter @kemdia/api admin:grant  awa@exemple.ga   # le compte doit être inscrit et vérifié
+pnpm --filter @kemdia/api admin:revoke awa@exemple.ga
+# image Docker : node dist/cli/admin-role.js grant awa@exemple.ga
+```
+
+Les rôles sont lus avec le compte à chaque requête : un rôle retiré ne sert plus, tout de suite.
+
+### 3.10 Module `audit` (S4-T06)
+
+Décision : [ADR-0020](adr/0020-roles-journal-audit.md).
+
+```
+src/modules/audit/
+├── index.ts                         Port public : AuditModule, AuditLog (écrire), AuditReader (lire), auditContextOf(req)
+├── domain/audit-event.ts            Actions (liste fermée), acteur, cible, détails courts sans caractère de contrôle ; 365 jours
+├── application/audit-log.ts         Écrire (dans la transaction de l'action) ; lire par pages de 100 au plus
+├── infrastructure/
+│   ├── prisma-audit.repository.ts   Écriture via TransactionContext ; lecture par curseur (date, id) ; purge par lots
+│   └── audit-retention.ts           Purge toutes les 6 h des lignes de plus de 365 jours
+└── interface/request-context.ts     Adresse IP vue par l'API, identifiant de requête
+```
+
+| Action                 | Écrite par                         | Détails          |
+| ---------------------- | ---------------------------------- | ---------------- |
+| `role.granted`         | Administrateur ou commande serveur | `role`, `source` |
+| `role.revoked`         | Administrateur ou commande serveur | `role`, `source` |
+| `password.reset`       | Titulaire (mot de passe oublié)    | —                |
+| `sessions.revoked_all` | Titulaire (« tous mes appareils ») | `count` (si ≥ 1) |
+
+Table `audit.events` : identifiant, date (**posée par la base**), action, type et UUID de l'acteur, type et UUID de la cible, détails (JSON ≤ 2 Ko),
+adresse IP, identifiant de requête. Déclencheurs SQL : **aucune modification**, suppression seulement après 365 jours, `TRUNCATE` interdit.
+Pas de clé étrangère vers les comptes : la trace survit au compte.
 
 ## 4. Choix technologiques
 
@@ -704,7 +764,7 @@ flowchart LR
 1. **Ne jamais faire confiance au client** : URL, formulaires, `localStorage`, en-têtes sont validés.
 2. **Le serveur calcule tous les montants.**
 3. **Aucun secret, aucune donnée réelle dans Git.**
-4. **Moindre privilège** : conteneur non-root, système de fichiers en lecture seule, rôles stricts (S6).
+4. **Moindre privilège** : conteneur non-root, système de fichiers en lecture seule, rôles stricts (S4-T06 : client, vendeur, modérateur, administrateur).
 5. **Défense en profondeur** : validation + échappement + CSP + en-têtes.
 
 ### 6.2 Mesures en place (S1)
@@ -769,12 +829,17 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 | Ticket d'inscription (empreinte seulement) portant l'inscription ; compte créé au bon code : une deuxième inscription ne peut pas faire valider son mot de passe par le titulaire (S4-T02)                                                          | `identity/domain/signup-ticket.ts`                                | Détournement d'inscription                                     |
 | E-mails sans lien ni image, sans donnée saisie ; clé Brevo jamais journalisée, erreurs réduites au statut HTTP (S4-T02)                                                                                                                             | `identity/infrastructure/email/`                                  | Hameçonnage, injection, fuite de secret                        |
 | Jamais de code écrit dans les journaux hors du poste de développement ; SMS refusé tant que `SMS_ENABLED=false` (S4-T01)                                                                                                                            | `identity/infrastructure/otp-sender.factory.ts`                   | Fuite de codes, coûts imprévus                                 |
+| Rôles : seul un administrateur accorde `vendor` / `moderator` ; `admin` jamais par l'API ; jamais sur soi (aussi en SQL) ; UUID comparés sans casse ; statut du compte relu sous verrou (S4-T06)                                                    | `identity/domain/role.ts`, `role.service.ts`, migration           | CRIT-06 (élévation), MED-07 (pas de hiérarchie)                |
+| `@Authorize` fermée par défaut ; règles du contrôleur et de la méthode toutes exigées ; rôles relus à chaque requête ; administration : connexion de moins de 15 minutes (S4-T06)                                                                   | `identity/interface/role.guard.ts`                                | Routes oubliées, rôle retiré encore utilisable, session volée  |
+| Journal d'audit en ajout seul (déclencheurs SQL), date posée par la base, écrit dans la transaction de l'action, sans secret ; conservé 365 jours (S4-T06)                                                                                          | `modules/audit`, migration `roles_journal_audit`                  | Actions sans trace, effacement de traces, MED-18               |
+| Premier administrateur par commande serveur sur un compte vérifié ; aucun mot de passe par défaut ; erreurs sans détail technique (S4-T06)                                                                                                          | `src/cli/admin-role.ts`                                           | CRIT-02 (secrets), compte par défaut                           |
 
 ### 6.4 Prévu 🔜
 
 - S4 : sessions en base + cookie `HttpOnly; Secure; SameSite=Lax` (S4-T03), CSP à _nonce_ via `proxy.ts`, protection CSRF, limitation par compte (S4-T07).
 - S5 : signature des webhooks Mobile Money, idempotence des paiements, transactions SQL pour stock et coupons.
-- S7 : deux rôles PostgreSQL (migrations / application sans droit de modifier les tables), connexion chiffrée selon l'hébergement, sauvegardes chiffrées testées.
+- S6 : écrans d'administration avec double authentification (MED-15) ; nouvelles actions au journal (KYC, modération).
+- S7 : deux rôles PostgreSQL (migrations / application sans droit de modifier les tables **ni de désactiver les déclencheurs du journal d'audit**), connexion chiffrée selon l'hébergement, sauvegardes chiffrées testées.
 
 ## 7. DevOps — CI/CD
 
