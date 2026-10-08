@@ -5,6 +5,7 @@ import type { LoginGuardState } from "../domain/login-guard.js";
 import type { Session } from "../domain/session.js";
 import type { ResetTicket } from "../domain/reset-ticket.js";
 import type { SignupTicket } from "../domain/signup-ticket.js";
+import type { StoredRole } from "../domain/role.js";
 
 /**
  * Ports du module identity (architecture hexagonale) : ce dont les cas d'utilisation ont besoin,
@@ -22,6 +23,8 @@ export const PASSWORD_HASHER = Symbol("PASSWORD_HASHER");
 export const OTP_SENDER = Symbol("OTP_SENDER");
 export const IDENTITY_CLOCK = Symbol("IDENTITY_CLOCK");
 export const IDENTITY_OPTIONS = Symbol("IDENTITY_OPTIONS");
+export const ROLE_REPOSITORY = Symbol("ROLE_REPOSITORY");
+export const TRANSACTION_RUNNER = Symbol("TRANSACTION_RUNNER");
 /** Facultatif : tirage du code et de l'identifiant du défi, remplacé dans les tests. */
 export const OTP_RANDOM = Symbol("OTP_RANDOM");
 
@@ -158,6 +161,22 @@ export interface OtpSender {
   /** Canaux réellement disponibles avec cet adaptateur et cette configuration. */
   readonly channels: readonly OtpChannel[];
   send(message: OtpMessage): Promise<void>;
+}
+
+/** Rôles enregistrés (S4-T06, ADR-0020). Lus avec le compte (AccountRepository), écrits seulement ici. */
+export interface RoleRepository {
+  /** Ajoute le rôle s'il manque, en une requête ; `true` s'il vient d'être ajouté. `grantedBy` vide = commande serveur. */
+  grant(accountId: string, role: StoredRole, grantedBy: string | null, now: Date): Promise<boolean>;
+  /** Retire le rôle ; `true` s'il était présent. */
+  revoke(accountId: string, role: StoredRole): Promise<boolean>;
+}
+
+/**
+ * Transaction partagée (ADR-0020) : tout ce que `work` écrit — dans ce module ET dans le journal d'audit —
+ * est enregistré ensemble ou pas du tout. Un appel imbriqué rejoint la transaction en cours.
+ */
+export interface TransactionRunner {
+  run<T>(work: () => Promise<T>): Promise<T>;
 }
 
 export interface Clock {

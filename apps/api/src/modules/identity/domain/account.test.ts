@@ -70,8 +70,23 @@ describe("Compte (FR-001)", () => {
       lastName: "Ndong",
       email: "awa@exemple.ga",
       phone: null,
+      roles: ["client"],
     });
     expect(JSON.stringify(account.view())).not.toContain("argon2");
+  });
+
+  it("rôles (S4-T06) : « client » toujours, rôles enregistrés dans un ordre fixe, inconnus ignorés", () => {
+    const account = newAccount();
+    const restored = Account.restore({
+      ...account.snapshot(),
+      roles: ["admin", "vendor", "root" as never],
+    });
+    expect(restored.roles).toEqual(["client", "vendor", "admin"]);
+    expect(restored.adminView()).toMatchObject({
+      status: "pending",
+      roles: ["client", "vendor", "admin"],
+    });
+    expect(JSON.stringify(restored.adminView())).not.toContain("argon2");
   });
 
   it("changer de mot de passe", () => {

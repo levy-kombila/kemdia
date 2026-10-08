@@ -1,0 +1,40 @@
+// Module audit : journal des actions sensibles (S4-T06, ADR-0020).
+// Chaque modèle de ce fichier porte @@schema("audit").
+// Règles posées en SQL dans la migration (Prisma ne sait pas les décrire) : table en AJOUT SEUL
+// (modification interdite, suppression seulement après 365 jours, TRUNCATE interdit), format des actions,
+// acteur cohérent avec son type, détails limités à un petit objet.
+
+/// Qui a agi : un compte (ACCOUNT) ou le serveur lui-même (SYSTEM : commande en ligne, tâche planifiée).
+enum AuditActorType {
+  ACCOUNT
+  SYSTEM
+
+  @@map("actor_type")
+  @@schema("audit")
+}
+
+/// Une action sensible : qui, quoi, sur quoi, quand, d'où. Jamais de mot de passe, de code ni de jeton.
+model AuditEvent {
+  id         String         @id @db.Uuid
+  occurredAt DateTime       @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  /// Ex. « role.granted », « password.reset »
+  action     String         @db.VarChar(64)
+  actorType  AuditActorType @map("actor_type")
+  /// UUID du compte qui agit (vide si SYSTEM). Pas de clé étrangère : le journal survit au compte (ADR-0006).
+  actorId    String?        @map("actor_id") @db.Uuid
+  /// Ce sur quoi porte l'action (ex. « account ») et son UUID
+  targetType String?        @map("target_type") @db.VarChar(32)
+  targetId   String?        @map("target_id") @db.Uuid
+  /// Précisions courtes et non sensibles (ex. { "role": "vendor" })
+  details    Json           @default("{}") @db.JsonB
+  /// Adresse IP vue par l'API
+  ip         String?        @db.Inet
+  /// Identifiant de requête (le même que dans les journaux techniques)
+  requestId  String?        @map("request_id") @db.VarChar(64)
+
+  @@index([occurredAt])
+  @@index([actorId, occurredAt])
+  @@index([targetId, occurredAt])
+  @@map("events")
+  @@schema("audit")
+}

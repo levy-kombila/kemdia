@@ -1,6 +1,7 @@
 import type { Identifier } from "./identifier.js";
 import { IdentityError } from "./identity-error.js";
 import { normalizeName } from "./password-policy.js";
+import { effectiveRoles, STORED_ROLES, type Role, type StoredRole } from "./role.js";
 
 /**
  * Compte client (FR-001). Le mot de passe n'est connu que sous forme de hachage Argon2id (ADR-0015).
@@ -26,6 +27,8 @@ export interface AccountProps {
   /** Colonnes du S4-T01 qui ne servent plus (le blocage est dans login_guards, ADR-0017) ; supprimées au S4-T08. */
   failedLogins: number;
   lockedUntil: Date | null;
+  /** Rôles enregistrés (S4-T06) ; jamais écrits par `AccountRepository.save` (voir RoleRepository) */
+  roles: readonly StoredRole[];
   createdAt: Date;
 }
 
@@ -46,6 +49,14 @@ export interface AccountView {
   lastName: string;
   email: string | null;
   phone: string | null;
+  /** Toujours `client`, puis les rôles enregistrés (S4-T06) */
+  roles: Role[];
+}
+
+/** Ce que l'administration voit d'un compte (S4-T06) : jamais le hachage ni les compteurs. */
+export interface AdminAccountView extends AccountView {
+  status: AccountStatus;
+  createdAt: Date;
 }
 
 export class Account {
@@ -76,13 +87,14 @@ export class Account {
       phoneVerifiedAt: null,
       failedLogins: 0,
       lockedUntil: null,
+      roles: [],
       createdAt: input.now,
     });
   }
 
   /** Reconstruit un compte lu en base (aucune règle rejouée : la base les garantit déjà). */
   static restore(props: AccountProps): Account {
-    return new Account({ ...props });
+    return new Account({ ...props, roles: STORED_ROLES.filter((r) => props.roles.includes(r)) });
   }
 
   get id(): string {
@@ -97,6 +109,10 @@ export class Account {
 
   get passwordVersion(): number {
     return this.props.passwordVersion;
+  }
+
+  get roles(): Role[] {
+    return effectiveRoles(this.props.roles);
   }
 
   snapshot(): Readonly<AccountProps> {
@@ -144,6 +160,11 @@ export class Account {
       lastName: this.props.lastName,
       email: this.props.email,
       phone: this.props.phone,
+      roles: this.roles,
     };
+  }
+
+  adminView(): AdminAccountView {
+    return { ...this.view(), status: this.props.status, createdAt: this.props.createdAt };
   }
 }

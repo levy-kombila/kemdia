@@ -1,9 +1,10 @@
 import { openApiComponentSchemas } from "@kemdia/contracts";
 import { catalogPaths } from "../modules/catalog/interface/catalog.openapi.js";
+import { adminPaths } from "../modules/identity/interface/admin.openapi.js";
 import { identityPaths } from "../modules/identity/interface/identity.openapi.js";
 
 /** Version du contrat HTTP (indépendante de la version de l'image) : à augmenter à chaque changement de l'API. */
-export const API_CONTRACT_VERSION = "1.4.0";
+export const API_CONTRACT_VERSION = "1.5.0";
 
 /** Document OpenAPI complet de l'API, généré à partir des schémas réellement utilisés. */
 export function buildOpenApiDocument(): Record<string, unknown> {
@@ -19,6 +20,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         "- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.",
         "- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).",
         "- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.",
+        "- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.",
       ].join("\n"),
     },
     servers: [{ url: "/", description: "Même adresse que cette documentation" }],
@@ -31,6 +33,11 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         name: "Identité",
         description:
           "Inscription et vérification par code (module identity) ; appelées par le serveur du site",
+      },
+      {
+        name: "Administration",
+        description:
+          "Rôles des comptes et journal d'audit (S4-T06) : administrateurs connectés depuis moins de 15 minutes",
       },
       { name: "Supervision", description: "État du service" },
     ],
@@ -54,6 +61,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       },
       ...catalogPaths,
       ...identityPaths,
+      ...adminPaths,
     },
     // Schémas du contrat partagé avec le site (@kemdia/contracts)
     components: {

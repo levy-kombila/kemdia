@@ -7,6 +7,8 @@ import {
   InMemorySignupTickets,
   RecordingOtpSender,
   fakeHasher,
+  RecordingAudit,
+  directTransactions,
 } from "../../../../test/identity/in-memory.js";
 import { Account } from "../domain/account.js";
 import { requireIdentifier } from "../domain/identifier.js";
@@ -26,6 +28,7 @@ const EMAIL = requireIdentifier("awa@exemple.ga");
 
 function setup() {
   const accounts = new InMemoryAccounts();
+  const audit = new RecordingAudit();
   const tickets = new InMemorySignupTickets();
   const challenges = new InMemoryOtpChallenges();
   const sender = new RecordingOtpSender(["email"]);
@@ -48,7 +51,7 @@ function setup() {
     fakeHasher,
     clock,
     otp,
-    new SessionService(sessions, accounts, clock),
+    new SessionService(sessions, accounts, clock, audit, directTransactions),
   );
   const account = () => [...accounts.rows.values()][0];
   return { service, accounts, tickets, challenges, sender, clock, otp, account, sessions };

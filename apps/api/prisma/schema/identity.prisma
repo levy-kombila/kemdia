@@ -32,6 +32,17 @@ enum OtpChannel {
   @@schema("identity")
 }
 
+/// Rôle accordé à un compte (S4-T06, ADR-0020). « client » n'est pas stocké : tout compte actif l'a.
+/// VENDOR (vendeur), MODERATOR (modération), ADMIN (administration ; jamais accordé par l'API).
+enum Role {
+  VENDOR
+  MODERATOR
+  ADMIN
+
+  @@map("role")
+  @@schema("identity")
+}
+
 /// Compte client (FR-001). Mot de passe : hachage Argon2id uniquement.
 model Account {
   /// BR-042 : identifiant public UUID
@@ -50,6 +61,7 @@ model Account {
   lockedUntil     DateTime?     @map("locked_until") @db.Timestamptz(3)
   sessions        Session[]
   resetTickets    ResetTicket[]
+  roles           AccountRole[]
   createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -143,5 +155,20 @@ model Session {
   @@index([accountId])
   @@index([expiresAt])
   @@map("sessions")
+  @@schema("identity")
+}
+
+/// Rôles d'un compte (S4-T06, ADR-0020) : une ligne par rôle, cumulables. Lus à chaque requête (retrait immédiat).
+model AccountRole {
+  accountId String   @map("account_id") @db.Uuid
+  role      Role
+  grantedAt DateTime @default(now()) @map("granted_at") @db.Timestamptz(3)
+  /// Administrateur qui a accordé le rôle ; vide = commande serveur (`admin:grant`)
+  grantedBy String?  @map("granted_by") @db.Uuid
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@id([accountId, role])
+  @@index([role])
+  @@map("account_roles")
   @@schema("identity")
 }

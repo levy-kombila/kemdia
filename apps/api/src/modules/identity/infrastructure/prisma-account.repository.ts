@@ -1,8 +1,12 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../../database/prisma.service.js";
-import type { Account as AccountRow } from "../../../generated/prisma/client.js";
+import type {
+  Account as AccountRow,
+  AccountRole as AccountRoleRow,
+} from "../../../generated/prisma/client.js";
 import { Account, type AccountStatus } from "../domain/account.js";
 import type { Identifier } from "../domain/identifier.js";
+import type { StoredRole } from "../domain/role.js";
 import { IdentifierTakenError, type AccountRepository } from "../application/ports.js";
 import { isUniqueViolation } from "./prisma-errors.js";
 
@@ -13,7 +17,17 @@ const FROM_DB = {
   DISABLED: "disabled",
 } as const satisfies Record<AccountRow["status"], AccountStatus>;
 
-function toDomain(row: AccountRow): Account {
+export const ROLE_TO_DB = { vendor: "VENDOR", moderator: "MODERATOR", admin: "ADMIN" } as const;
+const ROLE_FROM_DB = {
+  VENDOR: "vendor",
+  MODERATOR: "moderator",
+  ADMIN: "admin",
+} as const satisfies Record<AccountRoleRow["role"], StoredRole>;
+
+/** Les rôles sont lus avec le compte, à chaque requête : un rôle retiré ne sert plus, tout de suite. */
+const WITH_ROLES = { roles: { select: { role: true } } } as const;
+
+function toDomain(row: AccountRow & { roles: Pick<AccountRoleRow, "role">[] }): Account {
   return Account.restore({
     id: row.id,
     firstName: row.firstName,
@@ -27,6 +41,7 @@ function toDomain(row: AccountRow): Account {
     phoneVerifiedAt: row.phoneVerifiedAt,
     failedLogins: row.failedLogins,
     lockedUntil: row.lockedUntil,
+    roles: row.roles.map((r) => ROLE_FROM_DB[r.role]),
     createdAt: row.createdAt,
   });
 }
@@ -56,7 +71,7 @@ export class PrismaAccountRepository implements AccountRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async findById(id: string): Promise<Account | null> {
-    const row = await this.prisma.account.findUnique({ where: { id } });
+    const row = await this.prisma.account.findUnique({ where: { id }, include: WITH_ROLES });
     return row ? toDomain(row) : null;
   }
 
@@ -64,6 +79,7 @@ export class PrismaAccountRepository implements AccountRepository {
     const row = await this.prisma.account.findUnique({
       where:
         identifier.kind === "email" ? { email: identifier.value } : { phone: identifier.value },
+      include: WITH_ROLES,
     });
     return row ? toDomain(row) : null;
   }

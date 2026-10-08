@@ -1,7 +1,12 @@
 import { z } from "zod";
 import {
   AVAILABILITY_REASONS,
+  ADMIN_ASSIGNABLE_ROLES,
+  AUDIT_ACTIONS,
+  AUDIT_PAGE_DEFAULT,
+  AUDIT_PAGE_MAX,
   IDENTITY_ERROR_CODES,
+  ROLES,
   MAX_AVAILABILITY_LINES,
   MAX_ORDER_QUANTITY,
   OTP_CHANNELS,
@@ -290,6 +295,9 @@ export const AccountViewSchema = z
     lastName: z.string(),
     email: z.string().nullable(),
     phone: z.string().nullable().describe("Format +2410XXXXXXXX"),
+    roles: z
+      .array(z.enum(ROLES))
+      .describe("Rôles cumulables (S4-T06) : toujours « client », puis vendor, moderator, admin"),
   })
   .meta({ id: "AccountView", description: "Le compte de la personne connectée" });
 export type AccountView = z.infer<typeof AccountViewSchema>;
@@ -388,6 +396,76 @@ export const ResetPasswordRequestSchema = z
   })
   .meta({ id: "ResetPasswordRequest" });
 export type ResetPasswordRequest = z.infer<typeof ResetPasswordRequestSchema>;
+
+// --- Administration : rôles et journal d'audit (S4-T06, ADR-0020) ---
+
+export const AdminAccountLookupRequestSchema = z
+  .strictObject({ identifier: z.string().max(300).describe("Adresse e-mail ou mobile gabonais") })
+  .meta({
+    id: "AdminAccountLookupRequest",
+    description:
+      "Recherche d'un compte (dans le corps : jamais d'adresse e-mail dans l'URL ni les journaux)",
+  });
+export type AdminAccountLookupRequest = z.infer<typeof AdminAccountLookupRequestSchema>;
+
+export const AdminAccountSchema = AccountViewSchema.extend({
+  status: z.enum(["pending", "active", "disabled"]),
+  createdAt: z.iso.datetime(),
+}).meta({ id: "AdminAccount", description: "Un compte vu par l'administration" });
+export type AdminAccount = z.infer<typeof AdminAccountSchema>;
+
+/** Paramètres de chemin de `PUT|DELETE /admin/accounts/{accountId}/roles/{role}`. */
+export const AdminRoleParamsSchema = z.strictObject({
+  accountId: uuid,
+  role: z.enum(ADMIN_ASSIGNABLE_ROLES),
+});
+export type AdminRoleParams = z.infer<typeof AdminRoleParamsSchema>;
+
+/** Position dans le journal (page suivante) : opaque pour le client. */
+export const AUDIT_CURSOR_PATTERN = /^[A-Za-z0-9_-]{20,120}$/;
+
+export const AuditQueryParamsSchema = z.strictObject({
+  limit: z.coerce.number().int().min(1).max(AUDIT_PAGE_MAX).default(AUDIT_PAGE_DEFAULT),
+  before: z.string().regex(AUDIT_CURSOR_PATTERN).optional(),
+  action: z.enum(AUDIT_ACTIONS).optional(),
+  accountId: uuid.optional().describe("Lignes où ce compte agit ou est la cible"),
+});
+export type AuditQueryParams = z.infer<typeof AuditQueryParamsSchema>;
+
+export const AuditEventSchema = z
+  .object({
+    id: uuid,
+    occurredAt: z.iso.datetime(),
+    action: z.enum(AUDIT_ACTIONS),
+    actor: z.discriminatedUnion("type", [
+      z.object({ type: z.literal("account"), id: uuid }),
+      z.object({ type: z.literal("system") }),
+    ]),
+    target: z.object({ type: z.literal("account"), id: uuid }).nullable(),
+    details: z.record(z.string(), z.union([z.string(), z.int()])),
+    ip: z.string().nullable().describe("Adresse vue par l'API"),
+    requestId: z
+      .string()
+      .nullable()
+      .describe("Identifiant de la requête dans les journaux techniques"),
+  })
+  .meta({
+    id: "AuditEvent",
+    description: "Une action sensible : qui, quoi, sur quoi, quand, d'où",
+  });
+export type AuditEvent = z.infer<typeof AuditEventSchema>;
+
+export const AuditPageSchema = z
+  .object({
+    items: z.array(AuditEventSchema),
+    nextCursor: z
+      .string()
+      .regex(AUDIT_CURSOR_PATTERN)
+      .nullable()
+      .describe("À passer dans `before` pour la page suivante ; vide à la fin"),
+  })
+  .meta({ id: "AuditPage", description: "Journal d'audit, du plus récent au plus ancien" });
+export type AuditPage = z.infer<typeof AuditPageSchema>;
 
 type JsonSchema = Record<string, unknown>;
 

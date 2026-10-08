@@ -5,6 +5,9 @@ import {
   ProductSummarySchema,
   SignupRequestSchema,
   SignupVerifyRequestSchema,
+  AdminRoleParamsSchema,
+  AuditQueryParamsSchema,
+  AccountViewSchema,
   openApiComponentSchemas,
   productQueryParams,
 } from "./index.js";
@@ -71,6 +74,10 @@ describe("schémas", () => {
   it("sont tous exportés pour la documentation OpenAPI", () => {
     expect(Object.keys(openApiComponentSchemas())).toEqual([
       "AccountView",
+      "AdminAccount",
+      "AdminAccountLookupRequest",
+      "AuditEvent",
+      "AuditPage",
       "AvailabilityRequest",
       "AvailabilityResponse",
       "Category",
@@ -118,6 +125,41 @@ describe("schémas", () => {
     expect(SignupVerifyRequestSchema.safeParse({ ticket: "court", code: "042917" }).success).toBe(
       false,
     );
+  });
+});
+
+describe("rôles et journal d'audit (S4-T06)", () => {
+  const id = "0b9c2f5e-3c1a-4d2b-9e8f-1a2b3c4d5e6f";
+
+  it("seuls « vendor » et « moderator » sont attribuables par l'API (jamais « admin »)", () => {
+    expect(AdminRoleParamsSchema.safeParse({ accountId: id, role: "vendor" }).success).toBe(true);
+    expect(AdminRoleParamsSchema.safeParse({ accountId: id, role: "moderator" }).success).toBe(
+      true,
+    );
+    expect(AdminRoleParamsSchema.safeParse({ accountId: id, role: "admin" }).success).toBe(false);
+    expect(AdminRoleParamsSchema.safeParse({ accountId: "42", role: "vendor" }).success).toBe(
+      false,
+    );
+  });
+
+  it("compte : rôles connus seulement", () => {
+    const account = { id, firstName: "Awa", lastName: "Ndong", email: null, phone: null };
+    expect(AccountViewSchema.safeParse({ ...account, roles: ["client", "admin"] }).success).toBe(
+      true,
+    );
+    expect(AccountViewSchema.safeParse({ ...account, roles: ["root"] }).success).toBe(false);
+  });
+
+  it("journal : 50 lignes par défaut, 100 au plus, action connue, paramètres inconnus refusés", () => {
+    expect(AuditQueryParamsSchema.parse({})).toEqual({ limit: 50 });
+    expect(AuditQueryParamsSchema.parse({ limit: "20", action: "role.granted" })).toEqual({
+      limit: 20,
+      action: "role.granted",
+    });
+    expect(AuditQueryParamsSchema.safeParse({ limit: "500" }).success).toBe(false);
+    expect(AuditQueryParamsSchema.safeParse({ action: "tout" }).success).toBe(false);
+    expect(AuditQueryParamsSchema.safeParse({ before: "x'; DROP" }).success).toBe(false);
+    expect(AuditQueryParamsSchema.safeParse({ sql: "1" }).success).toBe(false);
   });
 });
 

@@ -12,7 +12,14 @@ export type IdentityErrorCode =
   | "COMPTE_BLOQUE"
   | "IDENTIFIANTS_INCORRECTS"
   | "COMPTE_DESACTIVE"
-  | "SESSION_INVALIDE";
+  | "SESSION_INVALIDE"
+  // Rôles et administration (S4-T06, ADR-0020)
+  | "ACCES_REFUSE"
+  | "RECONNEXION_REQUISE"
+  | "ROLE_NON_ATTRIBUABLE"
+  | "ROLE_SUR_SOI_INTERDIT"
+  | "COMPTE_INTROUVABLE"
+  | "COMPTE_INACTIF";
 
 /** Une règle de l'identité n'est pas respectée. Le message est lisible par un humain, en français. */
 export class IdentityError extends Error {

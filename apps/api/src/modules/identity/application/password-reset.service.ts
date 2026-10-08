@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
+import { AuditLog, NO_REQUEST, type AuditContext } from "../../audit/index.js";
 import { parseIdentifier, requireIdentifier } from "../domain/identifier.js";
 import { IdentityError } from "../domain/identity-error.js";
 import type { Account } from "../domain/account.js";
@@ -18,10 +19,12 @@ import {
   IDENTITY_CLOCK,
   PASSWORD_HASHER,
   RESET_TICKET_REPOSITORY,
+  TRANSACTION_RUNNER,
   type AccountRepository,
   type Clock,
   type PasswordHasher,
   type ResetTicketRepository,
+  type TransactionRunner,
 } from "./ports.js";
 
 export interface ResetStarted extends Omit<IssuedOtp, "challengeId"> {
@@ -34,6 +37,8 @@ export interface ResetInput {
   code: string;
   newPassword: string;
   userAgent?: string;
+  /** Pour le journal d'audit (S4-T06) */
+  context?: AuditContext;
 }
 
 const invalidCode = () => new IdentityError("CODE_INVALIDE", "code incorrect");
@@ -65,6 +70,8 @@ export class PasswordResetService {
     @Inject(IDENTITY_CLOCK) private readonly clock: Clock,
     private readonly otp: OtpService,
     private readonly sessions: SessionService,
+    @Inject(AuditLog) private readonly audit: Pick<AuditLog, "record">,
+    @Inject(TRANSACTION_RUNNER) private readonly transactions: TransactionRunner,
   ) {}
 
   async start(rawIdentifier: string): Promise<ResetStarted> {
@@ -110,14 +117,27 @@ export class PasswordResetService {
     const expectedVersion = account.passwordVersion;
     account.changePassword(await this.hasher.hash(input.newPassword));
     // UNE transaction : mot de passe (version +1), tickets supprimés, toutes les sessions fermées,
-    // blocage BR-040 levé. Les sessions ouvertes avec l'ancienne version sont refusées ensuite.
-    const applied = await this.tickets.applyReset({
-      accountId: account.id,
-      expectedVersion,
-      passwordHash: account.passwordHash,
-      destination: found.destination,
-      guardIdentifiers: guardIdentifiers(account),
-      now: this.clock.now(),
+    // blocage BR-040 levé, ligne du journal d'audit (S4-T06). Les sessions ouvertes avec l'ancienne version
+    // sont refusées ensuite.
+    const applied = await this.transactions.run(async () => {
+      const done = await this.tickets.applyReset({
+        accountId: account.id,
+        expectedVersion,
+        passwordHash: account.passwordHash,
+        destination: found.destination,
+        guardIdentifiers: guardIdentifiers(account),
+        now: this.clock.now(),
+      });
+      if (done) {
+        await this.audit.record({
+          action: "password.reset",
+          actor: { type: "account", id: account.id },
+          target: { type: "account", id: account.id },
+          details: {},
+          context: input.context ?? NO_REQUEST,
+        });
+      }
+      return done;
     });
     if (!applied) throw invalidCode();
 

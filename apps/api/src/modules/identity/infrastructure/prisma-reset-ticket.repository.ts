@@ -1,11 +1,15 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../../database/prisma.service.js";
+import { TransactionContext } from "../../../database/transaction-context.js";
 import type { ResetTicket } from "../domain/reset-ticket.js";
 import type { PasswordResetChange, ResetTicketRepository } from "../application/ports.js";
 
 @Injectable()
 export class PrismaResetTicketRepository implements ResetTicketRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly transactions: TransactionContext,
+  ) {}
 
   async replaceForDestination(ticket: ResetTicket): Promise<void> {
     // Une transaction : jamais deux demandes en cours pour la même adresse
@@ -24,7 +28,9 @@ export class PrismaResetTicketRepository implements ResetTicketRepository {
   }
 
   async applyReset(change: PasswordResetChange): Promise<boolean> {
-    return this.prisma.$transaction(async (tx) => {
+    // Rejoint la transaction en cours (journal d'audit, S4-T06) ou en ouvre une
+    return this.transactions.run(async () => {
+      const tx = this.transactions.db;
       // Mise à jour ciblée : seulement si le compte est encore actif et n'a pas changé de mot de passe
       const { count } = await tx.account.updateMany({
         where: { id: change.accountId, status: "ACTIVE", passwordVersion: change.expectedVersion },

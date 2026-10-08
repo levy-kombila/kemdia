@@ -18,6 +18,13 @@ const STATUS: Record<IdentityErrorCode, number> = {
   IDENTIFIANTS_INCORRECTS: HttpStatus.UNAUTHORIZED,
   COMPTE_DESACTIVE: HttpStatus.FORBIDDEN,
   SESSION_INVALIDE: HttpStatus.UNAUTHORIZED,
+  ACCES_REFUSE: HttpStatus.FORBIDDEN,
+  // 403 et non 401 : la session est valable, mais trop ancienne pour une action d'administration
+  RECONNEXION_REQUISE: HttpStatus.FORBIDDEN,
+  ROLE_NON_ATTRIBUABLE: HttpStatus.FORBIDDEN,
+  ROLE_SUR_SOI_INTERDIT: HttpStatus.FORBIDDEN,
+  COMPTE_INTROUVABLE: HttpStatus.NOT_FOUND,
+  COMPTE_INACTIF: HttpStatus.CONFLICT,
 };
 
 /** Exécute un cas d'utilisation ; une erreur métier devient une réponse HTTP avec son code. */
