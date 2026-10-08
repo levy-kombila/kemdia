@@ -1,7 +1,9 @@
 # Guide — Envoi des e-mails (codes de vérification)
 
-L'API envoie deux sortes d'e-mails : le **code à 6 chiffres** (inscription, puis mot de passe oublié au S4-T04)
-et l'**alerte** « quelqu'un a essayé de s'inscrire avec votre adresse ». Décision : [ADR-0016](../architecture/adr/0016-inscription-tickets-emails.md).
+L'API envoie trois sortes d'e-mails : le **code à 6 chiffres** (inscription et mot de passe oublié),
+l'**alerte** « quelqu'un a essayé de s'inscrire avec votre adresse », et l'**avis** « votre mot de passe a été modifié ».
+Une adresse sans compte qui demande « mot de passe oublié » ne reçoit **rien**.
+Décisions : [ADR-0016](../architecture/adr/0016-inscription-tickets-emails.md), [ADR-0018](../architecture/adr/0018-mot-de-passe-oublie.md).
 
 Le réglage `EMAIL_TRANSPORT` choisit le moyen d'envoi :
 

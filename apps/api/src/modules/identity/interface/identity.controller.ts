@@ -13,12 +13,19 @@ import {
 import type { Request } from "express";
 import { Throttle } from "@nestjs/throttler";
 import {
+  ForgotPasswordRequestSchema,
   LoginRequestSchema,
+  ResetPasswordRequestSchema,
+  ResetResendRequestSchema,
   SignupRequestSchema,
   SignupResendRequestSchema,
   SignupVerifyRequestSchema,
   type CurrentSession as CurrentSessionView,
+  type ForgotPasswordRequest,
   type LoginRequest,
+  type ResetPasswordRequest,
+  type ResetResendRequest,
+  type ResetStarted,
   type LogoutAll,
   type OpenedSession as OpenedSessionView,
   type SignupRequest,
@@ -28,6 +35,7 @@ import {
   type SignupVerifyRequest,
 } from "@kemdia/contracts";
 import { LoginService } from "../application/login.service.js";
+import { PasswordResetService } from "../application/password-reset.service.js";
 import {
   SessionService,
   type AuthenticatedSession,
@@ -63,6 +71,7 @@ export class IdentityController {
     private readonly signup: SignupService,
     private readonly login: LoginService,
     private readonly sessions: SessionService,
+    private readonly passwordReset: PasswordResetService,
   ) {}
 
   /** FR-001 : crée le compte en attente et envoie le code (réponse identique si le compte existe déjà). */
@@ -143,5 +152,43 @@ export class IdentityController {
     @Body({ schema: SignupResendRequestSchema }) body: SignupResendRequest,
   ): Promise<SignupStarted> {
     return withIdentityErrors(() => this.signup.resend(body.ticket));
+  }
+
+  /** FR-012 : code envoyé si un compte existe ; réponse identique sinon (et rien n'est envoyé). */
+  @Post("password/forgot")
+  @HttpCode(HttpStatus.ACCEPTED)
+  @Header("Cache-Control", "no-store")
+  forgot(
+    @Body({ schema: ForgotPasswordRequestSchema }) body: ForgotPasswordRequest,
+  ): Promise<ResetStarted> {
+    return withIdentityErrors(() => this.passwordReset.start(body.identifier));
+  }
+
+  @Post("password/resend")
+  @HttpCode(HttpStatus.ACCEPTED)
+  @Header("Cache-Control", "no-store")
+  resendReset(
+    @Body({ schema: ResetResendRequestSchema }) body: ResetResendRequest,
+  ): Promise<ResetStarted> {
+    return withIdentityErrors(() => this.passwordReset.resend(body.ticket));
+  }
+
+  /** Ticket + code + nouveau mot de passe : connecté ici, déconnecté partout ailleurs, blocage levé. */
+  @Post("password/reset")
+  @HttpCode(HttpStatus.OK)
+  @Header("Cache-Control", "no-store")
+  async resetPassword(
+    @Body({ schema: ResetPasswordRequestSchema }) body: ResetPasswordRequest,
+    @Headers("x-kemdia-user-agent") userAgent?: string,
+  ): Promise<OpenedSessionView> {
+    const opened = await withIdentityErrors(() =>
+      this.passwordReset.reset({
+        ticket: body.ticket,
+        code: body.code,
+        newPassword: body.newPassword,
+        userAgent,
+      }),
+    );
+    return presentOpened(opened);
   }
 }

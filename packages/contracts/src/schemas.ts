@@ -351,6 +351,44 @@ export const SignupResendRequestSchema = z
   .meta({ id: "SignupResendRequest" });
 export type SignupResendRequest = z.infer<typeof SignupResendRequestSchema>;
 
+// --- Identité : mot de passe oublié (S4-T04) ---
+
+export const ForgotPasswordRequestSchema = z
+  .strictObject({ identifier: z.string().max(300).describe("Adresse e-mail ou mobile gabonais") })
+  .meta({ id: "ForgotPasswordRequest" });
+export type ForgotPasswordRequest = z.infer<typeof ForgotPasswordRequestSchema>;
+
+export const ResetStartedSchema = z
+  .object({
+    ticket: z
+      .string()
+      .regex(SIGNUP_TICKET_PATTERN)
+      .describe("Ticket de réinitialisation, à garder côté serveur du site (cookie HttpOnly)"),
+    channel: z.enum(OTP_CHANNELS),
+    sentTo: z.string().describe("Destination masquée"),
+    resendInSeconds: z.int().positive(),
+  })
+  .meta({
+    id: "ResetStarted",
+    description:
+      "Réponse IDENTIQUE qu'un compte existe ou non (« si un compte existe, un code a été envoyé ») ; sans compte, rien n'est envoyé.",
+  });
+export type ResetStarted = z.infer<typeof ResetStartedSchema>;
+
+export const ResetResendRequestSchema = z
+  .strictObject({ ticket: z.string().regex(SIGNUP_TICKET_PATTERN) })
+  .meta({ id: "ResetResendRequest" });
+export type ResetResendRequest = z.infer<typeof ResetResendRequestSchema>;
+
+export const ResetPasswordRequestSchema = z
+  .strictObject({
+    ticket: z.string().regex(SIGNUP_TICKET_PATTERN),
+    code: z.string().regex(OTP_CODE_PATTERN).describe("Code à 6 chiffres reçu par e-mail"),
+    newPassword: z.string().max(200).describe("8 à 128 caractères, une lettre et un chiffre"),
+  })
+  .meta({ id: "ResetPasswordRequest" });
+export type ResetPasswordRequest = z.infer<typeof ResetPasswordRequestSchema>;
+
 type JsonSchema = Record<string, unknown>;
 
 /**

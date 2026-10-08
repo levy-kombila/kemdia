@@ -55,6 +55,9 @@ export class SessionService {
       lastSeenAt: now,
       revokedAt: null,
       userAgent: summarizeUserAgent(userAgent),
+      // Version du mot de passe LUE avec le hachage vérifié : une connexion commencée avant
+      // un changement de mot de passe donne une session aussitôt refusée (ADR-0018)
+      passwordVersion: account.passwordVersion,
       createdAt: now,
     });
     return { token, expiresAt, account: account.view() };
@@ -68,6 +71,7 @@ export class SessionService {
     if (!session || !isSessionActive(session, now)) throw invalidSession();
     const account = await this.accounts.findById(session.accountId);
     if (!account || !account.isActive()) throw invalidSession();
+    if (session.passwordVersion !== account.passwordVersion) throw invalidSession();
 
     let expiresAt = session.expiresAt;
     if (shouldRenew(session, now)) {
@@ -85,7 +89,7 @@ export class SessionService {
       await this.sessions.revoke(session.id, this.clock.now());
   }
 
-  /** « Déconnecter tous mes appareils » (et, au S4-T04, après un changement de mot de passe). */
+  /** « Déconnecter tous mes appareils ». (Après un changement de mot de passe : voir ResetTicketRepository.applyReset.) */
   logoutAll(accountId: string): Promise<number> {
     return this.sessions.revokeAllForAccount(accountId, this.clock.now());
   }

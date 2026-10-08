@@ -3,6 +3,7 @@ import type { Identifier, OtpChannel } from "../domain/identifier.js";
 import type { OtpChallenge, OtpPurpose } from "../domain/otp.js";
 import type { LoginGuardState } from "../domain/login-guard.js";
 import type { Session } from "../domain/session.js";
+import type { ResetTicket } from "../domain/reset-ticket.js";
 import type { SignupTicket } from "../domain/signup-ticket.js";
 
 /**
@@ -14,6 +15,7 @@ export const ACCOUNT_REPOSITORY = Symbol("ACCOUNT_REPOSITORY");
 export const OTP_CHALLENGE_REPOSITORY = Symbol("OTP_CHALLENGE_REPOSITORY");
 export const SIGNUP_TICKET_REPOSITORY = Symbol("SIGNUP_TICKET_REPOSITORY");
 export const LOGIN_GUARD_REPOSITORY = Symbol("LOGIN_GUARD_REPOSITORY");
+export const RESET_TICKET_REPOSITORY = Symbol("RESET_TICKET_REPOSITORY");
 export const SESSION_REPOSITORY = Symbol("SESSION_REPOSITORY");
 export const IDENTITY_MAINTENANCE = Symbol("IDENTITY_MAINTENANCE");
 export const PASSWORD_HASHER = Symbol("PASSWORD_HASHER");
@@ -72,6 +74,31 @@ export interface SignupTicketRepository {
   deleteForDestination(destination: string): Promise<void>;
 }
 
+export interface ResetTicketRepository {
+  /** Enregistre un ticket et ANNULE les précédents de la même destination. */
+  replaceForDestination(ticket: ResetTicket): Promise<void>;
+  findByHash(ticketHash: string): Promise<ResetTicket | null>;
+  deleteForDestination(destination: string): Promise<void>;
+  /**
+   * Termine une réinitialisation en UNE transaction (ADR-0018) : nouveau mot de passe (version +1)
+   * si le compte est toujours actif et à la version attendue, tickets de la destination supprimés,
+   * sessions fermées, compteurs BR-040 des identifiants du compte effacés.
+   * Renvoie false (et ne change rien) si le compte a changé entre-temps.
+   */
+  applyReset(change: PasswordResetChange): Promise<boolean>;
+}
+
+export interface PasswordResetChange {
+  accountId: string;
+  /** Version lue avant le changement (verrou optimiste) */
+  expectedVersion: number;
+  passwordHash: string;
+  destination: string;
+  /** E-mail et téléphone du compte : le blocage est levé pour les deux */
+  guardIdentifiers: string[];
+  now: Date;
+}
+
 /** BR-040 par identifiant (ADR-0017). Toutes les opérations sont atomiques en base. */
 export interface LoginGuardRepository {
   /** Réserve un essai selon `nextGuardState` en UNE opération et renvoie le nouvel état. */
@@ -113,13 +140,18 @@ export interface PasswordHasher {
 /**
  * Message envoyé à un identifiant :
  * - `code` : le code à usage unique ;
- * - `signup-alert` : « quelqu'un a essayé de créer un compte avec votre adresse » (elle a déjà un compte, ADR-0016).
+ * - `signup-alert` : « quelqu'un a essayé de créer un compte avec votre adresse » (elle a déjà un compte, ADR-0016) ;
+ * - `password-changed` : « votre mot de passe vient d'être modifié » (S4-T04, ADR-0018).
  */
 export type OtpMessage = {
   channel: OtpChannel;
   /** Identifiant normalisé du destinataire */
   to: string;
-} & ({ kind: "code"; code: string; purpose: OtpPurpose } | { kind: "signup-alert" });
+} & (
+  | { kind: "code"; code: string; purpose: OtpPurpose }
+  | { kind: "signup-alert" }
+  | { kind: "password-changed" }
+);
 
 /** Envoi des messages : console (développement), e-mail (S4-T02), SMS (quand le client aura choisi un fournisseur). */
 export interface OtpSender {

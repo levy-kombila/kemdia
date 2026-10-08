@@ -48,6 +48,20 @@ export function renderEmail(message: OtpMessage): Email {
     };
   }
 
+  if (message.kind === "password-changed") {
+    const lines = [
+      "Le mot de passe de votre compte Kemdia vient d'être modifié, et vos autres appareils ont été déconnectés.",
+      "Si c'est vous : vous n'avez rien à faire.",
+      "Si ce n'est pas vous : utilisez tout de suite « Mot de passe oublié » sur le site pour reprendre la main, puis contactez le service client Kemdia.",
+    ];
+    return {
+      to: message.to,
+      subject: "Votre mot de passe Kemdia a été modifié",
+      text: ["Kemdia", "", ...lines].join("\n"),
+      html: layout("Votre mot de passe a été modifié", lines),
+    };
+  }
+
   const signup = message.purpose === "signup";
   const subject = signup
     ? "Votre code de vérification Kemdia"

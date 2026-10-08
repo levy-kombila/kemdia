@@ -17,6 +17,8 @@ import { LOGIN_LOCK_MS } from "../src/modules/identity/domain/login-guard.js";
 import { PrismaIdentityMaintenance } from "../src/modules/identity/infrastructure/identity-maintenance.js";
 import { PrismaLoginGuardRepository } from "../src/modules/identity/infrastructure/prisma-login-guard.repository.js";
 import { PrismaSessionRepository } from "../src/modules/identity/infrastructure/prisma-session.repository.js";
+import { PrismaResetTicketRepository } from "../src/modules/identity/infrastructure/prisma-reset-ticket.repository.js";
+import { PasswordResetService } from "../src/modules/identity/application/password-reset.service.js";
 import { fakeHasher } from "./identity/in-memory.js";
 import { FakeClock, RecordingOtpSender } from "./identity/in-memory.js";
 import { testDatabaseUrl } from "./integration-db.js";
@@ -34,6 +36,7 @@ const tickets = new PrismaSignupTicketRepository(prisma);
 const sessions = new PrismaSessionRepository(prisma);
 const guards = new PrismaLoginGuardRepository(prisma);
 const maintenance = new PrismaIdentityMaintenance(prisma);
+const resetTickets = new PrismaResetTicketRepository(prisma);
 
 const T0 = new Date("2026-10-07T10:00:00.000Z");
 let n = 0;
@@ -51,7 +54,7 @@ const register = (identifier: string, id = uuid()) =>
 
 beforeEach(async () => {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "identity"."login_guards", "identity"."sessions", "identity"."signup_tickets", "identity"."otp_challenges", "identity"."accounts"',
+    'TRUNCATE "identity"."reset_tickets", "identity"."login_guards", "identity"."sessions", "identity"."signup_tickets", "identity"."otp_challenges", "identity"."accounts"',
   );
 });
 afterAll(() => prisma.$disconnect());
@@ -395,5 +398,144 @@ describe("connexion et sessions (PostgreSQL)", () => {
     await expect(prisma.session.count()).resolves.toBe(1);
     expect((await prisma.session.findFirstOrThrow()).revokedAt).toBeNull();
     void kept;
+  });
+});
+
+describe("mot de passe oublié (PostgreSQL)", () => {
+  const setup = async () => {
+    const clock = new FakeClock(T0);
+    const sender = new RecordingOtpSender(["email"]);
+    const otp = new OtpService(challenges, sender, clock, { smsEnabled: false });
+    const sessionService = new SessionService(sessions, accounts, clock);
+    const account = register("awa@exemple.ga");
+    account.markVerified(requireIdentifier("awa@exemple.ga"), T0);
+    await accounts.save(
+      Account.restore({ ...account.snapshot(), passwordHash: "hash:Mangue2026" }),
+    );
+    const service = new PasswordResetService(
+      accounts,
+      resetTickets,
+      fakeHasher,
+      clock,
+      otp,
+      sessionService,
+    );
+    const login = new LoginService(accounts, guards, fakeHasher, clock, sessionService);
+    return { clock, sender, service, login, sessionService, accountId: account.id };
+  };
+
+  it("parcours complet : blocage levé, autres sessions fermées, ticket gardé en empreinte puis supprimé", async () => {
+    const { service, login, sender, sessionService, accountId } = await setup();
+    const elsewhere = await login.login({ identifier: "awa@exemple.ga", password: "Mangue2026" });
+    for (const p of ["faux1", "faux2", "faux3"])
+      await login.login({ identifier: "awa@exemple.ga", password: p }).catch(() => undefined);
+    expect(await prisma.loginGuard.count()).toBe(1);
+
+    const { ticket } = await service.start("awa@exemple.ga");
+    const rows = await prisma.resetTicket.findMany();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ accountId, destination: "awa@exemple.ga" });
+    expect(JSON.stringify(rows)).not.toContain(ticket);
+
+    const opened = await service.reset({
+      ticket,
+      code: sender.lastCode(),
+      newPassword: "Papaye2027",
+      userAgent: "Chrome",
+    });
+    expect(await prisma.resetTicket.count()).toBe(0);
+    expect(await prisma.loginGuard.count()).toBe(0);
+    const active = await prisma.session.findMany({ where: { revokedAt: null } });
+    expect(active).toHaveLength(1);
+    // Seule la nouvelle session est ouverte ; l'ancienne est refusée
+    await expect(sessionService.authenticate(opened.token)).resolves.toBeDefined();
+    await expect(sessionService.authenticate(elsewhere.token)).rejects.toMatchObject({
+      code: "SESSION_INVALIDE",
+    });
+    expect(
+      (await prisma.account.findUniqueOrThrow({ where: { id: accountId } })).passwordHash,
+    ).toBe("hash:Papaye2027");
+  });
+
+  it("une seule demande par adresse ; adresse sans compte : ticket leurre, aucun envoi", async () => {
+    const { service, sender, clock } = await setup();
+    await service.start("awa@exemple.ga");
+    clock.advance(OTP_RESEND_DELAY_MS);
+    await service.start("awa@exemple.ga");
+    await service.start("inconnu@exemple.ga");
+    const rows = await prisma.resetTicket.findMany({ orderBy: { destination: "asc" } });
+    expect(rows.map((r) => [r.destination, r.accountId === null])).toEqual([
+      ["awa@exemple.ga", false],
+      ["inconnu@exemple.ga", true],
+    ]);
+    expect(sender.sent.filter((m) => m.to === "inconnu@exemple.ga")).toEqual([]);
+  });
+
+  it("5 validations simultanées du même bon code : une seule réussit", async () => {
+    const { service, sender } = await setup();
+    const { ticket } = await service.start("awa@exemple.ga");
+    const code = sender.lastCode();
+    const results = await Promise.allSettled(
+      Array.from({ length: 5 }, () => service.reset({ ticket, code, newPassword: "Papaye2027" })),
+    );
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(await prisma.session.count({ where: { revokedAt: null } })).toBe(1);
+  });
+
+  it("la suppression du compte emporte ses tickets ; la base refuse une empreinte invalide", async () => {
+    const { service, accountId } = await setup();
+    await service.start("awa@exemple.ga");
+    await prisma.account.delete({ where: { id: accountId } });
+    expect(await prisma.resetTicket.count()).toBe(0);
+    await expect(
+      prisma.resetTicket.create({
+        data: {
+          id: uuid(),
+          ticketHash: "x".repeat(64),
+          destination: "a@b.ga",
+          expiresAt: new Date(T0.getTime() + 1000),
+          createdAt: T0,
+        },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("ménage : les tickets expirés sont supprimés", async () => {
+    const { service, clock } = await setup();
+    await service.start("awa@exemple.ga");
+    const counts = await maintenance.purgeExpired(new Date(clock.now().getTime() + 2 * 3600_000));
+    expect(counts.tickets).toBe(1);
+    expect(await prisma.resetTicket.count()).toBe(0);
+  });
+
+  it("connexion qui lit l'ancien mot de passe pendant le changement : sa session est refusée", async () => {
+    const { service, sender, sessionService, accountId } = await setup();
+    const { ticket } = await service.start("awa@exemple.ga");
+    const staleRead = (await accounts.findById(accountId))!;
+    await service.reset({ ticket, code: sender.lastCode(), newPassword: "Papaye2027" });
+    const late = await sessionService.open(staleRead);
+    await expect(sessionService.authenticate(late.token)).rejects.toMatchObject({
+      code: "SESSION_INVALIDE",
+    });
+    const row = await prisma.account.findUniqueOrThrow({ where: { id: accountId } });
+    expect(row.passwordVersion).toBe(1);
+  });
+
+  it("compte modifié entre-temps : rien n'est changé (transaction annulée)", async () => {
+    const { login, accountId } = await setup();
+    await login.login({ identifier: "awa@exemple.ga", password: "Mangue2026" });
+    await prisma.account.update({ where: { id: accountId }, data: { passwordVersion: 3 } });
+    const applied = await resetTickets.applyReset({
+      accountId,
+      expectedVersion: 0,
+      passwordHash: "hash:Papaye2027",
+      destination: "awa@exemple.ga",
+      guardIdentifiers: ["awa@exemple.ga"],
+      now: T0,
+    });
+    expect(applied).toBe(false);
+    const row = await prisma.account.findUniqueOrThrow({ where: { id: accountId } });
+    expect(row.passwordHash).toBe("hash:Mangue2026");
+    expect(await prisma.session.count({ where: { revokedAt: null } })).toBe(1);
   });
 });
