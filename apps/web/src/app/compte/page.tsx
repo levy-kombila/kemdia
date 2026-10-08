@@ -1,6 +1,7 @@
 import { CircleUser, Heart, LogOut, MapPin, MonitorSmartphone, Package } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { RoleList } from "@/components/account/RoleList";
 import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 import { FormAlert } from "@/components/ui/Field";
 import { logoutAction, logoutAllAction } from "@/lib/auth/actions";
@@ -100,6 +101,7 @@ function SignedIn({ account, error }: { account: AccountSummary; error: boolean 
             </p>
           </div>
         </div>
+        <RoleList roles={account.roles} />
         <div className="mt-6">
           <Features />
         </div>

@@ -73,6 +73,7 @@ export function toSummary(account: AccountSummary): AccountSummary {
     lastName: account.lastName,
     email: account.email,
     phone: account.phone,
+    roles: [...account.roles],
   };
 }
 

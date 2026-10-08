@@ -58,6 +58,7 @@ const ACCOUNT = {
   lastName: "Ndong",
   email: "awa@exemple.ga",
   phone: null,
+  roles: ["client"],
 };
 const OPENED = { token: TOKEN, expiresAt: "2026-11-07T10:00:00.000Z", account: ACCOUNT };
 const STARTED = {
@@ -79,7 +80,13 @@ describe("connexion", () => {
     const result = await loginAction("awa@exemple.ga", "Mangue2026");
     expect(result).toEqual({
       ok: true,
-      account: { firstName: "Awa", lastName: "Ndong", email: "awa@exemple.ga", phone: null },
+      account: {
+        firstName: "Awa",
+        lastName: "Ndong",
+        email: "awa@exemple.ga",
+        phone: null,
+        roles: ["client"],
+      },
     });
     expect(JSON.stringify(result)).not.toContain(TOKEN);
     expect(api.login).toHaveBeenCalledWith("awa@exemple.ga", "Mangue2026", "Firefox");

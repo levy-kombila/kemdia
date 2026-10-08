@@ -11,6 +11,7 @@ export const FAKE_ACCOUNT = {
   lastName: "Ndong",
   email: "awa@exemple.ga",
   phone: null,
+  roles: ["client"] as const,
 };
 
 const mask = (email: string) => `${email.slice(0, 2)}•••@${email.split("@")[1]}`;
