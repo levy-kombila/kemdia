@@ -3,6 +3,7 @@ import { APP_CONFIG } from "../../config/config.module.js";
 import type { AppConfig } from "../../config/env.js";
 import { LoginService } from "./application/login.service.js";
 import { OtpService } from "./application/otp.service.js";
+import { PasswordResetService } from "./application/password-reset.service.js";
 import { SessionService } from "./application/session.service.js";
 import { SignupService } from "./application/signup.service.js";
 import {
@@ -14,6 +15,7 @@ import {
   OTP_CHALLENGE_REPOSITORY,
   OTP_SENDER,
   PASSWORD_HASHER,
+  RESET_TICKET_REPOSITORY,
   SESSION_REPOSITORY,
   SIGNUP_TICKET_REPOSITORY,
   type IdentityOptions,
@@ -25,6 +27,7 @@ import {
 } from "./infrastructure/identity-maintenance.js";
 import { createOtpSender } from "./infrastructure/otp-sender.factory.js";
 import { PrismaLoginGuardRepository } from "./infrastructure/prisma-login-guard.repository.js";
+import { PrismaResetTicketRepository } from "./infrastructure/prisma-reset-ticket.repository.js";
 import { PrismaSessionRepository } from "./infrastructure/prisma-session.repository.js";
 import { PrismaAccountRepository } from "./infrastructure/prisma-account.repository.js";
 import { PrismaOtpChallengeRepository } from "./infrastructure/prisma-otp-challenge.repository.js";
@@ -43,6 +46,8 @@ import { SessionGuard } from "./interface/session.guard.js";
     SignupService,
     LoginService,
     SessionService,
+    PasswordResetService,
+    { provide: RESET_TICKET_REPOSITORY, useClass: PrismaResetTicketRepository },
     SessionGuard,
     PrismaIdentityMaintenance,
     IdentityCleanupScheduler,

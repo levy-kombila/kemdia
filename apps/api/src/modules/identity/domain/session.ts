@@ -17,6 +17,8 @@ export interface Session {
   lastSeenAt: Date;
   revokedAt: Date | null;
   userAgent: string | null;
+  /** Version du mot de passe à l'ouverture (ADR-0018) */
+  passwordVersion: number;
   createdAt: Date;
 }
 

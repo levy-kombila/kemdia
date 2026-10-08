@@ -47,6 +47,13 @@ describe("modèles d'e-mails", () => {
     expect(email.text).toMatch(/n'a pas été modifié/);
   });
 
+  it("mot de passe modifié : aucun code, dit quoi faire si ce n'était pas vous", () => {
+    const email = renderEmail({ kind: "password-changed", channel: "email", to: "awa@exemple.ga" });
+    expect(email.subject).toBe("Votre mot de passe Kemdia a été modifié");
+    expect(email.text).not.toMatch(/\d{6}/);
+    expect(email.html).not.toMatch(/<a |href=|<img/i);
+  });
+
   it("l'envoi par e-mail refuse un message SMS", async () => {
     const sender = new EmailOtpSender({ name: "test", send: vi.fn() });
     await expect(

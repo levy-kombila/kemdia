@@ -21,6 +21,7 @@ function toDomain(row: AccountRow): Account {
     email: row.email,
     phone: row.phone,
     passwordHash: row.passwordHash,
+    passwordVersion: row.passwordVersion,
     status: FROM_DB[row.status],
     emailVerifiedAt: row.emailVerifiedAt,
     phoneVerifiedAt: row.phoneVerifiedAt,
@@ -30,7 +31,10 @@ function toDomain(row: AccountRow): Account {
   });
 }
 
-/** Colonnes modifiables (ni l'identifiant ni la date de création). */
+/**
+ * Colonnes modifiables (ni l'identifiant ni la date de création).
+ * La version du mot de passe n'est JAMAIS écrite ici : seul applyReset la change, par une mise à jour ciblée.
+ */
 function writable(account: Account) {
   const s = account.snapshot();
   return {

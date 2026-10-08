@@ -6,6 +6,8 @@ import {
   type OtpMessage,
   type LoginGuardRepository,
   type OtpSender,
+  type PasswordResetChange,
+  type ResetTicketRepository,
   type SessionRepository,
   type SignupTicketRepository,
 } from "../../src/modules/identity/application/ports.js";
@@ -13,6 +15,7 @@ import {
   nextGuardState,
   type LoginGuardState,
 } from "../../src/modules/identity/domain/login-guard.js";
+import type { ResetTicket } from "../../src/modules/identity/domain/reset-ticket.js";
 import type { Session } from "../../src/modules/identity/domain/session.js";
 import type { SignupTicket } from "../../src/modules/identity/domain/signup-ticket.js";
 import { Account } from "../../src/modules/identity/domain/account.js";
@@ -185,5 +188,43 @@ export class InMemorySessions implements SessionRepository {
     );
     rows.forEach((s) => (s.revokedAt = now));
     return Promise.resolve(rows.length);
+  }
+}
+
+export class InMemoryResetTickets implements ResetTicketRepository {
+  rows: ResetTicket[] = [];
+  constructor(
+    private readonly accounts?: InMemoryAccounts,
+    private readonly sessions?: InMemorySessions,
+    private readonly guards?: InMemoryLoginGuards,
+  ) {}
+  replaceForDestination(ticket: ResetTicket): Promise<void> {
+    this.rows = [...this.rows.filter((t) => t.destination !== ticket.destination), ticket];
+    return Promise.resolve();
+  }
+  findByHash(ticketHash: string): Promise<ResetTicket | null> {
+    return Promise.resolve(this.rows.find((t) => t.ticketHash === ticketHash) ?? null);
+  }
+  deleteForDestination(destination: string): Promise<void> {
+    this.rows = this.rows.filter((t) => t.destination !== destination);
+    return Promise.resolve();
+  }
+  /** Même effet que la transaction SQL ; tout se passe sans attente, donc sans entrelacement. */
+  applyReset(change: PasswordResetChange): Promise<boolean> {
+    if (!this.accounts || !this.sessions || !this.guards) throw new Error("dépôts manquants");
+    const row = this.accounts.rows.get(change.accountId);
+    if (!row || row.status !== "active" || row.passwordVersion !== change.expectedVersion)
+      return Promise.resolve(false);
+    this.accounts.rows.set(row.id, {
+      ...row,
+      passwordHash: change.passwordHash,
+      passwordVersion: row.passwordVersion + 1,
+    });
+    this.rows = this.rows.filter((t) => t.destination !== change.destination);
+    this.sessions.rows
+      .filter((s) => s.accountId === change.accountId && s.revokedAt === null)
+      .forEach((s) => (s.revokedAt = change.now));
+    change.guardIdentifiers.forEach((id) => this.guards!.rows.delete(id));
+    return Promise.resolve(true);
   }
 }

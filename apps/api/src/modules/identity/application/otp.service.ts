@@ -155,6 +155,13 @@ export class OtpService {
     throw new IdentityError("CODE_INVALIDE", "code incorrect");
   }
 
+  /** Avis de sécurité « votre mot de passe a été modifié » (hors limites d'envoi : il suit une action réussie). */
+  notifyPasswordChanged(identifier: Identifier): void {
+    const channel = channelOf(identifier);
+    if (!this.availableChannels().includes(channel)) return;
+    this.deliver({ kind: "password-changed", channel, to: identifier.value }, identifier);
+  }
+
   /** Envoi en arrière-plan ; un échec est journalisé (sans clé ni contenu), jamais renvoyé à l'appelant. */
   private deliver(message: OtpMessage, identifier: Identifier): void {
     let sending: Promise<void>;

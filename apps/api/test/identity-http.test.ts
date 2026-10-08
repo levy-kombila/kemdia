@@ -12,6 +12,7 @@ import {
   CurrentSessionSchema,
   LogoutAllSchema,
   OpenedSessionSchema,
+  ResetStartedSchema,
 } from "@kemdia/contracts";
 import { AppModule } from "../src/app.module.js";
 import { loadConfig } from "../src/config/env.js";
@@ -25,6 +26,7 @@ import {
   SESSION_REPOSITORY,
   OTP_SENDER,
   PASSWORD_HASHER,
+  RESET_TICKET_REPOSITORY,
   SIGNUP_TICKET_REPOSITORY,
 } from "../src/modules/identity/application/ports.js";
 import { IDENTITY_ERROR_STATUS } from "../src/modules/identity/interface/identity-http-errors.js";
@@ -33,6 +35,7 @@ import {
   InMemoryAccounts,
   InMemoryLoginGuards,
   InMemoryOtpChallenges,
+  InMemoryResetTickets,
   InMemorySessions,
   InMemorySignupTickets,
   RecordingOtpSender,
@@ -74,6 +77,8 @@ describe("API identité — inscription (HTTP)", () => {
     accounts = new InMemoryAccounts();
     sender = new RecordingOtpSender(["email"]);
     clock = new FakeClock();
+    const sessions = new InMemorySessions();
+    const guards = new InMemoryLoginGuards();
     const moduleRef = await Test.createTestingModule({ imports: [AppModule.register(config)] })
       .overrideProvider(DatabaseHealth)
       .useValue({ check: () => Promise.resolve("ok") })
@@ -90,9 +95,11 @@ describe("API identité — inscription (HTTP)", () => {
       .overrideProvider(IDENTITY_CLOCK)
       .useValue(clock)
       .overrideProvider(SESSION_REPOSITORY)
-      .useValue(new InMemorySessions())
+      .useValue(sessions)
       .overrideProvider(LOGIN_GUARD_REPOSITORY)
-      .useValue(new InMemoryLoginGuards())
+      .useValue(guards)
+      .overrideProvider(RESET_TICKET_REPOSITORY)
+      .useValue(new InMemoryResetTickets(accounts, sessions, guards))
       .compile();
     app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });
     configureApp(app, config);
@@ -334,6 +341,85 @@ describe("API identité — inscription (HTTP)", () => {
       // 3 sessions : celle de l'inscription et les deux connexions
       expect(matches(LogoutAllSchema, res.body).revoked).toBe(3);
       await get("/api/v1/auth/session", b.token).expect(401);
+    });
+
+    it("mot de passe oublié : 202, puis nouveau mot de passe (200) — connecté ici, déconnecté ailleurs", async () => {
+      const email = await compte("oubli@exemple.ga");
+      const before = matches(
+        OpenedSessionSchema,
+        (await post("/api/v1/auth/login", { identifier: email, password: "Mangue2026" })).body,
+      );
+      const forgot = await post("/api/v1/auth/password/forgot", { identifier: email }).expect(202);
+      expect(forgot.headers["cache-control"]).toBe("no-store");
+      const { ticket } = matches(ResetStartedSchema, forgot.body);
+      const res = await post("/api/v1/auth/password/reset", {
+        ticket,
+        code: sender.lastCode(),
+        newPassword: "Papaye2027",
+      })
+        .set("X-Kemdia-User-Agent", "Firefox sur Windows")
+        .expect(200);
+      const opened = matches(OpenedSessionSchema, res.body);
+      expect(sender.sent.at(-1)).toMatchObject({ kind: "password-changed", to: email });
+      await get("/api/v1/auth/session", before.token).expect(401);
+      await get("/api/v1/auth/session", opened.token).expect(200);
+      await post("/api/v1/auth/login", { identifier: email, password: "Mangue2026" }).expect(401);
+      await post("/api/v1/auth/login", { identifier: email, password: "Papaye2027" }).expect(200);
+      // Ticket déjà utilisé
+      const again = await post("/api/v1/auth/password/reset", {
+        ticket,
+        code: "123456",
+        newPassword: "Goyave2028",
+      }).expect(410);
+      expect(codeOf(again.body)).toBe("CODE_EXPIRE");
+    });
+
+    it("mot de passe oublié sans compte : même réponse, aucun e-mail", async () => {
+      const known = await compte("connu@exemple.ga");
+      const sentBefore = sender.sent.length;
+      const unknown = await post("/api/v1/auth/password/forgot", {
+        identifier: "personne@exemple.ga",
+      }).expect(202);
+      expect(sender.sent.length).toBe(sentBefore);
+      const existing = await post("/api/v1/auth/password/forgot", { identifier: known }).expect(
+        202,
+      );
+      expect(Object.keys(unknown.body as object).sort()).toEqual(
+        Object.keys(existing.body as object).sort(),
+      );
+      matches(ResetStartedSchema, unknown.body);
+      // Renvoi trop rapide, identique pour les deux
+      const { ticket } = matches(ResetStartedSchema, unknown.body);
+      const r = await post("/api/v1/auth/password/resend", { ticket }).expect(429);
+      expect(codeOf(r.body)).toBe("ENVOI_TROP_RAPPROCHE");
+    });
+
+    it("mot de passe trop faible : 422, le code reste utilisable", async () => {
+      const email = await compte("faible@exemple.ga");
+      const { ticket } = matches(
+        ResetStartedSchema,
+        (await post("/api/v1/auth/password/forgot", { identifier: email }).expect(202)).body,
+      );
+      const code = sender.lastCode();
+      const weak = await post("/api/v1/auth/password/reset", {
+        ticket,
+        code,
+        newPassword: "court",
+      }).expect(422);
+      expect(codeOf(weak.body)).toBe("MOT_DE_PASSE_FAIBLE");
+      await post("/api/v1/auth/password/reset", { ticket, code, newPassword: "Papaye2027" }).expect(
+        200,
+      );
+    });
+
+    it("corps invalides : 400 (champ inconnu, code ou ticket mal formé)", async () => {
+      await post("/api/v1/auth/password/forgot", { identifier: "a@b.ga", role: "x" }).expect(400);
+      await post("/api/v1/auth/password/resend", { ticket: "court" }).expect(400);
+      await post("/api/v1/auth/password/reset", {
+        ticket: "a".repeat(43),
+        code: "12ab56",
+        newPassword: "Papaye2027",
+      }).expect(400);
     });
 
     it("corps de connexion invalide : 400", async () => {

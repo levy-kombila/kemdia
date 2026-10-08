@@ -13,7 +13,9 @@ export class ConsoleOtpSender implements OtpSender {
   readonly channels: readonly OtpChannel[] = ["email", "sms"];
 
   send(message: OtpMessage): Promise<void> {
-    if (message.kind === "signup-alert") {
+    if (message.kind === "password-changed") {
+      this.logger.warn(`[${message.channel}] ${message.to} — avis : mot de passe modifié`);
+    } else if (message.kind === "signup-alert") {
       this.logger.warn(
         `[${message.channel}] ${message.to} — alerte : inscription tentée sur un compte existant`,
       );

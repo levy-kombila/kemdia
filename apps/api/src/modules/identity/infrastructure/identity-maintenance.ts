@@ -20,7 +20,7 @@ export class PrismaIdentityMaintenance implements IdentityMaintenance {
 
   async purgeExpired(now: Date): Promise<Record<string, number>> {
     const dayAgo = new Date(now.getTime() - DAY_MS);
-    const [sessions, codes, tickets, guards] = await this.prisma.$transaction([
+    const [sessions, codes, tickets, resets, guards] = await this.prisma.$transaction([
       // Sessions expirées, ou fermées depuis plus d'un jour
       this.prisma.session.deleteMany({
         where: { OR: [{ expiresAt: { lt: now } }, { revokedAt: { lt: dayAgo } }] },
@@ -28,6 +28,7 @@ export class PrismaIdentityMaintenance implements IdentityMaintenance {
       // Codes de plus d'un jour (les limites d'envoi ne regardent que la dernière heure)
       this.prisma.otpChallenge.deleteMany({ where: { createdAt: { lt: dayAgo } } }),
       this.prisma.signupTicket.deleteMany({ where: { expiresAt: { lt: now } } }),
+      this.prisma.resetTicket.deleteMany({ where: { expiresAt: { lt: now } } }),
       // Compteurs d'essais inactifs depuis un jour et non bloqués
       this.prisma.loginGuard.deleteMany({
         where: {
@@ -39,7 +40,7 @@ export class PrismaIdentityMaintenance implements IdentityMaintenance {
     return {
       sessions: sessions.count,
       codes: codes.count,
-      tickets: tickets.count,
+      tickets: tickets.count + resets.count,
       compteurs: guards.count,
     };
   }

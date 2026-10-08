@@ -41,6 +41,7 @@ model Account {
   email           String?       @unique @db.VarChar(254)
   phone           String?       @unique @db.VarChar(13)
   passwordHash    String        @map("password_hash") @db.VarChar(255)
+  passwordVersion Int           @default(0) @map("password_version")
   status          AccountStatus @default(PENDING)
   emailVerifiedAt DateTime?     @map("email_verified_at") @db.Timestamptz(3)
   phoneVerifiedAt DateTime?     @map("phone_verified_at") @db.Timestamptz(3)
@@ -48,6 +49,7 @@ model Account {
   failedLogins    Int           @default(0) @map("failed_logins")
   lockedUntil     DateTime?     @map("locked_until") @db.Timestamptz(3)
   sessions        Session[]
+  resetTickets    ResetTicket[]
   createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -93,6 +95,23 @@ model SignupTicket {
   @@schema("identity")
 }
 
+/// Ticket « mot de passe oublié » (S4-T04, ADR-0018) : seule son empreinte est gardée.
+/// `accountId` vide : ticket leurre (aucun compte pour cette adresse), qui ne valide jamais rien.
+model ResetTicket {
+  id          String   @id @db.Uuid
+  ticketHash  String   @unique @map("ticket_hash") @db.Char(64)
+  destination String   @db.VarChar(254)
+  accountId   String?  @map("account_id") @db.Uuid
+  account     Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([destination])
+  @@index([accountId])
+  @@map("reset_tickets")
+  @@schema("identity")
+}
+
 /// BR-040 par identifiant (S4-T03, ADR-0017) : essais de connexion et blocage, qu'un compte existe ou non.
 /// Écrit uniquement par des requêtes atomiques (INSERT … ON CONFLICT … DO UPDATE).
 model LoginGuard {
@@ -109,16 +128,17 @@ model LoginGuard {
 
 /// Session ouverte (S4-T03). Le cookie porte un jeton aléatoire ; la base n'en garde que l'empreinte SHA-256.
 model Session {
-  id         String    @id @db.Uuid
-  accountId  String    @map("account_id") @db.Uuid
-  account    Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  tokenHash  String    @unique @map("token_hash") @db.Char(64)
-  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
-  lastSeenAt DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(3)
-  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+  id              String    @id @db.Uuid
+  accountId       String    @map("account_id") @db.Uuid
+  account         Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  tokenHash       String    @unique @map("token_hash") @db.Char(64)
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(3)
+  lastSeenAt      DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(3)
   /// Navigateur résumé (« Chrome sur Android »), pour la liste des appareils connectés
-  userAgent  String?   @map("user_agent") @db.VarChar(200)
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  userAgent       String?   @map("user_agent") @db.VarChar(200)
+  passwordVersion Int       @default(0) @map("password_version")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([accountId])
   @@index([expiresAt])

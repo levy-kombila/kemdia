@@ -18,6 +18,8 @@ export interface AccountProps {
   email: string | null;
   phone: string | null;
   passwordHash: string;
+  /** +1 à chaque changement de mot de passe ; une session ouverte avec une autre version est refusée (ADR-0018). */
+  passwordVersion: number;
   status: AccountStatus;
   emailVerifiedAt: Date | null;
   phoneVerifiedAt: Date | null;
@@ -68,6 +70,7 @@ export class Account {
       email: input.identifier.kind === "email" ? input.identifier.value : null,
       phone: input.identifier.kind === "phone" ? input.identifier.value : null,
       passwordHash: input.passwordHash,
+      passwordVersion: 0,
       status: "pending",
       emailVerifiedAt: null,
       phoneVerifiedAt: null,
@@ -90,6 +93,10 @@ export class Account {
   }
   get passwordHash(): string {
     return this.props.passwordHash;
+  }
+
+  get passwordVersion(): number {
+    return this.props.passwordVersion;
   }
 
   snapshot(): Readonly<AccountProps> {
@@ -116,9 +123,17 @@ export class Account {
     return this.props.status === "active";
   }
 
-  /** Mot de passe changé (mot de passe oublié, S4-T04). */
+  /** Mot de passe changé (mot de passe oublié, S4-T04) : les sessions ouvertes avec l'ancien ne valent plus rien. */
   changePassword(passwordHash: string): void {
     this.props.passwordHash = passwordHash;
+    this.props.passwordVersion += 1;
+  }
+
+  /** L'identifiant (e-mail ou téléphone) appartient-il encore à ce compte ? */
+  owns(identifier: Identifier): boolean {
+    return identifier.kind === "email"
+      ? identifier.value === this.props.email
+      : identifier.value === this.props.phone;
   }
 
   /** Ce que le titulaire voit de son compte (jamais le hachage du mot de passe). */

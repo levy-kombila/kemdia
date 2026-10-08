@@ -155,4 +155,55 @@ export const identityPaths = {
       },
     },
   },
+  "/api/v1/auth/password/forgot": {
+    post: {
+      tags: ["Identité"],
+      summary: "Mot de passe oublié : envoie un code si un compte existe, et renvoie un ticket",
+      description:
+        "Réponse **identique** qu'un compte existe ou non ; sans compte, rien n'est envoyé (mêmes limites d'envoi). Une nouvelle demande annule les précédentes.",
+      operationId: "forgotPassword",
+      requestBody: body("ForgotPasswordRequest"),
+      responses: {
+        "202": json("ResetStarted", "Demande enregistrée"),
+        "400": invalidBody,
+        "422": problem("`IDENTIFIANT_INVALIDE` ou `CANAL_INDISPONIBLE`"),
+        "429": tooMany,
+      },
+    },
+  },
+  "/api/v1/auth/password/resend": {
+    post: {
+      tags: ["Identité"],
+      summary: "Nouveau code pour une demande en cours",
+      operationId: "resendResetCode",
+      requestBody: body("ResetResendRequest"),
+      responses: {
+        "202": json("ResetStarted", "Nouveau code envoyé (si un compte existe)"),
+        "400": invalidBody,
+        "410": expired,
+        "422": problem("`CANAL_INDISPONIBLE`"),
+        "429": tooMany,
+      },
+    },
+  },
+  "/api/v1/auth/password/reset": {
+    post: {
+      tags: ["Identité"],
+      summary: "Nouveau mot de passe : le client est connecté ici et déconnecté partout ailleurs",
+      description:
+        "Le blocage après 3 erreurs (BR-040) est levé, et un e-mail « mot de passe modifié » est envoyé au titulaire.",
+      operationId: "resetPassword",
+      parameters: [userAgent],
+      requestBody: body("ResetPasswordRequest"),
+      responses: {
+        "200": json("OpenedSession", "Mot de passe changé, session ouverte"),
+        "400": invalidBody,
+        "410": expired,
+        "422": problem(
+          "`MOT_DE_PASSE_FAIBLE` (le code n'est alors pas consommé) ou `CODE_INVALIDE`",
+        ),
+        "429": tooMany,
+      },
+    },
+  },
 };
