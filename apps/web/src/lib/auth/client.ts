@@ -34,8 +34,6 @@ export interface AuthClient {
   resetPassword(code: string, newPassword: string): Promise<SignedIn>;
 }
 
-export const OTP_MAX_ATTEMPTS = 5;
-
 export const authClient: AuthClient = {
   login: loginAction,
   signup: signupAction,

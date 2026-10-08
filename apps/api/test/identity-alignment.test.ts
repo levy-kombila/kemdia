@@ -20,13 +20,8 @@ interface SiteValidation {
   passwordIssues(input: string): string[];
   normalizeName(input: string): string | null;
 }
-interface SiteAuthClient {
-  OTP_MAX_ATTEMPTS: number;
-  OTP_RESEND_DELAY_S: number;
-}
 const SITE_AUTH = new URL("../../web/src/lib/auth/", import.meta.url);
 const site = (await import(new URL("validation.ts", SITE_AUTH).pathname)) as SiteValidation;
-const siteClient = (await import(new URL("client.ts", SITE_AUTH).pathname)) as SiteAuthClient;
 
 const IDENTIFIERS = [
   "awa@exemple.ga",
@@ -65,8 +60,8 @@ describe("Site et API alignés (identité)", () => {
     expect(password.PASSWORD_MAX_LENGTH).toBe(site.PASSWORD_MAX_LENGTH);
     expect(password.NAME_MAX_LENGTH).toBe(site.NAME_MAX_LENGTH);
     expect(otp.OTP_LENGTH).toBe(site.OTP_LENGTH);
-    expect(otp.OTP_MAX_ATTEMPTS).toBe(siteClient.OTP_MAX_ATTEMPTS);
-    expect(otp.OTP_RESEND_DELAY_MS / 1000).toBe(siteClient.OTP_RESEND_DELAY_S);
+    // Essais et délai de renvoi : le site ne les recopie plus, l'API les applique et envoie le délai
+    // avec chaque code (`resendInSeconds`, S4-T05)
   });
 
   it.each(IDENTIFIERS)("identifiant « %s »", (input) => {
