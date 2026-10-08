@@ -46,6 +46,7 @@ export function Authorize(role: Role | readonly Role[], options: { recentLogin?:
 
 /**
  * Garde de rôle. FERMÉE par défaut : sans règle `@Authorize` (route mal déclarée) ou sans session, elle refuse.
+ * Une règle vide (`anyOf: []`) ne laisse passer personne.
  */
 @Injectable()
 export class RoleGuard implements CanActivate {
@@ -59,18 +60,24 @@ export class RoleGuard implements CanActivate {
   }
 
   private check(context: ExecutionContext): boolean {
-    const rule = this.reflector.getAllAndOverride<AccessRule | undefined>(ACCESS_RULE, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    // Règles de la classe ET de la méthode : TOUTES doivent être respectées. Une règle posée sur une méthode
+    // ne peut donc jamais affaiblir celle de son contrôleur (relecture de sécurité S4-T06).
+    const rules = [context.getClass(), context.getHandler()]
+      .map((target) => this.reflector.get<AccessRule | undefined>(ACCESS_RULE, target))
+      .filter((rule): rule is AccessRule => rule !== undefined);
     const session = context
       .switchToHttp()
       .getRequest<Request & { identitySession?: AuthenticatedSession }>().identitySession;
-    if (!rule || rule.anyOf.length === 0 || !session) throw denied();
+    if (rules.length === 0 || !session) throw denied();
 
     const roles = session.account.roles;
-    if (!rule.anyOf.some((required) => hasRole(roles, required))) throw denied();
-    if (rule.recentLogin && !isRecentLogin(session.openedAt, this.clock.now())) {
+    for (const rule of rules) {
+      if (!rule.anyOf.some((required) => hasRole(roles, required))) throw denied();
+    }
+    if (
+      rules.some((rule) => rule.recentLogin) &&
+      !isRecentLogin(session.openedAt, this.clock.now())
+    ) {
       throw new IdentityError(
         "RECONNEXION_REQUISE",
         "pour cette action, reconnectez-vous (connexion de moins de 15 minutes exigée)",

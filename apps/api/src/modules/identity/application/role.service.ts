@@ -68,6 +68,7 @@ export class RoleService {
   ): Promise<AdminAccountView> {
     const change = { actorId: actor.accountId, actorRoles: actor.roles, targetId, role };
     assertCanChangeRole(change);
+    // Contrôle anticipé (réponse claire) ; la règle qui fait foi est revérifiée sous verrou dans `apply`
     const target = await this.requireAccount(targetId);
     if (!target.isActive()) throw inactive();
     await this.apply(
@@ -146,10 +147,15 @@ export class RoleService {
   ): Promise<boolean> {
     return this.transactions.run(async () => {
       const grantedBy = actor.type === "account" ? actor.id : null;
-      const changed =
-        kind === "grant"
-          ? await this.roles.grant(accountId, role, grantedBy, this.clock.now())
-          : await this.roles.revoke(accountId, role);
+      let changed: boolean;
+      if (kind === "grant") {
+        const outcome = await this.roles.grant(accountId, role, grantedBy, this.clock.now());
+        if (outcome === "missing") throw notFound();
+        if (outcome === "inactive") throw inactive();
+        changed = outcome === "granted";
+      } else {
+        changed = await this.roles.revoke(accountId, role);
+      }
       if (changed) {
         await this.audit.record({
           action: kind === "grant" ? "role.granted" : "role.revoked",

@@ -67,6 +67,15 @@ describe("Rôles (RBAC, S4-T06)", () => {
         role: "vendor",
       }),
     ).toThrow(expect.objectContaining({ code: "ROLE_SUR_SOI_INTERDIT" }));
+    // Même UUID écrit en majuscules : toujours soi-même
+    expect(() =>
+      assertCanChangeRole({
+        actorId: ADMIN,
+        actorRoles: effectiveRoles(["admin"]),
+        targetId: ADMIN.toUpperCase(),
+        role: "moderator",
+      }),
+    ).toThrow(expect.objectContaining({ code: "ROLE_SUR_SOI_INTERDIT" }));
   });
 
   it("connexion récente : moins de 15 minutes, jamais dans le futur", () => {

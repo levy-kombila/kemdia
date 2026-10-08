@@ -163,10 +163,21 @@ export interface OtpSender {
   send(message: OtpMessage): Promise<void>;
 }
 
+/** Résultat d'un ajout de rôle : ajouté, déjà présent, compte non actif, compte inexistant. */
+export type GrantOutcome = "granted" | "unchanged" | "inactive" | "missing";
+
 /** Rôles enregistrés (S4-T06, ADR-0020). Lus avec le compte (AccountRepository), écrits seulement ici. */
 export interface RoleRepository {
-  /** Ajoute le rôle s'il manque, en une requête ; `true` s'il vient d'être ajouté. `grantedBy` vide = commande serveur. */
-  grant(accountId: string, role: StoredRole, grantedBy: string | null, now: Date): Promise<boolean>;
+  /**
+   * Ajoute le rôle s'il manque. Le compte est verrouillé et son statut relu DANS la transaction :
+   * un compte désactivé ou supprimé au même moment ne reçoit jamais de rôle. `grantedBy` vide = commande serveur.
+   */
+  grant(
+    accountId: string,
+    role: StoredRole,
+    grantedBy: string | null,
+    now: Date,
+  ): Promise<GrantOutcome>;
   /** Retire le rôle ; `true` s'il était présent. */
   revoke(accountId: string, role: StoredRole): Promise<boolean>;
 }

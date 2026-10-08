@@ -414,9 +414,15 @@ export const AdminAccountSchema = AccountViewSchema.extend({
 }).meta({ id: "AdminAccount", description: "Un compte vu par l'administration" });
 export type AdminAccount = z.infer<typeof AdminAccountSchema>;
 
+/**
+ * UUID reçu dans une adresse, ramené en minuscules : PostgreSQL ignore la casse des UUID, le code non.
+ * Sans cela, « mon UUID en majuscules » passerait la règle « pas sur soi-même » (relecture S4-T06).
+ */
+const uuidInput = uuid.transform((value) => value.toLowerCase());
+
 /** Paramètres de chemin de `PUT|DELETE /admin/accounts/{accountId}/roles/{role}`. */
 export const AdminRoleParamsSchema = z.strictObject({
-  accountId: uuid,
+  accountId: uuidInput,
   role: z.enum(ADMIN_ASSIGNABLE_ROLES),
 });
 export type AdminRoleParams = z.infer<typeof AdminRoleParamsSchema>;

@@ -111,6 +111,9 @@ describe("Sessions (30 jours glissants)", () => {
     ]);
     await expect(service.authenticate(a.token)).rejects.toMatchObject({ code: "SESSION_INVALIDE" });
     await expect(service.authenticate(b.token)).rejects.toMatchObject({ code: "SESSION_INVALIDE" });
+    // Recommencer ne ferme plus rien : aucune nouvelle ligne de journal
+    await expect(service.logoutAll(account.id, context)).resolves.toBe(0);
+    expect(audit.entries).toHaveLength(1);
   });
 
   it("compte désactivé : ses sessions ne valent plus rien", async () => {

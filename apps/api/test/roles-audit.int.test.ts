@@ -111,6 +111,18 @@ describe("rôles (PostgreSQL)", () => {
     expect(await traceOf(requestId)).toHaveLength(1);
   });
 
+  it("statut relu sous verrou : compte fermé ou supprimé → aucun rôle, aucune trace", async () => {
+    await prisma.account.update({ where: { id: awaId }, data: { status: "DISABLED" } });
+    await expect(roles.grant(awaId, "vendor", adminId, clock.now())).resolves.toBe("inactive");
+    await expect(roles.grant(randomUUID(), "vendor", adminId, clock.now())).resolves.toBe(
+      "missing",
+    );
+    await expect(
+      service.grant(ADMIN, awaId, "vendor", { ip: null, requestId: null }),
+    ).rejects.toMatchObject({ code: "COMPTE_INACTIF" });
+    expect(await prisma.accountRole.count({ where: { accountId: awaId } })).toBe(0);
+  });
+
   it("CRIT-06 en base : un rôle ne peut pas être accordé par son propre titulaire", async () => {
     await expect(
       prisma.accountRole.create({ data: { accountId: awaId, role: "VENDOR", grantedBy: awaId } }),

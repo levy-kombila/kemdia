@@ -108,6 +108,8 @@ export class SessionService {
   logoutAll(accountId: string, context: AuditContext = NO_REQUEST): Promise<number> {
     return this.transactions.run(async () => {
       const count = await this.sessions.revokeAllForAccount(accountId, this.clock.now());
+      // Rien fermé (clics répétés) : rien à tracer, le journal ne se remplit pas de bruit (relecture S4-T06)
+      if (count === 0) return 0;
       await this.audit.record({
         action: "sessions.revoked_all",
         actor: { type: "account", id: accountId },

@@ -207,9 +207,12 @@ describe("API administration — rôles et journal d'audit (HTTP)", () => {
     await as(admin).put(`/api/v1/admin/accounts/${AWA_ID}/roles/admin`).expect(400);
     await as(admin).put(`/api/v1/admin/accounts/${AWA_ID}/roles/client`).expect(400);
     await as(admin).put("/api/v1/admin/accounts/42/roles/vendor").expect(400);
-    const self = await as(admin).delete(`/api/v1/admin/accounts/${ADMIN_ID}/roles/moderator`);
-    expect(self.status).toBe(403);
-    expect(codeOf(self.body)).toBe("ROLE_SUR_SOI_INTERDIT");
+    for (const id of [ADMIN_ID, ADMIN_ID.toUpperCase()]) {
+      // Même UUID en majuscules : toujours soi-même (la base ignore la casse des UUID)
+      const self = await as(admin).delete(`/api/v1/admin/accounts/${id}/roles/moderator`);
+      expect(self.status).toBe(403);
+      expect(codeOf(self.body)).toBe("ROLE_SUR_SOI_INTERDIT");
+    }
     const unknown = await as(admin)
       .put("/api/v1/admin/accounts/44444444-4444-4444-8444-444444444444/roles/vendor")
       .expect(404);

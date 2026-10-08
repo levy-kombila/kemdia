@@ -81,7 +81,8 @@ export function assertCanChangeRole(change: RoleChange): asserts change is RoleC
       "ce rôle ne s'accorde pas ici : seuls « vendeur » et « modérateur » peuvent l'être",
     );
   }
-  if (change.actorId === change.targetId) {
+  // Comparaison sans casse, comme PostgreSQL pour les UUID (relecture de sécurité S4-T06)
+  if (change.actorId.toLowerCase() === change.targetId.toLowerCase()) {
     throw new IdentityError(
       "ROLE_SUR_SOI_INTERDIT",
       "vous ne pouvez pas modifier vos propres rôles",

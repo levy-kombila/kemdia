@@ -10,6 +10,7 @@ import {
   type ResetTicketRepository,
   type SessionRepository,
   type SignupTicketRepository,
+  type GrantOutcome,
   type RoleRepository,
   type TransactionRunner,
 } from "../../src/modules/identity/application/ports.js";
@@ -236,12 +237,13 @@ export class InMemoryResetTickets implements ResetTicketRepository {
 /** Rôles en mémoire : modifient la ligne du compte (comme la table account_roles relue avec le compte). */
 export class InMemoryRoles implements RoleRepository {
   constructor(private readonly accounts: InMemoryAccounts) {}
-  grant(accountId: string, role: StoredRole): Promise<boolean> {
+  grant(accountId: string, role: StoredRole): Promise<GrantOutcome> {
     const row = this.accounts.rows.get(accountId);
-    if (!row) return Promise.reject(new Error("compte inconnu (clé étrangère)"));
-    if (row.roles.includes(role)) return Promise.resolve(false);
+    if (!row) return Promise.resolve("missing");
+    if (row.status !== "active") return Promise.resolve("inactive");
+    if (row.roles.includes(role)) return Promise.resolve("unchanged");
     this.accounts.rows.set(accountId, { ...row, roles: [...row.roles, role] });
-    return Promise.resolve(true);
+    return Promise.resolve("granted");
   }
   revoke(accountId: string, role: StoredRole): Promise<boolean> {
     const row = this.accounts.rows.get(accountId);
