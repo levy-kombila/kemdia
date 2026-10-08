@@ -16,8 +16,17 @@ export const ARGON2_OPTIONS = {
   parallelism: 1,
 } as const;
 
+/**
+ * Argon2id d'un mot de passe aléatoire jeté aussitôt (personne ne le connaît), mêmes réglages qu'ARGON2_OPTIONS :
+ * comparé quand l'identifiant n'a pas de compte (ADR-0017). Si les réglages changent, le régénérer avec eux.
+ */
+export const DUMMY_PASSWORD_HASH =
+  "$argon2id$v=19$m=19456,t=2,p=1$l3JaKcJNf8uXMGIqnOCBiA$C3SRYtMQWG6ShpLaNofWnxIr1ThJTdo7LZ7ej9MPpRE";
+
 @Injectable()
 export class Argon2PasswordHasher implements PasswordHasher {
+  readonly dummyHash = DUMMY_PASSWORD_HASH;
+
   hash(password: string): Promise<string> {
     return hash(password, ARGON2_OPTIONS);
   }

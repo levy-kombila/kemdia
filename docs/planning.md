@@ -118,18 +118,19 @@ Ces démarches prennent souvent plusieurs mois et **bloquent** des sprints si el
 ## S4 — Module `identity` : comptes et connexion ⏳
 
 Décisions : [ADR-0015](architecture/adr/0015-identite-sessions-otp.md) (sessions en base + cookie, Argon2id, codes, SMS différé),
-[ADR-0016](architecture/adr/0016-inscription-tickets-emails.md) (inscription sans énumération, tickets, e-mails).
+[ADR-0016](architecture/adr/0016-inscription-tickets-emails.md) (inscription sans énumération, tickets, e-mails),
+[ADR-0017](architecture/adr/0017-connexion-sessions.md) (connexion, sessions, blocage neutre).
 
-| ID     | Tâche                                                                                                                      | Statut |
-| ------ | -------------------------------------------------------------------------------------------------------------------------- | ------ |
-| S4-T01 | Fondations `identity` : schéma `identity`, comptes, Argon2id, codes à usage unique, port d'envoi, `SMS_ENABLED` (ADR-0015) | ✅     |
-| S4-T02 | Inscription + vérification par code (BR-041, HIGH-11) ; envoi par e-mail (Mailpit en local, offre gratuite sur la démo)    | ⏳     |
-| S4-T03 | Connexion, sessions (cookie `HttpOnly` posé par le site), déconnexion, blocage après 3 échecs (BR-040)                     | ⏳     |
-| S4-T04 | Mot de passe oublié (FR-012)                                                                                               | ⏳     |
-| S4-T05 | Site branché sur l'API (adaptateur `AuthClient`) ; option téléphone « bientôt disponible »                                 | ⏳     |
-| S4-T06 | Rôles (RBAC) et journal d'audit                                                                                            | ⏳     |
-| S4-T07 | CSRF, CSP à _nonce_, limitation par compte (HIGH-16, MED-05)                                                               | ⏳     |
-| S4-T08 | Démo + dette, clôture du sprint (v0.4.0)                                                                                   | ⏳     |
+| ID     | Tâche                                                                                                                                  | Statut |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| S4-T01 | Fondations `identity` : schéma `identity`, comptes, Argon2id, codes à usage unique, port d'envoi, `SMS_ENABLED` (ADR-0015)             | ✅     |
+| S4-T02 | Inscription + vérification par code (BR-041, HIGH-11) ; e-mails Mailpit (local) et Brevo (démo, actif depuis le 2026-10-08) — ADR-0016 | ✅     |
+| S4-T03 | Connexion, sessions 30 jours glissants, déconnexion, blocage neutre après 3 échecs (BR-040) — ADR-0017                                 | ✅     |
+| S4-T04 | Mot de passe oublié (FR-012)                                                                                                           | ⏳     |
+| S4-T05 | Site branché sur l'API (adaptateur `AuthClient`) ; option téléphone « bientôt disponible »                                             | ⏳     |
+| S4-T06 | Rôles (RBAC) et journal d'audit                                                                                                        | ⏳     |
+| S4-T07 | CSRF, CSP à _nonce_, limitation par compte (HIGH-16, MED-05)                                                                           | ⏳     |
+| S4-T08 | Démo + dette, clôture du sprint (v0.4.0)                                                                                               | ⏳     |
 
 ## S5 à S8 — grandes lignes
 

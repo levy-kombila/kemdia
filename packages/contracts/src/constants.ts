@@ -73,6 +73,9 @@ export const IDENTITY_ERROR_CODES = [
   "CODE_EXPIRE",
   "TROP_D_ESSAIS",
   "COMPTE_BLOQUE",
+  "IDENTIFIANTS_INCORRECTS",
+  "COMPTE_DESACTIVE",
+  "SESSION_INVALIDE",
 ] as const;
 export type IdentityErrorCode = (typeof IDENTITY_ERROR_CODES)[number];
 
@@ -80,5 +83,9 @@ export type IdentityErrorCode = (typeof IDENTITY_ERROR_CODES)[number];
 export const OTP_CODE_PATTERN = /^\d{6}$/;
 /** Ticket d'inscription : 32 octets en base64url (43 caractères). */
 export const SIGNUP_TICKET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+/** Jeton de session (cookie du site, en-tête `Authorization: Bearer …` vers l'API) : 32 octets en base64url. */
+export const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+/** Durée d'une session sans visite : 30 jours, prolongés à chaque visite (ADR-0017). */
+export const SESSION_TTL_DAYS = 30;
 /** Canaux d'envoi des codes. */
 export const OTP_CHANNELS = ["email", "sms"] as const;

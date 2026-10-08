@@ -32,11 +32,11 @@ Légende : ✅ traité par conception (S1) · 🛡️ mesure prévue au sprint i
 | HIGH-08 | Téléversement non restreint             | Type MIME + taille + ré-encodage des images, stockage hors racine web                                   | 🛡️ S6                          |
 | HIGH-09 | Avis modifiés après modération          | Toute modification repasse en modération                                                                | 🛡️ S6                          |
 | HIGH-10 | SITE_URL absent → e-mails cassés        | Variables validées au démarrage (échec explicite)                                                       | 🛡️ S3                          |
-| HIGH-11 | Connexion avant vérification e-mail     | Connexion impossible avant vérification                                                                 | 🛡️ S4                          |
+| HIGH-11 | Connexion avant vérification e-mail     | Aucun compte avant le bon code ; connexion impossible sans compte (S4-T02, S4-T03)                      | ✅ S4                          |
 | HIGH-12 | Changements d'état en GET               | Aucune écriture en GET (règle de revue + tests)                                                         | 🛡️ S3                          |
 | HIGH-13 | Suppression via GET                     | Idem HIGH-12                                                                                            | 🛡️ S6                          |
 | HIGH-14 | Collision d'e-mail dans le profil       | E-mail unique en base + reconfirmation lors d'un changement                                             | 🛡️ S4                          |
-| HIGH-15 | Jetons d'activation forgeables          | Jetons aléatoires 256 bits, hachés en base, expirables, usage unique                                    | 🛡️ S4                          |
+| HIGH-15 | Jetons d'activation forgeables          | Tickets et jetons de session de 256 bits, hachés en base, expirables, à usage unique (S4-T02, S4-T03)   | ✅ S4                          |
 | HIGH-16 | CSRF sur le stock vendeur               | Cookies `SameSite` + jeton CSRF sur toute mutation                                                      | 🛡️ S4                          |
 | MED-01  | Redirection ouverte                     | Aucune redirection construite depuis l'URL (S1) ; `parseReturnTo` : chemins internes seulement (S2)     | ✅                             |
 | MED-02  | CSRF désactivé (panier)                 | Panier S1 local au navigateur ; mutations serveur protégées                                             | ✅ · 🛡️ S5                     |
@@ -47,7 +47,7 @@ Légende : ✅ traité par conception (S1) · 🛡️ mesure prévue au sprint i
 | MED-07  | Pas de hiérarchie staff                 | Idem CRIT-06                                                                                            | 🛡️ S6                          |
 | MED-08  | Fuite de géolocalisation (suivi)        | Suivi public sans adresse ni coordonnées précises                                                       | 🛡️ S5                          |
 | MED-09  | Note moyenne corrompue                  | Note recalculée en base (agrégat), testée                                                               | 🛡️ S6                          |
-| MED-10  | Pas de verrouillage de compte           | Verrouillage progressif                                                                                 | 🛡️ S4                          |
+| MED-10  | Pas de verrouillage de compte           | 3 essais puis 15 minutes, compté par identifiant même sans compte (S4-T03, ADR-0017)                    | ✅ S4                          |
 | MED-11  | IDOR calcul de livraison                | Calcul sans identifiant de commande d'autrui ; contrôle de propriété                                    | ✅ (S1 : calcul local) · 🛡️ S5 |
 | MED-12  | Faux avis                               | Avis réservés aux acheteurs vérifiés                                                                    | 🛡️ S6                          |
 | MED-13  | Paramètre de tri non assaini            | Liste blanche `parseSort` + tests                                                                       | ✅                             |

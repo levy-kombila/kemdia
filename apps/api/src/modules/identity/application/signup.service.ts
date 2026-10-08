@@ -11,6 +11,7 @@ import {
   type SignupTicket,
 } from "../domain/signup-ticket.js";
 import { OtpService, type IssuedOtp } from "./otp.service.js";
+import { SessionService, type OpenedSession } from "./session.service.js";
 import {
   ACCOUNT_REPOSITORY,
   IDENTITY_CLOCK,
@@ -55,6 +56,7 @@ export class SignupService {
     @Inject(PASSWORD_HASHER) private readonly hasher: PasswordHasher,
     @Inject(IDENTITY_CLOCK) private readonly clock: Clock,
     private readonly otp: OtpService,
+    private readonly sessions: SessionService,
   ) {}
 
   async start(input: SignupInput): Promise<SignupStarted> {
@@ -102,8 +104,11 @@ export class SignupService {
     };
   }
 
-  /** BR-041 : le bon code crée le compte, déjà vérifié, avec les données du ticket. La connexion arrive au S4-T03. */
-  async verify(ticket: string, code: string): Promise<void> {
+  /**
+   * BR-041 : le bon code crée le compte, déjà vérifié, avec les données du ticket,
+   * et ouvre directement une session (choix du 2026-10-08 : pas besoin de retaper le mot de passe).
+   */
+  async verify(ticket: string, code: string, userAgent?: string): Promise<OpenedSession> {
     const found = await this.findTicket(ticket);
     const identifier = requireIdentifier(found.destination);
     await this.otp.verify("signup", identifier, code);
@@ -122,6 +127,7 @@ export class SignupService {
       throw error;
     }
     await this.tickets.deleteForDestination(found.destination);
+    return this.sessions.open(account, userAgent);
   }
 
   private async createTicket(

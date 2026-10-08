@@ -13,7 +13,11 @@ const STATUS: Record<IdentityErrorCode, number> = {
   ENVOI_TROP_RAPPROCHE: HttpStatus.TOO_MANY_REQUESTS,
   TROP_D_ENVOIS: HttpStatus.TOO_MANY_REQUESTS,
   TROP_D_ESSAIS: HttpStatus.TOO_MANY_REQUESTS,
-  COMPTE_BLOQUE: HttpStatus.LOCKED,
+  // Même statut qu'une limite d'envoi : rien n'indique qu'un compte existe (ADR-0017)
+  COMPTE_BLOQUE: HttpStatus.TOO_MANY_REQUESTS,
+  IDENTIFIANTS_INCORRECTS: HttpStatus.UNAUTHORIZED,
+  COMPTE_DESACTIVE: HttpStatus.FORBIDDEN,
+  SESSION_INVALIDE: HttpStatus.UNAUTHORIZED,
 };
 
 /** Exécute un cas d'utilisation ; une erreur métier devient une réponse HTTP avec son code. */

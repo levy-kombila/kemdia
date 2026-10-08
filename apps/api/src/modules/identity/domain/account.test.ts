@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Account, LOCK_DURATION_MS } from "./account.js";
+import { Account } from "./account.js";
 import { requireIdentifier } from "./identifier.js";
 
 const T0 = new Date("2026-10-07T10:00:00Z");
@@ -60,41 +60,23 @@ describe("Compte (FR-001)", () => {
     );
   });
 
-  describe("BR-040 : 3 échecs → bloqué 15 minutes", () => {
-    it("bloqué au 3ᵉ échec, débloqué 15 minutes plus tard", () => {
-      const account = newAccount();
-      account.recordFailedLogin(at(0));
-      account.recordFailedLogin(at(1000));
-      expect(account.isLocked(at(1000))).toBe(false);
-      account.recordFailedLogin(at(2000));
-      expect(account.isLocked(at(2000))).toBe(true);
-      expect(account.isLocked(at(2000 + LOCK_DURATION_MS - 1))).toBe(true);
-      expect(account.isLocked(at(2000 + LOCK_DURATION_MS))).toBe(false);
+  it("vue du titulaire : jamais le hachage du mot de passe", () => {
+    const account = newAccount();
+    account.markVerified(requireIdentifier("awa@exemple.ga"), T0);
+    expect(account.isActive()).toBe(true);
+    expect(account.view()).toEqual({
+      id: "11111111-1111-4111-8111-111111111111",
+      firstName: "Awa",
+      lastName: "Ndong",
+      email: "awa@exemple.ga",
+      phone: null,
     });
+    expect(JSON.stringify(account.view())).not.toContain("argon2");
+  });
 
-    it("les échecs pendant le blocage ne le prolongent pas", () => {
-      const account = newAccount();
-      for (let i = 0; i < 3; i++) account.recordFailedLogin(at(0));
-      account.recordFailedLogin(at(60_000));
-      expect(account.snapshot().lockedUntil).toEqual(at(LOCK_DURATION_MS));
-    });
-
-    it("une connexion réussie remet le compteur à zéro", () => {
-      const account = newAccount();
-      account.recordFailedLogin(at(0));
-      account.recordFailedLogin(at(0));
-      account.recordSuccessfulLogin();
-      account.recordFailedLogin(at(0));
-      expect(account.isLocked(at(0))).toBe(false);
-      expect(account.snapshot().failedLogins).toBe(1);
-    });
-
-    it("changer de mot de passe lève le blocage", () => {
-      const account = newAccount();
-      for (let i = 0; i < 3; i++) account.recordFailedLogin(at(0));
-      account.changePassword("$argon2id$nouveau");
-      expect(account.isLocked(at(0))).toBe(false);
-      expect(account.passwordHash).toBe("$argon2id$nouveau");
-    });
+  it("changer de mot de passe", () => {
+    const account = newAccount();
+    account.changePassword("$argon2id$nouveau");
+    expect(account.passwordHash).toBe("$argon2id$nouveau");
   });
 });

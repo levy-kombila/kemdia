@@ -93,6 +93,20 @@ model SignupTicket {
   @@schema("identity")
 }
 
+/// BR-040 par identifiant (S4-T03, ADR-0017) : essais de connexion et blocage, qu'un compte existe ou non.
+/// Écrit uniquement par des requêtes atomiques (INSERT … ON CONFLICT … DO UPDATE).
+model LoginGuard {
+  /// Identifiant normalisé (e-mail en minuscules ou +241…)
+  identifier  String    @id @db.VarChar(254)
+  attempts    Int       @default(0)
+  lockedUntil DateTime? @map("locked_until") @db.Timestamptz(3)
+  updatedAt   DateTime  @map("updated_at") @db.Timestamptz(3)
+
+  @@index([updatedAt])
+  @@map("login_guards")
+  @@schema("identity")
+}
+
 /// Session ouverte (S4-T03). Le cookie porte un jeton aléatoire ; la base n'en garde que l'empreinte SHA-256.
 model Session {
   id         String    @id @db.Uuid
@@ -107,6 +121,7 @@ model Session {
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([accountId])
+  @@index([expiresAt])
   @@map("sessions")
   @@schema("identity")
 }

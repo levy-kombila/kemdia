@@ -30,6 +30,16 @@ const expired = problem(
 );
 const invalidBody = problem("Corps de requête invalide (champ manquant, inconnu ou mal formé)");
 
+const userAgent = {
+  name: "X-Kemdia-User-Agent",
+  in: "header",
+  required: false,
+  description: "Navigateur du visiteur, transmis par le serveur du site (liste « mes appareils »)",
+  schema: { type: "string", maxLength: 500 },
+};
+const bearer = [{ session: [] }];
+const sessionRefused = problem("`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé");
+
 export const identityPaths = {
   "/api/v1/auth/signup": {
     post: {
@@ -57,11 +67,16 @@ export const identityPaths = {
   "/api/v1/auth/signup/verify": {
     post: {
       tags: ["Identité"],
-      summary: "Vérifie le code : le compte est créé, déjà vérifié (BR-041)",
+      summary:
+        "Vérifie le code : le compte est créé, déjà vérifié (BR-041), et le client est connecté",
       operationId: "verifySignup",
+      parameters: [userAgent],
       requestBody: body("SignupVerifyRequest"),
       responses: {
-        "200": json("SignupVerified", "Compte actif"),
+        "200": json(
+          "SignupVerified",
+          "Compte actif et session ouverte (jeton à garder dans un cookie HttpOnly)",
+        ),
         "400": invalidBody,
         "410": expired,
         "422": problem("`CODE_INVALIDE` : code incorrect (chaque essai compte)"),
@@ -79,6 +94,63 @@ export const identityPaths = {
         "202": json("SignupStarted", "Nouveau code envoyé"),
         "400": invalidBody,
         "410": expired,
+        "429": tooMany,
+      },
+    },
+  },
+  "/api/v1/auth/login": {
+    post: {
+      tags: ["Identité"],
+      summary: "Connexion par e-mail ou téléphone ; ouvre une session de 30 jours glissants",
+      description: [
+        "Réponses identiques qu'un compte existe ou non : `IDENTIFIANTS_INCORRECTS`, puis `COMPTE_BLOQUE` au 3ᵉ essai (BR-040, 15 minutes).",
+        "Le blocage se compte par identifiant, même sans compte. Seul un compte désactivé, avec le bon mot de passe, reçoit `COMPTE_DESACTIVE`.",
+      ].join("\n\n"),
+      operationId: "login",
+      parameters: [userAgent],
+      requestBody: body("LoginRequest"),
+      responses: {
+        "200": json("OpenedSession", "Session ouverte"),
+        "400": invalidBody,
+        "401": problem("`IDENTIFIANTS_INCORRECTS` : identifiant ou mot de passe incorrect"),
+        "403": problem("`COMPTE_DESACTIVE` : compte fermé par l'équipe Kemdia"),
+        "422": problem("`IDENTIFIANT_INVALIDE` : ni une adresse e-mail ni un mobile gabonais"),
+        "429": tooMany,
+      },
+    },
+  },
+  "/api/v1/auth/session": {
+    get: {
+      tags: ["Identité"],
+      summary:
+        "La session présentée est-elle valable ? (la prolonge au passage, au plus une fois par heure)",
+      operationId: "currentSession",
+      security: bearer,
+      responses: {
+        "200": json("CurrentSession", "Session valable"),
+        "401": sessionRefused,
+        "429": tooMany,
+      },
+    },
+  },
+  "/api/v1/auth/logout": {
+    post: {
+      tags: ["Identité"],
+      summary: "Déconnexion : la session est fermée tout de suite",
+      operationId: "logout",
+      security: bearer,
+      responses: { "204": { description: "Session fermée (ou déjà fermée)" }, "429": tooMany },
+    },
+  },
+  "/api/v1/auth/logout-all": {
+    post: {
+      tags: ["Identité"],
+      summary: "Déconnecter tous les appareils du compte (celui-ci compris)",
+      operationId: "logoutAll",
+      security: bearer,
+      responses: {
+        "200": json("LogoutAll", "Sessions fermées"),
+        "401": sessionRefused,
         "429": tooMany,
       },
     },
