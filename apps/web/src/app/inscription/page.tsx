@@ -8,7 +8,7 @@ export default function SignupPage() {
   return (
     <AuthShell
       title="Créer un compte"
-      subtitle="Avec votre numéro Airtel / Moov ou votre adresse e-mail."
+      subtitle="Avec votre adresse e-mail (numéro Airtel / Moov : bientôt disponible)."
     >
       <SignupForm />
     </AuthShell>

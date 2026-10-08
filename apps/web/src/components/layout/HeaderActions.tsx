@@ -1,10 +1,11 @@
 "use client";
 
-import { ChevronDown, CircleUser, Heart, MapPin } from "lucide-react";
+import { Heart, MapPin } from "lucide-react";
 import Link from "next/link";
 import { useDeliveryLocation } from "@/components/providers/LocationProvider";
 import { MiniCart } from "@/components/cart/MiniCart";
 import { useFavorites } from "@/components/providers/FavoritesProvider";
+import { AccountMenu, type HeaderAccount } from "./AccountMenu";
 
 export function LocationButton() {
   const { city, location, openModal } = useDeliveryLocation();
@@ -29,21 +30,6 @@ export function LocationButton() {
   );
 }
 
-export function AccountLink() {
-  return (
-    <Link href="/compte" className="hover:bg-ink-50 flex items-center gap-2 rounded-lg px-2 py-1">
-      <CircleUser className="text-ink-700 size-6" aria-hidden />
-      <span className="hidden leading-tight lg:block">
-        <span className="text-ink-500 block text-[0.7rem]">Bonjour,</span>
-        <span className="flex items-center text-sm font-semibold">
-          Mon compte <ChevronDown className="ml-0.5 size-3.5" aria-hidden />
-        </span>
-      </span>
-      <span className="sr-only lg:hidden">Mon compte</span>
-    </Link>
-  );
-}
-
 export function FavoritesLink() {
   const { items, hydrated } = useFavorites();
   const count = hydrated ? items.length : 0;
@@ -65,11 +51,11 @@ export function FavoritesLink() {
   );
 }
 
-export function HeaderActions() {
+export function HeaderActions({ account }: { account: HeaderAccount }) {
   return (
     <div className="flex items-center gap-1 sm:gap-2">
       <LocationButton />
-      <AccountLink />
+      <AccountMenu account={account} />
       <FavoritesLink />
       <MiniCart />
     </div>

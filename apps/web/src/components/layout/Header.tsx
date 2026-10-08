@@ -1,6 +1,8 @@
 import { unstable_rethrow } from "next/navigation";
 import { Logo } from "@/components/ui/Logo";
+import { getCurrentAccount } from "@/lib/auth/session";
 import { CatalogUnavailableError, getCategoryTree, type CategoryNode } from "@/lib/catalog";
+import { StaleSessionCleaner, type HeaderAccount } from "./AccountMenu";
 import { CategoryNav, type NavCategory } from "./CategoryNav";
 import { HeaderActions } from "./HeaderActions";
 import { SearchForm } from "./SearchForm";
@@ -34,9 +36,13 @@ async function navigationTree(): Promise<NavCategory[]> {
 
 export async function Header() {
   // Seuls les champs utiles au menu sont envoyés au navigateur (3 niveaux)
-  const tree = await navigationTree();
+  // Menu et compte lus en parallèle ; seul le prénom du compte est envoyé au navigateur
+  const [tree, current] = await Promise.all([navigationTree(), getCurrentAccount()]);
+  const account: HeaderAccount =
+    current.status === "signed-in" ? { firstName: current.account.firstName } : null;
   return (
     <>
+      {current.status === "stale" && <StaleSessionCleaner />}
       <TopBar />
       <header className="sticky top-0 z-50 shadow-sm">
         <div className="border-ink-100 border-b bg-white">
@@ -44,7 +50,7 @@ export async function Header() {
             <Logo className="shrink-0" />
             <SearchForm className="hidden max-w-2xl flex-1 md:block" />
             <div className="ml-auto">
-              <HeaderActions />
+              <HeaderActions account={account} />
             </div>
           </div>
           <div className="container-page pb-3 md:hidden">

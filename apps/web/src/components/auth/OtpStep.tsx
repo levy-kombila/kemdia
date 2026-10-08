@@ -2,31 +2,37 @@
 
 import { MessageSquareText, Mail } from "lucide-react";
 import { useEffect, useId, useState, type FormEvent } from "react";
-import { authClient, DEMO_OTP, OTP_RESEND_DELAY_S, type OtpPurpose } from "@/lib/auth/client";
-import { isValidOtp, maskIdentifier, OTP_LENGTH, type Identifier } from "@/lib/auth/validation";
-import { FormAlert, SubmitButton } from "@/components/ui/Field";
+import type { AuthResult, CodeSent } from "@/lib/auth/client";
+import { authErrorMessage } from "@/lib/auth/messages";
+import { isValidOtp, OTP_LENGTH } from "@/lib/auth/validation";
+import { SubmitButton } from "@/components/ui/Field";
 import { OtpInput } from "./OtpInput";
 
-const ERRORS = {
-  "invalid-code": "Code incorrect. Vérifiez le message reçu et réessayez.",
-  "too-many-attempts": "Trop d'essais. Demandez un nouveau code.",
-  expired: "Ce code a expiré. Demandez un nouveau code.",
-  unavailable: "Service momentanément indisponible. Réessayez dans quelques instants.",
-} as const;
-
 type Props = {
-  purpose: OtpPurpose;
-  identifier: Identifier;
-  onVerified: (code: string) => void;
+  /** Envoi en cours : canal, destination masquée par l'API, délai avant un nouveau code. */
+  sent: CodeSent;
+  /** Vérifie le code ; une erreur reste affichée et le champ est vidé. */
+  onSubmit: (code: string) => Promise<AuthResult>;
+  onResend: () => Promise<AuthResult<CodeSent>>;
   onBack: () => void;
+  /** Erreur à afficher en arrivant (ex. code refusé à l'étape suivante). */
+  initialError?: string | null;
+  submitLabel?: string;
 };
 
-export function OtpStep({ purpose, identifier, onVerified, onBack }: Props) {
+export function OtpStep({
+  sent,
+  onSubmit,
+  onResend,
+  onBack,
+  initialError = null,
+  submitLabel = "Vérifier",
+}: Props) {
   const [code, setCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [cooldown, setCooldown] = useState(OTP_RESEND_DELAY_S);
+  const [cooldown, setCooldown] = useState(sent.resendInSeconds);
   const errorId = useId();
 
   useEffect(() => {
@@ -44,24 +50,39 @@ export function OtpStep({ purpose, identifier, onVerified, onBack }: Props) {
     }
     setPending(true);
     setError(null);
-    const result = await authClient.verifyOtp(purpose, identifier, code);
+    setNotice(null);
+    const result = await onSubmit(code).catch((): AuthResult => ({
+      ok: false,
+      code: "INDISPONIBLE",
+    }));
     setPending(false);
-    if (result.ok) onVerified(code);
-    else {
-      setError(ERRORS[result.error]);
+    if (!result.ok) {
+      setError(authErrorMessage(result));
       setCode("");
     }
   };
 
   const resend = async () => {
-    setCooldown(OTP_RESEND_DELAY_S);
+    if (pending) return;
+    setPending(true);
     setError(null);
+    setNotice(null);
     setCode("");
-    await authClient.resendOtp(purpose, identifier);
-    setNotice("Un nouveau code vient d'être envoyé.");
+    const result = await onResend().catch((): AuthResult<CodeSent> => ({
+      ok: false,
+      code: "INDISPONIBLE",
+    }));
+    setPending(false);
+    if (result.ok) {
+      setCooldown(result.resendInSeconds);
+      setNotice("Un nouveau code vient d'être envoyé.");
+    } else {
+      setError(authErrorMessage(result));
+      if (result.retryAfterSeconds) setCooldown(result.retryAfterSeconds);
+    }
   };
 
-  const Icon = identifier.kind === "phone" ? MessageSquareText : Mail;
+  const Icon = sent.channel === "sms" ? MessageSquareText : Mail;
 
   return (
     <form onSubmit={submit} noValidate className="space-y-5">
@@ -71,19 +92,17 @@ export function OtpStep({ purpose, identifier, onVerified, onBack }: Props) {
         </span>
         <h2 className="mt-3 text-xl font-extrabold">Saisissez le code reçu</h2>
         <p className="text-ink-500 mt-1 text-sm">
-          {identifier.kind === "phone" ? "Envoyé par SMS au " : "Envoyé par e-mail à "}
-          <strong className="text-ink-800">{maskIdentifier(identifier)}</strong>
+          {sent.channel === "sms" ? "Envoyé par SMS au " : "Envoyé par e-mail à "}
+          <strong className="text-ink-800">{sent.sentTo}</strong>
           {" · "}
           <button type="button" onClick={onBack} className="text-brand-700 font-semibold underline">
             Modifier
           </button>
         </p>
+        <p className="text-ink-500 mt-1 text-xs">
+          Le code est valable 10 minutes. Pensez à regarder dans vos courriers indésirables.
+        </p>
       </div>
-
-      <FormAlert tone="info">
-        <strong>Mode démonstration</strong> : aucun SMS n&apos;est envoyé. Utilisez le code{" "}
-        <strong className="tracking-widest">{DEMO_OTP}</strong>.
-      </FormAlert>
 
       <OtpInput
         value={code}
@@ -103,7 +122,7 @@ export function OtpStep({ purpose, identifier, onVerified, onBack }: Props) {
         </p>
       )}
 
-      <SubmitButton pending={pending}>Vérifier</SubmitButton>
+      <SubmitButton pending={pending}>{submitLabel}</SubmitButton>
 
       <p className="text-ink-500 text-center text-sm">
         Pas reçu ?{" "}

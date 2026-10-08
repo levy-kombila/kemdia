@@ -2,15 +2,11 @@
 
 import { CircleCheck, Mail, Smartphone } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { authClient } from "@/lib/auth/client";
-import {
-  formatGabonPhone,
-  normalizeEmail,
-  normalizeGabonPhone,
-  normalizeName,
-  type Identifier,
-} from "@/lib/auth/validation";
+import { authClient, type AuthResult, type CodeSent, type SignedIn } from "@/lib/auth/client";
+import { authErrorMessage } from "@/lib/auth/messages";
+import { normalizeEmail, normalizeName } from "@/lib/auth/validation";
 import { cn } from "@/lib/cn";
 import { Field, FormAlert, PasswordField, SubmitButton } from "@/components/ui/Field";
 import { OtpStep } from "./OtpStep";
@@ -20,19 +16,23 @@ type Channel = "phone" | "email";
 type Errors = Partial<Record<"firstName" | "lastName" | "contact" | "password" | "terms", string>>;
 type Step =
   | { name: "form" }
-  | { name: "otp"; identifier: Identifier }
-  | { name: "done"; identifier: Identifier };
+  | { name: "otp"; email: string; sent: CodeSent }
+  | { name: "done"; email: string; firstName: string };
+
+/** Le SMS n'a pas encore de fournisseur (SMS_ENABLED=false) : l'option est affichée, mais pas encore active. */
+const SMS_SOON = "L'inscription par SMS sera bientôt disponible.";
 
 export function SignupForm() {
   const [step, setStep] = useState<Step>({ name: "form" });
-  const [channel, setChannel] = useState<Channel>("phone");
+  const router = useRouter();
+  const [channel, setChannel] = useState<Channel>("email");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [contact, setContact] = useState("");
   const [password, setPassword] = useState("");
   const [terms, setTerms] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
-  const [failure, setFailure] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [focusRequest, setFocusRequest] = useState(0);
   const formRef = useRef<HTMLFormElement>(null);
@@ -47,52 +47,59 @@ export function SignupForm() {
     if (pending) return;
     const first = normalizeName(firstName);
     const last = normalizeName(lastName);
-    let identifier: Identifier | null = null;
-    if (channel === "phone") {
-      const p = normalizeGabonPhone(contact);
-      if (p) identifier = { kind: "phone", ...p };
-    } else {
-      const m = normalizeEmail(contact);
-      if (m) identifier = { kind: "email", value: m };
-    }
+    const email = channel === "email" ? normalizeEmail(contact) : null;
     const next: Errors = {};
     if (!first) next.firstName = "Prénom requis (lettres, espaces, apostrophes ou tirets).";
     if (!last) next.lastName = "Nom requis (lettres, espaces, apostrophes ou tirets).";
-    if (!identifier)
-      next.contact =
-        channel === "phone"
-          ? "Numéro Airtel (07…) ou Moov (06…) de 9 chiffres, ex. 077 12 34 56."
-          : "Adresse e-mail invalide.";
+    if (!email) next.contact = channel === "phone" ? SMS_SOON : "Adresse e-mail invalide.";
     const pwError = passwordError(password);
     if (pwError) next.password = pwError;
     if (!terms) next.terms = "Vous devez accepter les conditions pour créer un compte.";
     setErrors(next);
-    setFailure(false);
-    if (Object.keys(next).length > 0 || !first || !last || !identifier) {
+    setFailure(null);
+    if (Object.keys(next).length > 0 || !first || !last || !email) {
       setFocusRequest((n) => n + 1);
       return;
     }
     setPending(true);
-    const result = await authClient.signup({
-      firstName: first,
-      lastName: last,
-      identifier,
-      password,
-    });
+    const result = await authClient
+      .signup({ firstName: first, lastName: last, identifier: email, password, acceptTerms: true })
+      .catch((): AuthResult<CodeSent> => ({ ok: false, code: "INDISPONIBLE" }));
     setPending(false);
-    if (result.ok) setStep({ name: "otp", identifier });
-    else setFailure(true);
+    if (result.ok) {
+      setStep({ name: "otp", email, sent: result });
+      return;
+    }
+    // Erreurs de saisie refusées par le serveur : affichées sous le bon champ
+    const field: keyof Errors | null =
+      result.code === "NOM_INVALIDE"
+        ? "firstName"
+        : result.code === "IDENTIFIANT_INVALIDE" || result.code === "CANAL_INDISPONIBLE"
+          ? "contact"
+          : result.code === "MOT_DE_PASSE_FAIBLE"
+            ? "password"
+            : null;
+    if (field) {
+      setErrors({ [field]: authErrorMessage(result) });
+      setFocusRequest((n) => n + 1);
+    } else setFailure(authErrorMessage(result));
   };
 
   if (step.name === "otp") {
     return (
       <OtpStep
-        purpose="signup"
-        identifier={step.identifier}
+        sent={step.sent}
         onBack={() => setStep({ name: "form" })}
-        onVerified={() => {
-          setPassword("");
-          setStep({ name: "done", identifier: step.identifier });
+        onResend={() => authClient.resendSignup()}
+        onSubmit={async (code) => {
+          const result: SignedIn = await authClient.verifySignup(code);
+          if (result.ok) {
+            setPassword("");
+            setStep({ name: "done", email: step.email, firstName: result.account.firstName });
+            // L'en-tête se met à jour : le client est connecté
+            router.refresh();
+          }
+          return result;
         }}
       />
     );
@@ -102,20 +109,10 @@ export function SignupForm() {
     return (
       <div className="text-center" role="status">
         <CircleCheck className="text-success-600 mx-auto size-16" aria-hidden />
-        <h2 className="mt-3 text-xl font-extrabold">
-          Bienvenue chez Kemdia, {normalizeName(firstName)} !
-        </h2>
+        <h2 className="mt-3 text-xl font-extrabold">Bienvenue chez Kemdia, {step.firstName} !</h2>
         <p className="text-ink-500 mt-2">
-          {step.identifier.kind === "phone"
-            ? `Votre numéro ${formatGabonPhone(step.identifier.value)} est vérifié.`
-            : `Votre adresse ${step.identifier.value} est vérifiée.`}
+          Votre adresse {step.email} est vérifiée et vous êtes connecté.
         </p>
-        <div className="mt-4">
-          <FormAlert tone="info">
-            Mode démonstration : aucun compte n&apos;a réellement été créé. Les comptes seront
-            enregistrés à partir du Sprint 4.
-          </FormAlert>
-        </div>
         <Link
           href="/"
           className="bg-brand-600 hover:bg-brand-700 mt-6 inline-block rounded-full px-6 py-3 font-semibold text-white"
@@ -134,11 +131,7 @@ export function SignupForm() {
 
   return (
     <form ref={formRef} onSubmit={submit} noValidate className="space-y-5">
-      {failure && (
-        <FormAlert>
-          Inscription impossible pour le moment. Réessayez dans quelques instants.
-        </FormAlert>
-      )}
+      {failure && <FormAlert>{failure}</FormAlert>}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field
           label="Prénom"
@@ -167,15 +160,16 @@ export function SignupForm() {
         <div className="bg-ink-50 grid grid-cols-2 gap-1 rounded-xl p-1">
           {(
             [
-              ["phone", "SMS", Smartphone],
-              ["email", "E-mail", Mail],
+              ["email", "E-mail", Mail, false],
+              ["phone", "SMS", Smartphone, true],
             ] as const
-          ).map(([value, label, Icon]) => (
+          ).map(([value, label, Icon, soon]) => (
             <label
               key={value}
               className={cn(
-                "flex cursor-pointer items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold transition has-[:focus-visible]:outline-2",
-                channel === value ? "text-brand-700 bg-white shadow-sm" : "text-ink-500",
+                "flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold transition has-[:focus-visible]:outline-2",
+                soon ? "text-ink-400 cursor-not-allowed" : "cursor-pointer",
+                channel === value ? "text-brand-700 bg-white shadow-sm" : !soon && "text-ink-500",
               )}
             >
               <input
@@ -183,31 +177,22 @@ export function SignupForm() {
                 name="channel"
                 value={value}
                 checked={channel === value}
+                disabled={soon}
                 onChange={() => switchChannel(value)}
                 className="sr-only"
               />
               <Icon className="size-4" aria-hidden /> {label}
+              {soon && (
+                <span className="bg-accent-400/25 text-ink-700 rounded-full px-1.5 text-[0.65rem] font-bold">
+                  bientôt
+                </span>
+              )}
             </label>
           ))}
         </div>
       </fieldset>
 
-      {channel === "phone" ? (
-        <Field
-          key="phone"
-          label="Numéro de téléphone"
-          name="tel"
-          type="tel"
-          inputMode="tel"
-          autoComplete="tel-national"
-          placeholder="077 12 34 56"
-          value={contact}
-          onChange={(e) => setContact(e.target.value)}
-          error={errors.contact}
-          hint="Airtel (07…) ou Moov (06…). Le code arrive par SMS."
-          maxLength={20}
-        />
-      ) : (
+      {channel === "email" && (
         <Field
           key="email"
           label="Adresse e-mail"
@@ -221,6 +206,7 @@ export function SignupForm() {
           value={contact}
           onChange={(e) => setContact(e.target.value)}
           error={errors.contact}
+          hint="Le code de vérification arrive par e-mail."
           maxLength={254}
         />
       )}

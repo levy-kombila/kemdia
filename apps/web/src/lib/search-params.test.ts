@@ -58,5 +58,17 @@ describe("parseReturnTo", () => {
     "/\\pirate.com",
     "javascript:alert(1)",
     "/a\nb",
-  ])("refuse %s (redirection ouverte)", (value) => expect(parseReturnTo(value)).toBe("/compte"));
+  ])("refuse %s (redirection ouverte) : retour à l'accueil", (value) =>
+    expect(parseReturnTo(value)).toBe("/"),
+  );
+  it("résout « . » et « .. » comme le navigateur : on reste sur le site", () => {
+    expect(parseReturnTo("/..//evil.com")).toBe("/");
+    expect(parseReturnTo("/a/../panier")).toBe("/panier");
+    expect(parseReturnTo("/./connexion")).toBe("/");
+  });
+  it("ne renvoie pas vers une page d'identité", () => {
+    expect(parseReturnTo("/connexion?retour=/panier")).toBe("/");
+    expect(parseReturnTo("/mot-de-passe-oublie")).toBe("/");
+    expect(parseReturnTo("/compte")).toBe("/compte");
+  });
 });
