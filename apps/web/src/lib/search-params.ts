@@ -38,14 +38,22 @@ export function first(value: string | string[] | undefined): string | undefined 
   return Array.isArray(value) ? value[0] : value;
 }
 
+/** Pages d'identité : y revenir après la connexion n'aurait pas de sens. */
+const AUTH_PAGES = ["/connexion", "/inscription", "/mot-de-passe-oublie"];
+
 /**
- * Adresse de retour après connexion (?retour=/panier).
+ * Adresse de retour après connexion (?retour=/panier) ; sans adresse valable : l'accueil.
  * Protection contre la redirection ouverte : seuls les chemins internes sont acceptés
  * (« //site-pirate.com » ou « https://… » renverraient l'utilisateur vers un faux site).
  */
 export function parseReturnTo(value: unknown): string {
-  if (typeof value !== "string" || value.length > 200) return "/compte";
-  if (!value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return "/compte";
-  if (/[\u0000-\u001f]/.test(value)) return "/compte";
-  return value;
+  if (typeof value !== "string" || value.length > 200) return "/";
+  if (!value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return "/";
+  if (/[\u0000-\u001f]/.test(value)) return "/";
+  // Résolution comme le ferait le navigateur (« /./ », « /../ ») : le résultat doit rester sur le site
+  const base = "http://kemdia.invalid";
+  const url = new URL(value, base);
+  if (url.origin !== base || url.pathname.startsWith("//")) return "/";
+  if (AUTH_PAGES.some((p) => url.pathname === p || url.pathname.startsWith(`${p}/`))) return "/";
+  return `${url.pathname}${url.search}${url.hash}`;
 }

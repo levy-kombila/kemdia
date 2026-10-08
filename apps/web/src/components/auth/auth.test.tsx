@@ -1,16 +1,25 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { FAKE_CODE, createFakeAuthClient } from "@/lib/auth/test-fake-auth";
 import { ForgotPasswordForm } from "./ForgotPasswordForm";
 import { LoginForm } from "./LoginForm";
 import { OtpInput } from "./OtpInput";
 import { SignupForm } from "./SignupForm";
 
-// Adaptateur de démonstration sans délai artificiel pour des tests rapides
-vi.mock("@/lib/auth/client", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("@/lib/auth/client")>();
-  return { ...mod, authClient: mod.createDemoAuthClient(0) };
+// Faux client d'identité (l'API est testée à part) et navigation de Next.js
+const fake = vi.hoisted(() => ({ client: null as null | ReturnType<typeof createFakeAuthClient> }));
+vi.mock("@/lib/auth/client", () => ({
+  get authClient() {
+    return fake.client;
+  },
+}));
+const refresh = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+beforeEach(() => {
+  fake.client = createFakeAuthClient();
+  refresh.mockClear();
 });
 
 function ControlledOtp() {
@@ -41,77 +50,134 @@ describe("OtpInput", () => {
   });
 });
 
+const typeCode = async (user: ReturnType<typeof userEvent.setup>, code: string) => {
+  await user.click(screen.getByLabelText("Chiffre 1"));
+  await user.paste(code);
+};
+
 describe("Inscription", () => {
   it("signale les champs invalides sans rien envoyer", async () => {
     const user = userEvent.setup();
     render(<SignupForm />);
     await user.click(screen.getByRole("button", { name: "Créer mon compte" }));
     expect(screen.getByLabelText("Prénom")).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByLabelText("Numéro de téléphone")).toHaveAccessibleDescription(
-      /Numéro Airtel/,
-    );
+    expect(screen.getByLabelText("Adresse e-mail")).toHaveAccessibleDescription(/invalide/);
     expect(screen.getByText(/accepter les conditions/)).toBeInTheDocument();
     expect(screen.getByLabelText("Prénom")).toHaveFocus();
+    expect(fake.client!.calls).toEqual([]);
   });
 
-  it("parcours complet : formulaire → code SMS → compte vérifié", async () => {
-    const user = userEvent.setup();
+  it("e-mail par défaut ; le SMS est « bientôt » et ne peut pas être choisi", () => {
     render(<SignupForm />);
+    expect(screen.getByRole("radio", { name: /E-mail/ })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /SMS/ })).toBeDisabled();
+    expect(screen.getAllByText(/bientôt/).length).toBeGreaterThan(0);
+  });
+
+  async function fillSignup(user: ReturnType<typeof userEvent.setup>, password = "Libreville2026") {
     await user.type(screen.getByLabelText("Prénom"), "Marie");
     await user.type(screen.getByLabelText("Nom"), "Nze");
-    await user.type(screen.getByLabelText("Numéro de téléphone"), "077 12 34 56");
-    await user.type(screen.getByLabelText("Mot de passe"), "Libreville2026");
+    await user.type(screen.getByLabelText("Adresse e-mail"), "Marie@Exemple.ga");
+    await user.type(screen.getByLabelText("Mot de passe"), password);
     await user.click(screen.getByRole("checkbox"));
     await user.click(screen.getByRole("button", { name: "Créer mon compte" }));
+  }
+
+  it("parcours complet : formulaire → code par e-mail → connecté", async () => {
+    const user = userEvent.setup();
+    render(<SignupForm />);
+    await fillSignup(user);
 
     expect(await screen.findByText("Saisissez le code reçu")).toBeInTheDocument();
-    expect(screen.getByText("077 •• •• 56")).toBeInTheDocument();
+    // Destination masquée renvoyée par l'API, adresse normalisée envoyée
+    expect(screen.getByText("ma•••@exemple.ga")).toBeInTheDocument();
+    expect(fake.client!.calls).toEqual(["signup:marie@exemple.ga"]);
 
-    await user.click(screen.getByLabelText("Chiffre 1"));
-    await user.paste("000000");
+    await typeCode(user, "000000");
     await user.click(screen.getByRole("button", { name: "Vérifier" }));
     expect(await screen.findByText(/Code incorrect/)).toBeInTheDocument();
 
-    await user.click(screen.getByLabelText("Chiffre 1"));
-    await user.paste("123456");
+    await typeCode(user, FAKE_CODE);
     await user.click(screen.getByRole("button", { name: "Vérifier" }));
     expect(await screen.findByText("Bienvenue chez Kemdia, Marie !")).toBeInTheDocument();
-    expect(screen.getByText(/077 12 34 56 est vérifié/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/marie@exemple.ga est vérifiée et vous êtes connecté/),
+    ).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalled();
   });
 
-  it("bascule vers l'e-mail", async () => {
+  it("mot de passe refusé par le serveur : message sous le champ", async () => {
     const user = userEvent.setup();
     render(<SignupForm />);
-    await user.click(screen.getByRole("radio", { name: /E-mail/ }));
-    expect(screen.getByLabelText("Adresse e-mail")).toHaveAttribute("autocomplete", "email");
+    await fillSignup(user, "Refuse2026");
+    expect(await screen.findByLabelText("Mot de passe")).toHaveAccessibleDescription(/refusé/);
   });
 });
 
 describe("Connexion", () => {
-  it("refuse un identifiant invalide", async () => {
+  it("refuse un identifiant invalide sans rien envoyer", async () => {
     const user = userEvent.setup();
-    render(<LoginForm returnTo="/compte" />);
-    await user.type(screen.getByLabelText("E-mail ou numéro de téléphone"), "0123");
+    render(<LoginForm returnTo="/" />);
+    await user.type(screen.getByLabelText("Adresse e-mail"), "0123");
     await user.click(screen.getByRole("button", { name: "Se connecter" }));
-    expect(screen.getByLabelText("E-mail ou numéro de téléphone")).toHaveAttribute(
-      "aria-invalid",
-      "true",
-    );
+    expect(screen.getByLabelText("Adresse e-mail")).toHaveAttribute("aria-invalid", "true");
+    expect(fake.client!.calls).toEqual([]);
   });
 
-  it("explique que la connexion arrive au Sprint 4 et efface le mot de passe", async () => {
+  it("téléphone : « bientôt disponible »", async () => {
     const user = userEvent.setup();
-    render(<LoginForm returnTo="/compte" />);
-    await user.type(screen.getByLabelText("E-mail ou numéro de téléphone"), "marie@exemple.ga");
-    await user.type(screen.getByLabelText("Mot de passe"), "Libreville2026");
+    render(<LoginForm returnTo="/" />);
+    await user.type(screen.getByLabelText("Adresse e-mail"), "077 12 34 56");
+    await user.type(screen.getByLabelText("Mot de passe"), "Mangue2026");
     await user.click(screen.getByRole("button", { name: "Se connecter" }));
-    expect(await screen.findByText(/connexion sera active au Sprint 4/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Adresse e-mail")).toHaveAccessibleDescription(
+      /bientôt disponible/,
+    );
+    expect(fake.client!.calls).toEqual([]);
+  });
+
+  it("mauvais mot de passe : message neutre, mot de passe effacé", async () => {
+    const user = userEvent.setup();
+    render(<LoginForm returnTo="/" />);
+    await user.type(screen.getByLabelText("Adresse e-mail"), "awa@exemple.ga");
+    await user.type(screen.getByLabelText("Mot de passe"), "Faux2026");
+    await user.click(screen.getByRole("button", { name: "Se connecter" }));
+    expect(await screen.findByText("Identifiant ou mot de passe incorrect.")).toBeInTheDocument();
     expect(screen.getByLabelText("Mot de passe")).toHaveValue("");
+  });
+
+  it("blocage : délai affiché et lien vers « mot de passe oublié »", async () => {
+    const user = userEvent.setup();
+    render(<LoginForm returnTo="/" />);
+    await user.type(screen.getByLabelText("Adresse e-mail"), "awa@exemple.ga");
+    await user.type(screen.getByLabelText("Mot de passe"), "Bloque2026");
+    await user.click(screen.getByRole("button", { name: "Se connecter" }));
+    expect(await screen.findByText(/Réessayez dans 15 minutes/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Choisir un nouveau mot de passe" }),
+    ).toBeInTheDocument();
+  });
+
+  it("bon mot de passe : retour à la page d'avant", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    const user = userEvent.setup();
+    render(<LoginForm returnTo="/panier" />);
+    await user.type(screen.getByLabelText("Adresse e-mail"), "awa@exemple.ga");
+    await user.type(screen.getByLabelText("Mot de passe"), "Mangue2026");
+    await user.click(screen.getByRole("button", { name: "Se connecter" }));
+    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith("/panier"));
+    vi.unstubAllGlobals();
+  });
+
+  it("affiche l'avis « déconnecté de tous vos appareils »", () => {
+    render(<LoginForm returnTo="/" notice="Vous avez été déconnecté de tous vos appareils." />);
+    expect(screen.getByRole("status")).toHaveTextContent(/tous vos appareils/);
   });
 
   it("permet d'afficher le mot de passe", async () => {
     const user = userEvent.setup();
-    render(<LoginForm returnTo="/compte" />);
+    render(<LoginForm returnTo="/" />);
     expect(screen.getByLabelText("Mot de passe")).toHaveAttribute("type", "password");
     await user.click(screen.getByRole("button", { name: "Afficher le mot de passe" }));
     expect(screen.getByLabelText("Mot de passe")).toHaveAttribute("type", "text");
@@ -119,14 +185,18 @@ describe("Connexion", () => {
 });
 
 describe("Mot de passe oublié", () => {
-  it("identifiant → code → nouveau mot de passe", async () => {
+  async function requestCode(user: ReturnType<typeof userEvent.setup>, email = "awa@exemple.ga") {
+    await user.type(screen.getByLabelText("Adresse e-mail"), email);
+    await user.click(screen.getByRole("button", { name: "Recevoir un code" }));
+    await screen.findByText("Saisissez le code reçu");
+  }
+
+  it("e-mail → code → nouveau mot de passe → connecté", async () => {
     const user = userEvent.setup();
     render(<ForgotPasswordForm />);
-    await user.type(screen.getByLabelText("E-mail ou numéro de téléphone"), "066 12 34 56");
-    await user.click(screen.getByRole("button", { name: "Recevoir un code" }));
-    await user.click(await screen.findByLabelText("Chiffre 1"));
-    await user.paste("123456");
-    await user.click(screen.getByRole("button", { name: "Vérifier" }));
+    await requestCode(user);
+    await typeCode(user, FAKE_CODE);
+    await user.click(screen.getByRole("button", { name: "Continuer" }));
     await user.type(await screen.findByLabelText("Nouveau mot de passe"), "azerty123");
     await user.click(screen.getByRole("button", { name: "Enregistrer le mot de passe" }));
     expect(screen.getByText(/trop courant/)).toBeInTheDocument();
@@ -134,5 +204,29 @@ describe("Mot de passe oublié", () => {
     await user.type(screen.getByLabelText("Nouveau mot de passe"), "Owendo2026!");
     await user.click(screen.getByRole("button", { name: "Enregistrer le mot de passe" }));
     expect(await screen.findByText("Mot de passe modifié")).toBeInTheDocument();
+    expect(screen.getByText(/autres appareils ont été déconnectés/)).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("code faux (vérifié avec le mot de passe) : retour à l'étape du code avec le message", async () => {
+    const user = userEvent.setup();
+    render(<ForgotPasswordForm />);
+    await requestCode(user);
+    await typeCode(user, "111111");
+    await user.click(screen.getByRole("button", { name: "Continuer" }));
+    await user.type(await screen.findByLabelText("Nouveau mot de passe"), "Owendo2026!");
+    await user.click(screen.getByRole("button", { name: "Enregistrer le mot de passe" }));
+    expect(await screen.findByText(/Code incorrect/)).toBeInTheDocument();
+    expect(screen.getByText("Saisissez le code reçu")).toBeInTheDocument();
+  });
+
+  it("téléphone : bientôt disponible", async () => {
+    const user = userEvent.setup();
+    render(<ForgotPasswordForm />);
+    await user.type(screen.getByLabelText("Adresse e-mail"), "066 12 34 56");
+    await user.click(screen.getByRole("button", { name: "Recevoir un code" }));
+    expect(await screen.findByLabelText("Adresse e-mail")).toHaveAccessibleDescription(
+      /SMS sera bientôt disponible/,
+    );
   });
 });

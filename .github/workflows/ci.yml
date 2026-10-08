@@ -127,6 +127,13 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U kemdia -d kemdia"
           --health-interval 5s --health-timeout 3s --health-retries 10
+      # Boîte de test : l'API y envoie ses e-mails, les tests y lisent les codes (S4-T05)
+      mailpit:
+        image: axllent/mailpit:v1.31.4
+        env:
+          MP_MAX_MESSAGE_SIZE: "1"
+        ports:
+          - 8025:8025
     env:
       DATABASE_URL: postgresql://kemdia:kemdia_ci@localhost:5432/kemdia
     steps:
@@ -162,6 +169,8 @@ jobs:
         run: |
           pnpm --filter @kemdia/api migrate
           pnpm --filter @kemdia/api db:seed
+      - name: Compte de test des parcours (base éphémère du job uniquement)
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f apps/web/e2e/fixtures/compte-e2e.sql
       - name: Démarrer l'API
         env:
           NODE_ENV: production
@@ -171,6 +180,8 @@ jobs:
           LOG_LEVEL: info
           API_INTERNAL_KEY: ${{ env.E2E_API_KEY }}
           API_DOCS: "false"
+          EMAIL_TRANSPORT: mailpit
+          MAILPIT_URL: http://127.0.0.1:8025
         run: |
           nohup node apps/api/dist/main.js > "$RUNNER_TEMP/api.log" 2>&1 &
           for i in $(seq 1 30); do
@@ -182,6 +193,8 @@ jobs:
       - name: Parcours dans un vrai navigateur (téléphone + ordinateur), site branché sur l'API
         env:
           E2E_API_URL: http://127.0.0.1:4000
+          E2E_ACCOUNT: "1"
+          E2E_MAILPIT_URL: http://127.0.0.1:8025
         run: pnpm --filter @kemdia/web e2e
       - name: Budget de performance (téléphone, 3G, cache vide), site branché sur l'API
         env:

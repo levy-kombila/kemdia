@@ -120,7 +120,8 @@ Ces démarches prennent souvent plusieurs mois et **bloquent** des sprints si el
 Décisions : [ADR-0015](architecture/adr/0015-identite-sessions-otp.md) (sessions en base + cookie, Argon2id, codes, SMS différé),
 [ADR-0016](architecture/adr/0016-inscription-tickets-emails.md) (inscription sans énumération, tickets, e-mails),
 [ADR-0017](architecture/adr/0017-connexion-sessions.md) (connexion, sessions, blocage neutre),
-[ADR-0018](architecture/adr/0018-mot-de-passe-oublie.md) (mot de passe oublié).
+[ADR-0018](architecture/adr/0018-mot-de-passe-oublie.md) (mot de passe oublié),
+[ADR-0019](architecture/adr/0019-site-branche-identite.md) (site branché : cookies, actions serveur).
 
 | ID     | Tâche                                                                                                                                  | Statut |
 | ------ | -------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -128,7 +129,7 @@ Décisions : [ADR-0015](architecture/adr/0015-identite-sessions-otp.md) (session
 | S4-T02 | Inscription + vérification par code (BR-041, HIGH-11) ; e-mails Mailpit (local) et Brevo (démo, actif depuis le 2026-10-08) — ADR-0016 | ✅     |
 | S4-T03 | Connexion, sessions 30 jours glissants, déconnexion, blocage neutre après 3 échecs (BR-040) — ADR-0017                                 | ✅     |
 | S4-T04 | Mot de passe oublié (FR-012) : ticket + code, aucun e-mail sans compte, connecté ici et déconnecté ailleurs — ADR-0018                 | ✅     |
-| S4-T05 | Site branché sur l'API (adaptateur `AuthClient`) ; option téléphone « bientôt disponible »                                             | ⏳     |
+| S4-T05 | Site branché sur l'API : cookies `HttpOnly`, « Bonjour, Awa », Mon compte, retour à la page d'avant ; téléphone « bientôt » — ADR-0019 | ✅     |
 | S4-T06 | Rôles (RBAC) et journal d'audit                                                                                                        | ⏳     |
 | S4-T07 | CSRF, CSP à _nonce_, limitation par compte (HIGH-16, MED-05)                                                                           | ⏳     |
 | S4-T08 | Démo + dette, clôture du sprint (v0.4.0)                                                                                               | ⏳     |

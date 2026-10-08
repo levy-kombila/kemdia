@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués  |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests      |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                       |
+| **2.5** | 2026-10-08 | S4     | Site branché sur l'identité (ADR-0019) : §5.4 réécrit (actions serveur, cookies, en-tête, Mon compte), §6.2 mesures du site                 |
 | **2.4** | 2026-10-08 | S4     | Mot de passe oublié (ADR-0018) : §3.7 routes `/auth/password/*` ; §3.9 `reset_tickets`, version du mot de passe ; §6.3                      |
 | **2.3** | 2026-10-08 | S4     | Connexion et sessions (ADR-0017) : §3.7 routes `/auth/login`, `/session`, `/logout` ; §3.9 blocage par identifiant, sessions, ménage ; §6.3 |
 | **2.2** | 2026-10-07 | S4     | Inscription et e-mails (ADR-0016) : §3.4 variables e-mail, §3.7 routes `/auth/signup`, §3.9 tickets et envoi, §6.3                          |
@@ -563,28 +564,35 @@ Composants **serveur** par défaut ; seuls les éléments interactifs sont des c
 | 18 fichiers CSS + Bootstrap + Font Awesome + AOS + Swiper (CDN) | Tailwind + tokens `@theme`, lucide, défilement natif          | Aucun CDN tiers, ~36 Ko HTML compressé |
 | Géolocalisation par IP via service externe                      | Choix explicite ville/quartier                                | Pas de fuite d'IP, pas de SSRF         |
 
-### 5.4 Parcours d'identité (S2-T01)
+### 5.4 Parcours d'identité (S2-T01, branché sur l'API au S4-T05)
 
-Interface complète, branchée sur un **adaptateur de démonstration** : aucun serveur contacté, aucune donnée conservée.
-Au Sprint 4, seul l'adaptateur change (module `identity` de l'API) ; les formulaires restent identiques.
+Décision : [ADR-0019](adr/0019-site-branche-identite.md). Les formulaires parlent au port `AuthClient` ; depuis le S4-T05,
+il est branché sur des **actions serveur** qui appellent l'API avec la clé interne. Le jeton de session et les tickets
+restent dans des cookies `HttpOnly` : le navigateur ne les voit jamais.
 
 ```mermaid
 flowchart LR
     form[Formulaires<br/>connexion · inscription · oubli] --> port{{Port AuthClient<br/>lib/auth/client.ts}}
-    port -->|S2| demo[Adaptateur démo<br/>code 123456, rien n'est stocké]
-    port -.->|S4| api[Adaptateur API<br/>NestJS · module identity]
+    port --> actions[Actions serveur<br/>lib/auth/actions.ts]
+    actions --> api[Adaptateur API<br/>lib/auth/api-identity.ts]
+    api -->|clé interne| identity[API · module identity]
+    actions -->|Set-Cookie HttpOnly| cookie[(Cookies __Host-<br/>session · tickets)]
+    header[En-tête · Mon compte] -->|session.ts<br/>10 s en mémoire| api
+    proxy[proxy.ts] -->|30 jours glissants| cookie
 ```
 
-| Parcours            | Étapes                                                                                 | Règles / exigences |
-| ------------------- | -------------------------------------------------------------------------------------- | ------------------ |
-| Inscription         | Prénom, nom, **SMS ou e-mail**, mot de passe, CGV → code à 6 chiffres → compte vérifié | FR-001, BR-041     |
-| Connexion           | **Un seul champ** e-mail ou téléphone + mot de passe ; `?retour=` validé               | FR-004, MED-01     |
-| Mot de passe oublié | Identifiant → code → nouveau mot de passe                                              | FR-012             |
+| Parcours            | Étapes                                                                                                       | Règles / exigences     |
+| ------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------- |
+| Inscription         | Prénom, nom, **e-mail** (SMS « bientôt »), mot de passe, CGV → code par e-mail → **compte créé et connecté** | FR-001, BR-041         |
+| Connexion           | E-mail + mot de passe ; message neutre ; blocage avec délai ; **retour à la page d'avant** (`?retour=`)      | FR-004, BR-040, MED-01 |
+| Mot de passe oublié | E-mail → code → nouveau mot de passe → **connecté ici, déconnecté ailleurs**                                 | FR-012                 |
+| En-tête             | « Bonjour, Awa » + menu (Mon compte, Se déconnecter) ; visiteur : « Se connecter » avec retour               | —                      |
+| Mon compte          | Identité ; « Se déconnecter » ; « Déconnecter tous mes appareils » ; commandes et adresses « bientôt »       | —                      |
 
 Numéros acceptés : mobiles gabonais à 9 chiffres `06…` (Moov) et `07…` (Airtel), avec ou sans `+241` ;
 forme enregistrée `+241077123456`. L'API applique les mêmes règles (§3.9, test `identity-alignment`).
 **SMS différé** ([ADR-0015](adr/0015-identite-sessions-otp.md)) : tant que le client n'a pas choisi de fournisseur, `SMS_ENABLED=false`
-et l'option téléphone sera affichée « bientôt disponible » (S4-T05) ; l'inscription se fait par e-mail.
+et l'option téléphone est affichée « bientôt disponible » ; l'inscription et la connexion se font par e-mail.
 
 ### 5.5 Charte graphique (tokens `globals.css`)
 
@@ -701,28 +709,31 @@ flowchart LR
 
 ### 6.2 Mesures en place (S1)
 
-| Mesure                                                                                                                                     | Où                                | Faille(s) de l'ancien projet évitée(s) |
-| ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------- | -------------------------------------- |
-| Content-Security-Policy, X-Frame-Options, HSTS, Referrer-Policy, Permissions-Policy, nosniff                                               | `next.config.ts`                  | LOW-03                                 |
-| En-tête `X-Powered-By` supprimé                                                                                                            | `next.config.ts`                  | Empreinte technologique                |
-| React échappe tout texte ; aucun `innerHTML` sur des données                                                                               | Tous les composants               | CRIT-04 (XSS)                          |
-| Tri/page/recherche validés par liste blanche et bornes                                                                                     | `lib/search-params.ts`            | MED-13                                 |
-| Filtres (prix, marque, stock, promo, note) : valeurs connues uniquement, marques comparées au catalogue                                    | `lib/filters.ts`                  | MED-13                                 |
-| Commande : seuls identifiants + quantités envoyés (aucun montant) ; numéro de paiement vérifié selon l'opérateur                           | `lib/checkout.ts`                 | CRIT-01, HIGH-05                       |
-| Optimiseur d'images limité à `/images/**` (URL externes refusées : 400)                                                                    | `next.config.ts`                  | HIGH-03 (SSRF)                         |
-| `localStorage` validé champ par champ                                                                                                      | `lib/cart.ts`, `LocationProvider` | Altération du panier                   |
-| Ville choisie dans une liste fermée, aucune redirection construite depuis l'URL                                                            | `LocationModal`                   | MED-01, MED-06, MED-14                 |
-| Code catalogue `server-only`                                                                                                               | `lib/catalog/`                    | Fuite de logique côté client           |
-| Catalogue (S3-T05) : réponses de l'API validées par le contrat, délai maximal, slug vérifié avant l'appel, jamais de repli silencieux      | `lib/catalog/api-catalog.ts`      | Données altérées, SSRF, faux prix      |
-| Configuration du site vérifiée au démarrage : production sans API refusée, clé interne obligatoire, adresse sans identifiants (S3-T05)     | `lib/config/`, `instrumentation`  | CRIT-02, mauvais réglage               |
-| `.gitignore` : `.env*`, `*.sqlite3`, dumps                                                                                                 | racine                            | CRIT-02, CRIT-03, CRIT-05, LOW-02      |
-| Gitleaks (historique complet), pnpm audit, CodeQL, Dependabot, Trivy                                                                       | CI                                | CRIT-02, HIGH-07                       |
-| Pages d'erreur sans détail technique                                                                                                       | `error.tsx`                       | Fuite d'informations                   |
-| Adresse de retour après connexion limitée aux chemins internes (`parseReturnTo`)                                                           | `lib/search-params.ts`            | MED-01 (redirection ouverte)           |
-| Messages identiques que le compte existe ou non (connexion, mot de passe oublié)                                                           | `components/auth/`                | Énumération des comptes                |
-| Mot de passe : 8 caractères min., lettre + chiffre, liste des plus courants refusée ; jamais stocké dans le navigateur, effacé après envoi | `lib/auth/validation.ts`          | Mots de passe faibles                  |
-| Code OTP : 5 essais max. puis nouveau code obligatoire, renvoi après 60 s (simulé, appliqué par le serveur au S4)                          | `lib/auth/client.ts`              | MED-05, MED-10 (préparation)           |
-| Attributs `autocomplete` corrects (gestionnaires de mots de passe, code SMS auto-rempli)                                                   | Formulaires                       | Mots de passe réutilisés               |
+| Mesure                                                                                                                                       | Où                                       | Faille(s) de l'ancien projet évitée(s)    |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ----------------------------------------- |
+| Content-Security-Policy, X-Frame-Options, HSTS, Referrer-Policy, Permissions-Policy, nosniff                                                 | `next.config.ts`                         | LOW-03                                    |
+| En-tête `X-Powered-By` supprimé                                                                                                              | `next.config.ts`                         | Empreinte technologique                   |
+| React échappe tout texte ; aucun `innerHTML` sur des données                                                                                 | Tous les composants                      | CRIT-04 (XSS)                             |
+| Tri/page/recherche validés par liste blanche et bornes                                                                                       | `lib/search-params.ts`                   | MED-13                                    |
+| Filtres (prix, marque, stock, promo, note) : valeurs connues uniquement, marques comparées au catalogue                                      | `lib/filters.ts`                         | MED-13                                    |
+| Commande : seuls identifiants + quantités envoyés (aucun montant) ; numéro de paiement vérifié selon l'opérateur                             | `lib/checkout.ts`                        | CRIT-01, HIGH-05                          |
+| Optimiseur d'images limité à `/images/**` (URL externes refusées : 400)                                                                      | `next.config.ts`                         | HIGH-03 (SSRF)                            |
+| `localStorage` validé champ par champ                                                                                                        | `lib/cart.ts`, `LocationProvider`        | Altération du panier                      |
+| Ville choisie dans une liste fermée, aucune redirection construite depuis l'URL                                                              | `LocationModal`                          | MED-01, MED-06, MED-14                    |
+| Code catalogue `server-only`                                                                                                                 | `lib/catalog/`                           | Fuite de logique côté client              |
+| Catalogue (S3-T05) : réponses de l'API validées par le contrat, délai maximal, slug vérifié avant l'appel, jamais de repli silencieux        | `lib/catalog/api-catalog.ts`             | Données altérées, SSRF, faux prix         |
+| Configuration du site vérifiée au démarrage : production sans API refusée, clé interne obligatoire, adresse sans identifiants (S3-T05)       | `lib/config/`, `instrumentation`         | CRIT-02, mauvais réglage                  |
+| `.gitignore` : `.env*`, `*.sqlite3`, dumps                                                                                                   | racine                                   | CRIT-02, CRIT-03, CRIT-05, LOW-02         |
+| Gitleaks (historique complet), pnpm audit, CodeQL, Dependabot, Trivy                                                                         | CI                                       | CRIT-02, HIGH-07                          |
+| Pages d'erreur sans détail technique                                                                                                         | `error.tsx`                              | Fuite d'informations                      |
+| Adresse de retour après connexion limitée aux chemins internes (`parseReturnTo`)                                                             | `lib/search-params.ts`                   | MED-01 (redirection ouverte)              |
+| Messages identiques que le compte existe ou non (connexion, mot de passe oublié)                                                             | `components/auth/`                       | Énumération des comptes                   |
+| Mot de passe : 8 caractères min., lettre + chiffre, liste des plus courants refusée ; jamais stocké dans le navigateur, effacé après envoi   | `lib/auth/validation.ts`                 | Mots de passe faibles                     |
+| Code OTP : 5 essais max. puis nouveau code obligatoire, renvoi après 60 s — appliqués par l'API (S4-T02)                                     | API `identity`                           | MED-05, MED-10                            |
+| Jeton de session et tickets dans des cookies `__Host-` `HttpOnly` `Secure` `SameSite=Lax`, jamais dans la page ni l'adresse (S4-T05)         | `lib/auth/cookies.ts`, `actions.ts`      | Vol de session (XSS), fixation de session |
+| Actions serveur : arguments revérifiés (type, longueur, format), origine contrôlée par Next.js ; aucun secret renvoyé ni journalisé (S4-T05) | `lib/auth/actions.ts`, `api-identity.ts` | Requêtes forgées, fuite de jeton          |
+| Adresse de retour résolue comme le navigateur (`.`/`..`), jamais vers une page d'identité (S4-T05)                                           | `lib/search-params.ts`                   | MED-01                                    |
+| Attributs `autocomplete` corrects (gestionnaires de mots de passe, code SMS auto-rempli)                                                     | Formulaires                              | Mots de passe réutilisés                  |
 
 Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-django.md`](../securite/heritage-audit-django.md).
 
