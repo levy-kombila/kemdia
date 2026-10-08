@@ -1,10 +1,10 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { MAILPIT_URL, lastCode, lastEmail } from "./mailpit";
 
 /**
- * Identité branchée sur la vraie API (S4-T05). En CI, l'API n'envoie pas d'e-mails : le parcours complet
- * (code reçu) est vérifié par les tests de l'API et par l'essai réel du rapport ; ici, on vérifie ce que
- * le navigateur voit : connexion, cookie protégé, en-tête, « Mon compte », déconnexion.
+ * Identité branchée sur la vraie API (S4-T05) : connexion, cookie protégé, en-tête, « Mon compte »,
+ * déconnexion ; et, quand la boîte de test Mailpit est là (CI), les parcours complets avec le code reçu.
  *
  * Le compte de test est inséré par la CI dans sa base éphémère (e2e/fixtures/compte-e2e.sql) ;
  * sur un poste sans ce compte, les tests qui en ont besoin sont sautés.
@@ -101,4 +101,58 @@ test("mot de passe oublié : même écran du code pour une adresse sans compte",
   await page.getByLabel("Adresse e-mail").fill(unique("personne"));
   await page.getByRole("button", { name: "Recevoir un code" }).click();
   await expect(page.getByText("Saisissez le code reçu")).toBeVisible();
+});
+
+test.describe("parcours complets avec l'e-mail reçu (Mailpit)", () => {
+  test.skip(!MAILPIT_URL, "boîte de test Mailpit absente (E2E_MAILPIT_URL non défini)");
+
+  const typeCode = async (page: Page, code: string) => {
+    await page.getByLabel("Chiffre 1").click();
+    await page.keyboard.insertText(code);
+  };
+
+  test("inscription → code reçu → connecté ; puis mot de passe oublié → nouveau mot de passe", async ({
+    page,
+    browser,
+  }) => {
+    const email = unique("parcours");
+    await page.goto("/inscription");
+    await page.getByLabel("Prénom").fill("Léa");
+    await page.getByLabel("Nom", { exact: true }).fill("Mba");
+    await page.getByLabel("Adresse e-mail").fill(email);
+    await page.getByLabel("Mot de passe", { exact: true }).fill("Mangue2026");
+    await page.getByRole("checkbox").check();
+    await page.getByRole("button", { name: "Créer mon compte" }).click();
+    await expect(page.getByText("Saisissez le code reçu")).toBeVisible();
+
+    await typeCode(page, await lastCode(email, "Votre code de vérification Kemdia"));
+    await page.getByRole("button", { name: "Vérifier" }).click();
+    await expect(page.getByText("Bienvenue chez Kemdia, Léa !")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Léa/ })).toBeVisible();
+    await page.goto("/compte");
+    await expect(page.getByRole("heading", { name: "Léa Mba" })).toBeVisible();
+
+    // Mot de passe oublié depuis un autre appareil : celui-ci est déconnecté
+    const other = await browser.newContext();
+    const phone = await other.newPage();
+    await phone.goto("/mot-de-passe-oublie");
+    await phone.getByLabel("Adresse e-mail").fill(email);
+    await phone.getByRole("button", { name: "Recevoir un code" }).click();
+    await expect(phone.getByText("Saisissez le code reçu")).toBeVisible();
+    await typeCode(phone, await lastCode(email, "Votre code pour changer de mot de passe"));
+    await phone.getByRole("button", { name: "Continuer" }).click();
+    await phone.getByLabel("Nouveau mot de passe").fill("Papaye2027");
+    await phone.getByRole("button", { name: "Enregistrer le mot de passe" }).click();
+    await expect(phone.getByText("Mot de passe modifié")).toBeVisible();
+    expect((await lastEmail(email, "a été modifié")).text).toContain("déconnectés");
+    await other.close();
+
+    await page.goto("/compte");
+    await expect(page.getByRole("heading", { name: "Espace client" })).toBeVisible();
+    await page.goto("/connexion");
+    await page.getByLabel("Adresse e-mail").fill(email);
+    await page.getByLabel("Mot de passe", { exact: true }).fill("Papaye2027");
+    await page.getByRole("button", { name: "Se connecter" }).click();
+    await expect(page.getByRole("button", { name: /Léa/ })).toBeVisible();
+  });
 });

@@ -16,17 +16,17 @@ L'option téléphone est affichée « bientôt disponible ».
 
 ## 2. Fonctionnalités livrées
 
-| Élément                    | Ce que ça fait                                                                                      | Fichiers principaux                               |
-| -------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| Actions serveur            | Connexion, inscription, code, renvoi, mot de passe oublié, déconnexions                             | `lib/auth/actions.ts`                             |
-| Adaptateur API             | Appelle `/api/v1/auth/*` avec la clé interne ; réponses vérifiées par le contrat                    | `lib/auth/api-identity.ts`                        |
-| Cookies                    | Jeton de session et tickets dans des cookies `__Host-` `HttpOnly` `Secure` `SameSite=Lax`           | `lib/auth/cookies.ts`                             |
-| Cookie glissant            | Repart pour 30 jours à chaque page visitée (comme la session dans l'API)                            | `src/proxy.ts`                                    |
-| En-tête                    | « Bonjour, Awa » + menu (Mon compte, Se déconnecter) ; visiteur : « Se connecter » avec retour      | `components/layout/AccountMenu.tsx`, `Header.tsx` |
-| Mon compte                 | Identité, « Se déconnecter », « Déconnecter tous mes appareils », lien « nouveau mot de passe »     | `app/compte/page.tsx`                             |
-| Formulaires                | E-mail par défaut, SMS « bientôt » ; messages d'erreur de l'API en français, avec les délais        | `components/auth/*`, `lib/auth/messages.ts`       |
-| Retour après connexion     | Retour à la page d'avant (ex. le panier) ; sinon l'accueil                                          | `lib/search-params.ts`, `app/connexion/page.tsx`  |
-| Test de bout en bout en CI | Compte de test inséré dans la base **éphémère** du job ; connexion, cookie, Mon compte, déconnexion | `e2e/compte.spec.ts`, `.github/workflows/ci.yml`  |
+| Élément                    | Ce que ça fait                                                                                                        | Fichiers principaux                               |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Actions serveur            | Connexion, inscription, code, renvoi, mot de passe oublié, déconnexions                                               | `lib/auth/actions.ts`                             |
+| Adaptateur API             | Appelle `/api/v1/auth/*` avec la clé interne ; réponses vérifiées par le contrat                                      | `lib/auth/api-identity.ts`                        |
+| Cookies                    | Jeton de session et tickets dans des cookies `__Host-` `HttpOnly` `Secure` `SameSite=Lax`                             | `lib/auth/cookies.ts`                             |
+| Cookie glissant            | Repart pour 30 jours à chaque page visitée (comme la session dans l'API)                                              | `src/proxy.ts`                                    |
+| En-tête                    | « Bonjour, Awa » + menu (Mon compte, Se déconnecter) ; visiteur : « Se connecter » avec retour                        | `components/layout/AccountMenu.tsx`, `Header.tsx` |
+| Mon compte                 | Identité, « Se déconnecter », « Déconnecter tous mes appareils », lien « nouveau mot de passe »                       | `app/compte/page.tsx`                             |
+| Formulaires                | E-mail par défaut, SMS « bientôt » ; messages d'erreur de l'API en français, avec les délais                          | `components/auth/*`, `lib/auth/messages.ts`       |
+| Retour après connexion     | Retour à la page d'avant (ex. le panier) ; sinon l'accueil                                                            | `lib/search-params.ts`, `app/connexion/page.tsx`  |
+| Test de bout en bout en CI | Compte de test dans la base **éphémère** du job ; boîte de test **Mailpit** ajoutée au job (l'API y envoie ses codes) | `e2e/compte.spec.ts`, `.github/workflows/ci.yml`  |
 
 ## 3. Décisions techniques
 
@@ -56,12 +56,12 @@ L'option téléphone est affichée « bientôt disponible ».
 
 ## 5. Qualité
 
-| Vérification                                      | Résultat                                                                                                                                                                                   |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Tests du site                                     | 189 : adaptateur API, actions (cookies), mémoire de session, `proxy`, messages, menu, formulaires (faux client), page de connexion                                                         |
-| Bout en bout (Playwright, téléphone + ordinateur) | 10 nouveaux : connexion depuis le panier, cookie protégé, Mon compte (accessibilité), déconnexion, inscription jusqu'au code, mot de passe oublié sans compte ; suite complète OK          |
-| Essai réel (site compilé + API + PostgreSQL)      | Inscription → code → connecté ; menu ; déconnexion ; connexion depuis le panier ; 2ᵉ appareil ; mot de passe oublié → 2ᵉ appareil déconnecté et son cookie effacé ; « tous mes appareils » |
-| `typecheck`, `lint`, `build`                      | OK                                                                                                                                                                                         |
+| Vérification                                      | Résultat                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tests du site                                     | 189 : adaptateur API, actions (cookies), mémoire de session, `proxy`, messages, menu, formulaires (faux client), page de connexion                                                                                                                                                                                                                       |
+| Bout en bout (Playwright, téléphone + ordinateur) | 12 nouveaux : parcours complets avec le **vrai code lu dans la boîte de test Mailpit** (inscription → connecté ; mot de passe oublié depuis un 2ᵉ appareil → le 1ᵉʳ est déconnecté), connexion depuis le panier, cookie protégé, Mon compte (accessibilité), déconnexion, inscription jusqu'au code, mot de passe oublié sans compte ; suite complète OK |
+| Essai réel (site compilé + API + PostgreSQL)      | Inscription → code → connecté ; menu ; déconnexion ; connexion depuis le panier ; 2ᵉ appareil ; mot de passe oublié → 2ᵉ appareil déconnecté et son cookie effacé ; « tous mes appareils »                                                                                                                                                               |
+| `typecheck`, `lint`, `build`                      | OK                                                                                                                                                                                                                                                                                                                                                       |
 
 ## 6. Captures d'écran
 
