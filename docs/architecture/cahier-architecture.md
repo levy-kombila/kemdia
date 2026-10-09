@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués  |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests      |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                       |
+| **2.8** | 2026-10-09 | S4     | Fin du Sprint 4 (v0.4.0) : écran de réveil de la démo (ADR-0022, §5.2, §5.9), colonnes obsolètes ignorées (§3.9) ; rapport de clôture       |
 | **2.7** | 2026-10-09 | S4     | CSRF, CSP à nonce, limites (ADR-0021) : §3.7 limitation de débit, §5.2 rendu à la demande, §5.4 proxy, §5.9 `CLIENT_IP_HEADER`, §6          |
 | **2.6** | 2026-10-08 | S4     | Rôles et journal d'audit (ADR-0020) : §3.3 module `audit`, §3.5 schéma `audit`, §3.7 routes `/admin`, §3.9 rôles, §3.10 (nouvelle), §6      |
 | **2.5** | 2026-10-08 | S4     | Site branché sur l'identité (ADR-0019) : §5.4 réécrit (actions serveur, cookies, en-tête, Mon compte), §6.2 mesures du site                 |
@@ -490,15 +491,15 @@ src/modules/identity/
 
 Tables du schéma `identity` :
 
-| Table            | Contenu                                                                                                                | Contraintes SQL ajoutées à la main                                                                |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `accounts`       | Prénom, nom, e-mail et/ou téléphone (uniques), hachage Argon2id, version du mot de passe, statut, vérifications        | Au moins un identifiant ; e-mail en minuscules ; téléphone `+2410[67]` ; actif ⇒ vérifié          |
-| `otp_challenges` | Usage (inscription / oubli), canal, destination, **empreinte** du code, essais, expiration                             | Empreinte hexadécimale de 64 caractères ; 0 à 5 essais                                            |
-| `sessions`       | Compte, **empreinte** du jeton (unique), expiration, dernière activité, révocation, version du mot de passe            | Empreinte hexadécimale ; suppression en cascade avec le compte                                    |
-| `reset_tickets`  | **Empreinte** du ticket, destination, compte (vide = leurre), expiration (S4-T04)                                      | Empreinte hexadécimale ; expiration après création ; suppression en cascade avec le compte        |
-| `login_guards`   | Identifiant (compte ou pas), essais, fin du blocage, dernière tentative (S4-T03)                                       | Essais ≥ 0 ; écrit seulement par `INSERT … ON CONFLICT DO UPDATE`                                 |
-| `signup_tickets` | **Empreinte** du ticket, destination, inscription (prénom, nom, hachage ; vide = leurre), expiration (S4-T02)          | Empreinte hexadécimale ; inscription complète ou vide ; une seule par destination                 |
-| `account_roles`  | Compte, rôle (`VENDOR`, `MODERATOR`, `ADMIN`), date, administrateur qui l'a accordé (vide = commande serveur) (S4-T06) | Un rôle par ligne (clé compte + rôle) ; jamais accordé par son titulaire ; cascade avec le compte |
+| Table            | Contenu                                                                                                                                                                                                       | Contraintes SQL ajoutées à la main                                                                |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `accounts`       | Prénom, nom, e-mail et/ou téléphone (uniques), hachage Argon2id, version du mot de passe, statut, vérifications ; `failed_logins` / `locked_until` ignorées depuis le S4-T08, supprimées au S5-T01 (ADR-0022) | Au moins un identifiant ; e-mail en minuscules ; téléphone `+2410[67]` ; actif ⇒ vérifié          |
+| `otp_challenges` | Usage (inscription / oubli), canal, destination, **empreinte** du code, essais, expiration                                                                                                                    | Empreinte hexadécimale de 64 caractères ; 0 à 5 essais                                            |
+| `sessions`       | Compte, **empreinte** du jeton (unique), expiration, dernière activité, révocation, version du mot de passe                                                                                                   | Empreinte hexadécimale ; suppression en cascade avec le compte                                    |
+| `reset_tickets`  | **Empreinte** du ticket, destination, compte (vide = leurre), expiration (S4-T04)                                                                                                                             | Empreinte hexadécimale ; expiration après création ; suppression en cascade avec le compte        |
+| `login_guards`   | Identifiant (compte ou pas), essais, fin du blocage, dernière tentative (S4-T03)                                                                                                                              | Essais ≥ 0 ; écrit seulement par `INSERT … ON CONFLICT DO UPDATE`                                 |
+| `signup_tickets` | **Empreinte** du ticket, destination, inscription (prénom, nom, hachage ; vide = leurre), expiration (S4-T02)                                                                                                 | Empreinte hexadécimale ; inscription complète ou vide ; une seule par destination                 |
+| `account_roles`  | Compte, rôle (`VENDOR`, `MODERATOR`, `ADMIN`), date, administrateur qui l'a accordé (vide = commande serveur) (S4-T06)                                                                                        | Un rôle par ligne (clé compte + rôle) ; jamais accordé par son titulaire ; cascade avec le compte |
 
 **Rôles (S4-T06, [ADR-0020](adr/0020-roles-journal-audit.md))** : `client` (tout compte actif, jamais stocké), `vendor`, `moderator`, `admin`,
 cumulables ; `admin` a les droits de `moderator`. Un administrateur accorde ou retire `vendor` / `moderator` à un autre compte ; `admin`
@@ -600,16 +601,17 @@ packages/contracts/          Schémas Zod et constantes partagés avec l'API ; d
 
 ### 5.2 Rendu des pages
 
-| Page                                        | Mode                                                                  | Raison                                                              |
-| ------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| **Toutes les pages (S4-T07)**               | **À la demande** (`connection()` dans le layout)                      | CSP à nonce : chaque page porte le nonce de SA requête (ADR-0021)   |
-| Compte, favoris, commande, pages d'identité | À la demande (statiques avant le S4-T07)                              | Panier et favoris remplis côté navigateur                           |
-| Toute page qui lit le catalogue (S3-T05)    | À la demande (`connection()`)                                         | Aucun appel à l'API pendant `next build` (§5.9) ; cache de 60 s     |
-| Accueil, fiche produit                      | À la demande (S2-T05)                                                 | Liens absolus des aperçus WhatsApp tirés de `SITE_URL` au démarrage |
-| Accueil — bas de page (S3-T08)              | Zones `<Suspense>` envoyées au fil de l'eau                           | Haut de page envoyé sans attendre ; voir ci-dessous                 |
-| Aperçus `opengraph-image`                   | À la demande (S3-T05)                                                 | Image 1200 × 630 ; prix lu dans l'API                               |
-| Catégorie, recherche, promotions            | Dynamique                                                             | Dépend de `?tri=`, `?page=` et des filtres                          |
-| Infos                                       | Liste fermée (`dynamicParams = false`), à la demande depuis le S4-T07 | Toute autre URL → 404                                               |
+| Page                                        | Mode                                                                                                            | Raison                                                                                       |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **Toutes les pages (S4-T07)**               | **À la demande** (`connection()` dans le layout)                                                                | CSP à nonce : chaque page porte le nonce de SA requête (ADR-0021)                            |
+| Compte, favoris, commande, pages d'identité | À la demande (statiques avant le S4-T07)                                                                        | Panier et favoris remplis côté navigateur                                                    |
+| **Démo seulement (S4-T08)**                 | En-tête et page dans des `<Suspense>` : en-tête de réserve + « La boutique se réveille… » envoyés tout de suite | API endormie (~1 min) ; ailleurs rendu bloquant pour garder les vrais 404/500/307 (ADR-0022) |
+| Toute page qui lit le catalogue (S3-T05)    | À la demande (`connection()`)                                                                                   | Aucun appel à l'API pendant `next build` (§5.9) ; cache de 60 s                              |
+| Accueil, fiche produit                      | À la demande (S2-T05)                                                                                           | Liens absolus des aperçus WhatsApp tirés de `SITE_URL` au démarrage                          |
+| Accueil — bas de page (S3-T08)              | Zones `<Suspense>` envoyées au fil de l'eau                                                                     | Haut de page envoyé sans attendre ; voir ci-dessous                                          |
+| Aperçus `opengraph-image`                   | À la demande (S3-T05)                                                                                           | Image 1200 × 630 ; prix lu dans l'API                                                        |
+| Catégorie, recherche, promotions            | Dynamique                                                                                                       | Dépend de `?tri=`, `?page=` et des filtres                                                   |
+| Infos                                       | Liste fermée (`dynamicParams = false`), à la demande depuis le S4-T07                                           | Toute autre URL → 404                                                                        |
 
 Composants **serveur** par défaut ; seuls les éléments interactifs sont des composants **client**
 (`"use client"`) : panier, mini-panier, menu, modale de ville, galerie, compte à rebours, tri.
@@ -774,6 +776,8 @@ flowchart LR
 - Variables : `API_URL`, `API_INTERNAL_KEY` (secret), `CATALOG_TIMEOUT_MS` (5000 par défaut, 90 000 au plus),
   `CLIENT_IP_HEADER` (S4-T07, vide par défaut : en-tête de l'hébergeur qui porte l'adresse du visiteur ; `x-forwarded-for` → dernière adresse ;
   nom invalide → refus de démarrer) — voir `apps/web/.env.example`.
+- **Démo : écran de réveil (S4-T08, ADR-0022)** : avec `APP_ENV=demo`, la page part tout de suite (en-tête de réserve, puis « La boutique se réveille… »
+  après 2 s si l'API dort) et se complète seule ; `robots.txt` interdit l'indexation de la démo.
 - **Démo Render (S3-T07)** : au démarrage, le site réveille l'API en arrière-plan (`lib/config/wake-api.ts`, seulement avec `APP_ENV=demo`) ;
   `CATALOG_TIMEOUT_MS=90000` (le maximum, depuis la clôture du S3) laisse au premier visiteur le temps du réveil. `/api/health` du site indique `"catalog": "api"` (toujours, depuis le S3-T08 ; gardé pour le contrôle de la démo).
 
