@@ -5,6 +5,11 @@
 
 /** En-tête par lequel le serveur du site s'identifie auprès de l'API (exempté de la limitation de débit). */
 export const INTERNAL_KEY_HEADER = "x-kemdia-internal-key";
+/**
+ * Adresse IP du VISITEUR, transmise par le serveur du site (S4-T07, ADR-0021) : l'API ne la croit
+ * qu'accompagnée de la bonne clé interne (limites par visiteur, journal d'audit).
+ */
+export const CLIENT_IP_HEADER = "x-kemdia-client-ip";
 
 /** Tris disponibles. « ventes » : les plus demandés d'abord (nombre d'avis, en attendant les ventes réelles du S5). */
 export const SORT_KEYS = [
@@ -83,6 +88,8 @@ export const IDENTITY_ERROR_CODES = [
   "ROLE_SUR_SOI_INTERDIT",
   "COMPTE_INTROUVABLE",
   "COMPTE_INACTIF",
+  // Limites par compte (S4-T07)
+  "TROP_DE_REQUETES",
 ] as const;
 export type IdentityErrorCode = (typeof IDENTITY_ERROR_CODES)[number];
 

@@ -1,3 +1,4 @@
+import { ClientIpConfigError, clientIpHeaderName } from "@/lib/security/client-ip";
 import { describeCatalogSource, resolveCatalogSource, SiteConfigError } from "./catalog-source";
 import { wakeCatalogApi } from "./wake-api";
 
@@ -10,9 +11,13 @@ export function checkConfigurationAtStartup(): void {
   try {
     const source = resolveCatalogSource(process.env);
     console.log(`Kemdia — catalogue : ${describeCatalogSource(source)}`);
+    const ipHeader = clientIpHeaderName(process.env);
+    console.log(
+      `Kemdia — adresse des visiteurs transmise à l'API : ${ipHeader ? `oui (${ipHeader})` : "non (CLIENT_IP_HEADER vide)"}`,
+    );
     void wakeCatalogApi(process.env.APP_ENV, source);
   } catch (error) {
-    if (error instanceof SiteConfigError) {
+    if (error instanceof SiteConfigError || error instanceof ClientIpConfigError) {
       console.error(error.message);
       process.exit(1);
     }

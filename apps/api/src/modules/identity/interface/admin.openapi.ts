@@ -16,7 +16,7 @@ const common = {
   "403": problem(
     "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
   ),
-  "429": problem("Plus de 30 requêtes par minute"),
+  "429": problem("Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)"),
 };
 const RULES = [
   "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes** (sinon `RECONNEXION_REQUISE` : se reconnecter).",

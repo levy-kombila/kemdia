@@ -2,6 +2,7 @@ import { VersioningType } from "@nestjs/common";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import helmet from "helmet";
 import type { AppConfig } from "../config/env.js";
+import { clientMiddleware } from "./client.js";
 import { ProblemDetailsFilter } from "./problem-details.filter.js";
 
 /** Taille maximale d'un corps de requête JSON : une API de catalogue et de commande n'a pas besoin de plus. */
@@ -29,10 +30,12 @@ export function configureApp(app: NestExpressApplication, config: AppConfig): vo
     }),
   );
   app.useBodyParser("json", { limit: BODY_LIMIT });
+  // Qui appelle : visiteur transmis par le site (clé interne) ou adresse directe (S4-T07)
+  app.use(clientMiddleware(config));
 
   app.enableCors(
     config.CORS_ORIGINS.length
-      ? { origin: [...config.CORS_ORIGINS], methods: ["GET", "POST", "PATCH", "DELETE"] }
+      ? { origin: [...config.CORS_ORIGINS], methods: ["GET", "POST", "PUT", "PATCH", "DELETE"] }
       : { origin: false },
   );
 

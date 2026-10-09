@@ -6,7 +6,12 @@ export { IdentityModule } from "./identity.module.js";
 export { OtpService, type IssuedOtp } from "./application/otp.service.js";
 export { SignupService } from "./application/signup.service.js";
 export { SessionService, type AuthenticatedSession } from "./application/session.service.js";
-export { SessionGuard, CurrentSession } from "./interface/session.guard.js";
+export {
+  SessionGuard,
+  CurrentSession,
+  AccountRateLimit,
+  DEFAULT_ACCOUNT_LIMIT,
+} from "./interface/session.guard.js";
 export { Authorize, RoleGuard } from "./interface/role.guard.js";
 export { RoleService } from "./application/role.service.js";
 export { ROLES, hasRole, type Role } from "./domain/role.js";

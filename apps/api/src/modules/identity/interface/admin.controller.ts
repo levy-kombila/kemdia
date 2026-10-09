@@ -36,7 +36,7 @@ import type { AuthenticatedSession } from "../application/session.service.js";
 import type { AdminAccountView } from "../domain/account.js";
 import { withIdentityErrors } from "./identity-http-errors.js";
 import { Authorize } from "./role.guard.js";
-import { CurrentSession } from "./session.guard.js";
+import { AccountRateLimit, CurrentSession } from "./session.guard.js";
 
 function presentAccount(account: AdminAccountView): AdminAccount {
   return { ...account, createdAt: account.createdAt.toISOString() };
@@ -76,12 +76,14 @@ export function decodeCursor(raw: string): AuditCursor {
  *
  * - Réservé aux administrateurs, avec une connexion de moins de 15 minutes (`@Authorize`).
  * - Le rôle `admin` ne s'accorde jamais ici (commande serveur `admin:grant`) ; personne ne change ses propres rôles.
- * - Jamais mis en cache ; limite de 30 requêtes par minute.
+ * - Jamais mis en cache ; limite de 30 requêtes par minute, par adresse ET par compte.
  * - Les écrans d'administration du site arrivent au S6 avec la double authentification (MED-15).
  */
 @Controller("admin")
 @Authorize("admin", { recentLogin: true })
 @Throttle({ default: { limit: 30, ttl: 60_000 } })
+// Aussi par compte (S4-T07) : la limite par adresse ne s'applique pas aux appels du site sans visiteur
+@AccountRateLimit(30)
 export class AdminController {
   constructor(
     private readonly roles: RoleService,

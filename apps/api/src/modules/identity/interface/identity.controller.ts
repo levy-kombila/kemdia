@@ -44,7 +44,7 @@ import {
 } from "../application/session.service.js";
 import { SignupService } from "../application/signup.service.js";
 import { withIdentityErrors } from "./identity-http-errors.js";
-import { bearerToken, CurrentSession, SessionGuard } from "./session.guard.js";
+import { AccountRateLimit, bearerToken, CurrentSession, SessionGuard } from "./session.guard.js";
 
 function presentOpened(opened: OpenedSession): OpenedSessionView {
   return {
@@ -142,6 +142,8 @@ export class IdentityController {
   @HttpCode(HttpStatus.OK)
   @Header("Cache-Control", "no-store")
   @UseGuards(SessionGuard)
+  // 5 par minute et par compte (S4-T07) : le journal d'audit ne se remplit pas de clics répétés
+  @AccountRateLimit(5)
   async logoutAll(
     @CurrentSession() session: AuthenticatedSession,
     @Req() req: Request,

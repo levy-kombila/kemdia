@@ -53,6 +53,30 @@ describe("adaptateur API de l'identité", () => {
     });
   });
 
+  it("adresse du visiteur transmise quand elle est connue (S4-T07), jamais sinon", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(json(200, OPENED)));
+    const options = { url: "http://api:4000", key: KEY, timeoutMs: 1000, fetch };
+    await createIdentityApi({ ...options, visitorIp: () => Promise.resolve("203.0.113.5") }).login(
+      "a@b.ga",
+      "x",
+      null,
+    );
+    expect(fetch.mock.calls[0]![1]?.headers).toMatchObject({ "x-kemdia-client-ip": "203.0.113.5" });
+    await createIdentityApi({ ...options, visitorIp: () => Promise.resolve(null) }).login(
+      "a@b.ga",
+      "x",
+      null,
+    );
+    expect(fetch.mock.calls[1]![1]?.headers).not.toHaveProperty("x-kemdia-client-ip");
+    // Lecture impossible (hors requête) : l'appel part quand même, sans adresse
+    await createIdentityApi({ ...options, visitorIp: () => Promise.reject(new Error("x")) }).login(
+      "a@b.ga",
+      "x",
+      null,
+    );
+    expect(fetch.mock.calls[2]![1]?.headers).not.toHaveProperty("x-kemdia-client-ip");
+  });
+
   it("erreur métier : son code et le délai Retry-After", async () => {
     const { identity } = api(problem(429, "COMPTE_BLOQUE", { "retry-after": "900" }));
     expect(await identity.login("a@b.ga", "x", null)).toEqual({

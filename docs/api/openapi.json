@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "1.5.0",
-    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration."
+    "version": "1.6.0",
+    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne."
   },
   "servers": [
     {
@@ -1013,19 +1013,11 @@
             }
           },
           "429": {
-            "description": "Trop de demandes : `ENVOI_TROP_RAPPROCHE` (60 s entre deux codes), `TROP_D_ENVOIS` (5 par heure), `TROP_D_ESSAIS` (5 essais : redemander un code) ou limite par adresse IP",
+            "description": "`TROP_DE_REQUETES` : plus de 5 fois par minute pour ce compte (ou limite par adresse)",
             "content": {
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "Retry-After": {
-                "description": "Secondes avant de réessayer (limites d'envoi et par adresse IP ; absent pour `TROP_D_ESSAIS`)",
-                "schema": {
-                  "type": "integer"
                 }
               }
             }
@@ -1351,7 +1343,7 @@
             }
           },
           "429": {
-            "description": "Plus de 30 requêtes par minute",
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1458,7 +1450,7 @@
             }
           },
           "429": {
-            "description": "Plus de 30 requêtes par minute",
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1553,7 +1545,7 @@
             }
           },
           "429": {
-            "description": "Plus de 30 requêtes par minute",
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1657,7 +1649,7 @@
             }
           },
           "429": {
-            "description": "Plus de 30 requêtes par minute",
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2319,7 +2311,8 @@
               "ROLE_NON_ATTRIBUABLE",
               "ROLE_SUR_SOI_INTERDIT",
               "COMPTE_INTROUVABLE",
-              "COMPTE_INACTIF"
+              "COMPTE_INACTIF",
+              "TROP_DE_REQUETES"
             ]
           },
           "requestId": {
