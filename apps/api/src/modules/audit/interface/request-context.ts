@@ -12,7 +12,8 @@ const REQUEST_ID = /^[\w.-]{1,64}$/;
  */
 export function auditContextOf(req: Request): AuditContext {
   const client = clientOf(req);
-  const ip = client && client.ip !== "inconnue" ? client.ip : normalizeIp(req.ip);
+  // Visiteur annoncé mais illisible : pas d'adresse plutôt que celle du serveur du site
+  const ip = client ? normalizeIp(client.ip) : normalizeIp(req.ip);
   const id: unknown = (req as Request & { id?: unknown }).id;
   const requestId = typeof id === "string" && REQUEST_ID.test(id) ? id : null;
   return { ip, requestId };

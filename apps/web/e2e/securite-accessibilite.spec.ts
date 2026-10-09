@@ -16,7 +16,14 @@ test("CSP à nonce : chaque page a son nonce, tous ses scripts le portent, aucun
   request,
 }) => {
   const nonces = new Set<string>();
-  for (const path of ["/", "/compte", "/connexion"]) {
+  const paths = [
+    "/",
+    "/compte",
+    "/connexion",
+    "/produit/ecouteurs-sans-fil-pro-beats-noir",
+    "/page-qui-n-existe-pas",
+  ];
+  for (const path of paths) {
     const res = await request.get(path);
     const csp = res.headers()["content-security-policy"] ?? "";
     const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
@@ -27,23 +34,32 @@ test("CSP à nonce : chaque page a son nonce, tous ses scripts le portent, aucun
       path,
     ).not.toContain("'unsafe-inline'");
     nonces.add(nonce!);
-    const scripts = (await res.text()).match(/<script\b[^>]*>/g) ?? [];
+    // Blocs de données (JSON-LD) : jamais exécutés, la CSP ne les concerne pas
+    const scripts = ((await res.text()).match(/<script\b[^>]*>/g) ?? []).filter(
+      (tag) => !tag.includes('type="application/ld+json"'),
+    );
     expect(scripts.length, path).toBeGreaterThan(0);
     for (const tag of scripts) expect(tag, path).toContain(`nonce="${nonce}"`);
   }
-  expect(nonces.size).toBe(3);
+  expect(nonces.size).toBe(paths.length);
 });
 
 test("CSRF : une action envoyée depuis un autre site, ou sans origine, est refusée (403)", async ({
   request,
   baseURL,
 }) => {
-  for (const origin of ["https://pirate.example", undefined]) {
-    const res = await request.post("/connexion", {
+  for (const [path, origin] of [
+    ["/connexion", "https://pirate.example"],
+    ["/connexion", undefined],
+    // Next.js exécute une action sur n'importe quelle adresse : images et fichiers aussi (relecture S4-T07)
+    ["/favicon.ico", undefined],
+    ["/images/inexistante.png", undefined],
+  ] as const) {
+    const res = await request.post(path, {
       headers: { "next-action": "0".repeat(42), ...(origin ? { origin } : {}) },
       data: "[]",
     });
-    expect(res.status(), origin ?? "sans origine").toBe(403);
+    expect(res.status(), `${path} ${origin ?? "sans origine"}`).toBe(403);
   }
   // La même requête venue du site atteint Next.js (action inconnue : pas un 403)
   const own = await request.post("/connexion", {

@@ -27,5 +27,7 @@ describe("adresse du visiteur transmise à l'API (S4-T07)", () => {
     expect(visitorIp(h({ "true-client-ip": "1.1.1.1, 2.2.2.2" }), "true-client-ip")).toBeNull();
     expect(visitorIp(h({ "true-client-ip": "pirate" }), "true-client-ip")).toBeNull();
     expect(visitorIp(h({}), "true-client-ip")).toBeNull();
+    // Zone IPv6 : refusée (la base ne l'accepte pas)
+    expect(visitorIp(h({ "true-client-ip": "fe80::1%eth0" }), "true-client-ip")).toBeNull();
   });
 });

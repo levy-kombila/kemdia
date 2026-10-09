@@ -8,8 +8,10 @@ import { isIP } from "node:net";
  * - `x-forwarded-for` : on prend la DERNIÈRE adresse, ajoutée par le relais de l'hébergeur (les précédentes
  *   peuvent être inventées par le visiteur) ;
  * - autre en-tête (ex. `true-client-ip`) : une seule adresse attendue, sinon rien.
- * Toute valeur qui n'est pas une adresse IP est ignorée.
+ * Toute valeur qui n'est pas une adresse IP est ignorée. Réglage actif mais adresse illisible : on envoie
+ * {@link UNKNOWN_VISITOR}, et l'API range ces appels dans un compteur commun (la limite ne saute jamais).
  */
+export const UNKNOWN_VISITOR = "inconnue";
 const HEADER_NAME = /^[a-z0-9-]{1,64}$/;
 
 export class ClientIpConfigError extends Error {}
@@ -36,5 +38,6 @@ export function visitorIp(headers: Headers, headerName: string | null): string |
     .filter(Boolean);
   const candidate =
     headerName === "x-forwarded-for" ? parts.at(-1) : parts.length === 1 ? parts[0] : undefined;
-  return candidate && isIP(candidate) ? candidate : null;
+  // Pas de « zone » IPv6 (fe80::1%eth0) : PostgreSQL la refuse (relecture S4-T07)
+  return candidate && !candidate.includes("%") && isIP(candidate) ? candidate : null;
 }

@@ -45,8 +45,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Pages ET routes du site (le contrôle CSRF doit tout couvrir) ; ni fichiers statiques ni images
-  matcher: [
-    "/((?!_next/static|_next/image|images/|fonts/|favicon\\.ico$|icon\\.svg$|robots\\.txt$|sitemap\\.xml$|.*opengraph-image).*)",
-  ],
+  // TOUTES les adresses sauf les fichiers de construction : Next.js exécute une action serveur sur n'importe quelle
+  // adresse (même une image ou une page 404), le contrôle CSRF doit donc tout couvrir (relecture S4-T07)
+  matcher: ["/((?!_next/static|_next/image).*)"],
 };

@@ -95,13 +95,24 @@ describe("limites par visiteur et par compte (HTTP)", () => {
     await app.close();
   });
 
-  it("le site pour un visiteur : 10 connexions par minute PAR VISITEUR, les autres visiteurs passent", async () => {
+  it("le site pour un visiteur : 30 connexions par minute PAR VISITEUR (10 × 3, CGNAT), les autres passent", async () => {
     const visitorA = { ...SITE, "x-kemdia-client-ip": "203.0.113.10" };
-    for (let i = 0; i < 10; i++) expect((await login(visitorA)).status).toBe(401);
+    for (let i = 0; i < 30; i++) expect((await login(visitorA)).status).toBe(401);
     const blocked = await login(visitorA);
     expect(blocked.status).toBe(429);
     expect(blocked.headers["retry-after"]).toBeDefined();
+    expect(ProblemDetailsSchema.parse(blocked.body).code).toBe("TROP_DE_REQUETES");
     expect((await login({ ...SITE, "x-kemdia-client-ip": "203.0.113.11" })).status).toBe(401);
+  });
+
+  it("IPv6 : changer d'adresse dans le même bloc /64 ne contourne pas la limite", async () => {
+    const statuses: number[] = [];
+    for (let i = 1; i <= 31; i++) {
+      statuses.push(
+        (await login({ ...SITE, "x-kemdia-client-ip": `2001:db8:1:2::${i.toString(16)}` })).status,
+      );
+    }
+    expect(statuses.at(-1)).toBe(429);
   });
 
   it("l'en-tête visiteur sans la clé interne ne sert à rien (on ne change pas d'adresse pour contourner)", async () => {

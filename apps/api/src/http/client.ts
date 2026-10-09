@@ -21,9 +21,9 @@ export interface ApiClient {
 
 type RequestWithClient = Request & { kemdiaClient?: ApiClient };
 
-/** IPv4 écrite à l'intérieur d'une IPv6 (« ::ffff:1.2.3.4ʺ) → « 1.2.3.4 ». */
+/** IPv4 écrite à l'intérieur d'une IPv6 (« ::ffff:1.2.3.4 ») → « 1.2.3.4 ». Zone IPv6 (« %eth0 ») refusée. */
 export function normalizeIp(raw: string | undefined): string | null {
-  if (!raw) return null;
+  if (!raw || raw.includes("%")) return null;
   const value = raw.trim().toLowerCase();
   const ip = value.startsWith("::ffff:") && isIP(value.slice(7)) === 4 ? value.slice(7) : value;
   return isIP(ip) ? ip : null;
@@ -34,10 +34,32 @@ export function resolveClient(req: Request, config: AppConfig): ApiClient {
   const fallback = normalizeIp(req.ip) ?? "inconnue";
   if (!viaSite) return { ip: fallback, viaSite, visitorKnown: true };
   const header = req.headers[CLIENT_IP_HEADER];
-  const visitor = typeof header === "string" ? normalizeIp(header) : null;
-  return visitor
-    ? { ip: visitor, viaSite, visitorKnown: true }
-    : { ip: fallback, viaSite, visitorKnown: false };
+  if (typeof header !== "string") return { ip: fallback, viaSite, visitorKnown: false };
+  // Le site dit agir pour un visiteur dont il n'a pas pu lire l'adresse : compteur commun « inconnue »,
+  // jamais d'exemption (relecture S4-T07)
+  const visitor = normalizeIp(header);
+  return { ip: visitor ?? UNKNOWN_VISITOR, viaSite, visitorKnown: true };
+}
+
+/** Visiteur annoncé par le site sans adresse lisible : tous partagent ce compteur. */
+export const UNKNOWN_VISITOR = "inconnue";
+
+/**
+ * Clé du compteur par adresse : une IPv4 entière, mais une IPv6 regroupée par /64 (un abonné reçoit en général
+ * tout un bloc /64 et pourrait sinon changer d'adresse à chaque essai — relecture S4-T07).
+ */
+export function rateKey(ip: string): string {
+  if (isIP(ip) !== 6) return ip;
+  const [head = "", tail = ""] = ip.split("::");
+  const left = head ? head.split(":") : [];
+  const right = tail ? tail.split(":") : [];
+  const groups = ip.includes("::")
+    ? [...left, ...Array<string>(8 - left.length - right.length).fill("0"), ...right]
+    : left;
+  return `${groups
+    .slice(0, 4)
+    .map((g) => parseInt(g || "0", 16).toString(16))
+    .join(":")}::/64`;
 }
 
 /** Intergiciel Express posé par configureApp, avant toute route. */

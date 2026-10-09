@@ -1,7 +1,7 @@
 import type { Request } from "express";
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../config/env.js";
-import { normalizeIp, resolveClient } from "./client.js";
+import { normalizeIp, rateKey, resolveClient } from "./client.js";
 
 const KEY = "k".repeat(40);
 const config = loadConfig({ NODE_ENV: "test", API_INTERNAL_KEY: KEY });
@@ -33,19 +33,29 @@ describe("qui appelle l'API (S4-T07)", () => {
     ).toEqual({ ip: "2001:db8::1", viaSite: true, visitorKnown: true });
   });
 
-  it("le site sans visiteur, ou avec une adresse illisible : visiteur inconnu", () => {
-    const cases: Record<string, string>[] = [
-      { "x-kemdia-internal-key": KEY },
-      { "x-kemdia-internal-key": KEY, "x-kemdia-client-ip": "1.2.3.4, 5.6.7.8" },
-      { "x-kemdia-internal-key": KEY, "x-kemdia-client-ip": "<script>" },
-    ];
-    for (const headers of cases) {
-      expect(resolveClient(req(headers), config)).toEqual({
-        ip: "10.0.0.9",
-        viaSite: true,
-        visitorKnown: false,
-      });
+  it("le site sans visiteur (lecture du catalogue) : pas de visiteur, pas de limite par adresse", () => {
+    expect(resolveClient(req({ "x-kemdia-internal-key": KEY }), config)).toEqual({
+      ip: "10.0.0.9",
+      viaSite: true,
+      visitorKnown: false,
+    });
+  });
+
+  it("le site annonce un visiteur illisible : compteur commun « inconnue », jamais d'exemption", () => {
+    for (const value of ["1.2.3.4, 5.6.7.8", "<script>", "inconnue", "fe80::1%eth0"]) {
+      expect(
+        resolveClient(req({ "x-kemdia-internal-key": KEY, "x-kemdia-client-ip": value }), config),
+      ).toEqual({ ip: "inconnue", viaSite: true, visitorKnown: true });
     }
+  });
+
+  it("compteur par adresse : IPv4 entière, IPv6 regroupée par /64 (un abonné a tout un bloc)", () => {
+    expect(rateKey("203.0.113.4")).toBe("203.0.113.4");
+    expect(rateKey("2001:db8::1")).toBe(rateKey("2001:db8::12"));
+    expect(rateKey("2001:db8:0:0:abcd::1")).toBe("2001:db8:0:0::/64");
+    expect(rateKey("2001:db8:0:1::1")).not.toBe(rateKey("2001:db8:0:2::1"));
+    expect(rateKey("::1")).toBe("0:0:0:0::/64");
+    expect(rateKey("inconnue")).toBe("inconnue");
   });
 
   it("adresses : IPv4 dans IPv6 ramenée en IPv4, le reste refusé", () => {
@@ -53,5 +63,6 @@ describe("qui appelle l'API (S4-T07)", () => {
     expect(normalizeIp(" 203.0.113.4 ")).toBe("203.0.113.4");
     expect(normalizeIp("pirate.example")).toBeNull();
     expect(normalizeIp(undefined)).toBeNull();
+    expect(normalizeIp("::1%aaaa")).toBeNull();
   });
 });

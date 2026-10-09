@@ -1,16 +1,24 @@
-import { ExecutionContext, HttpException, HttpStatus, Inject, Injectable } from "@nestjs/common";
+import { ExecutionContext, HttpStatus, Inject, Injectable } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import {
   InjectThrottlerOptions,
   InjectThrottlerStorage,
   ThrottlerGuard,
   type ThrottlerModuleOptions,
+  type ThrottlerRequest,
   type ThrottlerStorage,
 } from "@nestjs/throttler";
 import type { Request } from "express";
 import { APP_CONFIG } from "../config/config.module.js";
 import type { AppConfig } from "../config/env.js";
-import { clientOf, resolveClient } from "./client.js";
+import { BusinessException } from "./business-exception.js";
+import { clientOf, rateKey, resolveClient } from "./client.js";
+
+/**
+ * Visiteurs transmis par le site : limites ×3. Au Gabon, les opérateurs mobiles placent souvent beaucoup
+ * d'abonnés derrière une même adresse (CGNAT) ; la connexion reste protégée par le blocage par identifiant (BR-040).
+ */
+export const SITE_VISITOR_FACTOR = 3;
 
 export { INTERNAL_KEY_HEADER, isInternalKey } from "./internal-key.js";
 
@@ -43,7 +51,13 @@ export class KemdiaThrottlerGuard extends ThrottlerGuard {
   }
 
   protected override getTracker(req: Record<string, unknown>): Promise<string> {
-    return Promise.resolve(this.client(req as unknown as Request).ip);
+    return Promise.resolve(rateKey(this.client(req as unknown as Request).ip));
+  }
+
+  protected override handleRequest(requestProps: ThrottlerRequest): Promise<boolean> {
+    const client = this.client(requestProps.context.switchToHttp().getRequest<Request>());
+    const limit = client.viaSite ? requestProps.limit * SITE_VISITOR_FACTOR : requestProps.limit;
+    return super.handleRequest({ ...requestProps, limit });
   }
 
   protected override async shouldSkip(context: ExecutionContext): Promise<boolean> {
@@ -52,9 +66,11 @@ export class KemdiaThrottlerGuard extends ThrottlerGuard {
   }
 
   protected override throwThrottlingException(): Promise<void> {
-    throw new HttpException(
-      "Trop de requêtes : réessayez dans quelques instants.",
+    // Code stable (S4-T07) : le site distingue une limite d'une panne de l'API
+    throw new BusinessException(
       HttpStatus.TOO_MANY_REQUESTS,
+      "Trop de requêtes : réessayez dans quelques instants.",
+      "TROP_DE_REQUETES",
     );
   }
 }

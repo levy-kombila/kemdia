@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
 import { SESSION_COOKIE } from "@/lib/auth/cookies";
-import { proxy } from "./proxy";
+import { config, proxy } from "./proxy";
 
 const TOKEN = "S".repeat(43);
 const request = (headers: Record<string, string>, method = "GET") =>
@@ -63,5 +63,29 @@ describe("proxy : CSRF et CSP à nonce (S4-T07)", () => {
     // En-têtes de la requête transmise au rendu (NextResponse.next({ request: { headers } }))
     expect(a.headers.get("x-middleware-request-x-nonce")).toBe(first);
     expect(a.headers.get("content-security-policy")).not.toContain("'unsafe-inline' 'strict");
+  });
+});
+
+describe("proxy : couverture des adresses (relecture S4-T07)", () => {
+  const covered = (path: string) =>
+    config.matcher.some((pattern) => new RegExp(`^${pattern}$`).test(path));
+
+  it("toutes les adresses passent par le contrôle CSRF, même les images et les aperçus", () => {
+    for (const path of [
+      "/",
+      "/connexion",
+      "/api/health",
+      "/images/x.png",
+      "/favicon.ico",
+      "/produit/opengraph-image",
+      "/robots.txt",
+    ]) {
+      expect(covered(path), path).toBe(true);
+    }
+  });
+
+  it("sauf les fichiers de construction de Next.js", () => {
+    expect(covered("/_next/static/chunks/a.js")).toBe(false);
+    expect(covered("/_next/image")).toBe(false);
   });
 });
