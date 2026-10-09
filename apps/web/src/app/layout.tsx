@@ -4,7 +4,8 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { connection } from "next/server";
 import { Footer } from "@/components/layout/Footer";
-import { Header } from "@/components/layout/Header";
+import { Suspense } from "react";
+import { Header, HeaderFallback } from "@/components/layout/Header";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { Providers } from "@/components/providers/Providers";
 import { SITE, siteUrl } from "@/lib/site";
@@ -74,7 +75,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           Aller au contenu
         </a>
         <Providers>
-          <Header />
+          {/* En-tête de réserve envoyé tout de suite si l'API tarde (démo qui se réveille, S4-T08) */}
+          <Suspense fallback={<HeaderFallback />}>
+            <Header />
+          </Suspense>
           <main id="contenu" className="flex-1 pb-16 lg:pb-0">
             {children}
           </main>

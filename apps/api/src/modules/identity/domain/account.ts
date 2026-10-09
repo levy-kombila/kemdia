@@ -24,9 +24,6 @@ export interface AccountProps {
   status: AccountStatus;
   emailVerifiedAt: Date | null;
   phoneVerifiedAt: Date | null;
-  /** Colonnes du S4-T01 qui ne servent plus (le blocage est dans login_guards, ADR-0017) ; supprimées au S4-T08. */
-  failedLogins: number;
-  lockedUntil: Date | null;
   /** Rôles enregistrés (S4-T06) ; jamais écrits par `AccountRepository.save` (voir RoleRepository) */
   roles: readonly StoredRole[];
   createdAt: Date;
@@ -85,8 +82,6 @@ export class Account {
       status: "pending",
       emailVerifiedAt: null,
       phoneVerifiedAt: null,
-      failedLogins: 0,
-      lockedUntil: null,
       roles: [],
       createdAt: input.now,
     });

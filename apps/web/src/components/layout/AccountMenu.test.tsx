@@ -66,3 +66,12 @@ describe("menu du compte (en-tête)", () => {
     expect(button).not.toHaveAttribute("aria-controls");
   });
 });
+
+describe("menu du compte : en-tête de réserve (S4-T08)", () => {
+  it("pendant l'attente de l'API : emplacement réservé, rien de cliquable ni d'annoncé", () => {
+    const { container } = render(<AccountMenu account="loading" />);
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(container.firstElementChild).toHaveAttribute("aria-hidden", "true");
+  });
+});
