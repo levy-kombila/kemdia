@@ -188,67 +188,43 @@ Aucun compte administrateur n'existe au départ, et aucun mot de passe par défa
 
 Les routes d'administration (`/api/v1/admin/…`) demandent une connexion de **moins de 15 minutes** ; il n'y a pas encore d'écran (S6).
 
-### 9. Adresse des visiteurs (S4-T07) — réglage facultatif, à faire avec ton accord
+### 9. Adresse des visiteurs (S4-T07) — ✅ activée le 2026-10-09
 
-Par défaut, le site **ne transmet pas** l'adresse IP des visiteurs à l'API (`CLIENT_IP_HEADER` vide) : les limites par compte
-et par identifiant protègent déjà la connexion, et le journal d'audit enregistre l'adresse du serveur du site.
+Réglage en place sur le service **site** (`kemdia-1`) : `CLIENT_IP_HEADER=cf-connecting-ip`. Au démarrage, les journaux du site
+affichent « adresse des visiteurs transmise à l'API : oui (cf-connecting-ip) ». Le site envoie alors l'adresse du visiteur à l'API
+(limites par visiteur, journal d'audit).
 
-**En-tête retenu pour la démo : `CF-Connecting-IP`** (Render passe par Cloudflare, qui pose cet en-tête et écrase une valeur
-envoyée par le visiteur). **Jamais la première adresse de `X-Forwarded-For`** : un visiteur peut l'inventer.
+**Pourquoi `CF-Connecting-IP`** : Render passe par Cloudflare, qui pose cet en-tête. **Jamais la première adresse de
+`X-Forwarded-For`** : un visiteur peut l'inventer.
 
-**Vérification avant d'activer** (diagnostic temporaire `/api/diagnostic-ip`, protégé par la clé interne, supprimé au S4-T08).
-Ce test prouve que **Cloudflare écrase** un `CF-Connecting-IP` envoyé par le visiteur ; il repose sur le fait que Render
+**Vérification faite avant l'activation** (diagnostic temporaire protégé par la clé interne, retiré au S4-T08) :
+
+| Essai                                            | Résultat                                                                                                                                                           |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Requête normale                                  | Adresse reçue = adresse réelle affichée par `ifconfig.me`                                                                                                          |
+| Requête avec un faux `CF-Connecting-IP: 1.2.3.4` | **Refusée par Cloudflare** (`error code: 1000`, HTTP 403) : elle n'atteint jamais le site                                                                          |
+| IPv6                                             | Sans objet (connexion sans IPv6)                                                                                                                                   |
+| Second réseau                                    | Non confirmé : une seule adresse vérifiée avec la bonne clé (via un VPN, pas de forfait 4G) ; l'essai sur l'autre réseau avait échoué à cause d'une clé mal collée |
+
+Limite : ce test montre que Cloudflare ne laisse pas passer un `CF-Connecting-IP` inventé ; il repose sur le fait que Render
 n'expose pas le site hors de Cloudflare (ce qu'aucun test ne peut prouver).
 
-1. Dans un terminal bash (Git Bash ou WSL sous Windows), **sans coller la clé dans un message ni un fichier suivi par Git**.
-   La clé passe par `printf` (intégré au shell) puis par l'entrée de `curl` : elle n'apparaît ni dans l'historique, ni dans la liste
-   des processus.
-
-   ```bash
-   read -rs KEMDIA_KEY   # coller la valeur de API_INTERNAL_KEY du service site sur Render, puis Entrée
-   URL=https://kemdia-1.onrender.com/api/diagnostic-ip
-   diag() { printf 'X-Kemdia-Internal-Key: %s\n' "$KEMDIA_KEY" | curl -s "$@" -H @- "$URL"; echo; }
-
-   # IPv4 — ma vraie adresse, puis le diagnostic normal, puis avec une fausse adresse
-   curl -s -4 https://ifconfig.me; echo
-   diag -4
-   diag -4 -H "CF-Connecting-IP: 1.2.3.4"
-
-   # IPv6 (si ta connexion en a une) — même chose, avec une fausse adresse IPv6
-   curl -s -6 https://ifconfig.me; echo
-   diag -6
-   diag -6 -H "CF-Connecting-IP: 2001:db8::1"
-
-   unset KEMDIA_KEY
-   ```
-
-2. Refaire les mêmes commandes en **4G** : partager la connexion du téléphone (point d'accès) avec l'ordinateur, couper le Wi-Fi
-   habituel, puis relancer le bloc ci-dessus. L'adresse doit changer et suivre l'adresse 4G.
-3. Résultat attendu à **chaque** ligne `diag` : `valeurRecue` = l'adresse affichée par `ifconfig.me` juste au-dessus (même famille,
-   `-4` ou `-6`), **jamais** `1.2.3.4` ni `2001:db8::1`, et `adresseRetenue` = la même. Sans clé, la route répond 404.
-
-**Si toutes les vérifications sont bonnes** (Wi-Fi et 4G), ajouter sur Render, service **site** (`kemdia-1`), _Environment_ :
-
-| Nom                | Valeur             |
-| ------------------ | ------------------ |
-| `CLIENT_IP_HEADER` | `cf-connecting-ip` |
-
-Le site redémarre et affiche dans ses journaux « adresse des visiteurs transmise à l'API : oui (cf-connecting-ip) ».
-Si une vérification échoue (valeur vide, fausse adresse recopiée, adresse identique en Wi-Fi et en 4G), **ne rien ajouter**.
+**Si l'adresse semble fausse un jour** (tous les visiteurs avec la même adresse, ou limites atteintes trop vite) : **vider**
+`CLIENT_IP_HEADER` sur Render. Le site cesse aussitôt de transmettre l'adresse ; les limites par compte et par identifiant restent.
 
 ## En cas de problème
 
-| Symptôme                                                                           | Cause probable et solution                                                                                                        |
-| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Logs de l'API : `Démarrage de démonstration refusé : APP_ENV doit valoir « demo »` | Ajouter `APP_ENV=demo` dans les variables du service de l'API                                                                     |
-| Logs de l'API : `DATABASE_URL : obligatoire en production`                         | Variable `DATABASE_URL` absente ou vide                                                                                           |
-| Logs de l'API : `Migrations de la base : ÉCHEC`                                    | Adresse Neon fausse, `-pooler` dans l'adresse, ou projet Neon supprimé. Recopier l'adresse directe (étape 3)                      |
-| Render : _image pull failed_ sur l'API                                             | Le dépôt Docker Hub `kemdia-api` est privé : le rendre public (étape 1.4)                                                         |
-| Site : « Une erreur est survenue » à la première visite                            | L'API se réveillait encore : cliquer **Réessayer** au bout d'une minute. Vérifier `CATALOG_TIMEOUT_MS=90000` sur le site          |
-| Site : erreur sur toutes les pages, logs `[catalogue] … API injoignable`           | `API_URL` fausse, ou clés différentes entre le site et l'API                                                                      |
-| CI : `Le site de démo ne lit pas l'API (catalogue : file)`                         | `API_URL` / `API_INTERNAL_KEY` absentes dans le service du site (étape 5)                                                         |
-| CI : `The requested URL returned error: 502` juste après le déploiement            | Bascule de Render vers la nouvelle version : la CI retente 5 fois (15 s d'écart). Si ça persiste, voir les **Logs** du service    |
-| Adresse `https://kemdia.onrender.com` → « Not Found »                              | Le nom était pris : Render a donné une autre adresse (ex. `kemdia-1.onrender.com`). Mettre la bonne dans `SITE_URL` et `DEMO_URL` |
+| Symptôme                                                                           | Cause probable et solution                                                                                                                                    |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Logs de l'API : `Démarrage de démonstration refusé : APP_ENV doit valoir « demo »` | Ajouter `APP_ENV=demo` dans les variables du service de l'API                                                                                                 |
+| Logs de l'API : `DATABASE_URL : obligatoire en production`                         | Variable `DATABASE_URL` absente ou vide                                                                                                                       |
+| Logs de l'API : `Migrations de la base : ÉCHEC`                                    | Adresse Neon fausse, `-pooler` dans l'adresse, ou projet Neon supprimé. Recopier l'adresse directe (étape 3)                                                  |
+| Render : _image pull failed_ sur l'API                                             | Le dépôt Docker Hub `kemdia-api` est privé : le rendre public (étape 1.4)                                                                                     |
+| Site : « Une erreur est survenue » à la première visite                            | L'API ne s'est pas réveillée en 90 s (le site patiente et réessaie depuis le S4-T08) : cliquer **Réessayer**. Vérifier `CATALOG_TIMEOUT_MS=90000` sur le site |
+| Site : erreur sur toutes les pages, logs `[catalogue] … API injoignable`           | `API_URL` fausse, ou clés différentes entre le site et l'API                                                                                                  |
+| CI : `Le site de démo ne lit pas l'API (catalogue : file)`                         | `API_URL` / `API_INTERNAL_KEY` absentes dans le service du site (étape 5)                                                                                     |
+| CI : `The requested URL returned error: 502` juste après le déploiement            | Bascule de Render vers la nouvelle version : la CI retente 5 fois (15 s d'écart). Si ça persiste, voir les **Logs** du service                                |
+| Adresse `https://kemdia.onrender.com` → « Not Found »                              | Le nom était pris : Render a donné une autre adresse (ex. `kemdia-1.onrender.com`). Mettre la bonne dans `SITE_URL` et `DEMO_URL`                             |
 
 **Changer la clé interne** : générer une nouvelle valeur, la mettre **dans les deux services** (API puis site). **Changer le mot de passe Neon** :
 Neon → **Roles → Reset password**, puis mettre la nouvelle adresse dans `DATABASE_URL` de l'API.

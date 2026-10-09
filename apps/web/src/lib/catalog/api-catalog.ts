@@ -22,7 +22,19 @@ export interface ApiCatalogOptions {
   timeoutMs: number;
   fetch?: typeof fetch;
   now?: () => number;
+  /**
+   * Démo seulement (S4-T08) : pendant son réveil, Render répond 502/503/504 au lieu d'attendre. On réessaie alors
+   * toutes les {@link GATEWAY_RETRY_MS} jusqu'à `timeoutMs`, au lieu d'afficher tout de suite la page d'erreur.
+   * Désactivé ailleurs : une vraie panne doit se voir sans attendre.
+   */
+  retryGatewayErrors?: boolean;
+  /** Attente entre deux essais (remplacée dans les tests) */
+  sleep?: (ms: number) => Promise<void>;
 }
+
+/** Pause entre deux essais quand l'API se réveille (démo). */
+export const GATEWAY_RETRY_MS = 3_000;
+const GATEWAY_STATUSES = new Set([502, 503, 504]);
 
 /**
  * Adaptateur « API » : lit le catalogue sur `/api/v1`, depuis le serveur du site uniquement
@@ -39,20 +51,33 @@ export function createApiCatalog(options: ApiCatalogOptions): CatalogPort {
   const cache = new Map<string, { expires: number; value: unknown }>();
   const inflight = new Map<string, Promise<unknown>>();
 
+  const sleep = options.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+
   async function load<T>(path: string, schema: z.ZodType<T>): Promise<T | null> {
     const url = `${options.url}/api/v1${path}`;
+    // Délai TOTAL, essais compris : le visiteur n'attend jamais plus que `timeoutMs`
+    const deadline = now() + options.timeoutMs;
     let response: Response;
-    try {
-      response = await doFetch(url, {
-        headers: { accept: "application/json", [INTERNAL_KEY_HEADER]: options.key },
-        // Pas de cache de Next.js : le nôtre suffit et se comporte pareil partout
-        cache: "no-store",
-        signal: AbortSignal.timeout(options.timeoutMs),
-      });
-    } catch (error) {
-      const timeout = error instanceof DOMException && error.name === "TimeoutError";
-      console.error(`[catalogue] ${path} : ${timeout ? "délai dépassé" : "API injoignable"}`);
-      throw new CatalogUnavailableError(timeout ? "délai dépassé" : "API injoignable");
+    for (;;) {
+      try {
+        response = await doFetch(url, {
+          headers: { accept: "application/json", [INTERNAL_KEY_HEADER]: options.key },
+          // Pas de cache de Next.js : le nôtre suffit et se comporte pareil partout
+          cache: "no-store",
+          signal: AbortSignal.timeout(Math.max(1, deadline - now())),
+        });
+      } catch (error) {
+        const timeout = error instanceof DOMException && error.name === "TimeoutError";
+        console.error(`[catalogue] ${path} : ${timeout ? "délai dépassé" : "API injoignable"}`);
+        throw new CatalogUnavailableError(timeout ? "délai dépassé" : "API injoignable");
+      }
+      const retry =
+        options.retryGatewayErrors &&
+        GATEWAY_STATUSES.has(response.status) &&
+        now() + GATEWAY_RETRY_MS < deadline;
+      if (!retry) break;
+      await response.body?.cancel().catch(() => undefined);
+      await sleep(GATEWAY_RETRY_MS);
     }
     if (response.status === 404) return null;
     if (!response.ok) {
