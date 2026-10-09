@@ -58,5 +58,17 @@ describe("Réveil de l'API au démarrage du site (démo Render, S3-T07)", () => 
       "failed",
     );
     expect(stuck).toHaveBeenCalledTimes(30);
+
+    // Délai dépassé pendant les essais : « failed », jamais d'exception
+    t = 0;
+    const statuses2 = [502];
+    const timeout = vi.fn(() =>
+      statuses2.shift()
+        ? Promise.resolve(new Response("", { status: 502 }))
+        : Promise.reject(new DOMException("trop long", "TimeoutError")),
+    );
+    await expect(wakeCatalogApi("demo", API, { fetch: timeout, log, ...timing })).resolves.toBe(
+      "failed",
+    );
   });
 });

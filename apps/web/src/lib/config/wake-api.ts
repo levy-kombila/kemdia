@@ -43,6 +43,8 @@ export async function wakeCatalogApi(
         signal: AbortSignal.timeout(Math.max(1, deadline - now())),
         cache: "no-store",
       });
+      // Corps jamais lu : libéré tout de suite (connexion rendue)
+      await response.body?.cancel().catch(() => undefined);
       if (response.ok) {
         log(`Kemdia — réveil de l'API : prête en ${elapsed()} s`);
         return "awake";

@@ -178,8 +178,40 @@ describe("Adaptateur « API »", () => {
         ...clock(),
       });
       await expect(api.categoryTree()).rejects.toBeInstanceOf(CatalogUnavailableError);
-      // Essais à 0, 3, 6 s ; à 9 s, il ne reste pas 3 s : on arrête
+      // Essais à 0, 3, 6 et 9 s ; après celui de 9 s, il ne reste pas 3 s : on arrête
       expect(calls).toHaveLength(Math.ceil(10_000 / GATEWAY_RETRY_MS));
+    });
+
+    it("chaque essai libère sa réponse, n'attend que le temps restant ; l'échec n'est pas gardé", async () => {
+      silence();
+      const cancels: number[] = [];
+      const timeouts: number[] = [];
+      const timeoutSpy = vi.spyOn(AbortSignal, "timeout").mockImplementation((ms: number) => {
+        timeouts.push(ms);
+        return new AbortController().signal;
+      });
+      const { fetch, calls } = fakeFetch(() => {
+        const body = new ReadableStream({ cancel: () => void cancels.push(1) });
+        return new Response(body, { status: 502 });
+      });
+      const api = createApiCatalog({
+        url: "http://api",
+        key: KEY,
+        timeoutMs: 10_000,
+        fetch,
+        retryGatewayErrors: true,
+        ...clock(),
+      });
+      // Deux visiteurs en même temps : une seule série d'essais
+      const [a, b] = await Promise.allSettled([api.categoryTree(), api.categoryTree()]);
+      expect([a.status, b.status]).toEqual(["rejected", "rejected"]);
+      expect(calls).toHaveLength(4);
+      expect(cancels).toHaveLength(3);
+      expect(timeouts).toEqual([10_000, 7_000, 4_000, 1_000]);
+      // L'erreur n'est pas mise en cache : l'appel suivant interroge de nouveau l'API
+      await api.categoryTree().catch(() => undefined);
+      expect(calls.length).toBeGreaterThan(4);
+      timeoutSpy.mockRestore();
     });
 
     it("hors démo, ou pour une autre erreur (500) : pas de nouvel essai", async () => {

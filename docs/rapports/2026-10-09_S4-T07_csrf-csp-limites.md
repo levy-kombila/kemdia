@@ -113,6 +113,5 @@ Avec ton accord, préparation de l'activation de `CLIENT_IP_HEADER` sur la démo
   pare-feu `DOCKER-USER`). Noté : la clé utilisée est la clé interne principale — raison de plus pour supprimer la route au S4-T08.
 
 **Résultat (2026-10-09)** : requête normale → adresse reçue = adresse réelle ; faux `CF-Connecting-IP` → **refusé par Cloudflare**
-(`error code: 1000`, HTTP 403), la requête n'atteint jamais le site ; pas d'IPv6. Second réseau non confirmé (pas de forfait 4G ;
-l'essai sur l'autre adresse avait échoué à cause d'une clé mal collée). `CLIENT_IP_HEADER=cf-connecting-ip` ajouté sur Render par
+(`error code: 1000`, HTTP 403), la requête n'atteint jamais le site ; pas d'IPv6. Second réseau non confirmé : adresse vérifiée = sortie VPN (pas de forfait 4G) ; l'essai sur l'autre réseau avait échoué à cause d'une clé mal collée. `CLIENT_IP_HEADER=cf-connecting-ip` ajouté sur Render par
 toi ; journaux du site : « adresse des visiteurs transmise à l'API : oui (cf-connecting-ip) ». Diagnostic retiré au S4-T08.
