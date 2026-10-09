@@ -57,12 +57,14 @@ test.describe("compte client", () => {
     await page.getByLabel("Mot de passe", { exact: true }).fill(ACCOUNT.password);
     await page.getByRole("button", { name: "Se connecter" }).click();
     await expect(page).toHaveURL(/\/$/);
-    // Vraie redirection HTTP (307), pas une page puis un rafraîchissement (relecture S4-T08)
-    const res = await page.request.get("/connexion?retour=/compte", { maxRedirects: 0 });
-    expect(res.status()).toBe(307);
-    expect(res.headers().location).toMatch(/\/compte$/);
-    await page.goto("/connexion?retour=/compte");
+    // Vraie redirection HTTP (307), pas une page puis un rafraîchissement (relecture S4-T08) :
+    // le navigateur suit la redirection lui-même, la requête d'origine est donc chaînée à la réponse finale.
+    // (Le contexte de requête de Playwright n'envoie pas le cookie « Secure » en http : on passe par la page.)
+    const response = await page.goto("/connexion?retour=/compte");
     await expect(page).toHaveURL(/\/compte$/);
+    const origin = response?.request().redirectedFrom();
+    expect(origin?.url()).toMatch(/\/connexion\?retour=/);
+    expect((await origin?.response())?.status()).toBe(307);
   });
 });
 
