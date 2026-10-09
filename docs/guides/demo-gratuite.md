@@ -190,18 +190,42 @@ Les routes d'administration (`/api/v1/admin/…`) demandent une connexion de **m
 
 ### 9. Adresse des visiteurs (S4-T07) — réglage facultatif, à faire avec ton accord
 
-Par défaut, le site **ne transmet pas** l'adresse IP des visiteurs à l'API : les limites par compte et par identifiant
-protègent déjà la connexion, et le journal d'audit enregistre l'adresse du serveur du site.
+Par défaut, le site **ne transmet pas** l'adresse IP des visiteurs à l'API (`CLIENT_IP_HEADER` vide) : les limites par compte
+et par identifiant protègent déjà la connexion, et le journal d'audit enregistre l'adresse du serveur du site.
 
-Pour activer les limites par visiteur et la vraie adresse dans le journal, il faut indiquer au site **quel en-tête** Render
-remplit avec l'adresse du visiteur, dans la variable `CLIENT_IP_HEADER` du service **site** (jamais deviné par le code) :
+**En-tête retenu pour la démo : `CF-Connecting-IP`** (Render passe par Cloudflare, qui pose cet en-tête et écrase une valeur
+envoyée par le visiteur). **Jamais la première adresse de `X-Forwarded-For`** : un visiteur peut l'inventer.
 
-1. vérifier d'abord quelle adresse arrive (par exemple en lisant le journal d'audit après un test avec `x-forwarded-for`,
-   puis en la comparant à ton adresse réelle) ;
-2. ajouter `CLIENT_IP_HEADER` sur Render ; le site redémarre et affiche dans ses journaux
-   « adresse des visiteurs transmise à l'API : oui (…) ».
+**Vérification avant d'activer** (diagnostic temporaire `/api/diagnostic-ip`, protégé par la clé interne, supprimé au S4-T08) :
 
-Si tous les visiteurs apparaissent avec la **même** adresse, l'en-tête est mauvais : vider la variable.
+1. Note ta vraie adresse publique (par exemple sur un site « quelle est mon IP »).
+2. Dans un terminal, **sans coller la clé dans un message ni un fichier suivi par Git** :
+
+   ```bash
+   read -rs KEMDIA_KEY   # coller la valeur de API_INTERNAL_KEY du service site sur Render, puis Entrée
+   # a) Normal : « valeurRecue » doit être TA vraie adresse
+   curl -s -H "X-Kemdia-Internal-Key: $KEMDIA_KEY" https://kemdia-1.onrender.com/api/diagnostic-ip
+   # b) Falsification : on envoie une fausse adresse ; « valeurRecue » doit rester TA vraie adresse, PAS 1.2.3.4
+   curl -s -H "X-Kemdia-Internal-Key: $KEMDIA_KEY" -H "CF-Connecting-IP: 1.2.3.4" https://kemdia-1.onrender.com/api/diagnostic-ip
+   unset KEMDIA_KEY
+   ```
+
+   Sous Windows (PowerShell) : `$k = Read-Host -AsSecureString` puis
+   `curl.exe -s -H "X-Kemdia-Internal-Key: $([Net.NetworkCredential]::new('', $k).Password)" https://kemdia-1.onrender.com/api/diagnostic-ip`.
+
+3. Refaire **a)** et **b)** en **4G** : partager la connexion du téléphone (point d'accès) avec l'ordinateur, couper le Wi-Fi
+   habituel, noter l'adresse publique affichée en 4G, relancer les deux commandes. La valeur doit changer et suivre l'adresse 4G.
+4. Résultat attendu dans les 4 cas : `valeurRecue` = la vraie adresse du moment, `adresseRetenue` = la même.
+   Sans clé, la route répond 404.
+
+**Si les 4 vérifications sont bonnes**, ajouter sur Render, service **site** (`kemdia-1`), _Environment_ :
+
+| Nom                | Valeur             |
+| ------------------ | ------------------ |
+| `CLIENT_IP_HEADER` | `cf-connecting-ip` |
+
+Le site redémarre et affiche dans ses journaux « adresse des visiteurs transmise à l'API : oui (cf-connecting-ip) ».
+Si une vérification échoue (valeur vide, `1.2.3.4` recopié, adresse identique en Wi-Fi et en 4G), **ne rien ajouter**.
 
 ## En cas de problème
 

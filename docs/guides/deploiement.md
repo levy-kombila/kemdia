@@ -187,6 +187,19 @@ Historique des déploiements : `/opt/kemdia/deploy.log`.
 | Mises à jour OS  | Automatiques (unattended-upgrades) ; redémarrage mensuel planifié conseillé                                                         |
 | Sauvegardes (S1) | `/opt/kemdia/proxy/.env` uniquement. À partir du S3 : sauvegarde chiffrée quotidienne de PostgreSQL, testée                         |
 
+### Adresse des visiteurs en production (S4-T07, ADR-0021)
+
+Sur le VPS, le relais de confiance est **Caddy**, pas Cloudflare : le réglage de la démo (`CLIENT_IP_HEADER=cf-connecting-ip`)
+**ne doit pas** être repris tel quel. Sans Cloudflare devant le serveur, n'importe qui pourrait envoyer un faux `CF-Connecting-IP`.
+
+| Situation                                   | Réglage du site                                                                                                                                                |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Caddy seul devant le site (cas prévu)       | `CLIENT_IP_HEADER=x-forwarded-for` : le site prend la **dernière** adresse, posée par Caddy (adresse réelle de la connexion)                                   |
+| Cloudflare devant Caddy (si ajouté un jour) | Déclarer les adresses de Cloudflare dans `trusted_proxies` de Caddy, n'accepter que Cloudflare sur les ports 80/443, puis seulement ensuite `cf-connecting-ip` |
+
+Avant l'ouverture, refaire sur la production la vérification de la démo (adresse réelle, puis fausse valeur envoyée,
+en Wi-Fi et en 4G), avec un diagnostic temporaire équivalent.
+
 ## 11. Limites du plan GitHub gratuit (dépôt privé)
 
 | Fonction                                                   | Gratuit (privé)          | GitHub Pro / Team                                   |
