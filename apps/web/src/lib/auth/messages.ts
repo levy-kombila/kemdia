@@ -32,6 +32,7 @@ const MESSAGES: Record<AuthErrorCode, string> = {
   ROLE_SUR_SOI_INTERDIT: "Vous ne pouvez pas modifier vos propres rôles.",
   COMPTE_INTROUVABLE: "Aucun compte ne correspond.",
   COMPTE_INACTIF: "Ce compte n'est pas actif.",
+  TROP_DE_REQUETES: "Trop de demandes. Patientez un instant avant de réessayer.",
   INDISPONIBLE: "Service momentanément indisponible. Réessayez dans quelques instants.",
 };
 

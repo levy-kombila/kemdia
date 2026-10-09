@@ -1,5 +1,6 @@
 import "server-only";
 import {
+  CLIENT_IP_HEADER,
   CurrentSessionSchema,
   INTERNAL_KEY_HEADER,
   LogoutAllSchema,
@@ -34,6 +35,8 @@ export interface IdentityApiOptions {
   key: string;
   timeoutMs: number;
   fetch?: typeof fetch;
+  /** Adresse du visiteur de la requête en cours (S4-T07), transmise à l'API avec la clé interne */
+  visitorIp?: () => Promise<string | null>;
 }
 
 type CallOptions = { body?: object; token?: string; userAgent?: string | null };
@@ -57,6 +60,9 @@ export function createIdentityApi(options: IdentityApiOptions) {
     if (token) headers.authorization = `Bearer ${token}`;
     // Appareil du client, pour la liste de ses sessions (l'API le résume et le nettoie)
     if (userAgent) headers["x-kemdia-user-agent"] = userAgent.slice(0, 500);
+    // Visiteur réel : limites par visiteur et journal d'audit dans l'API (S4-T07)
+    const ip = options.visitorIp ? await options.visitorIp().catch(() => null) : null;
+    if (ip) headers[CLIENT_IP_HEADER] = ip;
 
     let response: Response;
     try {

@@ -4,7 +4,7 @@ import { adminPaths } from "../modules/identity/interface/admin.openapi.js";
 import { identityPaths } from "../modules/identity/interface/identity.openapi.js";
 
 /** Version du contrat HTTP (indépendante de la version de l'image) : à augmenter à chaque changement de l'API. */
-export const API_CONTRACT_VERSION = "1.5.0";
+export const API_CONTRACT_VERSION = "1.6.0";
 
 /** Document OpenAPI complet de l'API, généré à partir des schémas réellement utilisés. */
 export function buildOpenApiDocument(): Record<string, unknown> {
@@ -21,6 +21,8 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         "- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).",
         "- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.",
         "- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.",
+        "- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.",
+        "- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.",
       ].join("\n"),
     },
     servers: [{ url: "/", description: "Même adresse que cette documentation" }],

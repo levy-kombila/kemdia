@@ -25,6 +25,7 @@ const STATUS: Record<IdentityErrorCode, number> = {
   ROLE_SUR_SOI_INTERDIT: HttpStatus.FORBIDDEN,
   COMPTE_INTROUVABLE: HttpStatus.NOT_FOUND,
   COMPTE_INACTIF: HttpStatus.CONFLICT,
+  TROP_DE_REQUETES: HttpStatus.TOO_MANY_REQUESTS,
 };
 
 /** Exécute un cas d'utilisation ; une erreur métier devient une réponse HTTP avec son code. */

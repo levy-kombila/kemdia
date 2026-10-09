@@ -1,9 +1,10 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import type { CurrentSession } from "@kemdia/contracts";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { cache } from "react";
 import { catalogSource } from "@/lib/config/server-config";
+import { UNKNOWN_VISITOR, clientIpHeaderName, visitorIp } from "@/lib/security/client-ip";
 import { createIdentityApi, type ApiResult, type IdentityApi } from "./api-identity";
 import { SESSION_COOKIE } from "./cookies";
 import type { AccountSummary } from "./types";
@@ -12,7 +13,15 @@ let instance: IdentityApi | undefined;
 
 /** Même API et même clé que le catalogue (ADR-0011) ; configuration vérifiée au démarrage. */
 export function identityApi(): IdentityApi {
-  instance ??= createIdentityApi(catalogSource());
+  instance ??= createIdentityApi({
+    ...catalogSource(),
+    // Adresse du visiteur lue dans la requête en cours, selon CLIENT_IP_HEADER (S4-T07)
+    visitorIp: async () => {
+      const name = clientIpHeaderName();
+      if (!name) return null;
+      return visitorIp(await headers(), name) ?? UNKNOWN_VISITOR;
+    },
+  });
   return instance;
 }
 

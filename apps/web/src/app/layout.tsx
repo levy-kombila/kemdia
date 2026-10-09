@@ -2,6 +2,7 @@ import "./globals.css";
 
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { connection } from "next/server";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
@@ -58,7 +59,10 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // CSP à nonce (S4-T07, ADR-0021) : chaque page est rendue à la demande, avec le nonce de SA requête.
+  // Une page pré-générée à la construction n'aurait pas de nonce : ses scripts seraient bloqués.
+  await connection();
   return (
     // data-scroll-behavior : défilement doux seulement à l'intérieur d'une page, pas lors d'un changement de page
     <html lang="fr-GA" className={archivo.variable} data-scroll-behavior="smooth">

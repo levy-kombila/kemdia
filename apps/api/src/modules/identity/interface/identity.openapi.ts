@@ -151,7 +151,9 @@ export const identityPaths = {
       responses: {
         "200": json("LogoutAll", "Sessions fermées"),
         "401": sessionRefused,
-        "429": tooMany,
+        "429": problem(
+          "`TROP_DE_REQUETES` : plus de 5 fois par minute pour ce compte (ou limite par adresse)",
+        ),
       },
     },
   },
