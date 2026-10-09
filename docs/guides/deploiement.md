@@ -187,6 +187,27 @@ Historique des déploiements : `/opt/kemdia/deploy.log`.
 | Mises à jour OS  | Automatiques (unattended-upgrades) ; redémarrage mensuel planifié conseillé                                                         |
 | Sauvegardes (S1) | `/opt/kemdia/proxy/.env` uniquement. À partir du S3 : sauvegarde chiffrée quotidienne de PostgreSQL, testée                         |
 
+### Adresse des visiteurs en production (S4-T07, ADR-0021)
+
+Sur le VPS, le relais de confiance est **Caddy**, pas Cloudflare : le réglage de la démo (`CLIENT_IP_HEADER=cf-connecting-ip`)
+**ne doit pas** être repris tel quel. Sans Cloudflare devant le serveur, n'importe qui pourrait envoyer un faux `CF-Connecting-IP`.
+
+| Situation                                   | Réglage du site                                                                                                                                                |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Caddy seul devant le site (cas prévu)       | `CLIENT_IP_HEADER=x-forwarded-for` : le site prend la **dernière** adresse, posée par Caddy (adresse réelle de la connexion)                                   |
+| Cloudflare devant Caddy (si ajouté un jour) | Déclarer les adresses de Cloudflare dans `trusted_proxies` de Caddy, n'accepter que Cloudflare sur les ports 80/443, puis seulement ensuite `cf-connecting-ip` |
+
+Points d'attention :
+
+- **IPv6 et Docker** : Caddy tourne dans Docker. Si l'IPv6 n'est pas activé dans Docker, les visiteurs IPv6 (souvent en 4G)
+  arrivent avec l'adresse de la passerelle Docker (`172.x.0.1`) et partagent une seule limite. Vérifier avec `curl -6` ; si
+  l'adresse vue commence par `172.`, activer `"ipv6": true` et `"ip6tables": true` dans `/etc/docker/daemon.json`
+  (ou ne pas publier d'enregistrement DNS AAAA).
+- **Pare-feu** : `ufw` ne filtre pas les ports publiés par Docker. Pour n'accepter que Cloudflare (cas Cloudflare devant Caddy),
+  filtrer dans la chaîne `DOCKER-USER` d'iptables.
+- Avant l'ouverture, refaire sur la production la vérification de la démo (adresse réelle puis fausse valeur, en `-4` **et** en `-6`,
+  en Wi-Fi et en 4G), avec un diagnostic temporaire équivalent.
+
 ## 11. Limites du plan GitHub gratuit (dépôt privé)
 
 | Fonction                                                   | Gratuit (privé)          | GitHub Pro / Team                                   |

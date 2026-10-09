@@ -190,18 +190,51 @@ Les routes d'administration (`/api/v1/admin/…`) demandent une connexion de **m
 
 ### 9. Adresse des visiteurs (S4-T07) — réglage facultatif, à faire avec ton accord
 
-Par défaut, le site **ne transmet pas** l'adresse IP des visiteurs à l'API : les limites par compte et par identifiant
-protègent déjà la connexion, et le journal d'audit enregistre l'adresse du serveur du site.
+Par défaut, le site **ne transmet pas** l'adresse IP des visiteurs à l'API (`CLIENT_IP_HEADER` vide) : les limites par compte
+et par identifiant protègent déjà la connexion, et le journal d'audit enregistre l'adresse du serveur du site.
 
-Pour activer les limites par visiteur et la vraie adresse dans le journal, il faut indiquer au site **quel en-tête** Render
-remplit avec l'adresse du visiteur, dans la variable `CLIENT_IP_HEADER` du service **site** (jamais deviné par le code) :
+**En-tête retenu pour la démo : `CF-Connecting-IP`** (Render passe par Cloudflare, qui pose cet en-tête et écrase une valeur
+envoyée par le visiteur). **Jamais la première adresse de `X-Forwarded-For`** : un visiteur peut l'inventer.
 
-1. vérifier d'abord quelle adresse arrive (par exemple en lisant le journal d'audit après un test avec `x-forwarded-for`,
-   puis en la comparant à ton adresse réelle) ;
-2. ajouter `CLIENT_IP_HEADER` sur Render ; le site redémarre et affiche dans ses journaux
-   « adresse des visiteurs transmise à l'API : oui (…) ».
+**Vérification avant d'activer** (diagnostic temporaire `/api/diagnostic-ip`, protégé par la clé interne, supprimé au S4-T08).
+Ce test prouve que **Cloudflare écrase** un `CF-Connecting-IP` envoyé par le visiteur ; il repose sur le fait que Render
+n'expose pas le site hors de Cloudflare (ce qu'aucun test ne peut prouver).
 
-Si tous les visiteurs apparaissent avec la **même** adresse, l'en-tête est mauvais : vider la variable.
+1. Dans un terminal bash (Git Bash ou WSL sous Windows), **sans coller la clé dans un message ni un fichier suivi par Git**.
+   La clé passe par `printf` (intégré au shell) puis par l'entrée de `curl` : elle n'apparaît ni dans l'historique, ni dans la liste
+   des processus.
+
+   ```bash
+   read -rs KEMDIA_KEY   # coller la valeur de API_INTERNAL_KEY du service site sur Render, puis Entrée
+   URL=https://kemdia-1.onrender.com/api/diagnostic-ip
+   diag() { printf 'X-Kemdia-Internal-Key: %s\n' "$KEMDIA_KEY" | curl -s "$@" -H @- "$URL"; echo; }
+
+   # IPv4 — ma vraie adresse, puis le diagnostic normal, puis avec une fausse adresse
+   curl -s -4 https://ifconfig.me; echo
+   diag -4
+   diag -4 -H "CF-Connecting-IP: 1.2.3.4"
+
+   # IPv6 (si ta connexion en a une) — même chose, avec une fausse adresse IPv6
+   curl -s -6 https://ifconfig.me; echo
+   diag -6
+   diag -6 -H "CF-Connecting-IP: 2001:db8::1"
+
+   unset KEMDIA_KEY
+   ```
+
+2. Refaire les mêmes commandes en **4G** : partager la connexion du téléphone (point d'accès) avec l'ordinateur, couper le Wi-Fi
+   habituel, puis relancer le bloc ci-dessus. L'adresse doit changer et suivre l'adresse 4G.
+3. Résultat attendu à **chaque** ligne `diag` : `valeurRecue` = l'adresse affichée par `ifconfig.me` juste au-dessus (même famille,
+   `-4` ou `-6`), **jamais** `1.2.3.4` ni `2001:db8::1`, et `adresseRetenue` = la même. Sans clé, la route répond 404.
+
+**Si toutes les vérifications sont bonnes** (Wi-Fi et 4G), ajouter sur Render, service **site** (`kemdia-1`), _Environment_ :
+
+| Nom                | Valeur             |
+| ------------------ | ------------------ |
+| `CLIENT_IP_HEADER` | `cf-connecting-ip` |
+
+Le site redémarre et affiche dans ses journaux « adresse des visiteurs transmise à l'API : oui (cf-connecting-ip) ».
+Si une vérification échoue (valeur vide, fausse adresse recopiée, adresse identique en Wi-Fi et en 4G), **ne rien ajouter**.
 
 ## En cas de problème
 
