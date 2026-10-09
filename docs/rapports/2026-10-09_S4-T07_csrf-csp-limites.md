@@ -94,3 +94,20 @@ Aucun changement visible : les protections sont invisibles pour un client normal
 - **S4-T08** : démo et dette (page « la boutique se réveille », suppression des colonnes `failed_logins` / `locked_until`),
   clôture du sprint (v0.4.0).
 - Avec ton accord : vérifier l'en-tête de Render et régler `CLIENT_IP_HEADER` sur la démo.
+
+## 9. Complément — vérification de l'adresse des visiteurs sur la démo (2026-10-09)
+
+Avec ton accord, préparation de l'activation de `CLIENT_IP_HEADER` sur la démo, avec tes conditions :
+
+- **Candidat : `CF-Connecting-IP`** (Render passe par Cloudflare) ; jamais la première valeur de `X-Forwarded-For`.
+- **Diagnostic temporaire** `GET /api/diagnostic-ip` sur le site : protégé par la clé interne (404 sinon), ne renvoie **que**
+  `CF-Connecting-IP` et l'adresse que le site en retiendrait, rien n'est journalisé, jamais mis en cache.
+  **Supprimé au S4-T08.**
+- Procédure de vérification (vraie adresse, fausse valeur `1.2.3.4`, Wi-Fi puis 4G) et variable exacte à ajouter :
+  [guide de la démo, étape 9](../guides/demo-gratuite.md).
+- Production sur VPS : le relais de confiance sera **Caddy**, pas Cloudflare (`x-forwarded-for`, dernière adresse) :
+  [guide de déploiement](../guides/deploiement.md).
+- Relecture de sécurité indépendante du diagnostic avant la PR : aucune faille critique ni élevée. Corrigé : test en IPv4 **et**
+  IPv6 avec l'adresse lue par le même moyen (`ifconfig.me`), fausse adresse IPv6 testée aussi ; clé passée à `curl` par son entrée
+  (invisible dans la liste des processus) ; autres méthodes HTTP → même 404 ; guide de production complété (IPv6 dans Docker,
+  pare-feu `DOCKER-USER`). Noté : la clé utilisée est la clé interne principale — raison de plus pour supprimer la route au S4-T08.
