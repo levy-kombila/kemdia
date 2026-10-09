@@ -58,7 +58,7 @@ function HeaderShell({ account, tree }: { account: HeaderAccount; tree: NavCateg
 }
 
 /**
- * En-tête envoyé TOUT DE SUITE pendant que le vrai attend l'API (S4-T08, `<Suspense>` du layout) : même hauteur,
+ * En-tête envoyé TOUT DE SUITE pendant que le vrai attend l'API (S4-T08, `<Suspense>` du layout, DÉMO seulement) : même hauteur,
  * recherche et panier utilisables, menu des catégories et compte réservés. Sur la démo endormie, le visiteur voit
  * donc le site et l'écran « La boutique se réveille » au lieu d'une page blanche.
  */

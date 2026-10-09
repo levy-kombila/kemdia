@@ -110,3 +110,15 @@ for (const path of [
     expect(serious.map((v) => `${v.id} (${v.nodes.length}) : ${v.help}`)).toEqual([]);
   });
 }
+
+test("codes HTTP réels hors démo : une page introuvable répond 404 (relecture S4-T08)", async ({
+  request,
+}) => {
+  for (const path of [
+    "/produit/produit-qui-n-existe-pas",
+    "/infos/page-inconnue",
+    "/page-inconnue",
+  ]) {
+    expect((await request.get(path)).status(), path).toBe(404);
+  }
+});

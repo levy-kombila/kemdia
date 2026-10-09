@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 export const WAKE_NOTICE_DELAY_MS = 2_000;
 
 /**
- * Attente d'une page (S4-T08) : `app/loading.tsx` l'envoie tout de suite, avant que la page ait ses données.
+ * Attente d'une page sur la DÉMO (S4-T08) : le layout l'envoie tout de suite (`<Suspense>`), avant que la page ait
+ * ses données. Jamais ailleurs : en streaming, les vrais codes 404, 500 et 307 seraient perdus.
  * - les 2 premières secondes : zone vide (pas de clignotement quand l'API répond vite) ;
  * - ensuite, sur la démo gratuite : « La boutique se réveille… » (l'API dort après 15 min sans visite) ;
  *   ailleurs : « Chargement… ».

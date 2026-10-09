@@ -57,6 +57,10 @@ test.describe("compte client", () => {
     await page.getByLabel("Mot de passe", { exact: true }).fill(ACCOUNT.password);
     await page.getByRole("button", { name: "Se connecter" }).click();
     await expect(page).toHaveURL(/\/$/);
+    // Vraie redirection HTTP (307), pas une page puis un rafraîchissement (relecture S4-T08)
+    const res = await page.request.get("/connexion?retour=/compte", { maxRedirects: 0 });
+    expect(res.status()).toBe(307);
+    expect(res.headers().location).toMatch(/\/compte$/);
     await page.goto("/connexion?retour=/compte");
     await expect(page).toHaveURL(/\/compte$/);
   });
