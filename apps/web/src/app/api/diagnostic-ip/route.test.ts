@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { GET } from "./route";
+import { GET, OPTIONS, POST } from "./route";
 
 const KEY = "k".repeat(40);
 const call = (headers: Record<string, string>) =>
@@ -11,11 +11,18 @@ describe("diagnostic temporaire de l'adresse du visiteur (S4-T07)", () => {
     process.env.API_INTERNAL_KEY = KEY;
   });
   afterEach(() => {
-    process.env.API_INTERNAL_KEY = previous;
+    if (previous === undefined) delete process.env.API_INTERNAL_KEY;
+    else process.env.API_INTERNAL_KEY = previous;
   });
 
   it("sans la clé interne, ou avec une mauvaise : 404, rien n'est révélé", async () => {
-    const attempts: Record<string, string>[] = [{}, { "x-kemdia-internal-key": "x".repeat(40) }];
+    const attempts: Record<string, string>[] = [
+      {},
+      { "x-kemdia-internal-key": "x".repeat(40) },
+      // Début de la clé seulement, clé trop longue
+      { "x-kemdia-internal-key": KEY.slice(0, 20) },
+      { "x-kemdia-internal-key": `${KEY}k` },
+    ];
     for (const headers of attempts) {
       const res = call({ ...headers, "cf-connecting-ip": "203.0.113.5" });
       expect(res.status).toBe(404);
@@ -45,6 +52,11 @@ describe("diagnostic temporaire de l'adresse du visiteur (S4-T07)", () => {
   it("valeur absente ou invalide : rien n'est retenu", async () => {
     const res = call({ "x-kemdia-internal-key": KEY, "cf-connecting-ip": "1.2.3.4, 5.6.7.8" });
     expect(await res.json()).toMatchObject({ adresseRetenue: null });
+  });
+
+  it("autres méthodes : la même 404, la route ne se signale pas", () => {
+    expect(OPTIONS().status).toBe(404);
+    expect(POST().status).toBe(404);
   });
 
   it("clé interne non configurée sur le serveur : toujours 404", () => {

@@ -25,11 +25,15 @@ function hasInternalKey(received: string | null): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+const noStore = { "Cache-Control": "no-store" };
+const notFound = () => new Response(null, { status: 404, headers: noStore });
+
+/** Autres méthodes : la même 404 que sans clé (la route ne se signale pas, relecture S4-T07) */
+export const OPTIONS = notFound;
+export const POST = notFound;
+
 export function GET(request: Request): Response {
-  const noStore = { "Cache-Control": "no-store" };
-  if (!hasInternalKey(request.headers.get(INTERNAL_KEY_HEADER))) {
-    return new Response(null, { status: 404, headers: noStore });
-  }
+  if (!hasInternalKey(request.headers.get(INTERNAL_KEY_HEADER))) return notFound();
   return Response.json(
     {
       enTete: CANDIDATE,

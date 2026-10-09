@@ -107,4 +107,7 @@ Avec ton accord, préparation de l'activation de `CLIENT_IP_HEADER` sur la démo
   [guide de la démo, étape 9](../guides/demo-gratuite.md).
 - Production sur VPS : le relais de confiance sera **Caddy**, pas Cloudflare (`x-forwarded-for`, dernière adresse) :
   [guide de déploiement](../guides/deploiement.md).
-- Relecture de sécurité indépendante du diagnostic avant la PR (voir la PR).
+- Relecture de sécurité indépendante du diagnostic avant la PR : aucune faille critique ni élevée. Corrigé : test en IPv4 **et**
+  IPv6 avec l'adresse lue par le même moyen (`ifconfig.me`), fausse adresse IPv6 testée aussi ; clé passée à `curl` par son entrée
+  (invisible dans la liste des processus) ; autres méthodes HTTP → même 404 ; guide de production complété (IPv6 dans Docker,
+  pare-feu `DOCKER-USER`). Noté : la clé utilisée est la clé interne principale — raison de plus pour supprimer la route au S4-T08.

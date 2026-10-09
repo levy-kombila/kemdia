@@ -196,36 +196,45 @@ et par identifiant protègent déjà la connexion, et le journal d'audit enregis
 **En-tête retenu pour la démo : `CF-Connecting-IP`** (Render passe par Cloudflare, qui pose cet en-tête et écrase une valeur
 envoyée par le visiteur). **Jamais la première adresse de `X-Forwarded-For`** : un visiteur peut l'inventer.
 
-**Vérification avant d'activer** (diagnostic temporaire `/api/diagnostic-ip`, protégé par la clé interne, supprimé au S4-T08) :
+**Vérification avant d'activer** (diagnostic temporaire `/api/diagnostic-ip`, protégé par la clé interne, supprimé au S4-T08).
+Ce test prouve que **Cloudflare écrase** un `CF-Connecting-IP` envoyé par le visiteur ; il repose sur le fait que Render
+n'expose pas le site hors de Cloudflare (ce qu'aucun test ne peut prouver).
 
-1. Note ta vraie adresse publique (par exemple sur un site « quelle est mon IP »).
-2. Dans un terminal, **sans coller la clé dans un message ni un fichier suivi par Git** :
+1. Dans un terminal bash (Git Bash ou WSL sous Windows), **sans coller la clé dans un message ni un fichier suivi par Git**.
+   La clé passe par `printf` (intégré au shell) puis par l'entrée de `curl` : elle n'apparaît ni dans l'historique, ni dans la liste
+   des processus.
 
    ```bash
    read -rs KEMDIA_KEY   # coller la valeur de API_INTERNAL_KEY du service site sur Render, puis Entrée
-   # a) Normal : « valeurRecue » doit être TA vraie adresse
-   curl -s -H "X-Kemdia-Internal-Key: $KEMDIA_KEY" https://kemdia-1.onrender.com/api/diagnostic-ip
-   # b) Falsification : on envoie une fausse adresse ; « valeurRecue » doit rester TA vraie adresse, PAS 1.2.3.4
-   curl -s -H "X-Kemdia-Internal-Key: $KEMDIA_KEY" -H "CF-Connecting-IP: 1.2.3.4" https://kemdia-1.onrender.com/api/diagnostic-ip
+   URL=https://kemdia-1.onrender.com/api/diagnostic-ip
+   diag() { printf 'X-Kemdia-Internal-Key: %s\n' "$KEMDIA_KEY" | curl -s "$@" -H @- "$URL"; echo; }
+
+   # IPv4 — ma vraie adresse, puis le diagnostic normal, puis avec une fausse adresse
+   curl -s -4 https://ifconfig.me; echo
+   diag -4
+   diag -4 -H "CF-Connecting-IP: 1.2.3.4"
+
+   # IPv6 (si ta connexion en a une) — même chose, avec une fausse adresse IPv6
+   curl -s -6 https://ifconfig.me; echo
+   diag -6
+   diag -6 -H "CF-Connecting-IP: 2001:db8::1"
+
    unset KEMDIA_KEY
    ```
 
-   Sous Windows (PowerShell) : `$k = Read-Host -AsSecureString` puis
-   `curl.exe -s -H "X-Kemdia-Internal-Key: $([Net.NetworkCredential]::new('', $k).Password)" https://kemdia-1.onrender.com/api/diagnostic-ip`.
+2. Refaire les mêmes commandes en **4G** : partager la connexion du téléphone (point d'accès) avec l'ordinateur, couper le Wi-Fi
+   habituel, puis relancer le bloc ci-dessus. L'adresse doit changer et suivre l'adresse 4G.
+3. Résultat attendu à **chaque** ligne `diag` : `valeurRecue` = l'adresse affichée par `ifconfig.me` juste au-dessus (même famille,
+   `-4` ou `-6`), **jamais** `1.2.3.4` ni `2001:db8::1`, et `adresseRetenue` = la même. Sans clé, la route répond 404.
 
-3. Refaire **a)** et **b)** en **4G** : partager la connexion du téléphone (point d'accès) avec l'ordinateur, couper le Wi-Fi
-   habituel, noter l'adresse publique affichée en 4G, relancer les deux commandes. La valeur doit changer et suivre l'adresse 4G.
-4. Résultat attendu dans les 4 cas : `valeurRecue` = la vraie adresse du moment, `adresseRetenue` = la même.
-   Sans clé, la route répond 404.
-
-**Si les 4 vérifications sont bonnes**, ajouter sur Render, service **site** (`kemdia-1`), _Environment_ :
+**Si toutes les vérifications sont bonnes** (Wi-Fi et 4G), ajouter sur Render, service **site** (`kemdia-1`), _Environment_ :
 
 | Nom                | Valeur             |
 | ------------------ | ------------------ |
 | `CLIENT_IP_HEADER` | `cf-connecting-ip` |
 
 Le site redémarre et affiche dans ses journaux « adresse des visiteurs transmise à l'API : oui (cf-connecting-ip) ».
-Si une vérification échoue (valeur vide, `1.2.3.4` recopié, adresse identique en Wi-Fi et en 4G), **ne rien ajouter**.
+Si une vérification échoue (valeur vide, fausse adresse recopiée, adresse identique en Wi-Fi et en 4G), **ne rien ajouter**.
 
 ## En cas de problème
 
