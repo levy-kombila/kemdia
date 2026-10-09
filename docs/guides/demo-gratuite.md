@@ -188,6 +188,21 @@ Aucun compte administrateur n'existe au départ, et aucun mot de passe par défa
 
 Les routes d'administration (`/api/v1/admin/…`) demandent une connexion de **moins de 15 minutes** ; il n'y a pas encore d'écran (S6).
 
+### 9. Adresse des visiteurs (S4-T07) — réglage facultatif, à faire avec ton accord
+
+Par défaut, le site **ne transmet pas** l'adresse IP des visiteurs à l'API : les limites par compte et par identifiant
+protègent déjà la connexion, et le journal d'audit enregistre l'adresse du serveur du site.
+
+Pour activer les limites par visiteur et la vraie adresse dans le journal, il faut indiquer au site **quel en-tête** Render
+remplit avec l'adresse du visiteur, dans la variable `CLIENT_IP_HEADER` du service **site** (jamais deviné par le code) :
+
+1. vérifier d'abord quelle adresse arrive (par exemple en lisant le journal d'audit après un test avec `x-forwarded-for`,
+   puis en la comparant à ton adresse réelle) ;
+2. ajouter `CLIENT_IP_HEADER` sur Render ; le site redémarre et affiche dans ses journaux
+   « adresse des visiteurs transmise à l'API : oui (…) ».
+
+Si tous les visiteurs apparaissent avec la **même** adresse, l'en-tête est mauvais : vider la variable.
+
 ## En cas de problème
 
 | Symptôme                                                                           | Cause probable et solution                                                                                                        |

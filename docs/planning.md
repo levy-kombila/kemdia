@@ -122,7 +122,8 @@ Décisions : [ADR-0015](architecture/adr/0015-identite-sessions-otp.md) (session
 [ADR-0017](architecture/adr/0017-connexion-sessions.md) (connexion, sessions, blocage neutre),
 [ADR-0018](architecture/adr/0018-mot-de-passe-oublie.md) (mot de passe oublié),
 [ADR-0019](architecture/adr/0019-site-branche-identite.md) (site branché : cookies, actions serveur),
-[ADR-0020](architecture/adr/0020-roles-journal-audit.md) (rôles et journal d'audit).
+[ADR-0020](architecture/adr/0020-roles-journal-audit.md) (rôles et journal d'audit),
+[ADR-0021](architecture/adr/0021-csrf-csp-limites.md) (CSRF, CSP à nonce, limites).
 
 | ID     | Tâche                                                                                                                                  | Statut |
 | ------ | -------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -132,7 +133,7 @@ Décisions : [ADR-0015](architecture/adr/0015-identite-sessions-otp.md) (session
 | S4-T04 | Mot de passe oublié (FR-012) : ticket + code, aucun e-mail sans compte, connecté ici et déconnecté ailleurs — ADR-0018                 | ✅     |
 | S4-T05 | Site branché sur l'API : cookies `HttpOnly`, « Bonjour, Awa », Mon compte, retour à la page d'avant ; téléphone « bientôt » — ADR-0019 | ✅     |
 | S4-T06 | Rôles (RBAC) et journal d'audit : 4 rôles cumulables, `@Authorize`, admin par commande serveur, journal 365 j (CRIT-06) — ADR-0020     | ✅     |
-| S4-T07 | CSRF, CSP à _nonce_, limitation par compte (HIGH-16, MED-05)                                                                           | ⏳     |
+| S4-T07 | CSRF (origine stricte), CSP à _nonce_, limites par visiteur et par compte, IP du visiteur au journal (HIGH-16, MED-05) — ADR-0021      | ✅     |
 | S4-T08 | Démo + dette, clôture du sprint (v0.4.0)                                                                                               | ⏳     |
 
 ## S5 à S8 — grandes lignes
