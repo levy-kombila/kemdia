@@ -3,25 +3,10 @@ import type { NextConfig } from "next";
 const isDev = process.env.NODE_ENV === "development";
 
 /**
- * Content-Security-Policy (corrige LOW-03 de l'audit : aucune CSP sur l'ancien site).
- * Tout est servi depuis notre propre domaine : plus de CDN tiers (Bootstrap, Font Awesome, AOS, Swiper…).
- * Étape suivante (Sprint 4) : CSP à nonce via proxy.ts quand l'API et le paiement seront branchés.
+ * La Content-Security-Policy n'est plus ici : elle est posée par `src/proxy.ts`, avec un nonce neuf à chaque
+ * requête (S4-T07, ADR-0021). Les autres en-têtes de sécurité restent identiques pour toutes les adresses.
  */
-const csp = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' blob: data:",
-  "font-src 'self'",
-  "connect-src 'self'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-].join("; ");
-
 const securityHeaders = [
-  { key: "Content-Security-Policy", value: csp },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
