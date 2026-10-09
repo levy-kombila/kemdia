@@ -6,7 +6,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { clearStaleSessionAction, logoutAction } from "@/lib/auth/actions";
 
-export type HeaderAccount = { firstName: string } | null;
+/** `"loading"` : l'en-tête attend encore l'API (S4-T08, démo qui se réveille) — emplacement réservé, rien de cliquable. */
+export type HeaderAccount = { firstName: string } | null | "loading";
 
 /** Lien « Se connecter » : après la connexion, retour à la page où l'on était. */
 function SignInLink() {
@@ -128,6 +129,20 @@ export function StaleSessionCleaner() {
   return null;
 }
 
+/** Même place que « Se connecter », sans texte : rien ne bouge quand le vrai menu arrive. */
+function AccountPlaceholder() {
+  return (
+    <span className="flex items-center gap-2 px-2 py-1" aria-hidden>
+      <CircleUser className="text-ink-300 size-6" />
+      <span className="hidden leading-tight lg:block">
+        <span className="bg-ink-100 block h-2.5 w-12 rounded" />
+        <span className="bg-ink-100 mt-1 block h-3.5 w-20 rounded" />
+      </span>
+    </span>
+  );
+}
+
 export function AccountMenu({ account }: { account: HeaderAccount }) {
+  if (account === "loading") return <AccountPlaceholder />;
   return account ? <SignedInMenu firstName={account.firstName} /> : <SignInLink />;
 }

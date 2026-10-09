@@ -46,7 +46,7 @@ Guide : [docs/guides/base-de-donnees.md](docs/guides/base-de-donnees.md).
 
 ```
 apps/web/     Site client — Next.js 16, React 19, Tailwind 4
-apps/api/     API — NestJS 12, monolithe modulaire, PostgreSQL 18 + Prisma 7 (Sprint 3, en construction)
+apps/api/     API — NestJS 12, monolithe modulaire, PostgreSQL 18 + Prisma 7 — modules `catalog`, `identity` (comptes, rôles) et `audit`
 packages/contracts/  Contrat partagé API ↔ site (schémas Zod, constantes, données de démonstration)
 deploy/       Scripts et configuration du serveur (Caddy, déploiement)
 docs/         Planning, rapports de sprint, cahier d'architecture, ADR, guides, sécurité
@@ -59,7 +59,7 @@ docs/         Planning, rapports de sprint, cahier d'architecture, ADR, guides, 
 - 🏛️ [Cahier d'architecture](docs/architecture/cahier-architecture.md) et [décisions (ADR)](docs/architecture/adr/)
 - 📘 [Comprendre l'architecture (concepts expliqués simplement)](docs/architecture/concepts.md)
 - 📏 [Règles métier et exigences (BR / FR)](docs/architecture/regles-metier.md) · [Synthèse du KSAD](docs/references/ksad-synthese.md)
-- 📝 [Rapports](docs/rapports/) — dernier : [Clôture du Sprint 3 — v0.3.0](docs/rapports/2026-10-07_S3_cloture.md)
+- 📝 [Rapports](docs/rapports/) — dernier : [Clôture du Sprint 4 — v0.4.0](docs/rapports/2026-10-09_S4_cloture.md)
 - 🔐 [Politique de sécurité](SECURITY.md) · [Suivi de l'audit de l'ancienne version](docs/securite/heritage-audit-django.md)
 - 🔌 [API : description OpenAPI](docs/api/openapi.json) — page interactive sur http://localhost:4000/api/docs (`pnpm --filter @kemdia/api dev`)
 - 🗄️ [Base de données locale (PostgreSQL, migrations)](docs/guides/base-de-donnees.md)

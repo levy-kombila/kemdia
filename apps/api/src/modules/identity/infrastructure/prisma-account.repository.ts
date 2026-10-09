@@ -39,8 +39,6 @@ function toDomain(row: AccountRow & { roles: Pick<AccountRoleRow, "role">[] }): 
     status: FROM_DB[row.status],
     emailVerifiedAt: row.emailVerifiedAt,
     phoneVerifiedAt: row.phoneVerifiedAt,
-    failedLogins: row.failedLogins,
-    lockedUntil: row.lockedUntil,
     roles: row.roles.map((r) => ROLE_FROM_DB[r.role]),
     createdAt: row.createdAt,
   });
@@ -61,8 +59,6 @@ function writable(account: Account) {
     status: TO_DB[s.status],
     emailVerifiedAt: s.emailVerifiedAt,
     phoneVerifiedAt: s.phoneVerifiedAt,
-    failedLogins: s.failedLogins,
-    lockedUntil: s.lockedUntil,
   };
 }
 

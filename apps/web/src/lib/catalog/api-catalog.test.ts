@@ -1,6 +1,6 @@
 import type { ProductPage } from "@kemdia/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CACHE_TTL_MS, createApiCatalog } from "./api-catalog";
+import { CACHE_TTL_MS, GATEWAY_RETRY_MS, createApiCatalog } from "./api-catalog";
 import { CatalogUnavailableError } from "./port";
 import { FAKE_PRODUCTS } from "./test-fake-api";
 
@@ -129,6 +129,109 @@ describe("Adaptateur « API »", () => {
       expect(logged).toContain("items.0.price");
       expect(logged).not.toContain("gratuit-secret");
       expect(logged).not.toContain(KEY);
+    });
+  });
+
+  describe("démo qui se réveille (S4-T08) : 502/503/504 réessayés jusqu'au délai total", () => {
+    const silence = () => vi.spyOn(console, "error").mockImplementation(() => {});
+    const tree = { items: [] };
+
+    /** Horloge et attente factices : chaque pause fait avancer l'horloge. */
+    function clock() {
+      let t = 0;
+      return {
+        now: () => t,
+        sleep: (ms: number) => {
+          t += ms;
+          return Promise.resolve();
+        },
+      };
+    }
+
+    it("502 puis 503 puis réponse : la page s'affiche, sans erreur", async () => {
+      const statuses = [502, 503];
+      const { fetch, calls } = fakeFetch(() => {
+        const status = statuses.shift();
+        return status ? new Response("Bad Gateway", { status }) : json(tree);
+      });
+      const api = createApiCatalog({
+        url: "http://api",
+        key: KEY,
+        timeoutMs: 90_000,
+        fetch,
+        retryGatewayErrors: true,
+        ...clock(),
+      });
+      await expect(api.categoryTree()).resolves.toEqual([]);
+      expect(calls).toHaveLength(3);
+    });
+
+    it("jamais au-delà du délai total : erreur à la fin", async () => {
+      silence();
+      const { fetch, calls } = fakeFetch(() => new Response("", { status: 502 }));
+      const api = createApiCatalog({
+        url: "http://api",
+        key: KEY,
+        timeoutMs: 10_000,
+        fetch,
+        retryGatewayErrors: true,
+        ...clock(),
+      });
+      await expect(api.categoryTree()).rejects.toBeInstanceOf(CatalogUnavailableError);
+      // Essais à 0, 3, 6 et 9 s ; après celui de 9 s, il ne reste pas 3 s : on arrête
+      expect(calls).toHaveLength(Math.ceil(10_000 / GATEWAY_RETRY_MS));
+    });
+
+    it("chaque essai libère sa réponse, n'attend que le temps restant ; l'échec n'est pas gardé", async () => {
+      silence();
+      const cancels: number[] = [];
+      const timeouts: number[] = [];
+      const timeoutSpy = vi.spyOn(AbortSignal, "timeout").mockImplementation((ms: number) => {
+        timeouts.push(ms);
+        return new AbortController().signal;
+      });
+      const { fetch, calls } = fakeFetch(() => {
+        const body = new ReadableStream({ cancel: () => void cancels.push(1) });
+        return new Response(body, { status: 502 });
+      });
+      const api = createApiCatalog({
+        url: "http://api",
+        key: KEY,
+        timeoutMs: 10_000,
+        fetch,
+        retryGatewayErrors: true,
+        ...clock(),
+      });
+      // Deux visiteurs en même temps : une seule série d'essais
+      const [a, b] = await Promise.allSettled([api.categoryTree(), api.categoryTree()]);
+      expect([a.status, b.status]).toEqual(["rejected", "rejected"]);
+      expect(calls).toHaveLength(4);
+      expect(cancels).toHaveLength(3);
+      expect(timeouts).toEqual([10_000, 7_000, 4_000, 1_000]);
+      // L'erreur n'est pas mise en cache : l'appel suivant interroge de nouveau l'API
+      await api.categoryTree().catch(() => undefined);
+      expect(calls.length).toBeGreaterThan(4);
+      timeoutSpy.mockRestore();
+    });
+
+    it("hors démo, ou pour une autre erreur (500) : pas de nouvel essai", async () => {
+      silence();
+      for (const [status, retry] of [
+        [502, false],
+        [500, true],
+      ] as const) {
+        const { fetch, calls } = fakeFetch(() => new Response("", { status }));
+        const api = createApiCatalog({
+          url: "http://api",
+          key: KEY,
+          timeoutMs: 90_000,
+          fetch,
+          retryGatewayErrors: retry,
+          ...clock(),
+        });
+        await expect(api.categoryTree()).rejects.toBeInstanceOf(CatalogUnavailableError);
+        expect(calls).toHaveLength(1);
+      }
     });
   });
 });

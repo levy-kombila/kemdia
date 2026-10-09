@@ -31,7 +31,11 @@ async function catalog(): Promise<CatalogPort> {
   await connection();
   if (process.env.NEXT_PHASE === "phase-production-build") throw new Error(BUILD_READ_ERROR);
   if (!instance) {
-    instance = createApiCatalog(catalogSource());
+    // Démo : l'API qui se réveille répond 502 quelques secondes ; on patiente (S4-T08)
+    instance = createApiCatalog({
+      ...catalogSource(),
+      retryGatewayErrors: process.env.APP_ENV === "demo",
+    });
   }
   return instance;
 }

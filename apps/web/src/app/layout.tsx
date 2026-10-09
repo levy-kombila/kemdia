@@ -4,7 +4,9 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { connection } from "next/server";
 import { Footer } from "@/components/layout/Footer";
-import { Header } from "@/components/layout/Header";
+import { Suspense } from "react";
+import { Header, HeaderFallback } from "@/components/layout/Header";
+import { WakeUpNotice } from "@/components/layout/WakeUpNotice";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { Providers } from "@/components/providers/Providers";
 import { SITE, siteUrl } from "@/lib/site";
@@ -63,6 +65,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // CSP à nonce (S4-T07, ADR-0021) : chaque page est rendue à la demande, avec le nonce de SA requête.
   // Une page pré-générée à la construction n'aurait pas de nonce : ses scripts seraient bloqués.
   await connection();
+  const demo = process.env.APP_ENV === "demo";
   return (
     // data-scroll-behavior : défilement doux seulement à l'intérieur d'une page, pas lors d'un changement de page
     <html lang="fr-GA" className={archivo.variable} data-scroll-behavior="smooth">
@@ -74,10 +77,26 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           Aller au contenu
         </a>
         <Providers>
-          <Header />
-          <main id="contenu" className="flex-1 pb-16 lg:pb-0">
-            {children}
-          </main>
+          {demo ? (
+            // Démo gratuite (S4-T08) : la page part tout de suite avec un en-tête de réserve et, si l'API dort,
+            // « La boutique se réveille… ». Réservé à la démo : en streaming, le statut 200 est envoyé avant que
+            // la page sache si elle est introuvable (404), en erreur (500) ou à rediriger (307).
+            <>
+              <Suspense fallback={<HeaderFallback />}>
+                <Header />
+              </Suspense>
+              <main id="contenu" className="flex-1 pb-16 lg:pb-0">
+                <Suspense fallback={<WakeUpNotice demo />}>{children}</Suspense>
+              </main>
+            </>
+          ) : (
+            <>
+              <Header />
+              <main id="contenu" className="flex-1 pb-16 lg:pb-0">
+                {children}
+              </main>
+            </>
+          )}
           <Footer />
           <MobileTabBar />
         </Providers>

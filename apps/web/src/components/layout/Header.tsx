@@ -34,15 +34,9 @@ async function navigationTree(): Promise<NavCategory[]> {
   }
 }
 
-export async function Header() {
-  // Seuls les champs utiles au menu sont envoyés au navigateur (3 niveaux)
-  // Menu et compte lus en parallèle ; seul le prénom du compte est envoyé au navigateur
-  const [tree, current] = await Promise.all([navigationTree(), getCurrentAccount()]);
-  const account: HeaderAccount =
-    current.status === "signed-in" ? { firstName: current.account.firstName } : null;
+function HeaderShell({ account, tree }: { account: HeaderAccount; tree: NavCategory[] }) {
   return (
     <>
-      {current.status === "stale" && <StaleSessionCleaner />}
       <TopBar />
       <header className="sticky top-0 z-50 shadow-sm">
         <div className="border-ink-100 border-b bg-white">
@@ -59,6 +53,29 @@ export async function Header() {
         </div>
         <CategoryNav tree={tree} />
       </header>
+    </>
+  );
+}
+
+/**
+ * En-tête envoyé TOUT DE SUITE pendant que le vrai attend l'API (S4-T08, `<Suspense>` du layout, DÉMO seulement) : même hauteur,
+ * recherche et panier utilisables, menu des catégories et compte réservés. Sur la démo endormie, le visiteur voit
+ * donc le site et l'écran « La boutique se réveille » au lieu d'une page blanche.
+ */
+export function HeaderFallback() {
+  return <HeaderShell account="loading" tree={[]} />;
+}
+
+export async function Header() {
+  // Seuls les champs utiles au menu sont envoyés au navigateur (3 niveaux)
+  // Menu et compte lus en parallèle ; seul le prénom du compte est envoyé au navigateur
+  const [tree, current] = await Promise.all([navigationTree(), getCurrentAccount()]);
+  const account: HeaderAccount =
+    current.status === "signed-in" ? { firstName: current.account.firstName } : null;
+  return (
+    <>
+      {current.status === "stale" && <StaleSessionCleaner />}
+      <HeaderShell account={account} tree={tree} />
     </>
   );
 }

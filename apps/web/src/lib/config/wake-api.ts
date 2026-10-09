@@ -13,26 +13,49 @@ export const WAKE_TIMEOUT_MS = 90_000;
 
 type Fetch = (url: string, init: RequestInit) => Promise<Response>;
 
+/** Pause entre deux essais quand Render répond 502/503/504 pendant le démarrage de l'API (S4-T08). */
+export const WAKE_RETRY_MS = 3_000;
+const GATEWAY_STATUSES = new Set([502, 503, 504]);
+
 export async function wakeCatalogApi(
   appEnv: string | undefined,
   source: CatalogSource,
-  options: { fetch?: Fetch; log?: (message: string) => void } = {},
+  options: {
+    fetch?: Fetch;
+    log?: (message: string) => void;
+    now?: () => number;
+    sleep?: (ms: number) => Promise<void>;
+  } = {},
 ): Promise<"skipped" | "awake" | "failed"> {
   if (appEnv !== "demo") return "skipped";
-  const { fetch: fetchImpl = fetch, log = console.log } = options;
-  const started = Date.now();
+  const {
+    fetch: fetchImpl = fetch,
+    log = console.log,
+    now = Date.now,
+    sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
+  } = options;
+  const started = now();
+  const deadline = started + WAKE_TIMEOUT_MS;
+  const elapsed = () => ((now() - started) / 1000).toFixed(1);
   try {
-    const response = await fetchImpl(`${source.url}/api/health`, {
-      signal: AbortSignal.timeout(WAKE_TIMEOUT_MS),
-      cache: "no-store",
-    });
-    const seconds = ((Date.now() - started) / 1000).toFixed(1);
-    if (!response.ok) {
-      log(`Kemdia — réveil de l'API : réponse ${response.status} après ${seconds} s`);
-      return "failed";
+    for (;;) {
+      const response = await fetchImpl(`${source.url}/api/health`, {
+        signal: AbortSignal.timeout(Math.max(1, deadline - now())),
+        cache: "no-store",
+      });
+      // Corps jamais lu : libéré tout de suite (connexion rendue)
+      await response.body?.cancel().catch(() => undefined);
+      if (response.ok) {
+        log(`Kemdia — réveil de l'API : prête en ${elapsed()} s`);
+        return "awake";
+      }
+      // Render répond 502 tant que l'API démarre (constaté sur la démo le 2026-10-09) : on patiente
+      if (!GATEWAY_STATUSES.has(response.status) || now() + WAKE_RETRY_MS >= deadline) {
+        log(`Kemdia — réveil de l'API : réponse ${response.status} après ${elapsed()} s`);
+        return "failed";
+      }
+      await sleep(WAKE_RETRY_MS);
     }
-    log(`Kemdia — réveil de l'API : prête en ${seconds} s`);
-    return "awake";
   } catch {
     log("Kemdia — réveil de l'API : pas de réponse (le premier affichage peut échouer)");
     return "failed";
