@@ -1,7 +1,11 @@
 import "reflect-metadata";
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config/env.js";
 import { PrismaService } from "../src/database/prisma.service.js";
+import { TransactionContext } from "../src/database/transaction-context.js";
+import { AuditLog } from "../src/modules/audit/index.js";
+import { PrismaAuditRepository } from "../src/modules/audit/infrastructure/prisma-audit.repository.js";
 import { OtpService } from "../src/modules/identity/application/otp.service.js";
 import { IdentifierTakenError } from "../src/modules/identity/application/ports.js";
 import { Account } from "../src/modules/identity/domain/account.js";
@@ -30,13 +34,15 @@ const config = loadConfig({
   DATABASE_URL: testDatabaseUrl(),
 });
 const prisma = new PrismaService(config);
+const transactions = new TransactionContext(prisma);
+const audit = new AuditLog(new PrismaAuditRepository(transactions));
 const accounts = new PrismaAccountRepository(prisma);
 const challenges = new PrismaOtpChallengeRepository(prisma);
 const tickets = new PrismaSignupTicketRepository(prisma);
-const sessions = new PrismaSessionRepository(prisma);
+const sessions = new PrismaSessionRepository(transactions);
 const guards = new PrismaLoginGuardRepository(prisma);
 const maintenance = new PrismaIdentityMaintenance(prisma);
-const resetTickets = new PrismaResetTicketRepository(prisma);
+const resetTickets = new PrismaResetTicketRepository(prisma, transactions);
 
 const T0 = new Date("2026-10-07T10:00:00.000Z");
 let n = 0;
@@ -54,7 +60,7 @@ const register = (identifier: string, id = uuid()) =>
 
 beforeEach(async () => {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "identity"."reset_tickets", "identity"."login_guards", "identity"."sessions", "identity"."signup_tickets", "identity"."otp_challenges", "identity"."accounts"',
+    'TRUNCATE "identity"."reset_tickets", "identity"."login_guards", "identity"."sessions", "identity"."signup_tickets", "identity"."otp_challenges", "identity"."account_roles", "identity"."accounts"',
   );
 });
 afterAll(() => prisma.$disconnect());
@@ -204,7 +210,7 @@ describe("inscription (PostgreSQL)", () => {
     const clock = new FakeClock(T0);
     const sender = new RecordingOtpSender(["email"]);
     const otp = new OtpService(challenges, sender, clock, { smsEnabled: false });
-    const sessionService = new SessionService(sessions, accounts, clock);
+    const sessionService = new SessionService(sessions, accounts, clock, audit, transactions);
     return {
       clock,
       sender,
@@ -278,7 +284,7 @@ describe("inscription (PostgreSQL)", () => {
 describe("connexion et sessions (PostgreSQL)", () => {
   const setup = async () => {
     const clock = new FakeClock(T0);
-    const sessionService = new SessionService(sessions, accounts, clock);
+    const sessionService = new SessionService(sessions, accounts, clock, audit, transactions);
     const account = register("awa@exemple.ga");
     account.markVerified(requireIdentifier("awa@exemple.ga"), T0);
     // fakeHasher : hash:<mot de passe>
@@ -329,7 +335,7 @@ describe("connexion et sessions (PostgreSQL)", () => {
       guards,
       counting,
       clock,
-      new SessionService(sessions, accounts, clock),
+      new SessionService(sessions, accounts, clock, audit, transactions),
     );
     const results = await Promise.all(
       Array.from({ length: 30 }, (_, i) =>
@@ -406,7 +412,7 @@ describe("mot de passe oublié (PostgreSQL)", () => {
     const clock = new FakeClock(T0);
     const sender = new RecordingOtpSender(["email"]);
     const otp = new OtpService(challenges, sender, clock, { smsEnabled: false });
-    const sessionService = new SessionService(sessions, accounts, clock);
+    const sessionService = new SessionService(sessions, accounts, clock, audit, transactions);
     const account = register("awa@exemple.ga");
     account.markVerified(requireIdentifier("awa@exemple.ga"), T0);
     await accounts.save(
@@ -419,6 +425,8 @@ describe("mot de passe oublié (PostgreSQL)", () => {
       clock,
       otp,
       sessionService,
+      audit,
+      transactions,
     );
     const login = new LoginService(accounts, guards, fakeHasher, clock, sessionService);
     return { clock, sender, service, login, sessionService, accountId: account.id };
@@ -437,12 +445,20 @@ describe("mot de passe oublié (PostgreSQL)", () => {
     expect(rows[0]).toMatchObject({ accountId, destination: "awa@exemple.ga" });
     expect(JSON.stringify(rows)).not.toContain(ticket);
 
+    const requestId = `int-${randomUUID()}`;
     const opened = await service.reset({
       ticket,
       code: sender.lastCode(),
       newPassword: "Papaye2027",
       userAgent: "Chrome",
+      context: { ip: "203.0.113.10", requestId },
     });
+    // Journal d'audit écrit dans la même transaction (S4-T06)
+    const traces = await prisma.auditEvent.findMany({ where: { requestId } });
+    expect(traces).toMatchObject([
+      { action: "password.reset", actorId: accountId, targetId: accountId, ip: "203.0.113.10" },
+    ]);
+    expect(JSON.stringify(traces)).not.toContain("Papaye2027");
     expect(await prisma.resetTicket.count()).toBe(0);
     expect(await prisma.loginGuard.count()).toBe(0);
     const active = await prisma.session.findMany({ where: { revokedAt: null } });

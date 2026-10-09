@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "1.4.0",
-    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message."
+    "version": "1.5.0",
+    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration."
   },
   "servers": [
     {
@@ -19,6 +19,10 @@
     {
       "name": "Identité",
       "description": "Inscription et vérification par code (module identity) ; appelées par le serveur du site"
+    },
+    {
+      "name": "Administration",
+      "description": "Rôles des comptes et journal d'audit (S4-T06) : administrateurs connectés depuis moins de 15 minutes"
     },
     {
       "name": "Supervision",
@@ -1263,6 +1267,407 @@
           }
         }
       }
+    },
+    "/api/v1/admin/accounts/lookup": {
+      "post": {
+        "tags": ["Administration"],
+        "summary": "Retrouver un compte par e-mail ou téléphone",
+        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes** (sinon `RECONNEXION_REQUISE` : se reconnecter).\n\nLes rôles sont relus à chaque requête : un rôle retiré ne sert plus, tout de suite.\n\nL'identifiant est dans le corps : jamais dans l'adresse ni dans les journaux techniques.",
+        "operationId": "lookupAccount",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminAccountLookupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Le compte trouvé",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAccount"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps de requête invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`COMPTE_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`IDENTIFIANT_INVALIDE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/accounts/{accountId}/roles/{role}": {
+      "put": {
+        "tags": ["Administration"],
+        "summary": "Accorder le rôle vendeur ou modérateur à un compte",
+        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes** (sinon `RECONNEXION_REQUISE` : se reconnecter).\n\nLes rôles sont relus à chaque requête : un rôle retiré ne sert plus, tout de suite.\n\nJamais sur son propre compte (`ROLE_SUR_SOI_INTERDIT`). Sans effet si le compte a déjà (ou n'a déjà plus) ce rôle ; sinon, une ligne est inscrite au journal d'audit dans la même transaction.\n\nLe compte doit être actif (`COMPTE_INACTIF`).",
+        "operationId": "grantRole",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "description": "UUID du compte",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "role",
+            "in": "path",
+            "required": true,
+            "description": "`vendor` ou `moderator` (`admin` : commande serveur seulement)",
+            "schema": {
+              "type": "string",
+              "enum": ["vendor", "moderator"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le compte et ses rôles après le changement",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAccount"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "UUID ou rôle invalide (`admin` et `client` sont refusés ici)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`COMPTE_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`COMPTE_INACTIF`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Administration"],
+        "summary": "Retirer le rôle vendeur ou modérateur d'un compte",
+        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes** (sinon `RECONNEXION_REQUISE` : se reconnecter).\n\nLes rôles sont relus à chaque requête : un rôle retiré ne sert plus, tout de suite.\n\nJamais sur son propre compte (`ROLE_SUR_SOI_INTERDIT`). Sans effet si le compte a déjà (ou n'a déjà plus) ce rôle ; sinon, une ligne est inscrite au journal d'audit dans la même transaction.",
+        "operationId": "revokeRole",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "description": "UUID du compte",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "role",
+            "in": "path",
+            "required": true,
+            "description": "`vendor` ou `moderator` (`admin` : commande serveur seulement)",
+            "schema": {
+              "type": "string",
+              "enum": ["vendor", "moderator"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le compte et ses rôles après le changement",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAccount"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "UUID ou rôle invalide (`admin` et `client` sont refusés ici)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`COMPTE_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/audit": {
+      "get": {
+        "tags": ["Administration"],
+        "summary": "Journal d'audit des actions sensibles, du plus récent au plus ancien",
+        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes** (sinon `RECONNEXION_REQUISE` : se reconnecter).\n\nLes rôles sont relus à chaque requête : un rôle retiré ne sert plus, tout de suite.\n\nActions : `role.granted`, `role.revoked`, `password.reset`, `sessions.revoked_all`. Conservé 365 jours ; la base refuse toute modification.\n\nPage suivante : repasser `nextCursor` dans `before`.",
+        "operationId": "listAuditEvents",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Lignes par page (50 par défaut, 100 au plus)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "Position renvoyée par la page précédente (`nextCursor`)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "description": "Une seule action",
+            "schema": {
+              "type": "string",
+              "enum": ["role.granted", "role.revoked", "password.reset", "sessions.revoked_all"]
+            }
+          },
+          {
+            "name": "accountId",
+            "in": "query",
+            "description": "Lignes où ce compte agit ou est la cible",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Une page du journal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Paramètre inconnu ou invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1288,11 +1693,216 @@
           "phone": {
             "description": "Format +2410XXXXXXXX",
             "type": ["string", "null"]
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["client", "vendor", "moderator", "admin"]
+            },
+            "description": "Rôles cumulables (S4-T06) : toujours « client », puis vendor, moderator, admin"
           }
         },
-        "required": ["id", "firstName", "lastName", "email", "phone"],
+        "required": ["id", "firstName", "lastName", "email", "phone", "roles"],
         "additionalProperties": false,
         "description": "Le compte de la personne connectée"
+      },
+      "AdminAccount": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "email": {
+            "type": ["string", "null"]
+          },
+          "phone": {
+            "description": "Format +2410XXXXXXXX",
+            "type": ["string", "null"]
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["client", "vendor", "moderator", "admin"]
+            },
+            "description": "Rôles cumulables (S4-T06) : toujours « client », puis vendor, moderator, admin"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "active", "disabled"]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "firstName",
+          "lastName",
+          "email",
+          "phone",
+          "roles",
+          "status",
+          "createdAt"
+        ],
+        "additionalProperties": false,
+        "description": "Un compte vu par l'administration"
+      },
+      "AdminAccountLookupRequest": {
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Adresse e-mail ou mobile gabonais"
+          }
+        },
+        "required": ["identifier"],
+        "additionalProperties": false,
+        "description": "Recherche d'un compte (dans le corps : jamais d'adresse e-mail dans l'URL ni les journaux)"
+      },
+      "AuditEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "action": {
+            "type": "string",
+            "enum": ["role.granted", "role.revoked", "password.reset", "sessions.revoked_all"]
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "account"
+                  },
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "description": "Identifiant UUID (BR-042)"
+                  }
+                },
+                "required": ["type", "id"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "system"
+                  }
+                },
+                "required": ["type"],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "account"
+                  },
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "description": "Identifiant UUID (BR-042)"
+                  }
+                },
+                "required": ["type", "id"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "details": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              ]
+            }
+          },
+          "ip": {
+            "description": "Adresse vue par l'API",
+            "type": ["string", "null"]
+          },
+          "requestId": {
+            "description": "Identifiant de la requête dans les journaux techniques",
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["id", "occurredAt", "action", "actor", "target", "details", "ip", "requestId"],
+        "additionalProperties": false,
+        "description": "Une action sensible : qui, quoi, sur quoi, quand, d'où"
+      },
+      "AuditPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEvent"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{20,120}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "À passer dans `before` pour la page suivante ; vide à la fin"
+          }
+        },
+        "required": ["items", "nextCursor"],
+        "additionalProperties": false,
+        "description": "Journal d'audit, du plus récent au plus ancien"
       },
       "AvailabilityRequest": {
         "type": "object",
@@ -1703,7 +2313,13 @@
               "COMPTE_BLOQUE",
               "IDENTIFIANTS_INCORRECTS",
               "COMPTE_DESACTIVE",
-              "SESSION_INVALIDE"
+              "SESSION_INVALIDE",
+              "ACCES_REFUSE",
+              "RECONNEXION_REQUISE",
+              "ROLE_NON_ATTRIBUABLE",
+              "ROLE_SUR_SOI_INTERDIT",
+              "COMPTE_INTROUVABLE",
+              "COMPTE_INACTIF"
             ]
           },
           "requestId": {

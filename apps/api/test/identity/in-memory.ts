@@ -10,7 +10,12 @@ import {
   type ResetTicketRepository,
   type SessionRepository,
   type SignupTicketRepository,
+  type GrantOutcome,
+  type RoleRepository,
+  type TransactionRunner,
 } from "../../src/modules/identity/application/ports.js";
+import type { AuditEntry } from "../../src/modules/audit/index.js";
+import type { StoredRole } from "../../src/modules/identity/domain/role.js";
 import {
   nextGuardState,
   type LoginGuardState,
@@ -228,3 +233,37 @@ export class InMemoryResetTickets implements ResetTicketRepository {
     return Promise.resolve(true);
   }
 }
+
+/** Rôles en mémoire : modifient la ligne du compte (comme la table account_roles relue avec le compte). */
+export class InMemoryRoles implements RoleRepository {
+  constructor(private readonly accounts: InMemoryAccounts) {}
+  grant(accountId: string, role: StoredRole): Promise<GrantOutcome> {
+    const row = this.accounts.rows.get(accountId);
+    if (!row) return Promise.resolve("missing");
+    if (row.status !== "active") return Promise.resolve("inactive");
+    if (row.roles.includes(role)) return Promise.resolve("unchanged");
+    this.accounts.rows.set(accountId, { ...row, roles: [...row.roles, role] });
+    return Promise.resolve("granted");
+  }
+  revoke(accountId: string, role: StoredRole): Promise<boolean> {
+    const row = this.accounts.rows.get(accountId);
+    if (!row?.roles.includes(role)) return Promise.resolve(false);
+    this.accounts.rows.set(accountId, { ...row, roles: row.roles.filter((r) => r !== role) });
+    return Promise.resolve(true);
+  }
+}
+
+/** Journal d'audit qui garde les entrées pour que le test les lise. */
+export class RecordingAudit {
+  readonly entries: AuditEntry[] = [];
+  record(entry: AuditEntry): Promise<void> {
+    this.entries.push(entry);
+    return Promise.resolve();
+  }
+  actions(): string[] {
+    return this.entries.map((e) => e.action);
+  }
+}
+
+/** Sans base : le travail s'exécute tel quel (les dépôts en mémoire n'ont pas de transaction). */
+export const directTransactions: TransactionRunner = { run: (work) => work() };

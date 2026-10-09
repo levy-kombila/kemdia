@@ -25,6 +25,13 @@ const MESSAGES: Record<AuthErrorCode, string> = {
     "Trop d'essais. Réessayez plus tard, ou choisissez un nouveau mot de passe avec « Mot de passe oublié ».",
   COMPTE_DESACTIVE: "Ce compte est désactivé. Contactez le service client Kemdia.",
   SESSION_INVALIDE: "Votre session a expiré. Reconnectez-vous.",
+  // Administration (S4-T06) : pas encore d'écran sur le site, messages prêts pour le S6
+  ACCES_REFUSE: "Cette action n'est pas permise avec votre compte.",
+  RECONNEXION_REQUISE: "Par sécurité, reconnectez-vous pour faire cette action.",
+  ROLE_NON_ATTRIBUABLE: "Ce rôle ne peut pas être accordé ici.",
+  ROLE_SUR_SOI_INTERDIT: "Vous ne pouvez pas modifier vos propres rôles.",
+  COMPTE_INTROUVABLE: "Aucun compte ne correspond.",
+  COMPTE_INACTIF: "Ce compte n'est pas actif.",
   INDISPONIBLE: "Service momentanément indisponible. Réessayez dans quelques instants.",
 };
 

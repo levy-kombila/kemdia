@@ -34,6 +34,7 @@ import {
   type SignupVerified,
   type SignupVerifyRequest,
 } from "@kemdia/contracts";
+import { auditContextOf } from "../../audit/index.js";
 import { LoginService } from "../application/login.service.js";
 import { PasswordResetService } from "../application/password-reset.service.js";
 import {
@@ -141,8 +142,11 @@ export class IdentityController {
   @HttpCode(HttpStatus.OK)
   @Header("Cache-Control", "no-store")
   @UseGuards(SessionGuard)
-  async logoutAll(@CurrentSession() session: AuthenticatedSession): Promise<LogoutAll> {
-    return { revoked: await this.sessions.logoutAll(session.account.id) };
+  async logoutAll(
+    @CurrentSession() session: AuthenticatedSession,
+    @Req() req: Request,
+  ): Promise<LogoutAll> {
+    return { revoked: await this.sessions.logoutAll(session.account.id, auditContextOf(req)) };
   }
 
   @Post("signup/resend")
@@ -179,6 +183,7 @@ export class IdentityController {
   @Header("Cache-Control", "no-store")
   async resetPassword(
     @Body({ schema: ResetPasswordRequestSchema }) body: ResetPasswordRequest,
+    @Req() req: Request,
     @Headers("x-kemdia-user-agent") userAgent?: string,
   ): Promise<OpenedSessionView> {
     const opened = await withIdentityErrors(() =>
@@ -187,6 +192,7 @@ export class IdentityController {
         code: body.code,
         newPassword: body.newPassword,
         userAgent,
+        context: auditContextOf(req),
       }),
     );
     return presentOpened(opened);

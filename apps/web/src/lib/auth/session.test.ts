@@ -12,6 +12,7 @@ const OK = {
       lastName: "Ndong",
       email: "awa@exemple.ga",
       phone: null,
+      roles: ["client" as const],
     },
   },
 };

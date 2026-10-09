@@ -1,4 +1,4 @@
-import type { IdentityErrorCode } from "@kemdia/contracts/constants";
+import type { IdentityErrorCode, Role } from "@kemdia/contracts/constants";
 
 /**
  * Résultats renvoyés aux formulaires par les actions serveur (S4-T05). Aucune donnée secrète :
@@ -28,4 +28,6 @@ export type AccountSummary = {
   lastName: string;
   email: string | null;
   phone: string | null;
+  /** Rôles cumulables (S4-T06) : toujours « client », puis vendeur, modérateur, administrateur */
+  roles: readonly Role[];
 };

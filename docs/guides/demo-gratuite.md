@@ -170,6 +170,24 @@ Fusionnez n'importe quelle PR dans `main` (ou _Actions → CI/CD → Run workflo
 
 Le résumé du job affiche l'adresse et la source du catalogue.
 
+### 8. Créer le premier administrateur (S4-T06)
+
+Aucun compte administrateur n'existe au départ, et aucun mot de passe par défaut : on **promeut un compte déjà inscrit**.
+
+1. Inscris-toi normalement sur le site de démo (code reçu par e-mail).
+2. Sur **ton poste**, dans un terminal, avec l'adresse de connexion Neon (tableau de bord Neon → _Connection string_) :
+
+   ```bash
+   DATABASE_URL="postgresql://…neon.tech/neondb?sslmode=require" pnpm --filter @kemdia/api admin:grant ton-adresse@exemple.ga
+   ```
+
+   La commande affiche seulement l'UUID du compte. Elle n'écrit rien dans Git ni dans Render ; l'adresse Neon reste dans ton terminal
+   (ne la colle pas dans un fichier suivi par Git).
+
+3. Pour retirer le rôle : `admin:revoke` avec la même adresse. Chaque changement est inscrit au journal d'audit.
+
+Les routes d'administration (`/api/v1/admin/…`) demandent une connexion de **moins de 15 minutes** ; il n'y a pas encore d'écran (S6).
+
 ## En cas de problème
 
 | Symptôme                                                                           | Cause probable et solution                                                                                                        |

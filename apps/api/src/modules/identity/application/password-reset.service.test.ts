@@ -8,6 +8,8 @@ import {
   InMemorySessions,
   RecordingOtpSender,
   fakeHasher,
+  RecordingAudit,
+  directTransactions,
 } from "../../../../test/identity/in-memory.js";
 import { Account } from "../domain/account.js";
 import { requireIdentifier } from "../domain/identifier.js";
@@ -23,6 +25,7 @@ const ACCOUNT_ID = "11111111-1111-4111-8111-111111111111";
 
 async function setup({ status = "active" }: { status?: "active" | "disabled" } = {}) {
   const accounts = new InMemoryAccounts();
+  const audit = new RecordingAudit();
 
   const guards = new InMemoryLoginGuards();
   const challenges = new InMemoryOtpChallenges();
@@ -41,7 +44,7 @@ async function setup({ status = "active" }: { status?: "active" | "disabled" } =
       uuid: () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`,
     },
   );
-  const sessionService = new SessionService(sessions, accounts, clock);
+  const sessionService = new SessionService(sessions, accounts, clock, audit, directTransactions);
   const account = Account.register({
     id: ACCOUNT_ID,
     firstName: "Awa",
@@ -59,10 +62,13 @@ async function setup({ status = "active" }: { status?: "active" | "disabled" } =
     clock,
     otp,
     sessionService,
+    audit,
+    directTransactions,
   );
   const login = new LoginService(accounts, guards, fakeHasher, clock, sessionService);
   const stored = () => accounts.rows.get(ACCOUNT_ID)!;
   return {
+    audit,
     service,
     login,
     accounts,
@@ -122,16 +128,28 @@ describe("Mot de passe oublié (FR-012)", () => {
   });
 
   it("bon code : mot de passe changé, connecté ici, déconnecté ailleurs, avis envoyé", async () => {
-    const { service, login, sender, sessions, tickets, stored } = await setup();
+    const { service, login, sender, sessions, tickets, stored, audit } = await setup();
     await tryLogin(login, "Mangue2026");
     const elsewhere = sessions.rows[0]!;
     const { ticket } = await service.start(EMAIL);
+    const context = { ip: "203.0.113.9", requestId: "req-42" };
     const opened = await service.reset({
       ticket,
       code: sender.lastCode(),
       newPassword: "Papaye2027",
       userAgent: "Chrome",
+      context,
     });
+    // Journal d'audit (S4-T06) : qui, quoi, d'où — jamais le mot de passe ni le code
+    expect(audit.entries).toEqual([
+      {
+        action: "password.reset",
+        actor: { type: "account", id: ACCOUNT_ID },
+        target: { type: "account", id: ACCOUNT_ID },
+        details: {},
+        context,
+      },
+    ]);
     expect(opened.account).toMatchObject({ id: ACCOUNT_ID, email: EMAIL });
     expect(stored().passwordHash).toBe("hash:Papaye2027");
     // L'ancienne session est fermée, la nouvelle est ouverte
@@ -181,7 +199,7 @@ describe("Mot de passe oublié (FR-012)", () => {
   });
 
   it("mauvais code : refusé, mot de passe inchangé, sessions intactes", async () => {
-    const { service, login, sender, sessions, stored } = await setup();
+    const { service, login, sender, sessions, stored, audit } = await setup();
     await tryLogin(login, "Mangue2026");
     const { ticket } = await service.start(EMAIL);
     const wrong = sender.lastCode() === "000000" ? "999999" : "000000";
@@ -190,6 +208,7 @@ describe("Mot de passe oublié (FR-012)", () => {
     ).rejects.toMatchObject({ code: "CODE_INVALIDE" });
     expect(stored().passwordHash).toBe("hash:Mangue2026");
     expect(sessions.rows.every((s) => s.revokedAt === null)).toBe(true);
+    expect(audit.entries).toEqual([]);
   });
 
   it("ticket leurre (adresse sans compte) : aucun code ne marche", async () => {

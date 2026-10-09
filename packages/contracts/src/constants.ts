@@ -76,6 +76,13 @@ export const IDENTITY_ERROR_CODES = [
   "IDENTIFIANTS_INCORRECTS",
   "COMPTE_DESACTIVE",
   "SESSION_INVALIDE",
+  // Rôles et administration (S4-T06)
+  "ACCES_REFUSE",
+  "RECONNEXION_REQUISE",
+  "ROLE_NON_ATTRIBUABLE",
+  "ROLE_SUR_SOI_INTERDIT",
+  "COMPTE_INTROUVABLE",
+  "COMPTE_INACTIF",
 ] as const;
 export type IdentityErrorCode = (typeof IDENTITY_ERROR_CODES)[number];
 
@@ -89,3 +96,30 @@ export const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 export const SESSION_TTL_DAYS = 30;
 /** Canaux d'envoi des codes. */
 export const OTP_CHANNELS = ["email", "sms"] as const;
+
+// --- Rôles et journal d'audit (S4-T06, ADR-0020) ---
+
+/** Rôles d'un compte, cumulables. `client` : tout compte actif. */
+export const ROLES = ["client", "vendor", "moderator", "admin"] as const;
+export type Role = (typeof ROLES)[number];
+/** Rôles qu'un administrateur peut accorder ou retirer par l'API (`admin` : commande serveur seulement). */
+export const ADMIN_ASSIGNABLE_ROLES = ["vendor", "moderator"] as const;
+export type AssignableRole = (typeof ADMIN_ASSIGNABLE_ROLES)[number];
+/** Libellés affichés par le site. */
+export const ROLE_LABELS: Readonly<Record<Role, string>> = {
+  client: "Client",
+  vendor: "Vendeur",
+  moderator: "Modérateur",
+  admin: "Administrateur",
+};
+/** Actions inscrites au journal d'audit (liste fermée, même liste que le module audit de l'API). */
+export const AUDIT_ACTIONS = [
+  "role.granted",
+  "role.revoked",
+  "password.reset",
+  "sessions.revoked_all",
+] as const;
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+/** Lignes par page du journal d'audit. */
+export const AUDIT_PAGE_DEFAULT = 50;
+export const AUDIT_PAGE_MAX = 100;

@@ -5,6 +5,8 @@ import {
   InMemoryLoginGuards,
   InMemorySessions,
   fakeHasher,
+  RecordingAudit,
+  directTransactions,
 } from "../../../../test/identity/in-memory.js";
 import { Account } from "../domain/account.js";
 import { requireIdentifier } from "../domain/identifier.js";
@@ -16,6 +18,7 @@ const EMAIL = "awa@exemple.ga";
 
 async function setup({ status = "active" }: { status?: "active" | "disabled" } = {}) {
   const accounts = new InMemoryAccounts();
+  const audit = new RecordingAudit();
   const guards = new InMemoryLoginGuards();
   const sessions = new InMemorySessions();
   const clock = new FakeClock();
@@ -44,7 +47,7 @@ async function setup({ status = "active" }: { status?: "active" | "disabled" } =
     guards,
     hasher,
     clock,
-    new SessionService(sessions, accounts, clock),
+    new SessionService(sessions, accounts, clock, audit, directTransactions),
   );
   return { service, guards, sessions, clock, verifications };
 }

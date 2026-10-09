@@ -111,6 +111,16 @@ pnpm --filter @kemdia/api test:int
 
 (PowerShell : `$env:DATABASE_URL="postgresql://kemdia:kemdia@localhost:5432/kemdia_test"` au lieu de `export`.)
 
+### Donner le rôle administrateur (S4-T06)
+
+```bash
+pnpm --filter @kemdia/api admin:grant  awa@exemple.ga   # compte déjà inscrit et vérifié
+pnpm --filter @kemdia/api admin:revoke awa@exemple.ga
+```
+
+Le journal d'audit (`audit.events`) est en **ajout seul** : la base refuse de modifier ou d'effacer une ligne de moins de 365 jours,
+même pour les tests. Pour repartir de zéro sur le poste : `docker compose down -v` (supprime toute la base locale).
+
 ## Règles à respecter
 
 - **Ne jamais modifier une migration déjà fusionnée** dans `main` : elle a peut-être été appliquée en ligne. On en crée une nouvelle.

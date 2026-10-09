@@ -3,6 +3,8 @@ import {
   FakeClock,
   InMemoryAccounts,
   InMemorySessions,
+  RecordingAudit,
+  directTransactions,
 } from "../../../../test/identity/in-memory.js";
 import { Account } from "../domain/account.js";
 import { requireIdentifier } from "../domain/identifier.js";
@@ -11,6 +13,7 @@ import { SessionService } from "./session.service.js";
 
 async function setup() {
   const accounts = new InMemoryAccounts();
+  const audit = new RecordingAudit();
   const sessions = new InMemorySessions();
   const clock = new FakeClock();
   const account = Account.register({
@@ -24,15 +27,26 @@ async function setup() {
   account.markVerified(requireIdentifier("awa@exemple.ga"), clock.now());
   await accounts.save(account);
   return {
-    service: new SessionService(sessions, accounts, clock),
+    service: new SessionService(sessions, accounts, clock, audit, directTransactions),
     sessions,
     accounts,
     clock,
     account,
+    audit,
   };
 }
 
 describe("Sessions (30 jours glissants)", () => {
+  it("la session authentifiée porte sa date d'ouverture et les rôles du compte (S4-T06)", async () => {
+    const { service, account, clock } = await setup();
+    const opened = await service.open(account);
+    const openedAt = clock.now();
+    clock.advance(3 * 60 * 60_000);
+    const session = await service.authenticate(opened.token);
+    expect(session.openedAt).toEqual(openedAt);
+    expect(session.account.roles).toEqual(["client"]);
+  });
+
   it("jeton remis une fois, seule son empreinte est gardée ; navigateur nettoyé", async () => {
     const { service, sessions, account } = await setup();
     const opened = await service.open(account, "Mozilla/5.0\u0000 (Android)\n" + "x".repeat(300));
@@ -80,13 +94,26 @@ describe("Sessions (30 jours glissants)", () => {
     await expect(service.logout("court")).resolves.toBeUndefined();
   });
 
-  it("déconnecter tous les appareils", async () => {
-    const { service, account } = await setup();
+  it("déconnecter tous les appareils, inscrit au journal d'audit (S4-T06)", async () => {
+    const { service, account, audit } = await setup();
     const a = await service.open(account);
     const b = await service.open(account);
-    await expect(service.logoutAll(account.id)).resolves.toBe(2);
+    const context = { ip: "203.0.113.7", requestId: "req-1" };
+    await expect(service.logoutAll(account.id, context)).resolves.toBe(2);
+    expect(audit.entries).toEqual([
+      {
+        action: "sessions.revoked_all",
+        actor: { type: "account", id: account.id },
+        target: { type: "account", id: account.id },
+        details: { count: 2 },
+        context,
+      },
+    ]);
     await expect(service.authenticate(a.token)).rejects.toMatchObject({ code: "SESSION_INVALIDE" });
     await expect(service.authenticate(b.token)).rejects.toMatchObject({ code: "SESSION_INVALIDE" });
+    // Recommencer ne ferme plus rien : aucune nouvelle ligne de journal
+    await expect(service.logoutAll(account.id, context)).resolves.toBe(0);
+    expect(audit.entries).toHaveLength(1);
   });
 
   it("compte désactivé : ses sessions ne valent plus rien", async () => {

@@ -38,6 +38,8 @@ test.describe("compte client", () => {
 
     await page.goto("/compte");
     await expect(page.getByRole("heading", { name: "Awa Testeuse" })).toBeVisible();
+    // Rôles lus dans l'API (S4-T06) : un compte inscrit est client
+    await expect(page.getByRole("list", { name: "Vos rôles" })).toHaveText("Client");
     const a11y = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(
       a11y.violations.filter((v) => v.impact === "critical" || v.impact === "serious"),

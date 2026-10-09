@@ -27,8 +27,12 @@ import {
   OTP_SENDER,
   PASSWORD_HASHER,
   RESET_TICKET_REPOSITORY,
+  ROLE_REPOSITORY,
   SIGNUP_TICKET_REPOSITORY,
+  TRANSACTION_RUNNER,
 } from "../src/modules/identity/application/ports.js";
+import { AUDIT_REPOSITORY } from "../src/modules/audit/application/ports.js";
+import { InMemoryAuditEvents } from "./audit/in-memory.js";
 import { IDENTITY_ERROR_STATUS } from "../src/modules/identity/interface/identity-http-errors.js";
 import {
   FakeClock,
@@ -38,7 +42,9 @@ import {
   InMemoryResetTickets,
   InMemorySessions,
   InMemorySignupTickets,
+  InMemoryRoles,
   RecordingOtpSender,
+  directTransactions,
   fakeHasher,
 } from "./identity/in-memory.js";
 
@@ -100,6 +106,12 @@ describe("API identité — inscription (HTTP)", () => {
       .useValue(guards)
       .overrideProvider(RESET_TICKET_REPOSITORY)
       .useValue(new InMemoryResetTickets(accounts, sessions, guards))
+      .overrideProvider(ROLE_REPOSITORY)
+      .useValue(new InMemoryRoles(accounts))
+      .overrideProvider(TRANSACTION_RUNNER)
+      .useValue(directTransactions)
+      .overrideProvider(AUDIT_REPOSITORY)
+      .useValue(new InMemoryAuditEvents())
       .compile();
     app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });
     configureApp(app, config);

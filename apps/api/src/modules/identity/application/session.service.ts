@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
+import { AuditLog, NO_REQUEST, type AuditContext } from "../../audit/index.js";
 import type { Account, AccountView } from "../domain/account.js";
 import { IdentityError } from "../domain/identity-error.js";
 import { SECRET_PATTERN, generateSecret, hashSecret } from "../domain/secret.js";
@@ -13,9 +14,11 @@ import {
   ACCOUNT_REPOSITORY,
   IDENTITY_CLOCK,
   SESSION_REPOSITORY,
+  TRANSACTION_RUNNER,
   type AccountRepository,
   type Clock,
   type SessionRepository,
+  type TransactionRunner,
 } from "./ports.js";
 
 export interface OpenedSession {
@@ -27,6 +30,8 @@ export interface OpenedSession {
 
 export interface AuthenticatedSession {
   sessionId: string;
+  /** Ouverture de la session (connexion) : les routes d'administration exigent moins de 15 minutes (ADR-0020) */
+  openedAt: Date;
   expiresAt: Date;
   account: AccountView;
 }
@@ -41,6 +46,8 @@ export class SessionService {
     @Inject(SESSION_REPOSITORY) private readonly sessions: SessionRepository,
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: AccountRepository,
     @Inject(IDENTITY_CLOCK) private readonly clock: Clock,
+    @Inject(AuditLog) private readonly audit: Pick<AuditLog, "record">,
+    @Inject(TRANSACTION_RUNNER) private readonly transactions: TransactionRunner,
   ) {}
 
   async open(account: Account, userAgent?: string): Promise<OpenedSession> {
@@ -78,7 +85,12 @@ export class SessionService {
       expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
       await this.sessions.renew(session.id, expiresAt, now);
     }
-    return { sessionId: session.id, expiresAt, account: account.view() };
+    return {
+      sessionId: session.id,
+      openedAt: session.createdAt,
+      expiresAt,
+      account: account.view(),
+    };
   }
 
   /** Déconnexion : la session ne vaut plus rien, tout de suite. Sans effet sur un jeton inconnu. */
@@ -89,8 +101,23 @@ export class SessionService {
       await this.sessions.revoke(session.id, this.clock.now());
   }
 
-  /** « Déconnecter tous mes appareils ». (Après un changement de mot de passe : voir ResetTicketRepository.applyReset.) */
-  logoutAll(accountId: string): Promise<number> {
-    return this.sessions.revokeAllForAccount(accountId, this.clock.now());
+  /**
+   * « Déconnecter tous mes appareils », inscrit au journal d'audit dans la même transaction (S4-T06).
+   * (Après un changement de mot de passe : voir ResetTicketRepository.applyReset.)
+   */
+  logoutAll(accountId: string, context: AuditContext = NO_REQUEST): Promise<number> {
+    return this.transactions.run(async () => {
+      const count = await this.sessions.revokeAllForAccount(accountId, this.clock.now());
+      // Rien fermé (clics répétés) : rien à tracer, le journal ne se remplit pas de bruit (relecture S4-T06)
+      if (count === 0) return 0;
+      await this.audit.record({
+        action: "sessions.revoked_all",
+        actor: { type: "account", id: accountId },
+        target: { type: "account", id: accountId },
+        details: { count },
+        context,
+      });
+      return count;
+    });
   }
 }
