@@ -69,3 +69,10 @@ export function useToast(): ToastApi {
   if (!ctx) throw new Error("useToast doit être utilisé dans <ToastProvider>");
   return ctx;
 }
+
+const NO_TOAST: ToastApi = { notify: () => {} };
+
+/** Comme `useToast`, sans exiger le fournisseur (composants testés seuls). */
+export function useOptionalToast(): ToastApi {
+  return useContext(ToastContext) ?? NO_TOAST;
+}

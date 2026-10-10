@@ -1,6 +1,7 @@
 import "server-only";
 import {
   CLIENT_IP_HEADER,
+  IDENTITY_ERROR_CODES,
   CurrentSessionSchema,
   INTERNAL_KEY_HEADER,
   LogoutAllSchema,
@@ -84,11 +85,13 @@ export function createIdentityApi(options: IdentityApiOptions) {
 
     if (!response.ok) {
       const problem = ProblemDetailsSchema.safeParse(payload);
-      if (problem.success && problem.data.code) {
+      const code = problem.success ? problem.data.code : undefined;
+      const identityCode = IDENTITY_ERROR_CODES.find((c) => c === code);
+      if (identityCode) {
         const retry = Number(response.headers.get("retry-after"));
         return {
           ok: false,
-          code: problem.data.code,
+          code: identityCode,
           ...(Number.isInteger(retry) && retry > 0 ? { retryAfterSeconds: retry } : {}),
         };
       }

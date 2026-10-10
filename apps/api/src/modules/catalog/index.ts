@@ -1,6 +1,6 @@
 /**
  * Port public du module catalog : la SEULE porte d'entrée pour les autres modules (ADR-0006, règle 1).
- * Le module `orders` (S5) importera d'ici `CatalogService.checkAvailability` (BR-001).
+ * Le module `orders` y lit `CatalogService.describeLines` (panier serveur, S5-T01 : BR-001, BR-004).
  */
 export { CatalogModule } from "./catalog.module.js";
 export {
@@ -9,6 +9,8 @@ export {
   type AvailabilityLine,
   type AvailabilityResult,
   type CategoryView,
+  type DescribedLine,
+  type VariantSnapshot,
 } from "./application/catalog.service.js";
 export type { Facets, Page, PriceRange, ProductSummary, SortKey } from "./application/ports.js";
 export { SORT_KEYS } from "./application/ports.js";

@@ -30,10 +30,10 @@ Choix du propriétaire (2026-10-09) : **écran d'attente immédiat** sans change
 
 ### Colonnes obsolètes — deux temps
 
-| Étape | Quand      | Contenu                                                                                                 |
-| ----- | ---------- | ------------------------------------------------------------------------------------------------------- |
-| 1     | **S4-T08** | Champs `@ignore` dans le schéma Prisma : le code ne lit ni n'écrit plus ces colonnes ; aucune migration |
-| 2     | **S5-T01** | Migration `DROP COLUMN` (+ contrainte `accounts_failed_logins_check`), une fois l'étape 1 en ligne      |
+| Étape | Quand      | Contenu                                                                                                                                                                                      |
+| ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | **S4-T08** | Champs `@ignore` dans le schéma Prisma : le code ne lit ni n'écrit plus ces colonnes ; aucune migration                                                                                      |
+| 2     | **S5-T01** | Migration `DROP COLUMN` (+ contrainte `accounts_failed_logins_check`), une fois l'étape 1 en ligne — ✅ fait (`20261010120000_retrait_colonnes_blocage`, [ADR-0023](0023-panier-serveur.md)) |
 
 ## Options écartées
 

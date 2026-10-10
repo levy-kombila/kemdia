@@ -17,6 +17,14 @@ export function pathOnly(url: string | undefined): string {
 }
 
 /**
+ * Chemin journalisé : sans chaîne de requête, et sans l'identifiant de la variante d'un panier
+ * (`/api/v1/cart/items/{variantId}`) — le journal ne doit pas dire ce que contient le panier d'un client (S5-T01).
+ */
+export function loggedPath(url: string | undefined): string {
+  return pathOnly(url).replace(/^(\/api\/v1\/cart\/items\/)[^/]+/, "$1{variantId}");
+}
+
+/**
  * Journaux au format JSON (une ligne par événement), lisibles par n'importe quel outil de surveillance.
  * Règle : **aucune donnée personnelle** — ni corps de requête, ni en-têtes, ni paramètres d'URL, ni adresse IP complète.
  */
@@ -38,7 +46,7 @@ export function loggerParams(config: AppConfig): Params {
         req: (req: IncomingMessage & { id?: string }) => ({
           id: req.id,
           method: req.method,
-          path: pathOnly(req.url),
+          path: loggedPath(req.url),
         }),
         res: (res: ServerResponse) => ({ statusCode: res.statusCode }),
       },

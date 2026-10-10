@@ -5,8 +5,12 @@ import {
   MAX_QTY_PER_LINE,
   cartCount,
   cartReducer,
+  cartErrorMessage,
   cartSubtotal,
   emptyCart,
+  fromServerCart,
+  issueMessage,
+  linesToMerge,
   parseStoredCart,
 } from "./cart";
 
@@ -126,5 +130,103 @@ describe("parseStoredCart (donnée non fiable)", () => {
   it("borne une quantité trafiquée", () => {
     const raw = JSON.stringify({ lines: [{ ...line, quantity: 99999 }] });
     expect(parseStoredCart(raw).lines[0].quantity).toBe(5);
+  });
+});
+
+describe("panier serveur (S5-T01)", () => {
+  const serverLine = {
+    variantId: VARIANT_NOIR,
+    productId: PRODUCT,
+    slug: "p1",
+    title: "Produit 1",
+    variantName: "Noir",
+    image: "/images/products/p1.webp",
+    price: 12_000,
+    compareAtPrice: null,
+    quantity: 2,
+    maxQuantity: 20,
+    ok: true,
+  };
+
+  it("fromServerCart : prix du serveur, ligne signalée quand elle n'est pas commandable", () => {
+    const state = fromServerCart({
+      lines: [
+        serverLine,
+        {
+          ...serverLine,
+          variantId: VARIANT_BLEU,
+          ok: false,
+          reason: "STOCK_INSUFFISANT",
+          available: 1,
+          maxQuantity: 1,
+          image: "https://ailleurs.example/x.webp",
+        },
+      ],
+      itemCount: 4,
+      subtotal: 24_000,
+      ok: false,
+    });
+    expect(state.lines[0]).toEqual({
+      variantId: VARIANT_NOIR,
+      productId: PRODUCT,
+      slug: "p1",
+      title: "Produit 1",
+      variantName: "Noir",
+      price: 12_000,
+      image: "/images/products/p1.webp",
+      quantity: 2,
+      maxQuantity: 20,
+    });
+    expect(state.lines[1]).toMatchObject({
+      issue: { reason: "STOCK_INSUFFISANT", available: 1 },
+      image: null,
+    });
+    // Comme le serveur : la ligne signalée ne compte pas dans le total
+    expect(cartSubtotal(state)).toBe(24_000);
+  });
+
+  it("linesToMerge : variante et quantité seulement, jamais de prix (BR-004)", () => {
+    const s = cartReducer(emptyCart, { type: "add", line, quantity: 2 });
+    expect(linesToMerge(s)).toEqual([{ variantId: VARIANT_NOIR, quantity: 2 }]);
+  });
+
+  it("messages en français pour chaque situation", () => {
+    expect(issueMessage({ reason: "STOCK_INSUFFISANT", available: 2 })).toContain("Plus que 2");
+    expect(issueMessage({ reason: "PRODUIT_INDISPONIBLE" })).toContain("Plus disponible");
+    for (const code of [
+      "PANIER_PLEIN",
+      "PRODUIT_INDISPONIBLE",
+      "VARIANTE_INCONNUE",
+      "TROP_DE_REQUETES",
+      "SESSION_INVALIDE",
+      "INDISPONIBLE",
+    ]) {
+      expect(cartErrorMessage(code)).toMatch(/\.$/);
+    }
+    expect(cartErrorMessage("PANIER_PLEIN")).toContain("50");
+  });
+});
+
+describe("identifiant de réunion (S5-T01)", () => {
+  const MERGE_ID = "44444444-4444-4444-8444-444444444444";
+
+  it("gardé à la relecture s'il est valable et que le panier n'est pas vide", () => {
+    const raw = JSON.stringify({ lines: [{ ...line, quantity: 1 }], mergeId: MERGE_ID });
+    expect(parseStoredCart(raw).mergeId).toBe(MERGE_ID);
+    expect(
+      parseStoredCart(JSON.stringify({ lines: [], mergeId: MERGE_ID })).mergeId,
+    ).toBeUndefined();
+    expect(
+      parseStoredCart(JSON.stringify({ lines: [{ ...line, quantity: 1 }], mergeId: "x" })).mergeId,
+    ).toBeUndefined();
+  });
+
+  it("toute modification du panier l'efface (le contenu n'est plus celui de la réunion)", () => {
+    const state = { lines: [{ ...line, quantity: 1 }], mergeId: MERGE_ID };
+    expect(
+      cartReducer(state, { type: "setQuantity", variantId: VARIANT_NOIR, quantity: 2 }).mergeId,
+    ).toBeUndefined();
+    expect(cartReducer(state, { type: "remove", variantId: VARIANT_NOIR }).mergeId).toBeUndefined();
+    expect(cartReducer(state, { type: "add", line, quantity: 1 }).mergeId).toBeUndefined();
   });
 });

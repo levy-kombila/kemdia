@@ -1,35 +1,36 @@
 # Cahier d'architecture — Kemdia
 
-| Version | Date       | Sprint | Changements                                                                                                                                 |
-| ------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0.1** | 2026-10-05 | S1     | Création : contexte, exigences, stack, architecture frontend, sécurité, DevOps                                                              |
-| **0.2** | 2026-10-05 | S1     | §7 pipeline CD complet, §8 architecture de déploiement (ADR-0005)                                                                           |
-| **0.3** | 2026-10-05 | S1     | §8 environnement de démonstration gratuit (Render), version inscrite dans l'image                                                           |
-| **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués  |
-| **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests      |
-| **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                       |
-| **2.8** | 2026-10-09 | S4     | Fin du Sprint 4 (v0.4.0) : écran de réveil de la démo (ADR-0022, §5.2, §5.9), colonnes obsolètes ignorées (§3.9) ; rapport de clôture       |
-| **2.7** | 2026-10-09 | S4     | CSRF, CSP à nonce, limites (ADR-0021) : §3.7 limitation de débit, §5.2 rendu à la demande, §5.4 proxy, §5.9 `CLIENT_IP_HEADER`, §6          |
-| **2.6** | 2026-10-08 | S4     | Rôles et journal d'audit (ADR-0020) : §3.3 module `audit`, §3.5 schéma `audit`, §3.7 routes `/admin`, §3.9 rôles, §3.10 (nouvelle), §6      |
-| **2.5** | 2026-10-08 | S4     | Site branché sur l'identité (ADR-0019) : §5.4 réécrit (actions serveur, cookies, en-tête, Mon compte), §6.2 mesures du site                 |
-| **2.4** | 2026-10-08 | S4     | Mot de passe oublié (ADR-0018) : §3.7 routes `/auth/password/*` ; §3.9 `reset_tickets`, version du mot de passe ; §6.3                      |
-| **2.3** | 2026-10-08 | S4     | Connexion et sessions (ADR-0017) : §3.7 routes `/auth/login`, `/session`, `/logout` ; §3.9 blocage par identifiant, sessions, ménage ; §6.3 |
-| **2.2** | 2026-10-07 | S4     | Inscription et e-mails (ADR-0016) : §3.4 variables e-mail, §3.7 routes `/auth/signup`, §3.9 tickets et envoi, §6.3                          |
-| **2.1** | 2026-10-07 | S4     | Fondations du module `identity` (ADR-0015) : §3.4 `SMS_ENABLED`, §3.5, §3.9 (nouvelle), §5.4 SMS différé, §6.3, §6.4                        |
-| **2.0** | 2026-10-07 | S3     | Fin du Sprint 3 (v0.3.0) : démo avec `CATALOG_TIMEOUT_MS=90000` (§5.9) ; rapport de clôture                                                 |
-| **1.9** | 2026-10-07 | S3     | Dette S3-T08 : mode fichier retiré (§3.2, §5.9), accueil chargé zone par zone (§5.2), TypeScript 6 / ESLint 10 (§4, ADR-0014), §7, §9       |
-| **1.8** | 2026-10-07 | S3     | Démo Render avec l'API et une base Neon (ADR-0013) : §3.2, §3.5, §3.8 démarrage de démo, §5.9, §7 jobs image de l'API et démo, §8, §9       |
-| **1.7** | 2026-10-06 | S3     | Image Docker de l'API et migrations au déploiement (ADR-0012) : §3.5, §3.8 (nouvelle), §6.3, §7 job « image de l'API », §8, §9              |
-| **1.6** | 2026-10-06 | S3     | Le site lit l'API (ADR-0011) : §3.2, §3.7 contrat `packages/contracts`, §5.1, §5.2, §5.7 panier par variante, §5.9 (nouvelle), §6.2, §7, §9 |
-| **1.5** | 2026-10-06 | S3     | §3.7 API REST `/api/v1` et documentation OpenAPI (ADR-0010) ; §3.4 `docs/`, variables ; §4 ; §6.3 limitation de débit ; §9 tests de contrat |
-| **1.4** | 2026-10-06 | S3     | BR-005 : 3 niveaux de catégories (domaine + déclencheur SQL) ; Fitness déplacé sous Sport & Loisirs ; §2.1, §3.6, §6.3, §9                  |
-| **1.3** | 2026-10-06 | S3     | §3.6 module `catalog` (ADR-0009) : domaine, cas d'utilisation, persistance, import de démonstration ; §2.1 F3 ; §6.3 ; §9 tests             |
-| **1.2** | 2026-10-06 | S3     | §3.5 base de données (ADR-0008) ; §3.4 dossier `database/`, `DATABASE_*` ; §4, §6.3, §7 job PostgreSQL, §8, §9 tests d'intégration          |
-| **1.1** | 2026-10-06 | S3     | §3.4 socle de l'API (`apps/api`, ADR-0007) ; §4 versions du backend ; §6.3 sécurité de l'API (ancien §6.3 → §6.4) ; §7 et §9 tests de l'API |
-| **0.9** | 2026-10-06 | S2     | §5.8 favoris, partage et aperçus, page vendeur ; §5.2 rendu à la demande (`SITE_URL`) ; §7 et §9 tests de bout en bout                      |
-| **0.8** | 2026-10-05 | S2     | §5.7 tunnel de commande (port `OrderClient`, données envoyées) ; §6.2 mesures du tunnel                                                     |
-| **0.7** | 2026-10-05 | S2     | §5.6 pages de liste (filtres) et panier ; §6.2 filtres par liste blanche                                                                    |
-| **0.6** | 2026-10-05 | S2     | §5.5 charte graphique « place de marché » (Archivo à largeur variable, étiquette de prix), §5.6 structure des pages, §5.1 composants        |
+| Version | Date       | Sprint | Changements                                                                                                                                                          |
+| ------- | ---------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0.1** | 2026-10-05 | S1     | Création : contexte, exigences, stack, architecture frontend, sécurité, DevOps                                                                                       |
+| **0.2** | 2026-10-05 | S1     | §7 pipeline CD complet, §8 architecture de déploiement (ADR-0005)                                                                                                    |
+| **0.3** | 2026-10-05 | S1     | §8 environnement de démonstration gratuit (Render), version inscrite dans l'image                                                                                    |
+| **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués                           |
+| **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests                               |
+| **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                                                |
+| **2.9** | 2026-10-10 | S5     | Panier serveur (ADR-0023) : §2.1 F4, §3.3 et §3.5 module et schéma `orders`, §3.7 routes `/cart`, §3.9 colonnes supprimées, §3.11 (nouvelle), §5.10 (nouvelle), §6.4 |
+| **2.8** | 2026-10-09 | S4     | Fin du Sprint 4 (v0.4.0) : écran de réveil de la démo (ADR-0022, §5.2, §5.9), colonnes obsolètes ignorées (§3.9) ; rapport de clôture                                |
+| **2.7** | 2026-10-09 | S4     | CSRF, CSP à nonce, limites (ADR-0021) : §3.7 limitation de débit, §5.2 rendu à la demande, §5.4 proxy, §5.9 `CLIENT_IP_HEADER`, §6                                   |
+| **2.6** | 2026-10-08 | S4     | Rôles et journal d'audit (ADR-0020) : §3.3 module `audit`, §3.5 schéma `audit`, §3.7 routes `/admin`, §3.9 rôles, §3.10 (nouvelle), §6                               |
+| **2.5** | 2026-10-08 | S4     | Site branché sur l'identité (ADR-0019) : §5.4 réécrit (actions serveur, cookies, en-tête, Mon compte), §6.2 mesures du site                                          |
+| **2.4** | 2026-10-08 | S4     | Mot de passe oublié (ADR-0018) : §3.7 routes `/auth/password/*` ; §3.9 `reset_tickets`, version du mot de passe ; §6.3                                               |
+| **2.3** | 2026-10-08 | S4     | Connexion et sessions (ADR-0017) : §3.7 routes `/auth/login`, `/session`, `/logout` ; §3.9 blocage par identifiant, sessions, ménage ; §6.3                          |
+| **2.2** | 2026-10-07 | S4     | Inscription et e-mails (ADR-0016) : §3.4 variables e-mail, §3.7 routes `/auth/signup`, §3.9 tickets et envoi, §6.3                                                   |
+| **2.1** | 2026-10-07 | S4     | Fondations du module `identity` (ADR-0015) : §3.4 `SMS_ENABLED`, §3.5, §3.9 (nouvelle), §5.4 SMS différé, §6.3, §6.4                                                 |
+| **2.0** | 2026-10-07 | S3     | Fin du Sprint 3 (v0.3.0) : démo avec `CATALOG_TIMEOUT_MS=90000` (§5.9) ; rapport de clôture                                                                          |
+| **1.9** | 2026-10-07 | S3     | Dette S3-T08 : mode fichier retiré (§3.2, §5.9), accueil chargé zone par zone (§5.2), TypeScript 6 / ESLint 10 (§4, ADR-0014), §7, §9                                |
+| **1.8** | 2026-10-07 | S3     | Démo Render avec l'API et une base Neon (ADR-0013) : §3.2, §3.5, §3.8 démarrage de démo, §5.9, §7 jobs image de l'API et démo, §8, §9                                |
+| **1.7** | 2026-10-06 | S3     | Image Docker de l'API et migrations au déploiement (ADR-0012) : §3.5, §3.8 (nouvelle), §6.3, §7 job « image de l'API », §8, §9                                       |
+| **1.6** | 2026-10-06 | S3     | Le site lit l'API (ADR-0011) : §3.2, §3.7 contrat `packages/contracts`, §5.1, §5.2, §5.7 panier par variante, §5.9 (nouvelle), §6.2, §7, §9                          |
+| **1.5** | 2026-10-06 | S3     | §3.7 API REST `/api/v1` et documentation OpenAPI (ADR-0010) ; §3.4 `docs/`, variables ; §4 ; §6.3 limitation de débit ; §9 tests de contrat                          |
+| **1.4** | 2026-10-06 | S3     | BR-005 : 3 niveaux de catégories (domaine + déclencheur SQL) ; Fitness déplacé sous Sport & Loisirs ; §2.1, §3.6, §6.3, §9                                           |
+| **1.3** | 2026-10-06 | S3     | §3.6 module `catalog` (ADR-0009) : domaine, cas d'utilisation, persistance, import de démonstration ; §2.1 F3 ; §6.3 ; §9 tests                                      |
+| **1.2** | 2026-10-06 | S3     | §3.5 base de données (ADR-0008) ; §3.4 dossier `database/`, `DATABASE_*` ; §4, §6.3, §7 job PostgreSQL, §8, §9 tests d'intégration                                   |
+| **1.1** | 2026-10-06 | S3     | §3.4 socle de l'API (`apps/api`, ADR-0007) ; §4 versions du backend ; §6.3 sécurité de l'API (ancien §6.3 → §6.4) ; §7 et §9 tests de l'API                          |
+| **0.9** | 2026-10-06 | S2     | §5.8 favoris, partage et aperçus, page vendeur ; §5.2 rendu à la demande (`SITE_URL`) ; §7 et §9 tests de bout en bout                                               |
+| **0.8** | 2026-10-05 | S2     | §5.7 tunnel de commande (port `OrderClient`, données envoyées) ; §6.2 mesures du tunnel                                                                              |
+| **0.7** | 2026-10-05 | S2     | §5.6 pages de liste (filtres) et panier ; §6.2 filtres par liste blanche                                                                                             |
+| **0.6** | 2026-10-05 | S2     | §5.5 charte graphique « place de marché » (Archivo à largeur variable, étiquette de prix), §5.6 structure des pages, §5.1 composants                                 |
 
 > Document vivant : chaque rapport de sprint (`docs/rapports/`) indique quelles sections il a modifiées.
 > Les sections marquées 🔜 seront rédigées au sprint indiqué.
@@ -83,20 +84,20 @@ Vision détaillée, personas et analyse de marché : [synthèse du KSAD](../refe
 Les **règles métier** (BR-xxx) et les **exigences fonctionnelles** (FR-xxx) issues du KSAD sont numérotées, rattachées à un module
 et à un sprint dans [`regles-metier.md`](regles-metier.md). Résumé :
 
-| #   | Exigence                                                                 | Sprint                              |
-| --- | ------------------------------------------------------------------------ | ----------------------------------- |
-| F1  | Parcourir le catalogue par catégories (3 niveaux au plus, BR-005)        | S1 ✅                               |
-| F2  | Rechercher, filtrer, trier, paginer                                      | S1 ✅ · S2 (filtres) · S3 (serveur) |
-| F3  | Fiche produit (photos, prix, stock, livraison estimée, variantes)        | S1 ✅ · S3 ✅ (variantes, API)      |
-| F4  | Panier                                                                   | S1 ✅ (navigateur) · S5 (serveur)   |
-| F5  | Ville / quartier de livraison au Gabon                                   | S1 ✅                               |
-| F6  | Compte client par e-mail ou téléphone (OTP)                              | S4                                  |
-| F7  | Commander et payer (Moov Money, Airtel Money, à la livraison)            | S5                                  |
-| F8  | Suivre sa commande                                                       | S5 · S7                             |
-| F9  | Vendeurs tiers : boutique, KYC, produits modérés, commandes, commissions | S6                                  |
-| F10 | Back-office : modération, KYC, commandes, livraisons                     | S6                                  |
-| F11 | Livraison via transporteur partenaire                                    | S7                                  |
-| F12 | Affiliation                                                              | Après MVP                           |
+| #   | Exigence                                                                 | Sprint                               |
+| --- | ------------------------------------------------------------------------ | ------------------------------------ |
+| F1  | Parcourir le catalogue par catégories (3 niveaux au plus, BR-005)        | S1 ✅                                |
+| F2  | Rechercher, filtrer, trier, paginer                                      | S1 ✅ · S2 (filtres) · S3 (serveur)  |
+| F3  | Fiche produit (photos, prix, stock, livraison estimée, variantes)        | S1 ✅ · S3 ✅ (variantes, API)       |
+| F4  | Panier                                                                   | S1 ✅ (navigateur) · S5 ✅ (serveur) |
+| F5  | Ville / quartier de livraison au Gabon                                   | S1 ✅                                |
+| F6  | Compte client par e-mail ou téléphone (OTP)                              | S4                                   |
+| F7  | Commander et payer (Moov Money, Airtel Money, à la livraison)            | S5                                   |
+| F8  | Suivre sa commande                                                       | S5 · S7                              |
+| F9  | Vendeurs tiers : boutique, KYC, produits modérés, commandes, commissions | S6                                   |
+| F10 | Back-office : modération, KYC, commandes, livraisons                     | S6                                   |
+| F11 | Livraison via transporteur partenaire                                    | S7                                   |
+| F12 | Affiliation                                                              | Après MVP                            |
 
 ### 2.2 Non fonctionnelles
 
@@ -197,6 +198,9 @@ Le module **`audit`** (S4-T06, [ADR-0020](adr/0020-roles-journal-audit.md)) est 
 n'a pas de route, et chaque module y inscrit ses actions sensibles (`AuditLog.record`) dans la même transaction que l'action.
 Les routes protégées par rôle utilisent `@Authorize(…)`, exporté par `identity`.
 
+Le module **`orders`** existe depuis le S5-T01 (§3.11, [ADR-0023](adr/0023-panier-serveur.md)) : panier serveur du compte connecté ;
+il lit le catalogue par son port public (`CatalogService.describeLines`) et protège ses routes avec `SessionGuard`.
+
 ### 3.4 Socle de l'API (`apps/api`, S3-T01)
 
 Décision : [ADR-0007](adr/0007-socle-api-nestjs.md).
@@ -279,7 +283,8 @@ flowchart LR
       catalog[schéma catalog]
       identity[schéma identity — S4]
       auditdb[schéma audit — S4-T06<br/>ajout seul]
-      futurs[orders · payments<br/>vendors · shipping — S5 à S7]
+      ordersdb[schéma orders — S5-T01<br/>paniers]
+      futurs[payments · vendors<br/>shipping — S5 à S7]
       pub[public : suivi des migrations]
     end
 ```
@@ -384,6 +389,10 @@ Décision : [ADR-0010](adr/0010-api-rest-openapi.md). Description complète : [`
 | `POST /api/v1/admin/accounts/lookup`                   | Retrouver un compte par e-mail ou téléphone (dans le corps) — **admin, connexion < 15 min** (S4-T06)   | aucun | 30/min/IP  |
 | `PUT\|DELETE /api/v1/admin/accounts/{id}/roles/{role}` | Accorder / retirer `vendor` ou `moderator` (jamais `admin`, jamais sur soi) — admin, < 15 min          | aucun | 30/min/IP  |
 | `GET /api/v1/admin/audit`                              | Journal d'audit, du plus récent au plus ancien (curseur, filtres) — admin, < 15 min                    | aucun | 30/min/IP  |
+| `GET\|DELETE /api/v1/cart`                             | Panier du compte connecté, **revérifié** (BR-001, prix BR-004) / le vider (S5-T01)                     | aucun | 120/min/IP |
+| `POST /api/v1/cart/items`                              | Ajouter une variante (quantités additionnées, ramenées au stock)                                       | aucun | 120/min/IP |
+| `PUT\|DELETE /api/v1/cart/items/{variantId}`           | Fixer la quantité d'une ligne / la retirer                                                             | aucun | 120/min/IP |
+| `POST /api/v1/cart/merge`                              | Réunir le panier du navigateur après la connexion (additionner, `ignored`) ; 10/min par compte         | aucun | 120/min/IP |
 | `GET /api/health`                                      | État de l'API et de la base                                                                            | aucun | aucune     |
 | `GET /api/v1/openapi.json`, `/api/docs`                | Documentation (si `API_DOCS`, désactivée par défaut en production)                                     | 5 min | aucune     |
 
@@ -418,6 +427,9 @@ rôles (`roles` dans `AccountView`), administration et journal : contrat 1.5.0 (
 | Toute route connectée (`SessionGuard`)                            | **Compte** et route                                                                   | 120/min ; « tous mes appareils » 5 ; admin 30 |
 
 Dépassement : 429, code `TROP_DE_REQUETES`, en-tête `Retry-After`. Contrat 1.6.0.
+
+**Panier (S5-T01)** : codes `PANIER_PLEIN`, `PRODUIT_INDISPONIBLE`, `VARIANTE_INCONNUE`, `PANIER_OCCUPE` (liste `CART_ERROR_CODES` ; `API_ERROR_CODES` = identité + panier),
+limites `CART_MAX_LINES` (50), `CART_MAX_QUANTITY` (20), `CART_TTL_DAYS` (90). Contrat 1.7.0.
 
 ### 3.8 Image Docker de l'API (S3-T06)
 
@@ -491,15 +503,15 @@ src/modules/identity/
 
 Tables du schéma `identity` :
 
-| Table            | Contenu                                                                                                                                                                                                       | Contraintes SQL ajoutées à la main                                                                |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `accounts`       | Prénom, nom, e-mail et/ou téléphone (uniques), hachage Argon2id, version du mot de passe, statut, vérifications ; `failed_logins` / `locked_until` ignorées depuis le S4-T08, supprimées au S5-T01 (ADR-0022) | Au moins un identifiant ; e-mail en minuscules ; téléphone `+2410[67]` ; actif ⇒ vérifié          |
-| `otp_challenges` | Usage (inscription / oubli), canal, destination, **empreinte** du code, essais, expiration                                                                                                                    | Empreinte hexadécimale de 64 caractères ; 0 à 5 essais                                            |
-| `sessions`       | Compte, **empreinte** du jeton (unique), expiration, dernière activité, révocation, version du mot de passe                                                                                                   | Empreinte hexadécimale ; suppression en cascade avec le compte                                    |
-| `reset_tickets`  | **Empreinte** du ticket, destination, compte (vide = leurre), expiration (S4-T04)                                                                                                                             | Empreinte hexadécimale ; expiration après création ; suppression en cascade avec le compte        |
-| `login_guards`   | Identifiant (compte ou pas), essais, fin du blocage, dernière tentative (S4-T03)                                                                                                                              | Essais ≥ 0 ; écrit seulement par `INSERT … ON CONFLICT DO UPDATE`                                 |
-| `signup_tickets` | **Empreinte** du ticket, destination, inscription (prénom, nom, hachage ; vide = leurre), expiration (S4-T02)                                                                                                 | Empreinte hexadécimale ; inscription complète ou vide ; une seule par destination                 |
-| `account_roles`  | Compte, rôle (`VENDOR`, `MODERATOR`, `ADMIN`), date, administrateur qui l'a accordé (vide = commande serveur) (S4-T06)                                                                                        | Un rôle par ligne (clé compte + rôle) ; jamais accordé par son titulaire ; cascade avec le compte |
+| Table            | Contenu                                                                                                                                                                                         | Contraintes SQL ajoutées à la main                                                                |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `accounts`       | Prénom, nom, e-mail et/ou téléphone (uniques), hachage Argon2id, version du mot de passe, statut, vérifications ; `failed_logins` / `locked_until` supprimées au S5-T01 (étape 2 de l'ADR-0022) | Au moins un identifiant ; e-mail en minuscules ; téléphone `+2410[67]` ; actif ⇒ vérifié          |
+| `otp_challenges` | Usage (inscription / oubli), canal, destination, **empreinte** du code, essais, expiration                                                                                                      | Empreinte hexadécimale de 64 caractères ; 0 à 5 essais                                            |
+| `sessions`       | Compte, **empreinte** du jeton (unique), expiration, dernière activité, révocation, version du mot de passe                                                                                     | Empreinte hexadécimale ; suppression en cascade avec le compte                                    |
+| `reset_tickets`  | **Empreinte** du ticket, destination, compte (vide = leurre), expiration (S4-T04)                                                                                                               | Empreinte hexadécimale ; expiration après création ; suppression en cascade avec le compte        |
+| `login_guards`   | Identifiant (compte ou pas), essais, fin du blocage, dernière tentative (S4-T03)                                                                                                                | Essais ≥ 0 ; écrit seulement par `INSERT … ON CONFLICT DO UPDATE`                                 |
+| `signup_tickets` | **Empreinte** du ticket, destination, inscription (prénom, nom, hachage ; vide = leurre), expiration (S4-T02)                                                                                   | Empreinte hexadécimale ; inscription complète ou vide ; une seule par destination                 |
+| `account_roles`  | Compte, rôle (`VENDOR`, `MODERATOR`, `ADMIN`), date, administrateur qui l'a accordé (vide = commande serveur) (S4-T06)                                                                          | Un rôle par ligne (clé compte + rôle) ; jamais accordé par son titulaire ; cascade avec le compte |
 
 **Rôles (S4-T06, [ADR-0020](adr/0020-roles-journal-audit.md))** : `client` (tout compte actif, jamais stocké), `vendor`, `moderator`, `admin`,
 cumulables ; `admin` a les droits de `moderator`. Un administrateur accorde ou retire `vendor` / `moderator` à un autre compte ; `admin`
@@ -538,6 +550,38 @@ src/modules/audit/
 Table `audit.events` : identifiant, date (**posée par la base**), action, type et UUID de l'acteur, type et UUID de la cible, détails (JSON ≤ 2 Ko),
 adresse IP, identifiant de requête. Déclencheurs SQL : **aucune modification**, suppression seulement après 365 jours, `TRUNCATE` interdit.
 Pas de clé étrangère vers les comptes : la trace survit au compte.
+
+### 3.11 Module `orders` — panier serveur (S5-T01)
+
+Décision : [ADR-0023](adr/0023-panier-serveur.md). Commandes et réservation du stock au S5-T02.
+
+```
+src/modules/orders/
+├── index.ts                         Port public : OrdersModule, CartService, OrdersError
+├── orders.module.ts                 Branche les ports ; lit le catalogue par CatalogService (port public)
+├── domain/
+│   ├── cart.ts                      Panier : variantes + quantités, 50 lignes, 1 à 20, borné au stock, réunion « additionner »
+│   └── orders-error.ts              PANIER_PLEIN, PRODUIT_INDISPONIBLE, VARIANTE_INCONNUE, PANIER_OCCUPE
+├── application/
+│   ├── ports.ts                     CartRepository (lecture, modification sous verrou, ménage), CartCatalog
+│   └── cart.service.ts              Lire (revérifié), ajouter, fixer, retirer, vider, réunir ; UUID en minuscules
+├── infrastructure/
+│   ├── prisma-cart.repository.ts    Verrou par INSERT … ON CONFLICT DO UPDATE (attente ≤ 1 s), réunion idempotente, écrit ce qui change
+│   └── cart-cleanup.ts              Ménage horaire : paniers sans activité depuis 90 jours
+└── interface/
+    ├── cart.controller.ts           /cart, /cart/items, /cart/items/{variantId}, /cart/merge (SessionGuard)
+    ├── cart.openapi.ts              Documentation OpenAPI
+    └── orders-http-errors.ts        Erreur métier → statut HTTP + code
+```
+
+| Table        | Contenu                                                                                                                                | Contraintes SQL ajoutées à la main                                                       |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `carts`      | Compte (UUID, **unique**, sans clé étrangère entre modules), dernière réunion appliquée (`last_merge_id`), création, dernière activité | Index sur la dernière activité (ménage)                                                  |
+| `cart_items` | Panier, variante (UUID du catalogue), quantité, date d'ajout — **jamais de prix**                                                      | Quantité de 1 à 20 ; déclencheur : 50 lignes au plus par panier ; cascade avec le panier |
+
+Chaque réponse est calculée à partir du catalogue **au moment de la lecture** : prix actuel, `ok` / `reason` / `available` par ligne
+(BR-001), total des seules lignes commandables, `ok` global (passage en caisse possible). Une variante supprimée du catalogue est retirée
+du panier. Le panier ne réserve pas le stock (BR-012, à la commande).
 
 ## 4. Choix technologiques
 
@@ -781,6 +825,27 @@ flowchart LR
 - **Démo Render (S3-T07)** : au démarrage, le site réveille l'API en arrière-plan (`lib/config/wake-api.ts`, seulement avec `APP_ENV=demo`) ;
   `CATALOG_TIMEOUT_MS=90000` (le maximum, depuis la clôture du S3) laisse au premier visiteur le temps du réveil. `/api/health` du site indique `"catalog": "api"` (toujours, depuis le S3-T08 ; gardé pour le contrôle de la démo).
 
+### 5.10 Panier : navigateur ou compte (S5-T01)
+
+Décision : [ADR-0023](adr/0023-panier-serveur.md). `CartProvider` choisit où vit le panier :
+
+```mermaid
+flowchart TB
+    layout["layout.tsx : cookie de session présent ?<br/>(présence seule, aucun appel)"] -->|non| local[Panier du navigateur<br/>localStorage kemdia.cart.v2]
+    layout -->|oui| sync["syncCart (action serveur)<br/>réunion idempotente (mergeId)<br/>panier local vidé après la réponse"]
+    sync -->|connecté| server[Panier du compte<br/>actions serveur → /api/v1/cart]
+    sync -->|session refusée / API en panne| local
+```
+
+| Règle                                                                                                   | Où                                            |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Le panier du compte n'est **jamais** écrit dans `localStorage` (sinon réuni deux fois)                  | `components/providers/CartProvider.tsx`       |
+| Modification affichée tout de suite, puis réponse de l'API ; refus → dernier panier confirmé + message  | idem                                          |
+| Ligne signalée par le serveur : raison affichée, hors total, « Commander » désactivé (panier et tunnel) | `app/panier/CartView.tsx`, `CheckoutFlow.tsx` |
+| Seuls `{ variantId, quantity }` partent vers le serveur ; arguments revérifiés dans les actions         | `lib/orders/cart-actions.ts`                  |
+| Réponses vérifiées par le contrat ; journaux sans jeton ni contenu du panier                            | `lib/orders/api-cart.ts`                      |
+| Limites (50 lignes, 20 par ligne) lues dans le contrat, comme l'API                                     | `lib/cart.ts`                                 |
+
 ## 6. Sécurité
 
 ### 6.1 Principes
@@ -865,7 +930,7 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 ### 6.4 Prévu 🔜
 
 - Démo : régler `CLIENT_IP_HEADER` une fois l'en-tête fiable de Render vérifié ; collecte des violations de CSP (`report-to`).
-- S5 : signature des webhooks Mobile Money, idempotence des paiements, transactions SQL pour stock et coupons.
+- S5 : signature des webhooks Mobile Money, idempotence des paiements, transactions SQL pour stock et coupons. Fait au S5-T01 : panier modifié sous verrou en une transaction, prix jamais reçus du navigateur, UUID normalisés.
 - S6 : écrans d'administration avec double authentification (MED-15) ; nouvelles actions au journal (KYC, modération).
 - S7 : deux rôles PostgreSQL (migrations / application sans droit de modifier les tables **ni de désactiver les déclencheurs du journal d'audit**), connexion chiffrée selon l'hébergement, sauvegardes chiffrées testées.
 

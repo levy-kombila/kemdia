@@ -40,6 +40,23 @@ export interface AvailabilityLine {
 
 export type AvailabilityResult = AvailabilityLine & Orderability;
 
+/** Ce qu'un panier affiche d'une variante : informations ACTUELLES du catalogue (BR-004 : le prix vient d'ici). */
+export interface VariantSnapshot {
+  variantId: string;
+  productId: string;
+  slug: string;
+  title: string;
+  variantName: string;
+  image: string | null;
+  price: number;
+  compareAtPrice: number | null;
+  /** Stock commandable maintenant : 0 si le produit n'est plus publié ou la variante plus active (BR-001). */
+  stock: number;
+}
+
+/** Ligne vérifiée (BR-001) avec, si la variante existe encore, ce qu'il faut pour l'afficher. */
+export type DescribedLine = AvailabilityResult & { variant: VariantSnapshot | null };
+
 /**
  * Service de lecture du catalogue : c'est lui que l'API REST (S3-T04) et le module `orders` (S5) appellent.
  * Il ne connaît ni HTTP ni Prisma : seulement le domaine et les ports.
@@ -147,6 +164,46 @@ export class CatalogService {
         ? product.checkOrderable(line.variantId, line.quantity)
         : { ok: false, reason: "VARIANTE_INCONNUE" };
       return { ...line, ...result };
+    });
+  }
+
+  /**
+   * Lignes d'un panier : vérification BR-001 (comme `checkAvailability`) et informations actuelles de chaque variante
+   * (titre, prix, image, stock). Utilisé par le panier serveur du module `orders` (S5-T01). Une variante supprimée du
+   * catalogue revient avec `variant: null` et la raison `VARIANTE_INCONNUE`.
+   */
+  async describeLines(lines: readonly AvailabilityLine[]): Promise<DescribedLine[]> {
+    if (lines.length > MAX_AVAILABILITY_LINES) {
+      throw new RangeError(`${MAX_AVAILABILITY_LINES} lignes au plus par vérification`);
+    }
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    // Comparaison en minuscules : PostgreSQL ne distingue pas la casse d'un UUID, le code oui
+    const ids = [
+      ...new Set(lines.map((l) => l.variantId.toLowerCase()).filter((id) => uuid.test(id))),
+    ];
+    const products = ids.length ? await this.products.findByVariantIds(ids) : [];
+    const productOf = new Map(products.flatMap((p) => p.variants.map((v) => [v.id, p] as const)));
+    return lines.map((line) => {
+      const id = line.variantId.toLowerCase();
+      const product = productOf.get(id);
+      if (!product) return { ...line, ok: false, reason: "VARIANTE_INCONNUE", variant: null };
+      const variant = product.variants.find((v) => v.id === id)!;
+      const sellable = product.status === "PUBLISHED" && variant.isActive;
+      return {
+        ...line,
+        ...product.checkOrderable(id, line.quantity),
+        variant: {
+          variantId: variant.id,
+          productId: product.id,
+          slug: product.slug,
+          title: product.title,
+          variantName: product.variants.filter((v) => v.isActive).length > 1 ? variant.name : "",
+          image: product.images[0] ?? null,
+          price: variant.price,
+          compareAtPrice: variant.compareAtPrice,
+          stock: sellable ? variant.stock : 0,
+        },
+      };
     });
   }
 

@@ -8,11 +8,18 @@ import { FavoritesProvider } from "./FavoritesProvider";
 import { LocationProvider } from "./LocationProvider";
 import { ToastProvider } from "./ToastProvider";
 
-export function Providers({ children }: { children: React.ReactNode }) {
+/** `signedIn` : un cookie de session existe (lu par le layout, sans appel à l'API) — panier du compte ou du navigateur. */
+export function Providers({
+  children,
+  signedIn = false,
+}: {
+  children: React.ReactNode;
+  signedIn?: boolean;
+}) {
   useEffect(markFirstHydrationDone, []);
   return (
     <ToastProvider>
-      <CartProvider>
+      <CartProvider signedIn={signedIn}>
         <FavoritesProvider>
           <LocationProvider>
             {children}
