@@ -2,12 +2,14 @@ import { openApiComponentSchemas } from "@kemdia/contracts";
 import { catalogPaths } from "../modules/catalog/interface/catalog.openapi.js";
 import { adminPaths } from "../modules/identity/interface/admin.openapi.js";
 import { cartPaths } from "../modules/orders/interface/cart.openapi.js";
+import { codSettingsPaths } from "../modules/orders/interface/cod-settings.openapi.js";
 import { couponPaths } from "../modules/orders/interface/coupon.openapi.js";
+import { paymentPaths } from "../modules/payments/interface/payments.openapi.js";
 import { orderPaths } from "../modules/orders/interface/order.openapi.js";
 import { identityPaths } from "../modules/identity/interface/identity.openapi.js";
 
 /** Version du contrat HTTP (indépendante de la version de l'image) : à augmenter à chaque changement de l'API. */
-export const API_CONTRACT_VERSION = "1.9.0";
+export const API_CONTRACT_VERSION = "1.10.0";
 
 /** Document OpenAPI complet de l'API, généré à partir des schémas réellement utilisés. */
 export function buildOpenApiDocument(): Record<string, unknown> {
@@ -29,6 +31,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         "- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.",
         "- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).",
         "- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.",
+        "- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.",
       ].join("\n"),
     },
     servers: [{ url: "/", description: "Même adresse que cette documentation" }],
@@ -57,6 +60,11 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         description:
           "Commandes du compte connecté (module orders, S5-T02) : stock réservé dans la même transaction (BR-012)",
       },
+      {
+        name: "Paiements",
+        description:
+          "Paiement Mobile Money d'une commande du compte connecté (module payments, S5-T04)",
+      },
       { name: "Supervision", description: "État du service" },
     ],
     paths: {
@@ -83,6 +91,8 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       ...cartPaths,
       ...orderPaths,
       ...couponPaths,
+      ...codSettingsPaths,
+      ...paymentPaths,
     },
     // Schémas du contrat partagé avec le site (@kemdia/contracts)
     components: {

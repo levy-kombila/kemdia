@@ -254,15 +254,40 @@ export const COD_MAX_TOTAL = 100_000;
 
 export type CodAvailability = { allowed: true } | { allowed: false; reason: string };
 
-export function codAvailability(cityId: string, total: number): CodAvailability {
+export interface CodRule {
+  readonly zones: readonly ZoneId[];
+  readonly maxTotal: number;
+}
+
+/** Réglage par défaut (valeurs provisoires) ; l'API lit le réglage de l'administrateur en base (S5-T04, BR-011). */
+export const DEFAULT_COD_RULE: CodRule = Object.freeze({
+  zones: COD_ZONES,
+  maxTotal: COD_MAX_TOTAL,
+});
+
+/** Montant lisible : « 100 000 » (espace entre les milliers). */
+const amountText = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+
+export function codAvailability(
+  cityId: string,
+  total: number,
+  rule: CodRule = DEFAULT_COD_RULE,
+): CodAvailability {
   const city = getCity(cityId);
-  if (!city || !COD_ZONES.includes(city.zone))
+  if (rule.zones.length === 0) return { allowed: false, reason: "Pas disponible pour le moment." };
+  if (!city || !rule.zones.includes(city.zone))
     return {
       allowed: false,
-      reason: "Disponible uniquement dans le Grand Libreville pour le moment.",
+      reason:
+        rule.zones.length === 1 && rule.zones[0] === "zone_1"
+          ? "Disponible uniquement dans le Grand Libreville pour le moment."
+          : "Pas disponible dans cette ville pour le moment.",
     };
-  if (total > COD_MAX_TOTAL)
-    return { allowed: false, reason: "Disponible pour les commandes jusqu'à 100 000 FCFA." };
+  if (total > rule.maxTotal)
+    return {
+      allowed: false,
+      reason: `Disponible pour les commandes jusqu'à ${amountText(rule.maxTotal)} FCFA.`,
+    };
   return { allowed: true };
 }
 

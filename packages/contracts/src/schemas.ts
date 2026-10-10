@@ -7,6 +7,9 @@ import {
   AUDIT_PAGE_DEFAULT,
   AUDIT_PAGE_MAX,
   CANCEL_REASONS,
+  PAYMENT_STATUSES,
+  REFUND_REASONS,
+  REFUND_STATUSES,
   COUPON_CODE_PATTERN,
   COUPON_KINDS,
   COUPON_LIMITS,
@@ -461,7 +464,9 @@ export const AuditEventSchema = z
       z.object({ type: z.literal("account"), id: uuid }),
       z.object({ type: z.literal("system") }),
     ]),
-    target: z.object({ type: z.enum(["account", "coupon"]), id: uuid }).nullable(),
+    target: z
+      .object({ type: z.enum(["account", "coupon", "order", "refund"]), id: uuid })
+      .nullable(),
     details: z.record(z.string(), z.union([z.string(), z.int()])),
     ip: z.string().nullable().describe("Adresse vue par l'API"),
     requestId: z
@@ -729,6 +734,10 @@ export const OrderSchema = z
       ),
     cancelledAt: z.iso.datetime().nullable(),
     cancelReason: z.enum(CANCEL_REASONS).nullable(),
+    paidAt: z.iso
+      .datetime()
+      .nullable()
+      .describe("Paiement reçu (Mobile Money confirmé ou espèces encaissées) — S5-T04"),
     canCancel: z.boolean().describe("Le client peut encore l'annuler (avant l'expédition)"),
     history: z
       .array(z.object({ status: z.enum(ORDER_STATUSES), at: z.iso.datetime() }))
@@ -866,6 +875,118 @@ export const CouponPageSchema = z
 export type CouponPage = z.infer<typeof CouponPageSchema>;
 
 export const CouponIdParamsSchema = z.strictObject({ couponId: uuid });
+
+// --- Paiements (S5-T04, ADR-0026) ---
+
+export const StartPaymentRequestSchema = z
+  .strictObject({
+    phone: z
+      .string()
+      .max(30)
+      .optional()
+      .describe("Autre numéro du MÊME opérateur (sinon celui de la commande)"),
+  })
+  .meta({
+    id: "StartPaymentRequest",
+    description: "Demander la validation du paiement sur le téléphone (3 essais au plus)",
+  });
+export type StartPaymentRequest = z.infer<typeof StartPaymentRequestSchema>;
+
+export const PaymentSchema = z
+  .object({
+    id: uuid,
+    orderReference: z.string(),
+    method: z.enum(["airtel", "moov", "cod"]),
+    amount: fcfa,
+    phone: z.string().nullable(),
+    status: z.enum(PAYMENT_STATUSES),
+    attempt: z.int().positive(),
+    attemptsLeft: z.int().nonnegative(),
+    failureReason: z.string().nullable(),
+    createdAt: z.iso.datetime(),
+    completedAt: z.iso.datetime().nullable(),
+  })
+  .meta({ id: "Payment", description: "Tentative de paiement d'une commande" });
+export type Payment = z.infer<typeof PaymentSchema>;
+
+export const AdminCancelOrderRequestSchema = z
+  .strictObject({
+    note: z
+      .string()
+      .trim()
+      .min(3)
+      .max(100)
+      .describe("Raison (service client), inscrite au journal d'audit"),
+  })
+  .meta({ id: "AdminCancelOrderRequest" });
+export type AdminCancelOrderRequest = z.infer<typeof AdminCancelOrderRequestSchema>;
+
+export const RefundSchema = z
+  .object({
+    id: uuid,
+    orderReference: z.string(),
+    amount: fcfa,
+    method: z.enum(["airtel", "moov"]),
+    phone: z.string(),
+    reason: z.enum(REFUND_REASONS),
+    status: z.enum(REFUND_STATUSES),
+    externalReference: z
+      .string()
+      .nullable()
+      .describe("Référence du remboursement chez l'opérateur"),
+    createdAt: z.iso.datetime(),
+    doneAt: z.iso.datetime().nullable(),
+  })
+  .meta({ id: "Refund", description: "Remboursement à faire ou fait (suivi manuel)" });
+export type Refund = z.infer<typeof RefundSchema>;
+
+export const RefundListParamsSchema = z.strictObject({
+  status: z.enum(REFUND_STATUSES).default("to_do"),
+});
+export const RefundPageSchema = z.object({ items: z.array(RefundSchema).max(200) }).meta({
+  id: "RefundPage",
+  description: "Remboursements (200 au plus, les plus anciens d'abord)",
+});
+export type RefundPage = z.infer<typeof RefundPageSchema>;
+
+export const RefundDoneRequestSchema = z
+  .strictObject({
+    externalReference: z
+      .string()
+      .min(3)
+      .max(100)
+      .regex(/^[A-Za-z0-9._/-]+$/)
+      .describe("Référence de l'opération chez l'opérateur"),
+  })
+  .meta({ id: "RefundDoneRequest" });
+export type RefundDoneRequest = z.infer<typeof RefundDoneRequestSchema>;
+
+export const CodCollectedRequestSchema = z
+  .strictObject({ amount: fcfa.describe("Montant encaissé (doit être le total de la commande)") })
+  .meta({ id: "CodCollectedRequest" });
+export type CodCollectedRequest = z.infer<typeof CodCollectedRequestSchema>;
+
+export const CodSettingsSchema = z
+  .object({
+    zones: z
+      .array(z.enum(["zone_1", "zone_2", "zone_3", "zone_4"]))
+      .max(4)
+      .describe("Zones où le paiement à la livraison est proposé (vide : nulle part)"),
+    maxTotal: z.int().nonnegative().max(10_000_000).describe("Total maximum, livraison comprise"),
+    updatedAt: z.iso.datetime().nullable(),
+  })
+  .meta({ id: "CodSettings", description: "Réglage du paiement à la livraison (BR-011)" });
+export type CodSettings = z.infer<typeof CodSettingsSchema>;
+
+export const CodSettingsRequestSchema = z
+  .strictObject({
+    zones: CodSettingsSchema.shape.zones,
+    maxTotal: CodSettingsSchema.shape.maxTotal,
+  })
+  .meta({ id: "CodSettingsRequest" });
+export type CodSettingsRequest = z.infer<typeof CodSettingsRequestSchema>;
+
+export const RefundIdParamsSchema = z.strictObject({ refundId: uuid });
 
 type JsonSchema = Record<string, unknown>;
 

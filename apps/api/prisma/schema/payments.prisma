@@ -1,0 +1,106 @@
+// Module payments : paiements des commandes et remboursements (S5-T04, ADR-0026).
+// Chaque modèle de ce fichier porte @@schema("payments").
+// Aucune relation vers les autres modules (ADR-0006) : on garde l'UUID de la commande (orders) et des comptes (identity).
+// Règles posées en SQL dans la migration (Prisma ne sait pas les décrire) : numéros, montants, statuts seulement dans
+// l'ordre prévu, champs figés, aucune suppression.
+
+/// En attente de la validation sur le téléphone → réussi / échoué / expiré (un essai expiré peut encore réussir).
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  EXPIRED
+
+  @@map("payment_status")
+  @@schema("payments")
+}
+
+enum PaymentChannel {
+  AIRTEL
+  MOOV
+  COD
+
+  @@map("payment_channel")
+  @@schema("payments")
+}
+
+enum RefundStatus {
+  TO_DO
+  DONE
+
+  @@map("refund_status")
+  @@schema("payments")
+}
+
+/// Commande payée puis annulée par un administrateur, ou argent reçu alors que la commande n'attendait plus de paiement.
+enum RefundReason {
+  ADMIN_CANCEL
+  UNEXPECTED_PAYMENT
+
+  @@map("refund_reason")
+  @@schema("payments")
+}
+
+/// Un essai de paiement Mobile Money (3 au plus par commande), ou l'encaissement à la livraison.
+model Payment {
+  id            String         @id @db.Uuid
+  /// Commande (module orders) : UUID seul, sans clé étrangère entre modules
+  orderId       String         @map("order_id") @db.Uuid
+  /// Compte du client (module identity) : UUID seul
+  accountId     String         @map("account_id") @db.Uuid
+  method        PaymentChannel
+  /// Montant demandé ou encaissé (total de la commande), en FCFA
+  amount        Int
+  /// Numéro Mobile Money (+241…) ; vide pour l'encaissement à la livraison
+  phone         String?        @db.VarChar(13)
+  status        PaymentStatus
+  /// Numéro de l'essai pour cette commande (3 comptés au plus ; 10 lignes au plus avec les refus de l'opérateur)
+  attempt       Int            @db.SmallInt
+  /// Fournisseur qui a traité l'essai (« simule », « especes »…)
+  provider      String         @db.VarChar(20)
+  /// Référence de l'opération chez le fournisseur (posée une seule fois)
+  providerRef   String?        @unique @map("provider_ref") @db.VarChar(100)
+  failureReason String?        @map("failure_reason") @db.VarChar(60)
+  /// Administrateur qui a noté l'encaissement à la livraison (module identity) : UUID seul
+  collectedBy   String?        @map("collected_by") @db.Uuid
+  /// Sans réponse de l'opérateur à cette date, l'essai est expiré
+  expiresAt     DateTime?      @map("expires_at") @db.Timestamptz(3)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  completedAt   DateTime?      @map("completed_at") @db.Timestamptz(3)
+  updatedAt     DateTime       @default(now()) @map("updated_at") @db.Timestamptz(3)
+  refund        Refund?
+
+  @@unique([orderId, attempt])
+  @@index([status, expiresAt])
+  @@index([phone, createdAt])
+  @@map("payments")
+  @@schema("payments")
+}
+
+/// Remboursement à faire puis fait (suivi manuel par un administrateur en attendant l'API de l'opérateur).
+model Refund {
+  id                String         @id @db.Uuid
+  /// Paiement remboursé : un remboursement au plus par paiement
+  paymentId         String         @unique @map("payment_id") @db.Uuid
+  payment           Payment        @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  /// Commande (module orders) : UUID seul, et son numéro (copié : l'administrateur s'y retrouve)
+  orderId           String         @map("order_id") @db.Uuid
+  orderReference    String         @map("order_reference") @db.VarChar(10)
+  amount            Int
+  method            PaymentChannel
+  phone             String         @db.VarChar(13)
+  reason            RefundReason
+  status            RefundStatus
+  /// Référence du remboursement chez l'opérateur, notée par l'administrateur
+  externalReference String?        @unique @map("external_reference") @db.VarChar(100)
+  /// Administrateur qui l'a noté fait (module identity) : UUID seul
+  doneBy            String?        @map("done_by") @db.Uuid
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  doneAt            DateTime?      @map("done_at") @db.Timestamptz(3)
+  updatedAt         DateTime       @default(now()) @map("updated_at") @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+  @@index([orderId])
+  @@map("refunds")
+  @@schema("payments")
+}

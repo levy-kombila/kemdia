@@ -4,11 +4,14 @@ import { CatalogModule, CatalogService, StockService } from "../catalog/index.js
 import { AuditModule } from "../audit/index.js";
 import { IdentityModule } from "../identity/index.js";
 import { CartService } from "./application/cart.service.js";
+import { CodSettingsService } from "./application/cod-settings.service.js";
 import { CouponService } from "./application/coupon.service.js";
+import { OrderPayments } from "./application/order-payments.service.js";
 import { OrderService } from "./application/order.service.js";
 import {
   CART_CATALOG,
   CART_REPOSITORY,
+  COD_SETTINGS_REPOSITORY,
   COUPON_REPOSITORY,
   ORDER_RANDOM,
   ORDER_REPOSITORY,
@@ -17,7 +20,9 @@ import {
 } from "./application/ports.js";
 import { OrdersTransactionRunner } from "./infrastructure/orders-transaction.js";
 import { OverdueOrdersScheduler } from "./infrastructure/overdue-orders.js";
+import { PrismaCodSettingsRepository } from "./infrastructure/prisma-cod-settings.repository.js";
 import { PrismaCouponRepository } from "./infrastructure/prisma-coupon.repository.js";
+import { CodSettingsController } from "./interface/cod-settings.controller.js";
 import { PrismaOrderRepository } from "./infrastructure/prisma-order.repository.js";
 import { CouponController } from "./interface/coupon.controller.js";
 import { OrderController } from "./interface/order.controller.js";
@@ -26,12 +31,13 @@ import { PrismaCartRepository } from "./infrastructure/prisma-cart.repository.js
 import { CartController } from "./interface/cart.controller.js";
 
 /**
- * Module orders (ADR-0006) : panier serveur (S5-T01, ADR-0023) ; commandes et réservation du stock (S5-T02, ADR-0024).
+ * Module orders (ADR-0006) : panier serveur (S5-T01, ADR-0023) ; commandes et réservation du stock (S5-T02, ADR-0024) ;
+ * coupons (S5-T03, ADR-0025) ; réglage du paiement à la livraison et `OrderPayments` pour le module payments (S5-T04).
  * Lit le catalogue par son port public (`CatalogService`), protège ses routes avec `SessionGuard` (module identity).
  */
 @Module({
   imports: [CatalogModule, IdentityModule, AuditModule],
-  controllers: [CartController, OrderController, CouponController],
+  controllers: [CartController, OrderController, CouponController, CodSettingsController],
   providers: [
     CartService,
     CartCleanupScheduler,
@@ -39,6 +45,9 @@ import { CartController } from "./interface/cart.controller.js";
     { provide: CART_CATALOG, useExisting: CatalogService },
     OrderService,
     CouponService,
+    CodSettingsService,
+    OrderPayments,
+    { provide: COD_SETTINGS_REPOSITORY, useClass: PrismaCodSettingsRepository },
     { provide: COUPON_REPOSITORY, useClass: PrismaCouponRepository },
     OverdueOrdersScheduler,
     { provide: ORDER_REPOSITORY, useClass: PrismaOrderRepository },
@@ -46,6 +55,6 @@ import { CartController } from "./interface/cart.controller.js";
     { provide: ORDER_STOCK, useExisting: StockService },
     { provide: ORDER_RANDOM, useValue: (size: number) => new Uint8Array(randomBytes(size)) },
   ],
-  exports: [CartService, OrderService],
+  exports: [CartService, OrderService, OrderPayments],
 })
 export class OrdersModule {}

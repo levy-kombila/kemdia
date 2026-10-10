@@ -22,11 +22,13 @@ import {
 import { OrdersError } from "../domain/orders-error.js";
 import { CartService } from "./cart.service.js";
 import {
+  COD_SETTINGS_REPOSITORY,
   COUPON_REPOSITORY,
   ORDER_RANDOM,
   ORDER_REPOSITORY,
   ORDER_STOCK,
   ORDERS_TRANSACTION,
+  type CodSettingsRepository,
   type CouponRepository,
   type OrderCursor,
   type OrderRecord,
@@ -141,6 +143,7 @@ export class OrderService {
     @Inject(ORDER_RANDOM) private readonly random: RandomBytes,
     private readonly carts: CartService,
     @Inject(COUPON_REPOSITORY) private readonly coupons: CouponRepository,
+    @Inject(COD_SETTINGS_REPOSITORY) private readonly codSettings: CodSettingsRepository,
   ) {}
 
   /**
@@ -197,7 +200,8 @@ export class OrderService {
     // Livraison offerte et paiement à la livraison : calculés sur ce que le client paie pour ses articles
     const delivery = estimateDelivery(cityId, cart.subtotal - discount)!;
     const total = cart.subtotal - discount + delivery.fee;
-    const cod = codAvailability(cityId, total);
+    // Réglage de l'administrateur (S5-T04, BR-011)
+    const cod = codAvailability(cityId, total, await this.codSettings.get());
     return {
       subtotal: cart.subtotal,
       discount,
@@ -300,7 +304,7 @@ export class OrderService {
         );
       }
       if (payment.method === "cod") {
-        const cod = codAvailability(address.cityId, total);
+        const cod = codAvailability(address.cityId, total, await this.codSettings.get());
         if (!cod.allowed) throw new OrdersError("PAIEMENT_A_LA_LIVRAISON_INDISPONIBLE", cod.reason);
       }
 
@@ -363,7 +367,7 @@ export class OrderService {
       const order = await this.orders.findByReference(accountId, reference, true);
       if (!order) throw notFound();
       if (order.status === "cancelled") return order;
-      if (!clientCanCancel(order.status, order.paymentMethod)) {
+      if (!clientCanCancel(order.status, order.paymentMethod, order.paidAt !== null)) {
         throw new OrdersError(
           "ANNULATION_IMPOSSIBLE",
           order.status === "shipped" || order.status === "delivered"

@@ -47,18 +47,21 @@ describe("statuts (S5-T02)", () => {
 
   it("le client annule lui-même jusqu'à l'expédition (choix du 2026-10-10)", () => {
     for (const method of ["airtel", "moov", "cod"] as const) {
-      expect(clientCanCancel("pending_payment", method)).toBe(true);
-      expect(clientCanCancel("shipped", method)).toBe(false);
-      expect(clientCanCancel("delivered", method)).toBe(false);
-      expect(clientCanCancel("cancelled", method)).toBe(false);
+      expect(clientCanCancel("pending_payment", method, false)).toBe(true);
+      expect(clientCanCancel("shipped", method, false)).toBe(false);
+      expect(clientCanCancel("delivered", method, false)).toBe(false);
+      expect(clientCanCancel("cancelled", method, false)).toBe(false);
     }
-    expect(clientCanCancel("confirmed", "cod")).toBe(true);
-    expect(clientCanCancel("preparing", "cod")).toBe(true);
+    expect(clientCanCancel("confirmed", "cod", false)).toBe(true);
+    expect(clientCanCancel("preparing", "cod", false)).toBe(true);
   });
 
-  it("Mobile Money déjà payée : pas d'annulation par le client tant que le remboursement n'existe pas", () => {
-    expect(clientCanCancel("confirmed", "airtel")).toBe(false);
-    expect(clientCanCancel("preparing", "moov")).toBe(false);
+  it("déjà payée (Mobile Money confirmé ou espèces encaissées) : service client, pas d'annulation en ligne", () => {
+    expect(clientCanCancel("confirmed", "airtel", false)).toBe(false);
+    expect(clientCanCancel("preparing", "moov", false)).toBe(false);
+    expect(clientCanCancel("confirmed", "airtel", true)).toBe(false);
+    expect(clientCanCancel("confirmed", "cod", true)).toBe(false);
+    expect(clientCanCancel("preparing", "cod", true)).toBe(false);
   });
 
   it("Mobile Money : 30 minutes pour payer ; à la livraison : confirmée tout de suite", () => {

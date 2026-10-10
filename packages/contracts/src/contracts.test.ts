@@ -98,6 +98,7 @@ describe("schémas", () => {
       "AccountView",
       "AdminAccount",
       "AdminAccountLookupRequest",
+      "AdminCancelOrderRequest",
       "AuditEvent",
       "AuditPage",
       "AvailabilityRequest",
@@ -112,6 +113,9 @@ describe("schémas", () => {
       "CategoryNode",
       "CategoryTree",
       "CategoryView",
+      "CodCollectedRequest",
+      "CodSettings",
+      "CodSettingsRequest",
       "Coupon",
       "CouponCreateRequest",
       "CouponPage",
@@ -131,10 +135,14 @@ describe("schémas", () => {
       "OrderQuote",
       "OrderQuoteRequest",
       "OrderSummary",
+      "Payment",
       "ProblemDetails",
       "ProductDetail",
       "ProductPage",
       "ProductSummary",
+      "Refund",
+      "RefundDoneRequest",
+      "RefundPage",
       "ResetPasswordRequest",
       "ResetResendRequest",
       "ResetStarted",
@@ -143,6 +151,7 @@ describe("schémas", () => {
       "SignupStarted",
       "SignupVerified",
       "SignupVerifyRequest",
+      "StartPaymentRequest",
       "Variant",
     ]);
   });
@@ -335,6 +344,16 @@ describe("livraison (barèmes partagés, S5-T02)", () => {
     expect(codAvailability("libreville", 100_000)).toEqual({ allowed: true });
     expect(codAvailability("libreville", 100_001).allowed).toBe(false);
     expect(codAvailability("port-gentil", 1_000).allowed).toBe(false);
+    // Réglage de l'administrateur (S5-T04) : zones et total maximum
+    const rule = { zones: ["zone_1", "zone_2"] as const, maxTotal: 250_000 };
+    expect(codAvailability("port-gentil", 200_000, rule)).toEqual({ allowed: true });
+    expect(codAvailability("libreville", 250_001, rule)).toEqual({
+      allowed: false,
+      reason: "Disponible pour les commandes jusqu'à 250 000 FCFA.",
+    });
+    expect(codAvailability("libreville", 1_000, { zones: [], maxTotal: 250_000 }).allowed).toBe(
+      false,
+    );
   });
 });
 

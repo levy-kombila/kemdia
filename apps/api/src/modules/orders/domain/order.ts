@@ -20,7 +20,7 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const PAYMENT_METHODS = ["airtel", "moov", "cod"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
-export type CancelReason = "client" | "paiement_expire";
+export type CancelReason = "client" | "paiement_expire" | "admin";
 
 /** Délai pour payer par Mobile Money (choix du 2026-10-10) ; ensuite annulée, stock remis en vente. */
 export const PAYMENT_WINDOW_MS = 30 * 60_000;
@@ -41,13 +41,26 @@ export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
 
 /**
  * Le client annule lui-même tant que la commande n'est pas expédiée (choix du 2026-10-10).
- * Exception (relecture de sécurité du S5-T02) : une commande Mobile Money déjà PAYÉE (confirmée ou en préparation)
- * demanderait un remboursement, qui n'existe pas encore (S5-T04 / T05) → service client. Avant paiement, toujours possible.
+ * Exception (relecture de sécurité du S5-T02, puis du S5-T04) : une commande déjà PAYÉE (Mobile Money confirmé, ou
+ * espèces encaissées) demande un remboursement → service client (annulation par un administrateur).
  */
-export function clientCanCancel(status: OrderStatus, method: PaymentMethod): boolean {
+export function clientCanCancel(
+  status: OrderStatus,
+  method: PaymentMethod,
+  paid: boolean,
+): boolean {
+  if (paid) return false;
   if (status === "pending_payment") return true;
   if (status === "confirmed" || status === "preparing") return method === "cod";
   return false;
+}
+
+/**
+ * Un administrateur (service client, S5-T04) annule toute commande pas encore expédiée, même payée : le remboursement
+ * est alors noté « à faire » par le module payments.
+ */
+export function adminCanCancel(status: OrderStatus): boolean {
+  return status === "pending_payment" || status === "confirmed" || status === "preparing";
 }
 
 /** Statuts d'une commande « ouverte » : elle bloque encore du stock. */

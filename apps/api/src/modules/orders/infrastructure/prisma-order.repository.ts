@@ -34,6 +34,7 @@ const METHOD_FROM_DB = Object.fromEntries(
 const REASON_TO_DB: Record<CancelReason, $Enums.CancelReason> = {
   client: "CLIENT",
   paiement_expire: "PAYMENT_EXPIRED",
+  admin: "ADMIN",
 };
 const REASON_FROM_DB = Object.fromEntries(
   Object.entries(REASON_TO_DB).map(([k, v]) => [v, k]),
@@ -82,6 +83,7 @@ function toRecord(row: OrderRow): OrderRecord {
     paymentDueAt: row.paymentDueAt,
     cancelledAt: row.cancelledAt,
     cancelReason: row.cancelReason ? REASON_FROM_DB[row.cancelReason] : null,
+    paidAt: row.paidAt,
     history: row.history.map((h) => ({ status: STATUS_FROM_DB[h.status], at: h.at })),
     requestHash: row.requestHash,
   };
@@ -187,19 +189,23 @@ export class PrismaOrderRepository implements OrderRepository {
   }
 
   async findByReference(
-    accountId: string,
+    accountId: string | null,
     reference: string,
     lock = false,
   ): Promise<OrderRecord | null> {
     const db = this.tx.db;
     if (lock) {
-      const rows = await db.$queryRaw<{ id: string }[]>`
+      const rows =
+        accountId === null
+          ? await db.$queryRaw<{ id: string }[]>`
+        SELECT "id" FROM "orders"."orders" WHERE "reference" = ${reference} FOR UPDATE`
+          : await db.$queryRaw<{ id: string }[]>`
         SELECT "id" FROM "orders"."orders"
         WHERE "reference" = ${reference} AND "account_id" = ${accountId}::uuid FOR UPDATE`;
       if (!rows[0]) return null;
     }
     const row = await db.order.findFirst({
-      where: { reference, accountId },
+      where: accountId === null ? { reference } : { reference, accountId },
       include: withDetails,
     });
     return row ? toRecord(row) : null;
@@ -264,10 +270,19 @@ export class PrismaOrderRepository implements OrderRepository {
         ...(status === "cancelled"
           ? { cancelledAt: now, cancelReason: REASON_TO_DB[reason ?? "client"] }
           : {}),
+        // Paiement reçu (S5-T04) : plus d'échéance
+        ...(status === "confirmed" ? { paymentDueAt: null } : {}),
       },
     });
     await db.orderStatusChange.create({
       data: { id: randomUUID(), orderId, status: STATUS_TO_DB[status], at: now },
+    });
+  }
+
+  async markPaid(orderId: string, now: Date): Promise<void> {
+    await this.tx.db.order.update({
+      where: { id: orderId },
+      data: { paidAt: now, updatedAt: now },
     });
   }
 
@@ -281,10 +296,14 @@ export class PrismaOrderRepository implements OrderRepository {
     return rows.map((r) => r.id);
   }
 
-  async lockById(orderId: string): Promise<OrderRecord | null> {
+  async lockById(orderId: string, wait = false): Promise<OrderRecord | null> {
     const db = this.tx.db;
-    // SKIP LOCKED : une commande qu'un client annule au même moment est laissée au passage suivant
-    const rows = await db.$queryRaw<{ id: string }[]>`
+    // SKIP LOCKED : une commande qu'un client annule au même moment est laissée au passage suivant ;
+    // `wait` (résultat d'un paiement, S5-T04) : on attend le verrou (borné par lock_timeout)
+    const rows = wait
+      ? await db.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "orders"."orders" WHERE "id" = ${orderId}::uuid FOR UPDATE`
+      : await db.$queryRaw<{ id: string }[]>`
       SELECT "id" FROM "orders"."orders" WHERE "id" = ${orderId}::uuid FOR UPDATE SKIP LOCKED`;
     if (!rows[0]) return null;
     const row = await db.order.findUnique({ where: { id: orderId }, include: withDetails });

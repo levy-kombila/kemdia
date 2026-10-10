@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués                                                |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests                                                    |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                                                                     |
+| **3.2** | 2026-10-10 | S5     | Paiements (ADR-0026) : §3.3 module `payments`, §3.5 schéma `payments`, §3.7 routes et contrat 1.10.0, §3.10 actions d'audit, §3.14 (nouvelle), §6.4                                       |
 | **3.1** | 2026-10-10 | S5     | Coupons (ADR-0025) : §3.7 routes `/admin/coupons` et contrat 1.9.0, §3.10 actions d'audit, §3.13 (nouvelle), §6.4                                                                         |
 | **3.0** | 2026-10-10 | S5     | Commandes (ADR-0024) : §2.1 F7 · F8, §3.5 schéma `orders`, §3.7 routes `/orders` et contrat 1.8.0, §3.12 (nouvelle : commandes, réservation du stock), §5.7 barèmes dans le contrat, §6.4 |
 | **2.9** | 2026-10-10 | S5     | Panier serveur (ADR-0023) : §2.1 F4, §3.3 et §3.5 module et schéma `orders`, §3.7 routes `/cart`, §3.9 colonnes supprimées, §3.11 (nouvelle), §5.10 (nouvelle), §6.4                      |
@@ -203,6 +204,9 @@ Les routes protégées par rôle utilisent `@Authorize(…)`, exporté par `iden
 Le module **`orders`** existe depuis le S5-T01 (§3.11, [ADR-0023](adr/0023-panier-serveur.md)) : panier serveur du compte connecté ;
 il lit le catalogue par son port public (`CatalogService.describeLines`) et protège ses routes avec `SessionGuard`.
 
+Le module **`payments`** existe depuis le S5-T04 (§3.14, [ADR-0026](adr/0026-paiements.md)) : essais Mobile Money, encaissement à la
+livraison, remboursements. Il passe par le port public `OrderPayments` du module `orders`, seul à changer le statut d'une commande.
+
 ### 3.4 Socle de l'API (`apps/api`, S3-T01)
 
 Décision : [ADR-0007](adr/0007-socle-api-nestjs.md).
@@ -286,7 +290,8 @@ flowchart LR
       identity[schéma identity — S4]
       auditdb[schéma audit — S4-T06<br/>ajout seul]
       ordersdb[schéma orders — S5<br/>paniers, commandes]
-      futurs[payments · vendors<br/>shipping — S5 à S7]
+      paymentsdb[schéma payments — S5-T04<br/>paiements, remboursements]
+      futurs[vendors · shipping<br/>S6 à S7]
       pub[public : suivi des migrations]
     end
 ```
@@ -400,6 +405,11 @@ Décision : [ADR-0010](adr/0010-api-rest-openapi.md). Description complète : [`
 | `GET /api/v1/orders`, `/orders/{reference}`            | Mes commandes (curseur), une commande et son historique                                                | aucun | 120/min/IP |
 | `POST\|GET /api/v1/admin/coupons`, `PATCH …/{id}`      | Coupons : créer, lister, activer / désactiver — admin, < 15 min, journal d'audit (S5-T03)              | aucun | 30/min/IP  |
 | `POST /api/v1/orders/{reference}/cancel`               | Annuler avant l'expédition (Mobile Money payée : service client) ; 10/min par compte                   | aucun | 120/min/IP |
+| `POST\|GET /api/v1/orders/{reference}/payments`        | Paiement Mobile Money : nouvel essai (3 au plus) / dernier essai (S5-T04) ; 10/min par compte          | aucun | 120/min/IP |
+| `GET\|PUT /api/v1/admin/settings/cod`                  | Réglage du paiement à la livraison (zones, total maximum) — admin, < 15 min, journal (S5-T04)          | aucun | 30/min/IP  |
+| `POST /api/v1/admin/orders/{reference}/cancel`         | Annuler une commande, même payée (remboursement à faire) — admin, < 15 min, journal (S5-T04)           | aucun | 30/min/IP  |
+| `POST /api/v1/admin/orders/{reference}/cod-collected`  | Noter l'encaissement à la livraison (montant exact) — admin, < 15 min, journal (S5-T04)                | aucun | 30/min/IP  |
+| `GET /api/v1/admin/refunds`, `POST …/{id}/done`        | Remboursements à faire / noter fait avec la référence de l'opérateur — admin, < 15 min (S5-T04)        | aucun | 30/min/IP  |
 | `GET /api/health`                                      | État de l'API et de la base                                                                            | aucun | aucune     |
 | `GET /api/v1/openapi.json`, `/api/docs`                | Documentation (si `API_DOCS`, désactivée par défaut en production)                                     | 5 min | aucune     |
 
@@ -554,14 +564,18 @@ src/modules/audit/
 └── interface/request-context.ts     Adresse IP vue par l'API, identifiant de requête
 ```
 
-| Action                 | Écrite par                         | Détails                 |
-| ---------------------- | ---------------------------------- | ----------------------- |
-| `role.granted`         | Administrateur ou commande serveur | `role`, `source`        |
-| `role.revoked`         | Administrateur ou commande serveur | `role`, `source`        |
-| `password.reset`       | Titulaire (mot de passe oublié)    | —                       |
-| `sessions.revoked_all` | Titulaire (« tous mes appareils ») | `count` (si ≥ 1)        |
-| `coupon.created`       | Administrateur (S5-T03)            | `code`, `kind`, `value` |
-| `coupon.updated`       | Administrateur (S5-T03)            | `code`, `active`        |
+| Action                     | Écrite par                         | Détails                                          |
+| -------------------------- | ---------------------------------- | ------------------------------------------------ |
+| `role.granted`             | Administrateur ou commande serveur | `role`, `source`                                 |
+| `role.revoked`             | Administrateur ou commande serveur | `role`, `source`                                 |
+| `password.reset`           | Titulaire (mot de passe oublié)    | —                                                |
+| `sessions.revoked_all`     | Titulaire (« tous mes appareils ») | `count` (si ≥ 1)                                 |
+| `coupon.created`           | Administrateur (S5-T03)            | `code`, `kind`, `value`                          |
+| `coupon.updated`           | Administrateur (S5-T03)            | `code`, `active`                                 |
+| `order.cancelled_by_admin` | Administrateur (S5-T04)            | `reference`, `previousStatus`, `refunds`, `note` |
+| `refund.done`              | Administrateur (S5-T04)            | `reference`, `amount`, `externalReference`       |
+| `cod.collected`            | Administrateur (S5-T04)            | `reference`, `amount`                            |
+| `settings.cod_updated`     | Administrateur (S5-T04)            | `zones`, `maxTotal`                              |
 
 Table `audit.events` : identifiant, date (**posée par la base**), action, type et UUID de l'acteur, type et UUID de la cible, détails (JSON ≤ 2 Ko),
 adresse IP, identifiant de requête. Déclencheurs SQL : **aucune modification**, suppression seulement après 365 jours, `TRUNCATE` interdit.
@@ -638,6 +652,34 @@ Décision : [ADR-0025](adr/0025-coupons.md). Fichiers ajoutés au module `orders
 | `orders` (colonnes)  | `discount`, `coupon_code`                                                                               | total = articles − réduction + livraison, total > 0, réduction < articles, réduction ⇔ code ; figés ; annulation → utilisation rendue (déclencheur) |
 
 Dans la transaction de la commande, l'ordre des verrous est toujours **panier → variantes → coupon** (annulation : commande → variantes → coupon).
+
+### 3.14 Paiements (S5-T04)
+
+Décision : [ADR-0026](adr/0026-paiements.md). Nouveau module `payments` (`domain/payment.ts` : essais, délais, comptage ;
+`application/payment.service.ts` : essais et résultat du fournisseur ; `application/payment-admin.service.ts` : service client ;
+`infrastructure/payment-providers.ts` : fournisseur simulé ou aucun ; `infrastructure/stale-payments.ts` : expiration).
+Ajouts au module `orders` : `OrderPayments` (port pour `payments`), réglage du paiement à la livraison (`cod-settings.*`).
+
+```mermaid
+stateDiagram-v2
+    [*] --> en_attente : essai (3 au plus)
+    en_attente --> réussi : argent reçu
+    en_attente --> échoué : refus de l'opérateur
+    en_attente --> expiré : 3 min sans réponse
+    échoué --> réussi : argent reçu en retard
+    expiré --> réussi : argent reçu en retard
+    réussi --> [*] : commande confirmée et payée,<br/>ou remboursement « à faire »
+```
+
+| Table                     | Contenu                                                                                                  | Règles SQL ajoutées à la main                                                                                                   |
+| ------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `payments.payments`       | Commande, compte, moyen, montant, numéro, statut, n° d'essai, fournisseur et sa référence, raison, délai | Montant > 0, numéro +2410[67]…, espèces = réussi et noté par un admin ; statuts dans l'ordre ; champs figés ; rien ne s'efface  |
+| `payments.refunds`        | Paiement (un au plus), commande et son numéro, montant, numéro, raison, à faire / fait, référence        | Lié à un paiement reçu (même commande, même numéro) ; « fait » ⇔ référence (unique) + admin + date, une fois ; rien ne s'efface |
+| `orders.cod_settings`     | Une ligne : zones, total maximum, dernier admin                                                          | Une seule ligne, zones connues, total entre 0 et 10 000 000 ; ne s'efface pas                                                   |
+| `orders.orders` (colonne) | `paid_at` (payée)                                                                                        | Posée une fois, jamais sur une commande annulée ; la commande payée ne s'annule plus en ligne                                   |
+
+Fournisseur : simulé sur le poste de développement et la démo, **aucun** en préproduction et production (`PAIEMENT_INDISPONIBLE`)
+tant que la question ouverte n° 7 n'est pas tranchée. Le simulateur et les notifications signées arrivent au S5-T05.
 
 ## 4. Choix technologiques
 
@@ -990,7 +1032,7 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 ### 6.4 Prévu 🔜
 
 - Démo : régler `CLIENT_IP_HEADER` une fois l'en-tête fiable de Render vérifié ; collecte des violations de CSP (`report-to`).
-- S5 : signature des webhooks Mobile Money, idempotence des paiements. Fait au S5-T01 : panier modifié sous verrou en une transaction, prix jamais reçus du navigateur, UUID normalisés. Fait au S5-T02 : stock réservé dans la transaction de la commande (BR-012), commandes idempotentes, montants figés par la base, 3 commandes ouvertes au plus par compte. Fait au S5-T03 : coupons comptés de façon atomique (BR-030), jamais de commande à 0 FCFA, limite d'essais de codes.
+- S5 : signature des webhooks Mobile Money, idempotence des paiements. Fait au S5-T01 : panier modifié sous verrou en une transaction, prix jamais reçus du navigateur, UUID normalisés. Fait au S5-T02 : stock réservé dans la transaction de la commande (BR-012), commandes idempotentes, montants figés par la base, 3 commandes ouvertes au plus par compte. Fait au S5-T03 : coupons comptés de façon atomique (BR-030), jamais de commande à 0 FCFA, limite d'essais de codes. Fait au S5-T04 : résultat d'un paiement vérifié (référence, montant), argent non attendu → remboursement à faire, commande payée non annulable en ligne, 5 demandes par heure au plus vers un même numéro, paiements et remboursements jamais effacés.
 - S6 : écrans d'administration avec double authentification (MED-15) ; nouvelles actions au journal (KYC, modération).
 - S7 : deux rôles PostgreSQL (migrations / application sans droit de modifier les tables **ni de désactiver les déclencheurs du journal d'audit**), connexion chiffrée selon l'hébergement, sauvegardes chiffrées testées.
 
