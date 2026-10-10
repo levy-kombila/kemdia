@@ -13,6 +13,10 @@
       "types": "./dist/constants.d.ts",
       "default": "./dist/constants.js"
     },
+    "./delivery": {
+      "types": "./dist/delivery.d.ts",
+      "default": "./dist/delivery.js"
+    },
     "./demo": {
       "types": "./dist/demo/index.d.ts",
       "default": "./dist/demo/index.js"

@@ -12,7 +12,16 @@ export {
   type DescribedLine,
   type VariantSnapshot,
 } from "./application/catalog.service.js";
-export type { Facets, Page, PriceRange, ProductSummary, SortKey } from "./application/ports.js";
+export type {
+  Facets,
+  Page,
+  PriceRange,
+  ProductSummary,
+  ReservedVariant,
+  SortKey,
+  StockLine,
+} from "./application/ports.js";
+export { StockService, StockUnavailableError } from "./application/stock.service.js";
 export { SORT_KEYS } from "./application/ports.js";
 export type { ProductSearchInput } from "./application/product-search.js";
 export type { Category, CategoryNode } from "./domain/category.js";

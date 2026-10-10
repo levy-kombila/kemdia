@@ -150,6 +150,75 @@ export const CART_ERROR_CODES = [
 ] as const;
 export type CartErrorCode = (typeof CART_ERROR_CODES)[number];
 
+// --- Commandes (S5-T02, ADR-0024) ---
+
+/** Moyens de paiement : Airtel Money, Moov Money, à la livraison. */
+export const PAYMENT_METHODS = ["airtel", "moov", "cod"] as const;
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
+/**
+ * Statuts d'une commande. En attente de paiement (Mobile Money) → confirmée → en préparation → expédiée → livrée ;
+ * annulée (par le client avant l'expédition, ou paiement non reçu à temps).
+ */
+export const ORDER_STATUSES = [
+  "pending_payment",
+  "confirmed",
+  "preparing",
+  "shipped",
+  "delivered",
+  "cancelled",
+] as const;
+export type OrderStatus = (typeof ORDER_STATUSES)[number];
+export const ORDER_STATUS_LABELS: Readonly<Record<OrderStatus, string>> = {
+  pending_payment: "En attente de paiement",
+  confirmed: "Confirmée",
+  preparing: "En préparation",
+  shipped: "Expédiée",
+  delivered: "Livrée",
+  cancelled: "Annulée",
+};
+/** Raisons d'une annulation. */
+export const CANCEL_REASONS = ["client", "paiement_expire"] as const;
+export type CancelReason = (typeof CANCEL_REASONS)[number];
+
+/**
+ * Numéro de commande montré au client : « KMD- » + 6 caractères tirés au hasard (BR-042 : jamais des numéros qui se
+ * suivent). Alphabet sans 0/O ni 1/I, pour le dicter au téléphone ou sur WhatsApp.
+ */
+export const ORDER_REFERENCE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+export const ORDER_REFERENCE_PATTERN = /^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/;
+/** Délai pour valider un paiement Mobile Money ; ensuite la commande est annulée et le stock remis en vente. */
+export const PAYMENT_WINDOW_MINUTES = 30;
+/**
+ * Commandes ouvertes (en attente de paiement, confirmées, en préparation) au plus par compte : un compte ne peut pas
+ * bloquer le stock avec des commandes jamais payées (relecture de sécurité du S5-T02). Valeur proposée, à confirmer.
+ */
+export const MAX_OPEN_ORDERS = 3;
+/** Commandes par page (« Mes commandes »). */
+export const ORDER_PAGE_DEFAULT = 10;
+export const ORDER_PAGE_MAX = 50;
+
+/** Codes d'erreur métier des commandes. */
+export const ORDER_ERROR_CODES = [
+  "PANIER_VIDE",
+  "PANIER_A_VERIFIER",
+  "PRIX_MODIFIE",
+  "ADRESSE_INVALIDE",
+  "NUMERO_PAIEMENT_INVALIDE",
+  "PAIEMENT_A_LA_LIVRAISON_INDISPONIBLE",
+  "COMMANDE_INTROUVABLE",
+  "ANNULATION_IMPOSSIBLE",
+  // La même clé d'idempotence a déjà servi pour une commande DIFFÉRENTE (adresse, paiement ou total)
+  "CLE_DEJA_UTILISEE",
+  // Trop de commandes encore ouvertes (non expédiées) sur ce compte : limite contre le blocage du stock
+  "TROP_DE_COMMANDES_OUVERTES",
+] as const;
+export type OrderErrorCode = (typeof ORDER_ERROR_CODES)[number];
+
 /** Tous les codes d'erreur métier que l'API peut renvoyer. */
-export const API_ERROR_CODES = [...IDENTITY_ERROR_CODES, ...CART_ERROR_CODES] as const;
+export const API_ERROR_CODES = [
+  ...IDENTITY_ERROR_CODES,
+  ...CART_ERROR_CODES,
+  ...ORDER_ERROR_CODES,
+] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

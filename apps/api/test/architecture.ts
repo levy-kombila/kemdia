@@ -29,7 +29,8 @@ const FORBIDDEN_PACKAGES: Partial<Record<Layer, readonly string[]>> = {
 
 /** Exceptions explicites aux interdictions ci-dessus (constantes sans aucune dépendance). */
 const ALLOWED_PACKAGES: Partial<Record<Layer, readonly string[]>> = {
-  application: ["@kemdia/contracts/constants"],
+  // Barèmes de livraison (S5-T02) : données et calculs purs, sans aucune dépendance
+  application: ["@kemdia/contracts/constants", "@kemdia/contracts/delivery"],
 };
 
 /** Accès à la base (dossiers de src/) : réservé à la couche infrastructure des modules. */

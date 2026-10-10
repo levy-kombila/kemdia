@@ -34,3 +34,111 @@ model CartItem {
   @@map("cart_items")
   @@schema("orders")
 }
+
+// ─── Commandes (S5-T02, ADR-0024) ─────────────────────────────────────────────────────────
+
+/// En attente de paiement (Mobile Money) → confirmée → en préparation → expédiée → livrée ; annulée.
+enum OrderStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  PREPARING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+
+  @@map("order_status")
+  @@schema("orders")
+}
+
+enum PaymentMethod {
+  AIRTEL
+  MOOV
+  COD
+
+  @@map("payment_method")
+  @@schema("orders")
+}
+
+/// Annulée par le client (avant l'expédition) ou paiement non reçu à temps.
+enum CancelReason {
+  CLIENT
+  PAYMENT_EXPIRED
+
+  @@map("cancel_reason")
+  @@schema("orders")
+}
+
+/// Commande d'un compte. Montants calculés par le serveur (BR-004) et figés : la base refuse de les modifier.
+model Order {
+  id                   String              @id @db.Uuid
+  /// Numéro montré au client (« KMD-7F3K9Q »), tiré au hasard (BR-042)
+  reference            String              @unique @db.VarChar(10)
+  /// Compte (module identity) : UUID seul, sans clé étrangère entre modules
+  accountId            String              @map("account_id") @db.Uuid
+  /// Clé tirée par le site : la même demande renvoyée ne crée pas deux commandes
+  idempotencyKey       String              @map("idempotency_key") @db.Uuid
+  /// Empreinte SHA-256 de la demande (adresse, paiement, total) : une clé ne sert qu'à une même commande
+  requestHash          String              @map("request_hash") @db.Char(64)
+  status               OrderStatus
+  paymentMethod        PaymentMethod       @map("payment_method")
+  /// Numéro Mobile Money (+241…) ; vide pour le paiement à la livraison
+  paymentPhone         String?             @map("payment_phone") @db.VarChar(13)
+  subtotal             Int
+  deliveryFee          Int                 @map("delivery_fee")
+  total                Int
+  deliveryName         String              @map("delivery_name") @db.VarChar(120)
+  deliveryPhone        String              @map("delivery_phone") @db.VarChar(13)
+  deliveryCityId       String              @map("delivery_city_id") @db.VarChar(40)
+  deliveryCityName     String              @map("delivery_city_name") @db.VarChar(60)
+  deliveryNeighborhood String              @map("delivery_neighborhood") @db.VarChar(80)
+  deliveryLandmark     String              @map("delivery_landmark") @db.VarChar(200)
+  deliveryDaysMin      Int                 @map("delivery_days_min")
+  deliveryDaysMax      Int                 @map("delivery_days_max")
+  /// En attente de paiement : au-delà, annulée et stock remis en vente
+  paymentDueAt         DateTime?           @map("payment_due_at") @db.Timestamptz(3)
+  cancelledAt          DateTime?           @map("cancelled_at") @db.Timestamptz(3)
+  cancelReason         CancelReason?       @map("cancel_reason")
+  items                OrderItem[]
+  history              OrderStatusChange[]
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime            @default(now()) @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([accountId, idempotencyKey])
+  @@index([accountId, createdAt])
+  @@index([status, paymentDueAt])
+  @@map("orders")
+  @@schema("orders")
+}
+
+/// Article commandé : copie figée au moment de la commande (titre, prix…). La base refuse toute modification.
+model OrderItem {
+  orderId     String  @map("order_id") @db.Uuid
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// Variante et produit du catalogue : UUID seuls
+  variantId   String  @map("variant_id") @db.Uuid
+  productId   String  @map("product_id") @db.Uuid
+  title       String  @db.VarChar(120)
+  variantName String  @map("variant_name") @db.VarChar(80)
+  image       String? @db.VarChar(300)
+  unitPrice   Int     @map("unit_price")
+  quantity    Int
+  lineTotal   Int     @map("line_total")
+  position    Int
+
+  @@id([orderId, variantId])
+  @@map("order_items")
+  @@schema("orders")
+}
+
+/// Historique des statuts (suivi de commande), en ajout seul.
+model OrderStatusChange {
+  id      String      @id @db.Uuid
+  orderId String      @map("order_id") @db.Uuid
+  order   Order       @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  status  OrderStatus
+  at      DateTime    @default(now()) @db.Timestamptz(3)
+
+  @@index([orderId, at])
+  @@map("order_status_history")
+  @@schema("orders")
+}

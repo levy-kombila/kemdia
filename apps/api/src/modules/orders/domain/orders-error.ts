@@ -4,7 +4,18 @@ export type OrdersErrorCode =
   | "PRODUIT_INDISPONIBLE"
   | "VARIANTE_INCONNUE"
   /** Le panier est déjà en cours de modification par une autre demande du même compte. */
-  | "PANIER_OCCUPE";
+  | "PANIER_OCCUPE"
+  // Commandes (S5-T02, ADR-0024)
+  | "PANIER_VIDE"
+  | "PANIER_A_VERIFIER"
+  | "PRIX_MODIFIE"
+  | "ADRESSE_INVALIDE"
+  | "NUMERO_PAIEMENT_INVALIDE"
+  | "PAIEMENT_A_LA_LIVRAISON_INDISPONIBLE"
+  | "COMMANDE_INTROUVABLE"
+  | "ANNULATION_IMPOSSIBLE"
+  | "CLE_DEJA_UTILISEE"
+  | "TROP_DE_COMMANDES_OUVERTES";
 
 /** Une règle du panier ou de la commande n'est pas respectée. Le message est lisible par un humain, en français. */
 export class OrdersError extends Error {

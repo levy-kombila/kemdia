@@ -100,3 +100,35 @@ export interface ProductRepository {
   /** Crée ou met à jour le produit ET ses variantes, en une seule transaction. */
   save(product: Product, searchText: string): Promise<void>;
 }
+
+/** Ligne à réserver ou à remettre en stock (S5-T02, BR-012). */
+export interface StockLine {
+  variantId: string;
+  quantity: number;
+}
+
+/**
+ * Variante réservée, avec les informations lues SUR LA LIGNE VERROUILLÉE (prix, titre…) : la commande les fige
+ * telles qu'elles étaient au moment exact de la réservation.
+ */
+export interface ReservedVariant {
+  variantId: string;
+  productId: string;
+  title: string;
+  variantName: string;
+  image: string | null;
+  price: number;
+  quantity: number;
+}
+
+export interface StockRepository {
+  /**
+   * Réserve chaque ligne par une mise à jour conditionnelle (stock suffisant, produit publié, variante active), dans
+   * l'ordre des identifiants (pas d'interblocage entre deux commandes). S'arrête à la première ligne impossible et la
+   * renvoie dans `failed` : c'est à l'appelant d'annuler la transaction. Doit tourner DANS une transaction.
+   */
+  reserve(lines: readonly StockLine[]): Promise<{ reserved: ReservedVariant[]; failed: string[] }>;
+  /** Remet le stock (annulation, paiement non reçu) ; une variante supprimée entre-temps est ignorée. */
+  release(lines: readonly StockLine[]): Promise<void>;
+}
+export const STOCK_REPOSITORY = Symbol("STOCK_REPOSITORY");

@@ -6,8 +6,14 @@ import {
   AUDIT_ACTIONS,
   AUDIT_PAGE_DEFAULT,
   AUDIT_PAGE_MAX,
+  CANCEL_REASONS,
   CART_MAX_LINES,
   CART_MAX_QUANTITY,
+  ORDER_PAGE_DEFAULT,
+  ORDER_PAGE_MAX,
+  ORDER_REFERENCE_PATTERN,
+  ORDER_STATUSES,
+  PAYMENT_METHODS,
   ROLES,
   MAX_AVAILABILITY_LINES,
   MAX_ORDER_QUANTITY,
@@ -570,6 +576,177 @@ export const CartMergedSchema = CartSchema.extend({
     .describe("Lignes du navigateur non reprises (produit indisponible ou panier plein)"),
 }).meta({ id: "CartMerged", description: "Panier après la réunion avec celui du navigateur" });
 export type CartMerged = z.infer<typeof CartMergedSchema>;
+
+// --- Commandes (S5-T02, ADR-0024) ---
+
+const orderReference = z
+  .string()
+  .regex(ORDER_REFERENCE_PATTERN)
+  .describe(
+    "Numéro de commande montré au client (« KMD-7F3K9Q »), jamais des numéros qui se suivent",
+  );
+const paymentMethod = z.enum(PAYMENT_METHODS).describe("airtel, moov ou cod (à la livraison)");
+
+export const DeliveryAddressSchema = z
+  .strictObject({
+    fullName: z.string().max(120).describe("Prénom et nom de la personne qui reçoit"),
+    phone: z.string().max(30).describe("Mobile gabonais (06… / 07…) joignable par le livreur"),
+    cityId: z.string().max(40).describe("Ville (liste du contrat : `@kemdia/contracts/delivery`)"),
+    neighborhood: z
+      .string()
+      .max(80)
+      .describe("Quartier de la liste de la ville, ou « Autre quartier »"),
+    landmark: z.string().max(400).describe("Point de repère pour le livreur (5 à 200 caractères)"),
+  })
+  .meta({ id: "DeliveryAddress", description: "Adresse de livraison, copiée dans la commande" });
+export type DeliveryAddress = z.infer<typeof DeliveryAddressSchema>;
+
+export const OrderQuoteRequestSchema = z.strictObject({ cityId: z.string().max(40) }).meta({
+  id: "OrderQuoteRequest",
+  description: "Ville de livraison envisagée, pour calculer le total du panier",
+});
+export type OrderQuoteRequest = z.infer<typeof OrderQuoteRequestSchema>;
+
+export const OrderQuoteSchema = z
+  .object({
+    subtotal: z.int().nonnegative().describe("Articles commandables, en FCFA (prix du catalogue)"),
+    deliveryFee: z.int().nonnegative(),
+    total: z
+      .int()
+      .nonnegative()
+      .describe("À renvoyer tel quel dans `expectedTotal` pour commander"),
+    freeDeliveryThreshold: z.int().nonnegative(),
+    deliveryDaysMin: z.int().positive(),
+    deliveryDaysMax: z.int().positive(),
+    cartOk: z.boolean().describe("Panier non vide et entièrement commandable"),
+    cod: z
+      .object({ allowed: z.boolean(), reason: z.string().optional() })
+      .describe(
+        "Paiement à la livraison possible pour cette ville et ce total (BR-011), sinon la raison",
+      ),
+  })
+  .meta({
+    id: "OrderQuote",
+    description: "Total calculé par le serveur (BR-004) avant la commande",
+  });
+export type OrderQuote = z.infer<typeof OrderQuoteSchema>;
+
+export const CreateOrderRequestSchema = z
+  .strictObject({
+    idempotencyKey: uuid.describe(
+      "Tiré par le site pour CETTE commande et renvoyé tel quel en cas de nouvel essai : jamais deux commandes",
+    ),
+    expectedTotal: z
+      .int()
+      .nonnegative()
+      .describe(
+        "Total affiché au client ; s'il ne correspond plus, la commande est refusée (`PRIX_MODIFIE`)",
+      ),
+    delivery: DeliveryAddressSchema,
+    payment: z.strictObject({
+      method: paymentMethod,
+      phone: z
+        .string()
+        .max(30)
+        .optional()
+        .describe("Numéro Mobile Money (obligatoire pour airtel / moov)"),
+    }),
+  })
+  .meta({
+    id: "CreateOrderRequest",
+    description:
+      "Commande du panier du compte : les articles et les prix viennent du serveur, jamais de la requête (BR-004)",
+  });
+export type CreateOrderRequest = z.infer<typeof CreateOrderRequestSchema>;
+
+export const OrderLineSchema = z
+  .object({
+    variantId: uuid,
+    productId: uuid,
+    title: z.string(),
+    variantName: z.string(),
+    image: z.string().nullable(),
+    unitPrice: fcfa.describe("Prix unitaire au moment de la commande"),
+    quantity: cartQuantity,
+    lineTotal: fcfa,
+  })
+  .meta({
+    id: "OrderLine",
+    description: "Article commandé (copie figée au moment de la commande)",
+  });
+export type OrderLine = z.infer<typeof OrderLineSchema>;
+
+export const OrderSchema = z
+  .object({
+    id: uuid,
+    reference: orderReference,
+    status: z.enum(ORDER_STATUSES),
+    paymentMethod,
+    paymentPhone: z.string().nullable(),
+    subtotal: fcfa,
+    deliveryFee: z.int().nonnegative(),
+    total: fcfa,
+    delivery: z.object({
+      fullName: z.string(),
+      phone: z.string(),
+      cityId: z.string(),
+      cityName: z.string(),
+      neighborhood: z.string(),
+      landmark: z.string(),
+      daysMin: z.int().positive(),
+      daysMax: z.int().positive(),
+    }),
+    lines: z.array(OrderLineSchema).min(1).max(CART_MAX_LINES),
+    createdAt: z.iso.datetime(),
+    paymentDueAt: z.iso
+      .datetime()
+      .nullable()
+      .describe(
+        "En attente de paiement : au-delà, la commande est annulée et le stock remis en vente",
+      ),
+    cancelledAt: z.iso.datetime().nullable(),
+    cancelReason: z.enum(CANCEL_REASONS).nullable(),
+    canCancel: z.boolean().describe("Le client peut encore l'annuler (avant l'expédition)"),
+    history: z
+      .array(z.object({ status: z.enum(ORDER_STATUSES), at: z.iso.datetime() }))
+      .describe("Changements de statut, du plus ancien au plus récent"),
+  })
+  .meta({ id: "Order", description: "Commande du compte connecté" });
+export type Order = z.infer<typeof OrderSchema>;
+
+export const OrderSummarySchema = z
+  .object({
+    id: uuid,
+    reference: orderReference,
+    status: z.enum(ORDER_STATUSES),
+    total: fcfa,
+    itemCount: z.int().positive(),
+    image: z.string().nullable(),
+    createdAt: z.iso.datetime(),
+  })
+  .meta({ id: "OrderSummary", description: "Ligne de « Mes commandes »" });
+export type OrderSummary = z.infer<typeof OrderSummarySchema>;
+
+export const ORDER_CURSOR_PATTERN = /^[A-Za-z0-9_-]{20,120}$/;
+
+export const OrderListParamsSchema = z.strictObject({
+  limit: z.coerce.number().int().min(1).max(ORDER_PAGE_MAX).default(ORDER_PAGE_DEFAULT),
+  before: z.string().regex(ORDER_CURSOR_PATTERN).optional(),
+});
+export type OrderListParams = z.infer<typeof OrderListParamsSchema>;
+
+export const OrderPageSchema = z
+  .object({
+    items: z.array(OrderSummarySchema),
+    nextCursor: z.string().regex(ORDER_CURSOR_PATTERN).nullable(),
+  })
+  .meta({
+    id: "OrderPage",
+    description: "Commandes du compte, de la plus récente à la plus ancienne",
+  });
+export type OrderPage = z.infer<typeof OrderPageSchema>;
+
+export const OrderReferenceParamsSchema = z.strictObject({ reference: orderReference });
 
 type JsonSchema = Record<string, unknown>;
 

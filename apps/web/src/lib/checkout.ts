@@ -5,7 +5,8 @@
  */
 import { normalizeGabonPhone, normalizeName, type MobileOperator } from "./auth/validation";
 import type { CartLine } from "./cart";
-import { getCity, type ZoneId } from "./delivery";
+import { LANDMARK_MAX, LANDMARK_MIN, OTHER_NEIGHBORHOOD } from "@kemdia/contracts/delivery";
+import { getCity } from "./delivery";
 
 export type PaymentMethod = "airtel" | "moov" | "cod";
 
@@ -16,27 +17,7 @@ export const PAYMENT_METHODS: Record<PaymentMethod, { label: string; operator?: 
     cod: { label: "Paiement à la livraison" },
   };
 
-/**
- * Paiement à la livraison (BR-011). Valeurs PROVISOIRES : question ouverte n° 1 de regles-metier.md.
- * Proposition : Grand Libreville uniquement, panier jusqu'à 100 000 FCFA.
- */
-export const COD_ZONES: ZoneId[] = ["zone_1"];
-export const COD_MAX_TOTAL = 100_000;
-
-export function codAvailability(
-  cityId: string,
-  total: number,
-): { allowed: true } | { allowed: false; reason: string } {
-  const city = getCity(cityId);
-  if (!city || !COD_ZONES.includes(city.zone))
-    return {
-      allowed: false,
-      reason: "Disponible uniquement dans le Grand Libreville pour le moment.",
-    };
-  if (total > COD_MAX_TOTAL)
-    return { allowed: false, reason: "Disponible pour les commandes jusqu'à 100 000 FCFA." };
-  return { allowed: true };
-}
+export { COD_MAX_TOTAL, COD_ZONES, codAvailability } from "@kemdia/contracts/delivery";
 
 export type Address = {
   fullName: string;
@@ -49,9 +30,7 @@ export type Address = {
 
 export type AddressErrors = Partial<Record<keyof Address, string>>;
 
-export const LANDMARK_MAX = 200;
-/** Quartier absent de la liste : la personne le précise dans le repère. */
-export const OTHER_NEIGHBORHOOD = "Autre quartier";
+export { LANDMARK_MAX, OTHER_NEIGHBORHOOD };
 
 export function validateAddress(a: Address): AddressErrors {
   const e: AddressErrors = {};
@@ -68,7 +47,7 @@ export function validateAddress(a: Address): AddressErrors {
   )
     e.neighborhood = "Choisissez votre quartier.";
   const landmark = a.landmark.trim();
-  if (landmark.length < 5)
+  if (landmark.length < LANDMARK_MIN)
     e.landmark = "Indiquez un repère pour le livreur (ex. « face à la pharmacie »).";
   else if (landmark.length > LANDMARK_MAX) e.landmark = `${LANDMARK_MAX} caractères maximum.`;
   return e;

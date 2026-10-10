@@ -1,5 +1,7 @@
-import type { DescribedLine } from "../../catalog/index.js";
+import type { DescribedLine, ReservedVariant } from "../../catalog/index.js";
 import type { Cart, CartLine } from "../domain/cart.js";
+import type { DeliveryAddress } from "../domain/delivery-address.js";
+import type { CancelReason, OrderStatus, PaymentMethod, PricedLine } from "../domain/order.js";
 
 /** Panier enregistré (schéma PostgreSQL `orders`). */
 export interface CartRepository {
@@ -46,3 +48,97 @@ export interface CartCatalog {
   describeLines(lines: readonly CartLine[]): Promise<DescribedLine[]>;
 }
 export const CART_CATALOG = Symbol("CART_CATALOG");
+
+// --- Commandes (S5-T02, ADR-0024) ---
+
+/** Commande enregistrée, telle que le module la relit. */
+export interface OrderRecord {
+  id: string;
+  reference: string;
+  accountId: string;
+  status: OrderStatus;
+  paymentMethod: PaymentMethod;
+  paymentPhone: string | null;
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  delivery: DeliveryAddress & { daysMin: number; daysMax: number };
+  lines: PricedLine[];
+  createdAt: Date;
+  paymentDueAt: Date | null;
+  cancelledAt: Date | null;
+  cancelReason: CancelReason | null;
+  history: { status: OrderStatus; at: Date }[];
+  /** Empreinte de la demande (adresse, paiement, total) : une même clé ne sert qu'à une même commande */
+  requestHash: string;
+}
+
+export type NewOrder = Omit<
+  OrderRecord,
+  "id" | "reference" | "createdAt" | "cancelledAt" | "cancelReason" | "history"
+> & {
+  idempotencyKey: string;
+};
+
+export interface OrderSummaryRecord {
+  id: string;
+  reference: string;
+  status: OrderStatus;
+  total: number;
+  itemCount: number;
+  image: string | null;
+  createdAt: Date;
+}
+
+/** Position dans « Mes commandes » (date de création puis identifiant, du plus récent au plus ancien). */
+export interface OrderCursor {
+  createdAt: Date;
+  id: string;
+}
+
+export interface OrderRepository {
+  /** Verrouille le panier du compte jusqu'à la fin de la transaction et renvoie ses lignes (`null` : pas de panier). */
+  lockCart(accountId: string): Promise<{ cartId: string; lines: CartLine[] } | null>;
+  findByIdempotencyKey(accountId: string, key: string): Promise<OrderRecord | null>;
+  /** Commandes du compte qui bloquent encore du stock (en attente de paiement, confirmées, en préparation). */
+  countOpen(accountId: string): Promise<number>;
+  /** Enregistre la commande, ses lignes et son premier statut ; tire des numéros jusqu'à en trouver un libre. */
+  insert(order: NewOrder, now: Date, nextReference: () => string): Promise<OrderRecord>;
+  /** Retire du panier les variantes commandées. */
+  removeCartLines(cartId: string, variantIds: readonly string[]): Promise<void>;
+  /** Commande du compte (`lock` : verrouillée jusqu'à la fin de la transaction). */
+  findByReference(
+    accountId: string,
+    reference: string,
+    lock?: boolean,
+  ): Promise<OrderRecord | null>;
+  list(
+    accountId: string,
+    limit: number,
+    before?: OrderCursor,
+  ): Promise<{ items: OrderSummaryRecord[]; next: OrderCursor | null }>;
+  /** Change le statut et l'inscrit dans l'historique. */
+  setStatus(orderId: string, status: OrderStatus, now: Date, reason?: CancelReason): Promise<void>;
+  /** Commandes en attente de paiement dont l'échéance est passée (pour l'annulation automatique). */
+  findOverdue(now: Date, limit: number): Promise<string[]>;
+  /** Verrouille une commande par son identifiant ; `null` si absente ou déjà verrouillée par une autre tâche. */
+  lockById(orderId: string): Promise<OrderRecord | null>;
+}
+export const ORDER_REPOSITORY = Symbol("ORDER_REPOSITORY");
+
+/** Transaction partagée (commande, stock du catalogue, panier) ; attente des verrous bornée. */
+export interface OrdersTransaction {
+  run<T>(work: () => Promise<T>): Promise<T>;
+}
+export const ORDERS_TRANSACTION = Symbol("ORDERS_TRANSACTION");
+
+/** Stock du catalogue (port public `StockService`), utilisé dans la transaction de la commande. */
+export interface OrderStock {
+  reserve(lines: readonly CartLine[]): Promise<ReservedVariant[]>;
+  release(lines: readonly CartLine[]): Promise<void>;
+}
+export const ORDER_STOCK = Symbol("ORDER_STOCK");
+
+/** Tirage au hasard (numéro de commande), remplaçable dans les tests. */
+export const ORDER_RANDOM = Symbol("ORDER_RANDOM");
+export type RandomBytes = (size: number) => Uint8Array;
