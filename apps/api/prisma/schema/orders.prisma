@@ -59,10 +59,11 @@ enum PaymentMethod {
   @@schema("orders")
 }
 
-/// Annulée par le client (avant l'expédition) ou paiement non reçu à temps.
+/// Annulée par le client (avant l'expédition), paiement non reçu à temps, ou par un administrateur (S5-T04).
 enum CancelReason {
   CLIENT
   PAYMENT_EXPIRED
+  ADMIN
 
   @@map("cancel_reason")
   @@schema("orders")
@@ -101,6 +102,8 @@ model Order {
   paymentDueAt         DateTime?           @map("payment_due_at") @db.Timestamptz(3)
   cancelledAt          DateTime?           @map("cancelled_at") @db.Timestamptz(3)
   cancelReason         CancelReason?       @map("cancel_reason")
+  /// Paiement reçu (Mobile Money confirmé ou espèces encaissées, S5-T04) : posé une fois, ensuite figé
+  paidAt               DateTime?           @map("paid_at") @db.Timestamptz(3)
   items                OrderItem[]
   history              OrderStatusChange[]
   couponRedemption     CouponRedemption?
@@ -202,5 +205,22 @@ model CouponRedemption {
 
   @@index([couponId, accountId])
   @@map("coupon_redemptions")
+  @@schema("orders")
+}
+
+// ─── Paiement à la livraison (S5-T04, ADR-0026) ───────────────────────────────────────────
+
+/// Réglage du paiement à la livraison (BR-011), modifié par un administrateur : une seule ligne (id = 1).
+model CodSettings {
+  id        Int       @id @default(1) @db.SmallInt
+  /// Zones de livraison où il est proposé (zone_1 … zone_4) ; vide : nulle part
+  zones     String[]  @db.VarChar(10)
+  /// Total maximum de la commande, livraison comprise, en FCFA
+  maxTotal  Int       @map("max_total")
+  /// Dernier administrateur qui l'a changé (module identity) : UUID seul
+  updatedBy String?   @map("updated_by") @db.Uuid
+  updatedAt DateTime? @map("updated_at") @db.Timestamptz(3)
+
+  @@map("cod_settings")
   @@schema("orders")
 }

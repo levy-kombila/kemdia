@@ -12,6 +12,7 @@ import { KemdiaThrottlerGuard, throttlerOptions } from "./http/rate-limit.js";
 import { CatalogModule } from "./modules/catalog/index.js";
 import { IdentityModule } from "./modules/identity/index.js";
 import { OrdersModule } from "./modules/orders/index.js";
+import { PaymentsModule } from "./modules/payments/index.js";
 
 /**
  * Module racine : il assemble les briques techniques et, à partir du S3-T03, les modules métier
@@ -31,6 +32,7 @@ export class AppModule {
         CatalogModule,
         IdentityModule,
         OrdersModule,
+        PaymentsModule,
         // Documentation (/api/docs, /api/v1/openapi.json) : désactivée par défaut en production
         ...(config.API_DOCS ? [DocsModule] : []),
       ],

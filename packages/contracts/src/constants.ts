@@ -128,6 +128,11 @@ export const AUDIT_ACTIONS = [
   // Coupons (S5-T03)
   "coupon.created",
   "coupon.updated",
+  // Paiements (S5-T04)
+  "order.cancelled_by_admin",
+  "refund.done",
+  "cod.collected",
+  "settings.cod_updated",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** Lignes par page du journal d'audit. */
@@ -181,7 +186,8 @@ export const ORDER_STATUS_LABELS: Readonly<Record<OrderStatus, string>> = {
   cancelled: "Annulée",
 };
 /** Raisons d'une annulation. */
-export const CANCEL_REASONS = ["client", "paiement_expire"] as const;
+/** Annulée par le client, faute de paiement à temps, ou par un administrateur (S5-T04, service client). */
+export const CANCEL_REASONS = ["client", "paiement_expire", "admin"] as const;
 export type CancelReason = (typeof CANCEL_REASONS)[number];
 
 /**
@@ -254,11 +260,44 @@ export const COUPON_ERROR_CODES = [
 ] as const;
 export type CouponErrorCode = (typeof COUPON_ERROR_CODES)[number];
 
+// --- Paiements (S5-T04, ADR-0026) ---
+
+/** États d'une tentative de paiement Mobile Money (ou d'un encaissement à la livraison). */
+export const PAYMENT_STATUSES = ["pending", "succeeded", "failed", "expired"] as const;
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+/** Essais Mobile Money au plus par commande (choix du 2026-10-10). */
+export const MAX_PAYMENT_ATTEMPTS = 3;
+/** Durée d'un essai : au-delà, sans réponse de l'opérateur, l'essai est expiré et le client peut réessayer. */
+export const PAYMENT_ATTEMPT_MINUTES = 3;
+/** États d'un remboursement (suivi manuel par l'administrateur en attendant le fournisseur). */
+export const REFUND_STATUSES = ["to_do", "done"] as const;
+export type RefundStatus = (typeof REFUND_STATUSES)[number];
+/**
+ * Raisons d'un remboursement : commande payée puis annulée par l'administrateur, ou argent reçu alors que la commande
+ * n'attendait plus de paiement (annulée entre-temps, ou déjà payée par un autre essai).
+ */
+export const REFUND_REASONS = ["annulation_admin", "paiement_non_attendu"] as const;
+export type RefundReason = (typeof REFUND_REASONS)[number];
+
+/** Codes d'erreur métier des paiements. */
+export const PAYMENT_ERROR_CODES = [
+  "PAIEMENT_IMPOSSIBLE",
+  "PAIEMENT_EN_COURS",
+  "TROP_D_ESSAIS_PAIEMENT",
+  "PAIEMENT_INDISPONIBLE",
+  "PAIEMENT_INTROUVABLE",
+  "REMBOURSEMENT_INTROUVABLE",
+  "ENCAISSEMENT_IMPOSSIBLE",
+  "REMBOURSEMENT_DEJA_FAIT",
+] as const;
+export type PaymentErrorCode = (typeof PAYMENT_ERROR_CODES)[number];
+
 /** Tous les codes d'erreur métier que l'API peut renvoyer. */
 export const API_ERROR_CODES = [
   ...IDENTITY_ERROR_CODES,
   ...CART_ERROR_CODES,
   ...ORDER_ERROR_CODES,
   ...COUPON_ERROR_CODES,
+  ...PAYMENT_ERROR_CODES,
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

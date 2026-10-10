@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "1.9.0",
-    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée."
+    "version": "1.10.0",
+    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main."
   },
   "servers": [
     {
@@ -31,6 +31,10 @@
     {
       "name": "Commandes",
       "description": "Commandes du compte connecté (module orders, S5-T02) : stock réservé dans la même transaction (BR-012)"
+    },
+    {
+      "name": "Paiements",
+      "description": "Paiement Mobile Money d'une commande du compte connecté (module payments, S5-T04)"
     },
     {
       "name": "Supervision",
@@ -2792,6 +2796,734 @@
           }
         }
       }
+    },
+    "/api/v1/admin/settings/cod": {
+      "get": {
+        "tags": ["Administration"],
+        "summary": "Réglage du paiement à la livraison",
+        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque changement est inscrit au journal d'audit.\n\nPaiement à la livraison (BR-011) : proposé dans les **zones** choisies et jusqu'au **total maximum** (livraison comprise). Le devis et la commande appliquent le nouveau réglage aussitôt.",
+        "operationId": "getCodSettings",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le réglage en vigueur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Administration"],
+        "summary": "Changer le réglage du paiement à la livraison",
+        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque changement est inscrit au journal d'audit.\n\nPaiement à la livraison (BR-011) : proposé dans les **zones** choisies et jusqu'au **total maximum** (livraison comprise). Le devis et la commande appliquent le nouveau réglage aussitôt.",
+        "operationId": "updateCodSettings",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Le nouveau réglage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide (zone inconnue, montant hors bornes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{reference}/payments": {
+      "post": {
+        "tags": ["Paiements"],
+        "summary": "Demander le paiement sur le téléphone (nouvel essai)",
+        "description": "Paiement **Mobile Money** d'une commande en attente de paiement : l'opérateur demande au client de valider sur son téléphone.\n\n**3 essais** au plus, avec le **même opérateur** que la commande (autre numéro possible). Un essai attend la réponse **3 minutes** au plus (jamais au-delà de l'échéance de la commande), puis expire. Le résultat arrive par l'opérateur : interroger `GET` pour le suivre.",
+        "operationId": "startPayment",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "path",
+            "required": true,
+            "description": "Numéro de la commande (ex. KMD-7F3K9Q)",
+            "schema": {
+              "type": "string",
+              "pattern": "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartPaymentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "L'essai, en attente de la validation sur le téléphone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Payment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps ou numéro de commande invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`COMMANDE_INTROUVABLE` (n'existe pas ou n'est pas à ce compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`PAIEMENT_IMPOSSIBLE` (à la livraison, déjà payée, annulée, délai passé), `PAIEMENT_EN_COURS`, `TROP_D_ESSAIS_PAIEMENT` ou `PANIER_OCCUPE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`NUMERO_PAIEMENT_INVALIDE` : numéro d'un autre opérateur",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de demandes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`PAIEMENT_INDISPONIBLE` : aucun fournisseur branché ou opérateur injoignable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Paiements"],
+        "summary": "Dernier essai de paiement de la commande",
+        "description": "Paiement **Mobile Money** d'une commande en attente de paiement : l'opérateur demande au client de valider sur son téléphone.\n\n**3 essais** au plus, avec le **même opérateur** que la commande (autre numéro possible). Un essai attend la réponse **3 minutes** au plus (jamais au-delà de l'échéance de la commande), puis expire. Le résultat arrive par l'opérateur : interroger `GET` pour le suivre.",
+        "operationId": "getPayment",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "path",
+            "required": true,
+            "description": "Numéro de la commande (ex. KMD-7F3K9Q)",
+            "schema": {
+              "type": "string",
+              "pattern": "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le dernier essai",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Payment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Numéro de commande invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`COMMANDE_INTROUVABLE` ou `PAIEMENT_INTROUVABLE` (aucun essai)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de demandes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/orders/{reference}/cancel": {
+      "post": {
+        "tags": ["Administration"],
+        "summary": "Annuler une commande (service client)",
+        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque action est inscrite au journal d'audit.\n\nToute commande **pas encore expédiée**, même payée : stock remis en vente, coupon rendu, et un remboursement **à faire** pour chaque paiement Mobile Money reçu. Une commande déjà annulée est renvoyée telle quelle.",
+        "operationId": "adminCancelOrder",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "path",
+            "required": true,
+            "description": "Numéro de la commande (ex. KMD-7F3K9Q)",
+            "schema": {
+              "type": "string",
+              "pattern": "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCancelOrderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "La commande annulée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps ou numéro de commande invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`COMMANDE_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`ANNULATION_IMPOSSIBLE` (expédiée, livrée ou encaissée en espèces) ou `PANIER_OCCUPE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/orders/{reference}/cod-collected": {
+      "post": {
+        "tags": ["Administration"],
+        "summary": "Noter l'encaissement d'un paiement à la livraison",
+        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque action est inscrite au journal d'audit.\n\nEn attendant le livreur (S7). Le montant doit être **exactement** le total de la commande. Déjà noté : l'encaissement existant est renvoyé (200).",
+        "operationId": "codCollected",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "path",
+            "required": true,
+            "description": "Numéro de la commande (ex. KMD-7F3K9Q)",
+            "schema": {
+              "type": "string",
+              "pattern": "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodCollectedRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Encaissement déjà noté",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Payment"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Encaissement noté",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Payment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps ou numéro de commande invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`COMMANDE_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`ENCAISSEMENT_IMPOSSIBLE` (pas à la livraison, annulée, montant différent) ou `PANIER_OCCUPE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/refunds": {
+      "get": {
+        "tags": ["Administration"],
+        "summary": "Remboursements à faire (ou faits)",
+        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque action est inscrite au journal d'audit.\n\nSuivi **manuel** en attendant l'API de l'opérateur : 200 au plus, les plus anciens d'abord.",
+        "operationId": "listRefunds",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "`to_do` (par défaut) ou `done`",
+            "schema": {
+              "type": "string",
+              "enum": ["to_do", "done"],
+              "default": "to_do"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Les remboursements",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefundPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Paramètres invalides",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/refunds/{refundId}/done": {
+      "post": {
+        "tags": ["Administration"],
+        "summary": "Noter un remboursement fait",
+        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque action est inscrite au journal d'audit.\n\nAvec la référence de l'opération chez l'opérateur. La même référence renvoyée ne change rien.",
+        "operationId": "refundDone",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "refundId",
+            "in": "path",
+            "required": true,
+            "description": "UUID du remboursement",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefundDoneRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Le remboursement, noté fait",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refund"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps ou UUID invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`REMBOURSEMENT_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`REMBOURSEMENT_DEJA_FAIT` (avec une autre référence) ou `PANIER_OCCUPE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2897,6 +3629,19 @@
         "additionalProperties": false,
         "description": "Recherche d'un compte (dans le corps : jamais d'adresse e-mail dans l'URL ni les journaux)"
       },
+      "AdminCancelOrderRequest": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 100,
+            "description": "Raison (service client), inscrite au journal d'audit"
+          }
+        },
+        "required": ["note"],
+        "additionalProperties": false
+      },
       "AuditEvent": {
         "type": "object",
         "properties": {
@@ -2919,7 +3664,11 @@
               "password.reset",
               "sessions.revoked_all",
               "coupon.created",
-              "coupon.updated"
+              "coupon.updated",
+              "order.cancelled_by_admin",
+              "refund.done",
+              "cod.collected",
+              "settings.cod_updated"
             ]
           },
           "actor": {
@@ -2961,7 +3710,7 @@
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["account", "coupon"]
+                    "enum": ["account", "coupon", "order", "refund"]
                   },
                   "id": {
                     "type": "string",
@@ -3475,6 +4224,76 @@
           }
         },
         "required": ["category", "path", "children"],
+        "additionalProperties": false
+      },
+      "CodCollectedRequest": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Montant encaissé (doit être le total de la commande)"
+          }
+        },
+        "required": ["amount"],
+        "additionalProperties": false
+      },
+      "CodSettings": {
+        "type": "object",
+        "properties": {
+          "zones": {
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["zone_1", "zone_2", "zone_3", "zone_4"]
+            },
+            "description": "Zones où le paiement à la livraison est proposé (vide : nulle part)"
+          },
+          "maxTotal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000000,
+            "description": "Total maximum, livraison comprise"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["zones", "maxTotal", "updatedAt"],
+        "additionalProperties": false,
+        "description": "Réglage du paiement à la livraison (BR-011)"
+      },
+      "CodSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "zones": {
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["zone_1", "zone_2", "zone_3", "zone_4"]
+            },
+            "description": "Zones où le paiement à la livraison est proposé (vide : nulle part)"
+          },
+          "maxTotal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000000,
+            "description": "Total maximum, livraison comprise"
+          }
+        },
+        "required": ["zones", "maxTotal"],
         "additionalProperties": false
       },
       "Coupon": {
@@ -4150,12 +4969,25 @@
             "anyOf": [
               {
                 "type": "string",
-                "enum": ["client", "paiement_expire"]
+                "enum": ["client", "paiement_expire", "admin"]
               },
               {
                 "type": "null"
               }
             ]
+          },
+          "paidAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Paiement reçu (Mobile Money confirmé ou espèces encaissées) — S5-T04"
           },
           "canCancel": {
             "type": "boolean",
@@ -4206,6 +5038,7 @@
           "paymentDueAt",
           "cancelledAt",
           "cancelReason",
+          "paidAt",
           "canCancel",
           "history"
         ],
@@ -4457,6 +5290,82 @@
         "additionalProperties": false,
         "description": "Ligne de « Mes commandes »"
       },
+      "Payment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "orderReference": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string",
+            "enum": ["airtel", "moov", "cod"]
+          },
+          "amount": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Montant en FCFA, entier (BR-004)"
+          },
+          "phone": {
+            "type": ["string", "null"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "succeeded", "failed", "expired"]
+          },
+          "attempt": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "attemptsLeft": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "failureReason": {
+            "type": ["string", "null"]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "completedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "orderReference",
+          "method",
+          "amount",
+          "phone",
+          "status",
+          "attempt",
+          "attemptsLeft",
+          "failureReason",
+          "createdAt",
+          "completedAt"
+        ],
+        "additionalProperties": false,
+        "description": "Tentative de paiement d'une commande"
+      },
       "ProblemDetails": {
         "type": "object",
         "properties": {
@@ -4523,7 +5432,15 @@
               "COUPON_NON_APPLICABLE",
               "COUPON_EXISTE",
               "COUPON_INTROUVABLE",
-              "COUPON_TROP_D_ESSAIS"
+              "COUPON_TROP_D_ESSAIS",
+              "PAIEMENT_IMPOSSIBLE",
+              "PAIEMENT_EN_COURS",
+              "TROP_D_ESSAIS_PAIEMENT",
+              "PAIEMENT_INDISPONIBLE",
+              "PAIEMENT_INTROUVABLE",
+              "REMBOURSEMENT_INTROUVABLE",
+              "ENCAISSEMENT_IMPOSSIBLE",
+              "REMBOURSEMENT_DEJA_FAIT"
             ]
           },
           "requestId": {
@@ -4812,6 +5729,105 @@
         "additionalProperties": false,
         "description": "Produit dans une liste (carte produit)"
       },
+      "Refund": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "orderReference": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Montant en FCFA, entier (BR-004)"
+          },
+          "method": {
+            "type": "string",
+            "enum": ["airtel", "moov"]
+          },
+          "phone": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "enum": ["annulation_admin", "paiement_non_attendu"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["to_do", "done"]
+          },
+          "externalReference": {
+            "description": "Référence du remboursement chez l'opérateur",
+            "type": ["string", "null"]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "doneAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "orderReference",
+          "amount",
+          "method",
+          "phone",
+          "reason",
+          "status",
+          "externalReference",
+          "createdAt",
+          "doneAt"
+        ],
+        "additionalProperties": false,
+        "description": "Remboursement à faire ou fait (suivi manuel)"
+      },
+      "RefundDoneRequest": {
+        "type": "object",
+        "properties": {
+          "externalReference": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9._/-]+$",
+            "description": "Référence de l'opération chez l'opérateur"
+          }
+        },
+        "required": ["externalReference"],
+        "additionalProperties": false
+      },
+      "RefundPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Refund"
+            }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false,
+        "description": "Remboursements (200 au plus, les plus anciens d'abord)"
+      },
       "ResetPasswordRequest": {
         "type": "object",
         "properties": {
@@ -4981,6 +5997,18 @@
         },
         "required": ["ticket", "code"],
         "additionalProperties": false
+      },
+      "StartPaymentRequest": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "description": "Autre numéro du MÊME opérateur (sinon celui de la commande)",
+            "type": "string",
+            "maxLength": 30
+          }
+        },
+        "additionalProperties": false,
+        "description": "Demander la validation du paiement sur le téléphone (3 essais au plus)"
       },
       "Variant": {
         "type": "object",

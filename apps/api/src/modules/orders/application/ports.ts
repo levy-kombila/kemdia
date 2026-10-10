@@ -1,3 +1,4 @@
+import type { ZoneId } from "@kemdia/contracts/delivery";
 import type { DescribedLine, ReservedVariant } from "../../catalog/index.js";
 import type { Cart, CartLine } from "../domain/cart.js";
 import type { DeliveryAddress } from "../domain/delivery-address.js";
@@ -72,6 +73,8 @@ export interface OrderRecord {
   paymentDueAt: Date | null;
   cancelledAt: Date | null;
   cancelReason: CancelReason | null;
+  /** Paiement reçu (S5-T04) : la commande ne s'annule plus en ligne */
+  paidAt: Date | null;
   history: { status: OrderStatus; at: Date }[];
   /** Empreinte de la demande (adresse, paiement, total) : une même clé ne sert qu'à une même commande */
   requestHash: string;
@@ -79,7 +82,7 @@ export interface OrderRecord {
 
 export type NewOrder = Omit<
   OrderRecord,
-  "id" | "reference" | "createdAt" | "cancelledAt" | "cancelReason" | "history"
+  "id" | "reference" | "createdAt" | "cancelledAt" | "cancelReason" | "history" | "paidAt"
 > & {
   idempotencyKey: string;
 };
@@ -110,9 +113,9 @@ export interface OrderRepository {
   insert(order: NewOrder, now: Date, nextReference: () => string): Promise<OrderRecord>;
   /** Retire du panier les variantes commandées. */
   removeCartLines(cartId: string, variantIds: readonly string[]): Promise<void>;
-  /** Commande du compte (`lock` : verrouillée jusqu'à la fin de la transaction). */
+  /** Commande du compte (`null` : de n'importe quel compte, administration) ; `lock` : verrouillée jusqu'à la fin de la transaction. */
   findByReference(
-    accountId: string,
+    accountId: string | null,
     reference: string,
     lock?: boolean,
   ): Promise<OrderRecord | null>;
@@ -123,10 +126,15 @@ export interface OrderRepository {
   ): Promise<{ items: OrderSummaryRecord[]; next: OrderCursor | null }>;
   /** Change le statut et l'inscrit dans l'historique. */
   setStatus(orderId: string, status: OrderStatus, now: Date, reason?: CancelReason): Promise<void>;
+  /** Note le paiement reçu (une seule fois ; la base refuse ensuite tout changement). */
+  markPaid(orderId: string, now: Date): Promise<void>;
   /** Commandes en attente de paiement dont l'échéance est passée (pour l'annulation automatique). */
   findOverdue(now: Date, limit: number): Promise<string[]>;
-  /** Verrouille une commande par son identifiant ; `null` si absente ou déjà verrouillée par une autre tâche. */
-  lockById(orderId: string): Promise<OrderRecord | null>;
+  /**
+   * Verrouille une commande par son identifiant ; `null` si absente ou (sans `wait`) déjà verrouillée par une autre
+   * tâche. `wait` : attend le verrou (borné par lock_timeout).
+   */
+  lockById(orderId: string, wait?: boolean): Promise<OrderRecord | null>;
 }
 export const ORDER_REPOSITORY = Symbol("ORDER_REPOSITORY");
 
@@ -146,6 +154,25 @@ export const ORDER_STOCK = Symbol("ORDER_STOCK");
 /** Tirage au hasard (numéro de commande), remplaçable dans les tests. */
 export const ORDER_RANDOM = Symbol("ORDER_RANDOM");
 export type RandomBytes = (size: number) => Uint8Array;
+
+// --- Paiement à la livraison (S5-T04, ADR-0026) ---
+
+/** Réglage du paiement à la livraison (BR-011) : zones et total maximum, modifiés par un administrateur. */
+export interface CodSettingsRecord {
+  zones: ZoneId[];
+  maxTotal: number;
+  updatedAt: Date | null;
+}
+
+export interface CodSettingsRepository {
+  get(): Promise<CodSettingsRecord>;
+  save(
+    settings: { zones: ZoneId[]; maxTotal: number },
+    adminId: string,
+    now: Date,
+  ): Promise<CodSettingsRecord>;
+}
+export const COD_SETTINGS_REPOSITORY = Symbol("COD_SETTINGS_REPOSITORY");
 
 // --- Coupons (S5-T03, ADR-0025) ---
 

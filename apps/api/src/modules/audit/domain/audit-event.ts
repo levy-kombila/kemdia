@@ -19,6 +19,14 @@ export const AUDIT_ACTIONS = [
   "coupon.created",
   /** Coupon activé ou désactivé (détails : code, active) — S5-T03 */
   "coupon.updated",
+  /** Commande annulée par un administrateur (détails : reference, previousStatus, refund) — S5-T04 */
+  "order.cancelled_by_admin",
+  /** Remboursement noté fait (détails : reference, amount, externalReference) — S5-T04 */
+  "refund.done",
+  /** Paiement à la livraison encaissé (détails : reference, amount) — S5-T04 */
+  "cod.collected",
+  /** Réglage du paiement à la livraison changé (détails : zones, maxTotal) — S5-T04 */
+  "settings.cod_updated",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -28,7 +36,7 @@ export const AUDIT_RETENTION_DAYS = 365;
 /** Qui agit : un compte, ou le serveur lui-même (commande en ligne, tâche planifiée). */
 export type AuditActor = { type: "account"; id: string } | { type: "system" };
 
-export const AUDIT_TARGET_TYPES = ["account", "coupon"] as const;
+export const AUDIT_TARGET_TYPES = ["account", "coupon", "order", "refund"] as const;
 export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];
 
 export interface AuditTarget {

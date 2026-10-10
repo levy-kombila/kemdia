@@ -23,7 +23,8 @@ export function presentOrder(order: OrderRecord): Order {
       order.status === "pending_payment" ? (order.paymentDueAt?.toISOString() ?? null) : null,
     cancelledAt: order.cancelledAt?.toISOString() ?? null,
     cancelReason: order.cancelReason,
-    canCancel: clientCanCancel(order.status, order.paymentMethod),
+    paidAt: order.paidAt?.toISOString() ?? null,
+    canCancel: clientCanCancel(order.status, order.paymentMethod, order.paidAt !== null),
     history: order.history.map((h) => ({ status: h.status, at: h.at.toISOString() })),
   };
 }
