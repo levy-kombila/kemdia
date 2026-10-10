@@ -130,3 +130,26 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** Lignes par page du journal d'audit. */
 export const AUDIT_PAGE_DEFAULT = 50;
 export const AUDIT_PAGE_MAX = 100;
+
+// --- Panier serveur (S5-T01, ADR-0023) ---
+
+/** Lignes au plus dans un panier (même limite que le panier du navigateur). */
+export const CART_MAX_LINES = 50;
+/** Quantité au plus par ligne de panier (même limite que le panier du navigateur). */
+export const CART_MAX_QUANTITY = 20;
+/** Un panier sans activité depuis ce nombre de jours est supprimé (ménage automatique). */
+export const CART_TTL_DAYS = 90;
+
+/** Codes d'erreur métier du panier (champ `code` des erreurs). */
+export const CART_ERROR_CODES = [
+  "PANIER_PLEIN",
+  "PRODUIT_INDISPONIBLE",
+  "VARIANTE_INCONNUE",
+  // Le panier est déjà en cours de modification (demandes simultanées) : réessayer dans un instant
+  "PANIER_OCCUPE",
+] as const;
+export type CartErrorCode = (typeof CART_ERROR_CODES)[number];
+
+/** Tous les codes d'erreur métier que l'API peut renvoyer. */
+export const API_ERROR_CODES = [...IDENTITY_ERROR_CODES, ...CART_ERROR_CODES] as const;
+export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

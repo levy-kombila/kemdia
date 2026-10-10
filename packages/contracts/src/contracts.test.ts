@@ -8,6 +8,12 @@ import {
   AdminRoleParamsSchema,
   AuditQueryParamsSchema,
   AccountViewSchema,
+  CART_ERROR_CODES,
+  CART_MAX_LINES,
+  CART_MAX_QUANTITY,
+  CartAddRequestSchema,
+  CartMergeRequestSchema,
+  ProblemDetailsSchema,
   openApiComponentSchemas,
   productQueryParams,
 } from "./index.js";
@@ -80,6 +86,12 @@ describe("schémas", () => {
       "AuditPage",
       "AvailabilityRequest",
       "AvailabilityResponse",
+      "Cart",
+      "CartAddRequest",
+      "CartLine",
+      "CartMerged",
+      "CartMergeRequest",
+      "CartQuantityRequest",
       "Category",
       "CategoryNode",
       "CategoryTree",
@@ -181,5 +193,47 @@ describe("données de démonstration", () => {
   it("112 catégories et 50 produits", () => {
     expect(demoCatalog.categories).toHaveLength(112);
     expect(demoCatalog.products).toHaveLength(50);
+  });
+});
+
+describe("panier (S5-T01)", () => {
+  const variantId = "0b5a3c3e-5a1b-4c1e-9f1a-2b3c4d5e6f70";
+
+  it("n'accepte que des variantes et des quantités entières de 1 à 20 (jamais de prix)", () => {
+    expect(CartAddRequestSchema.safeParse({ variantId, quantity: 2 }).success).toBe(true);
+    expect(CartAddRequestSchema.safeParse({ variantId, quantity: 0 }).success).toBe(false);
+    expect(
+      CartAddRequestSchema.safeParse({ variantId, quantity: CART_MAX_QUANTITY + 1 }).success,
+    ).toBe(false);
+    expect(CartAddRequestSchema.safeParse({ variantId, quantity: 1.5 }).success).toBe(false);
+    expect(CartAddRequestSchema.safeParse({ variantId, quantity: 1, price: 10 }).success).toBe(
+      false,
+    );
+    expect(CartAddRequestSchema.safeParse({ variantId: "38", quantity: 1 }).success).toBe(false);
+  });
+
+  it("réunion : 50 lignes au plus, prix refusé", () => {
+    const line = { variantId, quantity: 1 };
+    const mergeId = "4c5d6e7f-8a9b-4c0d-8e1f-2a3b4c5d6e7f";
+    expect(CartMergeRequestSchema.safeParse({ mergeId, lines: [line] }).success).toBe(true);
+    expect(CartMergeRequestSchema.safeParse({ mergeId, lines: [] }).success).toBe(true);
+    // Sans identifiant de réunion : refusé (une réunion répétée doublerait les quantités)
+    expect(CartMergeRequestSchema.safeParse({ lines: [line] }).success).toBe(false);
+    expect(
+      CartMergeRequestSchema.safeParse({ mergeId, lines: Array(CART_MAX_LINES + 1).fill(line) })
+        .success,
+    ).toBe(false);
+    expect(
+      CartMergeRequestSchema.safeParse({ mergeId, lines: [{ ...line, price: 1 }] }).success,
+    ).toBe(false);
+  });
+
+  it("les codes d'erreur du panier sont des codes de l'API", () => {
+    for (const code of CART_ERROR_CODES) {
+      expect(
+        ProblemDetailsSchema.safeParse({ type: "about:blank", title: "x", status: 422, code })
+          .success,
+      ).toBe(true);
+    }
   });
 });

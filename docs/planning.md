@@ -9,18 +9,18 @@ Mobile Money (Moov, Airtel) et paiement à la livraison, lancement visé **fin 2
 
 ## Vue d'ensemble
 
-| Sprint    | Objectif                                                                                                | Statut     |
-| --------- | ------------------------------------------------------------------------------------------------------- | ---------- |
-| **S0**    | Décision de réécriture, choix de la stack, poste de travail                                             | ✅ Terminé |
-| **S1**    | Fondations frontend + DevOps (CI/CD, sécurité, démo publique)                                           | ✅ Terminé |
-| **S2**    | Intégration du KSAD + finitions frontend (comptes, tunnel de commande, filtres, tests E2E)              | ✅ Terminé |
-| **S3**    | Backend NestJS + PostgreSQL, module `catalog`, site branché sur l'API                                   | ✅ Terminé |
-| **S4**    | Module `identity` : comptes par e-mail ou téléphone (OTP), sécurité de connexion                        | ✅ Terminé |
-| **S5**    | Modules `orders` + `payments` : commande, Mobile Money, paiement à la livraison                         | ⏳         |
-| **S6**    | Module `vendors` + back-office : boutiques, KYC, modération, commissions                                | ⏳         |
-| **S7**    | Module `shipping` (transporteur) + préproduction (serveur, surveillance, sauvegardes, test d'intrusion) | ⏳         |
-| **S8**    | Bêta fermée (vendeurs partenaires + testeurs) puis lancement Gabon 🇬🇦                                   | ⏳         |
-| Après MVP | Affiliation, application mobile, suivi GPS, Kemdia Pay v2                                               | —          |
+| Sprint    | Objectif                                                                                                | Statut      |
+| --------- | ------------------------------------------------------------------------------------------------------- | ----------- |
+| **S0**    | Décision de réécriture, choix de la stack, poste de travail                                             | ✅ Terminé  |
+| **S1**    | Fondations frontend + DevOps (CI/CD, sécurité, démo publique)                                           | ✅ Terminé  |
+| **S2**    | Intégration du KSAD + finitions frontend (comptes, tunnel de commande, filtres, tests E2E)              | ✅ Terminé  |
+| **S3**    | Backend NestJS + PostgreSQL, module `catalog`, site branché sur l'API                                   | ✅ Terminé  |
+| **S4**    | Module `identity` : comptes par e-mail ou téléphone (OTP), sécurité de connexion                        | ✅ Terminé  |
+| **S5**    | Modules `orders` + `payments` : commande, Mobile Money, paiement à la livraison                         | 🚧 En cours |
+| **S6**    | Module `vendors` + back-office : boutiques, KYC, modération, commissions                                | ⏳          |
+| **S7**    | Module `shipping` (transporteur) + préproduction (serveur, surveillance, sauvegardes, test d'intrusion) | ⏳          |
+| **S8**    | Bêta fermée (vendeurs partenaires + testeurs) puis lancement Gabon 🇬🇦                                   | ⏳          |
+| Après MVP | Affiliation, application mobile, suivi GPS, Kemdia Pay v2                                               | —           |
 
 ### Jalons
 
@@ -138,9 +138,26 @@ Décisions : [ADR-0015](architecture/adr/0015-identite-sessions-otp.md) (session
 | S4-T07 | CSRF (origine stricte), CSP à _nonce_, limites par visiteur et par compte, IP du visiteur au journal (HIGH-16, MED-05) — ADR-0021      | ✅     |
 | S4-T08 | Démo : écran « La boutique se réveille » ; colonnes obsolètes ignorées (suppression au S5-T01) ; versions 0.4.0 ; clôture — ADR-0022   | ✅     |
 
+## S5 — Modules `orders` + `payments` 🚧
+
+Décisions : [ADR-0023](architecture/adr/0023-panier-serveur.md) (panier serveur).
+Choix du 2026-10-10 : **compte obligatoire pour commander** ; paniers **additionnés** à la connexion ; connecté, panier **sur le serveur seul** ;
+paniers gardés **90 jours** ; paiement à la livraison, coupons et Mobile Money : **en attente du client** (voir les [questions ouvertes](architecture/regles-metier.md#questions-ouvertes)).
+
+| ID     | Tâche                                                                                                                                                                | Statut |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| S5-T01 | Colonnes `failed_logins` / `locked_until` supprimées (ADR-0022, étape 2) ; module `orders` : panier serveur vérifié, réunion à la connexion, site branché — ADR-0023 | ✅     |
+| S5-T02 | Commande : adresse, frais de livraison calculés par l'API, réservation du stock dans la même transaction (BR-012), statuts, annulation (BR-010), idempotence         | ⏳     |
+| S5-T03 | Coupons : expiration et limite comptées de façon atomique (BR-030), cumul réglable (BR-031)                                                                          | ⏳     |
+| S5-T04 | Module `payments` : port fournisseur, états du paiement, paiement à la livraison (BR-011, FR-017), stock libéré si le paiement échoue                                | ⏳     |
+| S5-T05 | Mobile Money en _sandbox_ (simulateur maison, puis Moov / Airtel ou agrégateur), webhooks signés, rejeu refusé                                                       | ⏳     |
+| S5-T06 | Factures (FR-015) : numérotation continue, PDF, envoi par e-mail                                                                                                     | ⏳     |
+| S5-T07 | Site branché : vrai tunnel de commande (compte obligatoire), attente de validation sur le téléphone, « Mes commandes »                                               | ⏳     |
+| S5-T08 | Démo, parcours de bout en bout du premier achat, versions 0.5.0, clôture                                                                                             | ⏳     |
+
 ## S5 à S8 — grandes lignes
 
-- **S5 `orders` + `payments`** : **S5-T01 commence par supprimer `accounts.failed_logins` / `locked_until`** (étape 2 de l'ADR-0022) ;
+- **S5 `orders` + `payments`** (détail ci-dessus) : S5-T01 a supprimé `accounts.failed_logins` / `locked_until` (étape 2 de l'ADR-0022) ;
   panier serveur (et vérification du panier par `POST /availability` au passage en caisse), réservation de stock atomique (BR-012), coupons (BR-030), paiement à la livraison sous conditions (BR-011),
   adaptateurs Moov / Airtel en _sandbox_, webhooks signés, idempotence, factures (FR-015).
 - **S6 `vendors` + back-office** : boutique, KYC (BR-024), modération des produits (BR-003), commandes vendeur (BR-013), commissions (BR-020), modération des avis.

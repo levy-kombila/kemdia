@@ -2,6 +2,7 @@ import "./globals.css";
 
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { cookies } from "next/headers";
 import { connection } from "next/server";
 import { Footer } from "@/components/layout/Footer";
 import { Suspense } from "react";
@@ -9,6 +10,7 @@ import { Header, HeaderFallback } from "@/components/layout/Header";
 import { WakeUpNotice } from "@/components/layout/WakeUpNotice";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { Providers } from "@/components/providers/Providers";
+import { SESSION_COOKIE } from "@/lib/auth/cookies";
 import { SITE, siteUrl } from "@/lib/site";
 
 /**
@@ -66,6 +68,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // Une page pré-générée à la construction n'aurait pas de nonce : ses scripts seraient bloqués.
   await connection();
   const demo = process.env.APP_ENV === "demo";
+  // Panier du compte ou du navigateur (S5-T01) : simple présence du cookie, aucun appel à l'API (rien ne bloque).
+  // Next.js redessine ce layout après une connexion ou une déconnexion (l'action serveur pose ou efface le cookie).
+  const signedIn = (await cookies()).has(SESSION_COOKIE);
   return (
     // data-scroll-behavior : défilement doux seulement à l'intérieur d'une page, pas lors d'un changement de page
     <html lang="fr-GA" className={archivo.variable} data-scroll-behavior="smooth">
@@ -76,7 +81,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         >
           Aller au contenu
         </a>
-        <Providers>
+        <Providers signedIn={signedIn}>
           {demo ? (
             // Démo gratuite (S4-T08) : la page part tout de suite avec un en-tête de réserve et, si l'API dort,
             // « La boutique se réveille… ». Réservé à la démo : en streaming, le statut 200 est envoyé avant que

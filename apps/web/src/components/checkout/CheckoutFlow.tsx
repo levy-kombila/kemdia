@@ -54,7 +54,7 @@ const stateOf = (n: Step, current: Step): StepState =>
   n < current ? "done" : n === current ? "current" : "todo";
 
 export function CheckoutFlow() {
-  const { state, hydrated, subtotal, clear } = useCart();
+  const { state, hydrated, subtotal, canCheckout, clear } = useCart();
   const { location, setLocation } = useDeliveryLocation();
   const [step, setStep] = useState<Step>(1);
   const [phase, setPhase] = useState<Phase>({ name: "form" });
@@ -117,6 +117,25 @@ export function CheckoutFlow() {
           className="bg-brand-600 mt-2 rounded-full px-6 py-3 font-semibold text-white"
         >
           Continuer mes achats
+        </Link>
+      </div>
+    );
+  }
+
+  // Passage en caisse (S5-T01) : connecté, le panier vient d'être revérifié par le serveur (BR-001)
+  if (!canCheckout) {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-xl bg-white px-6 py-14 text-center">
+        <ShoppingCart className="text-ink-400 size-12" aria-hidden />
+        <h1 className="text-xl font-extrabold">Votre panier est à vérifier</h1>
+        <p className="text-ink-500 max-w-sm text-sm">
+          Certains articles ne sont plus disponibles comme demandé (stock ou produit retiré).
+        </p>
+        <Link
+          href="/panier"
+          className="bg-brand-600 mt-2 rounded-full px-6 py-3 font-semibold text-white"
+        >
+          Voir mon panier
         </Link>
       </div>
     );

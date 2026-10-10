@@ -1,13 +1,22 @@
 "use client";
 
-import { BadgeCheck, Lock, MapPin, ShoppingCart, Smartphone, Trash2, Truck } from "lucide-react";
+import {
+  BadgeCheck,
+  CircleAlert,
+  Lock,
+  MapPin,
+  ShoppingCart,
+  Smartphone,
+  Trash2,
+  Truck,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCart } from "@/components/providers/CartProvider";
 import { useDeliveryLocation } from "@/components/providers/LocationProvider";
 import { QuantityInput } from "@/components/product/QuantityInput";
 import { Price } from "@/components/ui/Price";
-import { MAX_QTY_PER_LINE } from "@/lib/cart";
+import { MAX_QTY_PER_LINE, issueMessage } from "@/lib/cart";
 import { estimateDelivery, formatDelay } from "@/lib/delivery";
 import { formatFCFA } from "@/lib/format";
 
@@ -57,7 +66,7 @@ function FreeShippingMeter({ subtotal }: { subtotal: number }) {
 }
 
 export function CartView() {
-  const { state, hydrated, subtotal, count, setQuantity, remove, clear } = useCart();
+  const { state, hydrated, subtotal, count, canCheckout, setQuantity, remove, clear } = useCart();
   const { city, openModal } = useDeliveryLocation();
   const estimate = city ? estimateDelivery(city.id, subtotal) : null;
   const total = subtotal + (estimate?.fee ?? 0);
@@ -105,13 +114,23 @@ export function CartView() {
     );
   }
 
-  const checkout = (
+  // Connecté : le serveur a vérifié chaque ligne (BR-001). Une ligne signalée bloque le passage en caisse.
+  const checkout = canCheckout ? (
     <Link
       href="/commande"
       className="bg-accent-400 hover:bg-accent-300 text-ink-900 flex h-12 w-full items-center justify-center gap-2 rounded-full font-bold"
     >
       <Lock className="size-4" aria-hidden /> Commander
     </Link>
+  ) : (
+    <button
+      type="button"
+      disabled
+      aria-describedby="panier-a-corriger"
+      className="bg-ink-200 text-ink-500 flex h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-full font-bold"
+    >
+      <Lock className="size-4" aria-hidden /> Commander
+    </button>
   );
 
   return (
@@ -168,15 +187,22 @@ export function CartView() {
                       <BadgeCheck className="text-brand-600 size-3.5" aria-hidden /> Vendu par
                       Kemdia
                     </p>
-                    {l.maxQuantity <= 5 && (
-                      <p className="text-brand-700 mt-0.5 text-xs font-semibold">
-                        Plus que {l.maxQuantity} en stock
+                    {l.issue ? (
+                      <p className="text-brand-700 mt-1 flex items-start gap-1 text-sm font-semibold">
+                        <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+                        {issueMessage(l.issue)}
                       </p>
+                    ) : (
+                      l.maxQuantity <= 5 && (
+                        <p className="text-brand-700 mt-0.5 text-xs font-semibold">
+                          Plus que {l.maxQuantity} en stock
+                        </p>
+                      )
                     )}
                     <div className="mt-3 flex flex-wrap items-center gap-3">
                       <QuantityInput
                         value={l.quantity}
-                        max={Math.min(l.maxQuantity, MAX_QTY_PER_LINE)}
+                        max={Math.max(1, Math.min(l.maxQuantity, MAX_QTY_PER_LINE))}
                         onChange={(n) => setQuantity(l.variantId, n)}
                         label={`Quantité pour ${l.title}`}
                       />
@@ -245,6 +271,16 @@ export function CartView() {
                 </dd>
               </div>
             </dl>
+            {!canCheckout && (
+              <p
+                id="panier-a-corriger"
+                role="status"
+                className="text-brand-700 mt-4 text-sm font-semibold"
+              >
+                Certains articles ne sont plus disponibles comme demandé : corrigez-les pour
+                commander.
+              </p>
+            )}
             <div className="mt-4">{checkout}</div>
             <p className="text-ink-500 mt-3 text-center text-xs">
               Montants vérifiés et recalculés par nos serveurs au moment de la commande.

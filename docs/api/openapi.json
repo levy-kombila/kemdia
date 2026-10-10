@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "1.6.0",
-    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne."
+    "version": "1.7.0",
+    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site."
   },
   "servers": [
     {
@@ -23,6 +23,10 @@
     {
       "name": "Administration",
       "description": "Rôles des comptes et journal d'audit (S4-T06) : administrateurs connectés depuis moins de 15 minutes"
+    },
+    {
+      "name": "Panier",
+      "description": "Panier serveur du compte connecté (module orders, S5-T01) ; appelé par le serveur du site"
     },
     {
       "name": "Supervision",
@@ -1660,6 +1664,436 @@
           }
         }
       }
+    },
+    "/api/v1/cart": {
+      "get": {
+        "tags": ["Panier"],
+        "summary": "Le panier du compte, vérifié (sert au passage en caisse)",
+        "description": "Réservé au **compte connecté** (son propre panier). Toutes les routes renvoient le panier complet, **revérifié dans le catalogue** : prix actuel (BR-004), produit encore en vente et stock suffisant (BR-001), ligne par ligne. Une variante supprimée du catalogue est retirée du panier. Le panier ne réserve pas le stock (réservation à la commande, BR-012). 50 lignes au plus, 1 à 20 par ligne ; une quantité trop grande est ramenée au stock disponible.\n\n`ok` est vrai si le panier n'est pas vide et que toutes ses lignes sont commandables.",
+        "operationId": "getCart",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le panier",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cart"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes, par adresse ou par compte (`TROP_DE_REQUETES`, `Retry-After`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Panier"],
+        "summary": "Vider le panier",
+        "description": "Réservé au **compte connecté** (son propre panier). Toutes les routes renvoient le panier complet, **revérifié dans le catalogue** : prix actuel (BR-004), produit encore en vente et stock suffisant (BR-001), ligne par ligne. Une variante supprimée du catalogue est retirée du panier. Le panier ne réserve pas le stock (réservation à la commande, BR-012). 50 lignes au plus, 1 à 20 par ligne ; une quantité trop grande est ramenée au stock disponible.",
+        "operationId": "clearCart",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le panier, vide",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cart"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`PANIER_OCCUPE` : le panier est déjà en cours de modification par une autre demande (réessayer, `Retry-After`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes, par adresse ou par compte (`TROP_DE_REQUETES`, `Retry-After`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cart/items": {
+      "post": {
+        "tags": ["Panier"],
+        "summary": "Ajouter une variante (quantités additionnées si elle y est déjà)",
+        "description": "Réservé au **compte connecté** (son propre panier). Toutes les routes renvoient le panier complet, **revérifié dans le catalogue** : prix actuel (BR-004), produit encore en vente et stock suffisant (BR-001), ligne par ligne. Une variante supprimée du catalogue est retirée du panier. Le panier ne réserve pas le stock (réservation à la commande, BR-012). 50 lignes au plus, 1 à 20 par ligne ; une quantité trop grande est ramenée au stock disponible.",
+        "operationId": "addCartItem",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CartAddRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Le panier après l'ajout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cart"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide (quantité de 1 à 20, UUID)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`VARIANTE_INCONNUE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`PRODUIT_INDISPONIBLE` (plus en vente ou sans stock), `PANIER_PLEIN` (50 lignes) ou `PANIER_OCCUPE` : le panier est déjà en cours de modification par une autre demande (réessayer, `Retry-After`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes, par adresse ou par compte (`TROP_DE_REQUETES`, `Retry-After`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cart/items/{variantId}": {
+      "put": {
+        "tags": ["Panier"],
+        "summary": "Fixer la quantité d'une ligne (la crée si besoin)",
+        "description": "Réservé au **compte connecté** (son propre panier). Toutes les routes renvoient le panier complet, **revérifié dans le catalogue** : prix actuel (BR-004), produit encore en vente et stock suffisant (BR-001), ligne par ligne. Une variante supprimée du catalogue est retirée du panier. Le panier ne réserve pas le stock (réservation à la commande, BR-012). 50 lignes au plus, 1 à 20 par ligne ; une quantité trop grande est ramenée au stock disponible.",
+        "operationId": "setCartItemQuantity",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "variantId",
+            "in": "path",
+            "required": true,
+            "description": "UUID de la variante",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CartQuantityRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Le panier après la modification",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cart"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps ou UUID invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`VARIANTE_INCONNUE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`PRODUIT_INDISPONIBLE`, `PANIER_PLEIN` ou `PANIER_OCCUPE` : le panier est déjà en cours de modification par une autre demande (réessayer, `Retry-After`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes, par adresse ou par compte (`TROP_DE_REQUETES`, `Retry-After`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Panier"],
+        "summary": "Retirer une ligne (sans effet si elle n'y est pas)",
+        "description": "Réservé au **compte connecté** (son propre panier). Toutes les routes renvoient le panier complet, **revérifié dans le catalogue** : prix actuel (BR-004), produit encore en vente et stock suffisant (BR-001), ligne par ligne. Une variante supprimée du catalogue est retirée du panier. Le panier ne réserve pas le stock (réservation à la commande, BR-012). 50 lignes au plus, 1 à 20 par ligne ; une quantité trop grande est ramenée au stock disponible.",
+        "operationId": "removeCartItem",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "variantId",
+            "in": "path",
+            "required": true,
+            "description": "UUID de la variante",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le panier après le retrait",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cart"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "UUID invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`PANIER_OCCUPE` : le panier est déjà en cours de modification par une autre demande (réessayer, `Retry-After`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes, par adresse ou par compte (`TROP_DE_REQUETES`, `Retry-After`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cart/merge": {
+      "post": {
+        "tags": ["Panier"],
+        "summary": "Réunir le panier du navigateur avec celui du compte, après la connexion",
+        "description": "Réservé au **compte connecté** (son propre panier). Toutes les routes renvoient le panier complet, **revérifié dans le catalogue** : prix actuel (BR-004), produit encore en vente et stock suffisant (BR-001), ligne par ligne. Une variante supprimée du catalogue est retirée du panier. Le panier ne réserve pas le stock (réservation à la commande, BR-012). 50 lignes au plus, 1 à 20 par ligne ; une quantité trop grande est ramenée au stock disponible.\n\nMême variante : quantités **additionnées** (bornées au stock et à 20). Rien n'échoue : les lignes indisponibles ou qui ne tiennent plus sont ignorées et comptées dans `ignored`. 10 requêtes par minute et par compte.\n\n**Idempotente** : `mergeId` est tiré par le navigateur et réutilisé s'il renvoie la même réunion (double chargement, réponse perdue) ; une réunion déjà appliquée ne change rien.",
+        "operationId": "mergeCart",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CartMergeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Le panier réuni",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartMerged"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide (identifiant de réunion, 50 lignes au plus, quantités de 1 à 20, aucun prix)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`PANIER_OCCUPE` : le panier est déjà en cours de modification par une autre demande (réessayer, `Retry-After`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes, par adresse ou par compte (`TROP_DE_REQUETES`, `Retry-After`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1974,6 +2408,243 @@
         },
         "required": ["ok", "lines"],
         "additionalProperties": false
+      },
+      "Cart": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CartLine"
+            }
+          },
+          "itemCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Nombre d'articles (somme des quantités)"
+          },
+          "subtotal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Total des lignes commandables, en FCFA (sans livraison ni réduction)"
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "Panier non vide et toutes les lignes commandables : on peut passer en caisse"
+          }
+        },
+        "required": ["lines", "itemCount", "subtotal", "ok"],
+        "additionalProperties": false,
+        "description": "Panier du compte connecté, vérifié à chaque lecture (BR-001, BR-004)"
+      },
+      "CartAddRequest": {
+        "type": "object",
+        "properties": {
+          "variantId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Quantité, de 1 à 20"
+          }
+        },
+        "required": ["variantId", "quantity"],
+        "additionalProperties": false,
+        "description": "Ajoute une variante au panier ; si elle y est déjà, les quantités s'additionnent (limitées au stock et au maximum par ligne)"
+      },
+      "CartLine": {
+        "type": "object",
+        "properties": {
+          "variantId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "description": "Adresse lisible (ex. « telephones-portables »)"
+          },
+          "title": {
+            "type": "string"
+          },
+          "variantName": {
+            "type": "string",
+            "description": "Nom de la variante (« Noir · 128 Go »)"
+          },
+          "image": {
+            "type": ["string", "null"]
+          },
+          "price": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Prix unitaire ACTUEL, relu dans le catalogue (BR-004)"
+          },
+          "compareAtPrice": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Montant en FCFA, entier (BR-004)"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Quantité, de 1 à 20"
+          },
+          "maxQuantity": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20,
+            "description": "Quantité qu'on peut demander maintenant (stock disponible, limité au maximum par ligne)"
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "Commandable maintenant, à cette quantité (BR-001)"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "PRODUIT_INDISPONIBLE",
+              "VARIANTE_INCONNUE",
+              "QUANTITE_INVALIDE",
+              "STOCK_INSUFFISANT"
+            ]
+          },
+          "available": {
+            "description": "Quantité restante (STOCK_INSUFFISANT)",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "variantId",
+          "productId",
+          "slug",
+          "title",
+          "variantName",
+          "image",
+          "price",
+          "compareAtPrice",
+          "quantity",
+          "maxQuantity",
+          "ok"
+        ],
+        "additionalProperties": false,
+        "description": "Ligne du panier, avec les informations actuelles du catalogue"
+      },
+      "CartMerged": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CartLine"
+            }
+          },
+          "itemCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Nombre d'articles (somme des quantités)"
+          },
+          "subtotal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Total des lignes commandables, en FCFA (sans livraison ni réduction)"
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "Panier non vide et toutes les lignes commandables : on peut passer en caisse"
+          },
+          "ignored": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Lignes du navigateur non reprises (produit indisponible ou panier plein)"
+          }
+        },
+        "required": ["lines", "itemCount", "subtotal", "ok", "ignored"],
+        "additionalProperties": false,
+        "description": "Panier après la réunion avec celui du navigateur"
+      },
+      "CartMergeRequest": {
+        "type": "object",
+        "properties": {
+          "mergeId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant de CETTE réunion, tiré par le navigateur et réutilisé s'il la renvoie : une réunion déjà appliquée ne double rien"
+          },
+          "lines": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "variantId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "description": "Identifiant UUID (BR-042)"
+                },
+                "quantity": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 20,
+                  "description": "Quantité, de 1 à 20"
+                }
+              },
+              "required": ["variantId", "quantity"],
+              "additionalProperties": false
+            },
+            "description": "Panier du navigateur : variantes et quantités seulement, jamais de prix (BR-004)"
+          }
+        },
+        "required": ["mergeId", "lines"],
+        "additionalProperties": false,
+        "description": "Panier du navigateur à réunir avec le panier du compte, juste après la connexion (quantités additionnées)"
+      },
+      "CartQuantityRequest": {
+        "type": "object",
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Quantité, de 1 à 20"
+          }
+        },
+        "required": ["quantity"],
+        "additionalProperties": false,
+        "description": "Nouvelle quantité d'une ligne (ramenée au stock disponible si besoin)"
       },
       "Category": {
         "type": "object",
@@ -2312,7 +2983,11 @@
               "ROLE_SUR_SOI_INTERDIT",
               "COMPTE_INTROUVABLE",
               "COMPTE_INACTIF",
-              "TROP_DE_REQUETES"
+              "TROP_DE_REQUETES",
+              "PANIER_PLEIN",
+              "PRODUIT_INDISPONIBLE",
+              "VARIANTE_INCONNUE",
+              "PANIER_OCCUPE"
             ]
           },
           "requestId": {

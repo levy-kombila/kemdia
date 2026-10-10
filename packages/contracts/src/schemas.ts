@@ -1,11 +1,13 @@
 import { z } from "zod";
 import {
+  API_ERROR_CODES,
   AVAILABILITY_REASONS,
   ADMIN_ASSIGNABLE_ROLES,
   AUDIT_ACTIONS,
   AUDIT_PAGE_DEFAULT,
   AUDIT_PAGE_MAX,
-  IDENTITY_ERROR_CODES,
+  CART_MAX_LINES,
+  CART_MAX_QUANTITY,
   ROLES,
   MAX_AVAILABILITY_LINES,
   MAX_ORDER_QUANTITY,
@@ -45,7 +47,7 @@ export const ProblemDetailsSchema = z
       .optional()
       .describe("Explication destinée au client (erreurs prévues uniquement)"),
     code: z
-      .enum(IDENTITY_ERROR_CODES)
+      .enum(API_ERROR_CODES)
       .optional()
       .describe(
         "Code d'erreur métier stable (ex. « CODE_INVALIDE ») : le site choisit son message à partir de lui",
@@ -472,6 +474,102 @@ export const AuditPageSchema = z
   })
   .meta({ id: "AuditPage", description: "Journal d'audit, du plus récent au plus ancien" });
 export type AuditPage = z.infer<typeof AuditPageSchema>;
+
+// --- Panier serveur (S5-T01, ADR-0023) ---
+
+const cartQuantity = z
+  .int()
+  .min(1)
+  .max(CART_MAX_QUANTITY)
+  .describe(`Quantité, de 1 à ${CART_MAX_QUANTITY}`);
+
+export const CartAddRequestSchema = z
+  .strictObject({ variantId: uuid, quantity: cartQuantity })
+  .meta({
+    id: "CartAddRequest",
+    description:
+      "Ajoute une variante au panier ; si elle y est déjà, les quantités s'additionnent (limitées au stock et au maximum par ligne)",
+  });
+export type CartAddRequest = z.infer<typeof CartAddRequestSchema>;
+
+export const CartQuantityRequestSchema = z.strictObject({ quantity: cartQuantity }).meta({
+  id: "CartQuantityRequest",
+  description: "Nouvelle quantité d'une ligne (ramenée au stock disponible si besoin)",
+});
+export type CartQuantityRequest = z.infer<typeof CartQuantityRequestSchema>;
+
+export const CartItemParamsSchema = z.strictObject({ variantId: uuid });
+
+export const CartMergeRequestSchema = z
+  .strictObject({
+    mergeId: uuid.describe(
+      "Identifiant de CETTE réunion, tiré par le navigateur et réutilisé s'il la renvoie : une réunion déjà appliquée ne double rien",
+    ),
+    lines: z
+      .array(z.strictObject({ variantId: uuid, quantity: cartQuantity }))
+      .max(CART_MAX_LINES)
+      .describe("Panier du navigateur : variantes et quantités seulement, jamais de prix (BR-004)"),
+  })
+  .meta({
+    id: "CartMergeRequest",
+    description:
+      "Panier du navigateur à réunir avec le panier du compte, juste après la connexion (quantités additionnées)",
+  });
+export type CartMergeRequest = z.infer<typeof CartMergeRequestSchema>;
+
+export const CartLineSchema = z
+  .object({
+    variantId: uuid,
+    productId: uuid,
+    slug,
+    title: z.string(),
+    variantName: z.string().describe("Nom de la variante (« Noir · 128 Go »)"),
+    image: z.string().nullable(),
+    price: fcfa.describe("Prix unitaire ACTUEL, relu dans le catalogue (BR-004)"),
+    compareAtPrice: fcfa.nullable(),
+    quantity: cartQuantity,
+    maxQuantity: z
+      .int()
+      .nonnegative()
+      .max(CART_MAX_QUANTITY)
+      .describe(
+        "Quantité qu'on peut demander maintenant (stock disponible, limité au maximum par ligne)",
+      ),
+    ok: z.boolean().describe("Commandable maintenant, à cette quantité (BR-001)"),
+    reason: z.enum(AVAILABILITY_REASONS).optional(),
+    available: z.int().nonnegative().optional().describe("Quantité restante (STOCK_INSUFFISANT)"),
+  })
+  .meta({
+    id: "CartLine",
+    description: "Ligne du panier, avec les informations actuelles du catalogue",
+  });
+export type CartLine = z.infer<typeof CartLineSchema>;
+
+export const CartSchema = z
+  .object({
+    lines: z.array(CartLineSchema).max(CART_MAX_LINES),
+    itemCount: z.int().nonnegative().describe("Nombre d'articles (somme des quantités)"),
+    subtotal: z
+      .int()
+      .nonnegative()
+      .describe("Total des lignes commandables, en FCFA (sans livraison ni réduction)"),
+    ok: z
+      .boolean()
+      .describe("Panier non vide et toutes les lignes commandables : on peut passer en caisse"),
+  })
+  .meta({
+    id: "Cart",
+    description: "Panier du compte connecté, vérifié à chaque lecture (BR-001, BR-004)",
+  });
+export type Cart = z.infer<typeof CartSchema>;
+
+export const CartMergedSchema = CartSchema.extend({
+  ignored: z
+    .int()
+    .nonnegative()
+    .describe("Lignes du navigateur non reprises (produit indisponible ou panier plein)"),
+}).meta({ id: "CartMerged", description: "Panier après la réunion avec celui du navigateur" });
+export type CartMerged = z.infer<typeof CartMergedSchema>;
 
 type JsonSchema = Record<string, unknown>;
 

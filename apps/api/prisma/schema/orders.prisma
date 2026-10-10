@@ -1,0 +1,36 @@
+// Module orders : panier serveur (S5-T01, ADR-0023) ; commandes au S5-T02.
+// Chaque modèle de ce fichier porte @@schema("orders").
+// Aucune relation vers les autres modules (ADR-0006) : on garde l'UUID du compte (identity) et de la variante (catalog).
+// Règles posées en SQL dans la migration (Prisma ne sait pas les décrire) : quantité de 1 à 20 par ligne,
+// 50 lignes au plus par panier (déclencheur).
+
+/// Panier d'un compte : un seul par compte. Supprimé après 90 jours sans activité (ménage horaire).
+model Cart {
+  id        String     @id @db.Uuid
+  /// Compte propriétaire (module identity) : UUID seul, sans clé étrangère entre modules
+  accountId String     @unique @map("account_id") @db.Uuid
+  /// Dernière réunion appliquée (identifiant tiré par le navigateur) : une réunion répétée ne double rien
+  lastMergeId String?  @map("last_merge_id") @db.Uuid
+  items     CartItem[]
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// Dernière activité (lecture ou modification) : sert au ménage des paniers abandonnés
+  updatedAt DateTime   @default(now()) @map("updated_at") @db.Timestamptz(3)
+
+  @@index([updatedAt])
+  @@map("carts")
+  @@schema("orders")
+}
+
+/// Ligne du panier : une variante et sa quantité. JAMAIS de prix : il est relu dans le catalogue à chaque lecture (BR-004).
+model CartItem {
+  cartId    String   @map("cart_id") @db.Uuid
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  /// Variante du catalogue : UUID seul, sans clé étrangère entre modules
+  variantId String   @map("variant_id") @db.Uuid
+  quantity  Int
+  addedAt   DateTime @default(now()) @map("added_at") @db.Timestamptz(3)
+
+  @@id([cartId, variantId])
+  @@map("cart_items")
+  @@schema("orders")
+}

@@ -56,11 +56,6 @@ model Account {
   status          AccountStatus @default(PENDING)
   emailVerifiedAt DateTime?     @map("email_verified_at") @db.Timestamptz(3)
   phoneVerifiedAt DateTime?     @map("phone_verified_at") @db.Timestamptz(3)
-  /// Colonnes du S4-T01, plus utilisées depuis le S4-T03 (blocage dans login_guards, ADR-0017).
-  /// Ignorées par Prisma depuis le S4-T08 (le code ne les lit plus) ; supprimées en base au S5-T01
-  /// (« ajouter d'abord, supprimer plus tard » : l'API précédente les lit encore pendant un déploiement).
-  failedLogins    Int           @default(0) @map("failed_logins") @ignore
-  lockedUntil     DateTime?     @map("locked_until") @db.Timestamptz(3) @ignore
   sessions        Session[]
   resetTickets    ResetTicket[]
   roles           AccountRole[]

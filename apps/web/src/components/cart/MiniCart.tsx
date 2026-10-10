@@ -101,6 +101,9 @@ export function MiniCart() {
                         <p className="text-ink-500 text-xs">
                           {l.quantity} × {formatFCFA(l.price)}
                         </p>
+                        {l.issue && (
+                          <p className="text-brand-700 text-xs font-semibold">À vérifier</p>
+                        )}
                       </div>
                       <button
                         type="button"
