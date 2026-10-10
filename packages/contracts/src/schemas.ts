@@ -7,6 +7,12 @@ import {
   AUDIT_PAGE_DEFAULT,
   AUDIT_PAGE_MAX,
   CANCEL_REASONS,
+  COUPON_CODE_PATTERN,
+  COUPON_KINDS,
+  COUPON_LIMITS,
+  COUPON_PAGE_DEFAULT,
+  COUPON_PAGE_MAX,
+  COUPON_PERCENT_MAX,
   CART_MAX_LINES,
   CART_MAX_QUANTITY,
   ORDER_PAGE_DEFAULT,
@@ -455,7 +461,7 @@ export const AuditEventSchema = z
       z.object({ type: z.literal("account"), id: uuid }),
       z.object({ type: z.literal("system") }),
     ]),
-    target: z.object({ type: z.literal("account"), id: uuid }).nullable(),
+    target: z.object({ type: z.enum(["account", "coupon"]), id: uuid }).nullable(),
     details: z.record(z.string(), z.union([z.string(), z.int()])),
     ip: z.string().nullable().describe("Adresse vue par l'API"),
     requestId: z
@@ -586,6 +592,10 @@ const orderReference = z
     "Numéro de commande montré au client (« KMD-7F3K9Q »), jamais des numéros qui se suivent",
   );
 const paymentMethod = z.enum(PAYMENT_METHODS).describe("airtel, moov ou cod (à la livraison)");
+const couponCode = z
+  .string()
+  .regex(COUPON_CODE_PATTERN)
+  .describe("Code coupon (4 à 20 lettres, chiffres ou tirets ; majuscules ou minuscules)");
 
 export const DeliveryAddressSchema = z
   .strictObject({
@@ -601,15 +611,25 @@ export const DeliveryAddressSchema = z
   .meta({ id: "DeliveryAddress", description: "Adresse de livraison, copiée dans la commande" });
 export type DeliveryAddress = z.infer<typeof DeliveryAddressSchema>;
 
-export const OrderQuoteRequestSchema = z.strictObject({ cityId: z.string().max(40) }).meta({
-  id: "OrderQuoteRequest",
-  description: "Ville de livraison envisagée, pour calculer le total du panier",
-});
+export const OrderQuoteRequestSchema = z
+  .strictObject({ cityId: z.string().max(40), couponCode: couponCode.optional() })
+  .meta({
+    id: "OrderQuoteRequest",
+    description: "Ville de livraison envisagée (et coupon), pour calculer le total du panier",
+  });
 export type OrderQuoteRequest = z.infer<typeof OrderQuoteRequestSchema>;
 
 export const OrderQuoteSchema = z
   .object({
     subtotal: z.int().nonnegative().describe("Articles commandables, en FCFA (prix du catalogue)"),
+    discount: z
+      .int()
+      .nonnegative()
+      .describe("Réduction du coupon (articles seulement, jamais la livraison)"),
+    coupon: z
+      .object({ code: z.string(), discount: z.int().positive() })
+      .nullable()
+      .describe("Coupon appliqué (refusé : erreur `COUPON_*`)"),
     deliveryFee: z.int().nonnegative(),
     total: z
       .int()
@@ -643,6 +663,7 @@ export const CreateOrderRequestSchema = z
         "Total affiché au client ; s'il ne correspond plus, la commande est refusée (`PRIX_MODIFIE`)",
       ),
     delivery: DeliveryAddressSchema,
+    couponCode: couponCode.optional().describe("Un seul coupon par commande (BR-030)"),
     payment: z.strictObject({
       method: paymentMethod,
       phone: z
@@ -684,6 +705,8 @@ export const OrderSchema = z
     paymentMethod,
     paymentPhone: z.string().nullable(),
     subtotal: fcfa,
+    discount: z.int().nonnegative(),
+    couponCode: z.string().nullable(),
     deliveryFee: z.int().nonnegative(),
     total: fcfa,
     delivery: z.object({
@@ -747,6 +770,102 @@ export const OrderPageSchema = z
 export type OrderPage = z.infer<typeof OrderPageSchema>;
 
 export const OrderReferenceParamsSchema = z.strictObject({ reference: orderReference });
+
+// --- Coupons : administration (S5-T03, ADR-0025) ---
+
+const couponFields = {
+  kind: z.enum(COUPON_KINDS).describe("percent : pourcentage ; fixed : montant en FCFA"),
+  value: z
+    .int()
+    .positive()
+    .max(COUPON_LIMITS.fixedMax)
+    .describe(`Pourcentage (1 à ${COUPON_PERCENT_MAX}) ou montant en FCFA`),
+  maxDiscount: fcfa
+    .max(COUPON_LIMITS.maxDiscountMax)
+    .nullable()
+    .describe("Plafond de la réduction en FCFA (pourcentage seulement)"),
+  minSubtotal: z
+    .int()
+    .nonnegative()
+    .max(COUPON_LIMITS.minSubtotalMax)
+    .nullable()
+    .describe(
+      "Montant minimum d'articles, en FCFA (obligatoire pour un montant fixe, et supérieur à ce montant)",
+    ),
+  startsAt: z.iso.datetime().nullable().describe("Valable à partir de (vide : tout de suite)"),
+  endsAt: z.iso.datetime().nullable().describe("Valable jusqu'à (vide : sans fin)"),
+  usageLimit: z
+    .int()
+    .positive()
+    .max(COUPON_LIMITS.usageLimitMax)
+    .nullable()
+    .describe("Utilisations au total (vide : sans limite)"),
+  perAccountLimit: z
+    .int()
+    .positive()
+    .max(COUPON_LIMITS.perAccountLimitMax)
+    .nullable()
+    .describe("Utilisations par compte (vide : sans limite)"),
+  stackableWithSales: z
+    .boolean()
+    .describe("S'applique aussi aux articles déjà en promotion (prix barré) — BR-031"),
+};
+
+export const CouponCreateRequestSchema = z
+  .strictObject({
+    code: couponCode,
+    kind: couponFields.kind,
+    value: couponFields.value,
+    maxDiscount: couponFields.maxDiscount.optional(),
+    minSubtotal: couponFields.minSubtotal.optional(),
+    startsAt: couponFields.startsAt.optional(),
+    endsAt: couponFields.endsAt.optional(),
+    usageLimit: couponFields.usageLimit.optional(),
+    perAccountLimit: couponFields.perAccountLimit
+      .optional()
+      .describe("Utilisations par compte (1 par défaut ; null : sans limite)"),
+    stackableWithSales: couponFields.stackableWithSales
+      .optional()
+      .describe("Cumulable avec les prix barrés (non par défaut, BR-031)"),
+  })
+  .meta({ id: "CouponCreateRequest", description: "Nouveau coupon (administrateur)" });
+export type CouponCreateRequest = z.infer<typeof CouponCreateRequestSchema>;
+
+export const CouponUpdateRequestSchema = z.strictObject({ active: z.boolean() }).meta({
+  id: "CouponUpdateRequest",
+  description: "Activer ou désactiver un coupon (ses règles ne changent pas une fois créé)",
+});
+export type CouponUpdateRequest = z.infer<typeof CouponUpdateRequestSchema>;
+
+export const CouponSchema = z
+  .object({
+    id: uuid,
+    code: z.string(),
+    ...couponFields,
+    usedCount: z.int().nonnegative().describe("Utilisations comptées (commandes non annulées)"),
+    active: z.boolean(),
+    createdAt: z.iso.datetime(),
+  })
+  .meta({ id: "Coupon", description: "Coupon de réduction" });
+export type Coupon = z.infer<typeof CouponSchema>;
+
+export const COUPON_CURSOR_PATTERN = /^[A-Za-z0-9_-]{20,120}$/;
+
+export const CouponListParamsSchema = z.strictObject({
+  limit: z.coerce.number().int().min(1).max(COUPON_PAGE_MAX).default(COUPON_PAGE_DEFAULT),
+  before: z.string().regex(COUPON_CURSOR_PATTERN).optional(),
+});
+export type CouponListParams = z.infer<typeof CouponListParamsSchema>;
+
+export const CouponPageSchema = z
+  .object({
+    items: z.array(CouponSchema),
+    nextCursor: z.string().regex(COUPON_CURSOR_PATTERN).nullable(),
+  })
+  .meta({ id: "CouponPage", description: "Coupons, du plus récent au plus ancien" });
+export type CouponPage = z.infer<typeof CouponPageSchema>;
+
+export const CouponIdParamsSchema = z.strictObject({ couponId: uuid });
 
 type JsonSchema = Record<string, unknown>;
 

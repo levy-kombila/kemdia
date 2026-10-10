@@ -7,6 +7,7 @@ type Row = {
   product_id: string;
   name: string;
   price: number;
+  compare_at_price: number | null;
   title: string;
   image: string | null;
   active_count: number;
@@ -38,7 +39,7 @@ export class PrismaStockRepository implements StockRepository {
           AND p."status" = 'PUBLISHED'
           AND v."is_active"
           AND v."stock" >= ${quantity}
-        RETURNING v."id", v."product_id", v."name", v."price", p."title", p."images"[1] AS "image",
+        RETURNING v."id", v."product_id", v."name", v."price", v."compare_at_price", p."title", p."images"[1] AS "image",
           (SELECT count(*) FROM "catalog"."product_variants" AS w
             WHERE w."product_id" = v."product_id" AND w."is_active")::int AS "active_count"`;
       const row = rows[0];
@@ -50,6 +51,7 @@ export class PrismaStockRepository implements StockRepository {
         variantName: row.active_count > 1 ? row.name : "",
         image: row.image,
         price: row.price,
+        compareAtPrice: row.compare_at_price,
         quantity,
       });
     }

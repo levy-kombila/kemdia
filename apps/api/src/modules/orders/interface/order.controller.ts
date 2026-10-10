@@ -48,11 +48,15 @@ export class OrderController {
   @Post("quote")
   @HttpCode(HttpStatus.OK)
   @Header("Cache-Control", "no-store")
+  // Limite plus basse : on n'essaie pas des codes coupons au hasard (30 par minute et par compte)
+  @AccountRateLimit(30)
   quote(
     @CurrentSession() session: AuthenticatedSession,
     @Body({ schema: OrderQuoteRequestSchema }) body: OrderQuoteRequest,
   ): Promise<OrderQuote> {
-    return withOrdersErrors(() => this.orders.quote(session.account.id, body.cityId));
+    return withOrdersErrors(() =>
+      this.orders.quote(session.account.id, body.cityId, body.couponCode),
+    );
   }
 
   /** Crée la commande (201) ; la même clé renvoyée rend la commande déjà créée (200), jamais une deuxième. */

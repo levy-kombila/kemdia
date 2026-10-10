@@ -125,6 +125,9 @@ export const AUDIT_ACTIONS = [
   "role.revoked",
   "password.reset",
   "sessions.revoked_all",
+  // Coupons (S5-T03)
+  "coupon.created",
+  "coupon.updated",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** Lignes par page du journal d'audit. */
@@ -215,10 +218,47 @@ export const ORDER_ERROR_CODES = [
 ] as const;
 export type OrderErrorCode = (typeof ORDER_ERROR_CODES)[number];
 
+// --- Coupons (S5-T03, ADR-0025) ---
+
+/** Réduction en pourcentage (plafond possible en FCFA) ou montant fixe en FCFA. */
+export const COUPON_KINDS = ["percent", "fixed"] as const;
+export type CouponKind = (typeof COUPON_KINDS)[number];
+/** Code : 4 à 20 lettres, chiffres ou tirets (sans casse : enregistré en majuscules), commence et finit par une lettre ou un chiffre. */
+export const COUPON_CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]{2,18}[A-Za-z0-9]$/;
+/** Pourcentage au plus (une réduction de 100 % serait une erreur de saisie). */
+export const COUPON_PERCENT_MAX = 90;
+/** Bornes des réglages d'un coupon (au-delà : erreur de saisie probable). */
+export const COUPON_LIMITS = {
+  fixedMax: 10_000_000,
+  maxDiscountMax: 10_000_000,
+  minSubtotalMax: 100_000_000,
+  usageLimitMax: 1_000_000,
+  perAccountLimitMax: 1_000,
+} as const;
+/** Coupons par page (administration). */
+export const COUPON_PAGE_DEFAULT = 50;
+export const COUPON_PAGE_MAX = 100;
+
+/** Codes d'erreur métier des coupons. */
+export const COUPON_ERROR_CODES = [
+  "COUPON_INVALIDE",
+  "COUPON_EXPIRE",
+  "COUPON_EPUISE",
+  "COUPON_DEJA_UTILISE",
+  "COUPON_MINIMUM_NON_ATTEINT",
+  "COUPON_NON_APPLICABLE",
+  "COUPON_EXISTE",
+  "COUPON_INTROUVABLE",
+  // Trop de codes refusés d'affilée pour ce compte : on n'essaie pas des codes au hasard
+  "COUPON_TROP_D_ESSAIS",
+] as const;
+export type CouponErrorCode = (typeof COUPON_ERROR_CODES)[number];
+
 /** Tous les codes d'erreur métier que l'API peut renvoyer. */
 export const API_ERROR_CODES = [
   ...IDENTITY_ERROR_CODES,
   ...CART_ERROR_CODES,
   ...ORDER_ERROR_CODES,
+  ...COUPON_ERROR_CODES,
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

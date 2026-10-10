@@ -37,10 +37,10 @@
 
 ### Promotions
 
-| ID     | Règle                                                                                                                   | Module | Sprint |
-| ------ | ----------------------------------------------------------------------------------------------------------------------- | ------ | ------ |
-| BR-030 | Un coupon expiré ou ayant atteint sa limite d'utilisation est refusé ; l'utilisation est comptée **de façon atomique**. | orders | S5     |
-| BR-031 | Cumul coupon + vente flash : **à définir** (proposition : non cumulable).                                               | orders | S5     |
+| ID     | Règle                                                                                                                                                                                                                                                                                                            | Module | Sprint |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------ |
+| BR-030 | Un coupon expiré ou ayant atteint sa limite d'utilisation est refusé ; l'utilisation est comptée **de façon atomique**. ✅ S5-T03 : coupon verrouillé dans la transaction de la commande, compteur borné par la base ; testé avec deux clients pour la dernière utilisation ; rendue si la commande est annulée. | orders | S5     |
+| BR-031 | Cumul coupon + vente flash : **à définir** (proposition : non cumulable). ✅ S5-T03 : non cumulable **par défaut** (articles à prix barré exclus), réglable coupon par coupon (`stackableWithSales`) ; décision du client toujours attendue (question 2).                                                        | orders | S5     |
 
 ### Sécurité et identité
 

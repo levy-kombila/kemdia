@@ -2,6 +2,13 @@ import { createHash } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { codAvailability, estimateDelivery, getCity } from "@kemdia/contracts/delivery";
 import { StockUnavailableError } from "../../catalog/index.js";
+import {
+  assertUsable,
+  computeDiscount,
+  normalizeCouponCode,
+  type Coupon,
+  type DiscountLine,
+} from "../domain/coupon.js";
 import { validateAddress } from "../domain/delivery-address.js";
 import {
   clientCanCancel,
@@ -15,10 +22,12 @@ import {
 import { OrdersError } from "../domain/orders-error.js";
 import { CartService } from "./cart.service.js";
 import {
+  COUPON_REPOSITORY,
   ORDER_RANDOM,
   ORDER_REPOSITORY,
   ORDER_STOCK,
   ORDERS_TRANSACTION,
+  type CouponRepository,
   type OrderCursor,
   type OrderRecord,
   type OrderRepository,
@@ -30,6 +39,8 @@ import {
 
 export interface OrderQuoteView {
   subtotal: number;
+  discount: number;
+  coupon: { code: string; discount: number } | null;
   deliveryFee: number;
   total: number;
   freeDeliveryThreshold: number;
@@ -50,6 +61,55 @@ export interface CreateOrderInput {
     landmark: string;
   };
   payment: { method: PaymentMethod; phone?: string | undefined };
+  couponCode?: string | undefined;
+}
+
+/**
+ * Codes coupons refusés par compte : au-delà de 10 en 15 minutes, `COUPON_TROP_D_ESSAIS` (on n'essaie pas des codes au
+ * hasard — relecture de sécurité du S5-T03). Compteurs en mémoire, comme les autres limites (une instance au MVP).
+ */
+export const COUPON_FAILURES_MAX = 10;
+export const COUPON_FAILURES_WINDOW_MS = 15 * 60_000;
+
+export class CouponAttempts {
+  private readonly failures = new Map<string, number[]>();
+
+  /** Lève `COUPON_TROP_D_ESSAIS` si le compte a déjà trop d'échecs récents. */
+  check(accountId: string, now: number): void {
+    const recent = this.recent(accountId, now);
+    if (recent.length >= COUPON_FAILURES_MAX) {
+      const retry = Math.max(1, Math.ceil((recent[0]! + COUPON_FAILURES_WINDOW_MS - now) / 1000));
+      throw new OrdersError(
+        "COUPON_TROP_D_ESSAIS",
+        "trop de codes coupons refusés : réessayez plus tard",
+        retry,
+      );
+    }
+  }
+
+  fail(accountId: string, now: number): void {
+    const recent = this.recent(accountId, now);
+    recent.push(now);
+    this.failures.set(accountId, recent);
+    // Ménage : la carte ne grossit pas sans fin
+    if (this.failures.size > 10_000) {
+      for (const [key, times] of this.failures) {
+        if (times.every((t) => now - t >= COUPON_FAILURES_WINDOW_MS)) this.failures.delete(key);
+      }
+    }
+  }
+
+  private recent(accountId: string, now: number): number[] {
+    return (this.failures.get(accountId) ?? []).filter((t) => now - t < COUPON_FAILURES_WINDOW_MS);
+  }
+}
+
+/** Code coupon saisi : normalisé, ou `COUPON_INVALIDE` (même réponse qu'un code inconnu). */
+function couponCodeOf(input: string | undefined): string | null {
+  if (input === undefined) return null;
+  const code = normalizeCouponCode(input);
+  if (!code) throw new OrdersError("COUPON_INVALIDE", "ce code coupon n'est pas valable");
+  return code;
 }
 
 /** Ville du contrat partagé, sous la forme attendue par le domaine. */
@@ -69,6 +129,8 @@ function cityRule(cityId: string) {
 @Injectable()
 export class OrderService {
   private readonly logger = new Logger("Commandes");
+  /** Codes coupons refusés, par compte (limite contre la recherche de codes au hasard). */
+  readonly couponAttempts = new CouponAttempts();
   /** Horloge (remplaçable dans les tests). */
   clock: () => Date = () => new Date();
 
@@ -78,19 +140,68 @@ export class OrderService {
     @Inject(ORDER_STOCK) private readonly stock: OrderStock,
     @Inject(ORDER_RANDOM) private readonly random: RandomBytes,
     private readonly carts: CartService,
+    @Inject(COUPON_REPOSITORY) private readonly coupons: CouponRepository,
   ) {}
 
+  /**
+   * Réduction d'un coupon pour ce compte (BR-030) ; `lock` : le coupon est verrouillé (création de commande), ainsi le
+   * compteur et les utilisations du compte relus ici sont ceux qui comptent.
+   */
+  private async discountFor(
+    code: string,
+    accountId: string,
+    lines: readonly DiscountLine[],
+    now: Date,
+    lock: boolean,
+  ): Promise<{ coupon: Coupon; discount: number }> {
+    this.couponAttempts.check(accountId, now.getTime());
+    try {
+      const coupon = lock
+        ? await this.coupons.lockByCode(code)
+        : await this.coupons.findByCode(code);
+      if (!coupon) throw new OrdersError("COUPON_INVALIDE", "ce code coupon n'est pas valable");
+      assertUsable(coupon, now, await this.coupons.countUses(coupon.id, accountId));
+      return { coupon, discount: computeDiscount(coupon, lines) };
+    } catch (error) {
+      if (error instanceof OrdersError && error.code.startsWith("COUPON_")) {
+        this.couponAttempts.fail(accountId, now.getTime());
+      }
+      throw error;
+    }
+  }
+
   /** Total du panier pour une ville et un moyen de paiement (affiché avant de commander). */
-  async quote(accountId: string, cityId: string): Promise<OrderQuoteView> {
+  async quote(accountId: string, cityId: string, rawCoupon?: string): Promise<OrderQuoteView> {
     const estimate = estimateDelivery(cityId, 0);
     if (!estimate)
       throw new OrdersError("ADRESSE_INVALIDE", "ville : choisissez une ville de livraison");
+    const code = couponCodeOf(rawCoupon);
     const cart = await this.carts.view(accountId);
-    const delivery = estimateDelivery(cityId, cart.subtotal)!;
-    const total = cart.subtotal + delivery.fee;
+    let applied: { code: string; discount: number } | null = null;
+    if (code) {
+      const lines = cart.lines
+        .filter((l) => l.ok)
+        .map((l) => ({ lineTotal: l.price * l.quantity, onSale: l.compareAtPrice !== null }));
+      // Panier vide : on ne regarde pas le code (sa réponse ne doit rien dire de son existence)
+      if (lines.length === 0) throw new OrdersError("PANIER_VIDE", "votre panier est vide");
+      const { coupon, discount } = await this.discountFor(
+        code,
+        accountId,
+        lines,
+        this.clock(),
+        false,
+      );
+      applied = { code: coupon.code, discount };
+    }
+    const discount = applied?.discount ?? 0;
+    // Livraison offerte et paiement à la livraison : calculés sur ce que le client paie pour ses articles
+    const delivery = estimateDelivery(cityId, cart.subtotal - discount)!;
+    const total = cart.subtotal - discount + delivery.fee;
     const cod = codAvailability(cityId, total);
     return {
       subtotal: cart.subtotal,
+      discount,
+      coupon: applied,
       deliveryFee: delivery.fee,
       total,
       freeDeliveryThreshold: delivery.freeThreshold,
@@ -110,10 +221,11 @@ export class OrderService {
     // Vérifications sans base d'abord : rien n'est verrouillé pour une adresse mal saisie
     const address = validateAddress(input.delivery, cityRule(input.delivery.cityId));
     const payment = validatePayment(input.payment.method, input.payment.phone);
+    const couponCode = couponCodeOf(input.couponCode);
     const idempotencyKey = input.idempotencyKey.toLowerCase();
     // Empreinte de ce qui est demandé : une clé déjà utilisée pour une autre commande est refusée (pas de confusion)
     const requestHash = createHash("sha256")
-      .update(JSON.stringify([address, payment, input.expectedTotal]))
+      .update(JSON.stringify([address, payment, input.expectedTotal, couponCode]))
       .digest("hex");
 
     return this.tx.run(async () => {
@@ -165,8 +277,22 @@ export class OrderService {
           quantity: r.quantity,
         })),
       );
-      const delivery = estimateDelivery(address.cityId, subtotal)!;
-      const total = subtotal + delivery.fee;
+      const now = this.clock();
+      // Coupon : verrouillé APRÈS les variantes (ordre des verrous identique à l'annulation : pas d'interblocage)
+      let applied: { coupon: Coupon; discount: number } | null = null;
+      if (couponCode) {
+        const onSale = new Map(reserved.map((r) => [r.variantId, r.compareAtPrice !== null]));
+        applied = await this.discountFor(
+          couponCode,
+          accountId,
+          lines.map((l) => ({ lineTotal: l.lineTotal, onSale: onSale.get(l.variantId) ?? false })),
+          now,
+          true,
+        );
+      }
+      const discount = applied?.discount ?? 0;
+      const delivery = estimateDelivery(address.cityId, subtotal - discount)!;
+      const total = subtotal - discount + delivery.fee;
       if (total !== input.expectedTotal) {
         throw new OrdersError(
           "PRIX_MODIFIE",
@@ -178,7 +304,6 @@ export class OrderService {
         if (!cod.allowed) throw new OrdersError("PAIEMENT_A_LA_LIVRAISON_INDISPONIBLE", cod.reason);
       }
 
-      const now = this.clock();
       const order = await this.orders.insert(
         {
           accountId,
@@ -188,6 +313,8 @@ export class OrderService {
           paymentMethod: payment.method,
           paymentPhone: payment.phone,
           subtotal,
+          discount,
+          couponCode: applied?.coupon.code ?? null,
           deliveryFee: delivery.fee,
           total,
           delivery: { ...address, daysMin: delivery.daysMin, daysMax: delivery.daysMax },
@@ -196,6 +323,15 @@ export class OrderService {
         now,
         () => newReference(this.random),
       );
+      if (applied) {
+        await this.coupons.redeem({
+          couponId: applied.coupon.id,
+          orderId: order.id,
+          accountId,
+          amount: applied.discount,
+          now,
+        });
+      }
       await this.orders.removeCartLines(
         cart.cartId,
         lines.map((l) => l.variantId),
@@ -235,8 +371,11 @@ export class OrderService {
             : "cette commande est déjà payée : contactez le service client pour l'annuler et être remboursé",
         );
       }
+      const now = this.clock();
       await this.stock.release(order.lines);
-      await this.orders.setStatus(order.id, "cancelled", this.clock(), "client");
+      // Utilisation du coupon rendue (choix du 2026-10-10)
+      await this.coupons.releaseForOrder(order.id, now);
+      await this.orders.setStatus(order.id, "cancelled", now, "client");
       return (await this.orders.findByReference(accountId, order.reference))!;
     });
   }
@@ -259,6 +398,7 @@ export class OrderService {
             if (!order || order.status !== "pending_payment" || !order.paymentDueAt) return false;
             if (order.paymentDueAt > now) return false;
             await this.stock.release(order.lines);
+            await this.coupons.releaseForOrder(order.id, now);
             await this.orders.setStatus(order.id, "cancelled", now, "paiement_expire");
             return true;
           });

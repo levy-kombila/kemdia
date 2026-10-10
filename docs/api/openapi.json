@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "1.8.0",
-    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`)."
+    "version": "1.9.0",
+    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée."
   },
   "servers": [
     {
@@ -2103,7 +2103,7 @@
       "post": {
         "tags": ["Commandes"],
         "summary": "Total du panier pour une ville de livraison",
-        "description": "Réservé au **compte connecté** (ses propres commandes ; celle d'un autre compte répond 404). Jamais mis en cache.\n\nArticles commandables (prix du catalogue), frais de livraison (barèmes du contrat), total, délai, et paiement à la livraison possible ou non (BR-011, valeurs provisoires). Le `total` est à renvoyer dans `expectedTotal`.",
+        "description": "Réservé au **compte connecté** (ses propres commandes ; celle d'un autre compte répond 404). Jamais mis en cache.\n\nArticles commandables (prix du catalogue), réduction du coupon (`couponCode`, facultatif), frais de livraison (barèmes du contrat, calculés sur les articles après réduction), total, délai, et paiement à la livraison possible ou non (BR-011, valeurs provisoires). Le `total` est à renvoyer dans `expectedTotal`. 30 requêtes par minute et par compte.",
         "operationId": "quoteOrder",
         "security": [
           {
@@ -2151,8 +2151,18 @@
               }
             }
           },
+          "409": {
+            "description": "`COUPON_EPUISE` ou `COUPON_DEJA_UTILISE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "422": {
-            "description": "`ADRESSE_INVALIDE` : ville inconnue",
+            "description": "`ADRESSE_INVALIDE` (ville inconnue) ou coupon refusé : `COUPON_INVALIDE` (inconnu, désactivé ou pas encore valable), `COUPON_EXPIRE`, `COUPON_MINIMUM_NON_ATTEINT`, `COUPON_NON_APPLICABLE`",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2162,7 +2172,7 @@
             }
           },
           "429": {
-            "description": "Trop de requêtes, par adresse ou par compte (`TROP_DE_REQUETES`, `Retry-After`)",
+            "description": "`COUPON_TROP_D_ESSAIS` (10 codes refusés en 15 min) ou `TROP_DE_REQUETES`",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2178,7 +2188,7 @@
       "post": {
         "tags": ["Commandes"],
         "summary": "Commander le panier du compte",
-        "description": "Réservé au **compte connecté** (ses propres commandes ; celle d'un autre compte répond 404). Jamais mis en cache.\n\nEn **une transaction** : panier verrouillé, stock **réservé** sur chaque variante (BR-012, pas de survente), montants calculés avec les prix lus sur ces variantes (BR-004), total comparé à `expectedTotal`, commande enregistrée, panier vidé. Au moindre refus, rien n'est gardé.\n\n**Idempotente** : la même `idempotencyKey` avec la même demande renvoie la commande déjà créée (200), jamais une deuxième ; avec une demande différente : `CLE_DEJA_UTILISEE`.\n\nAu plus **3 commandes ouvertes** (en attente de paiement, confirmées, en préparation) par compte.\n\nMobile Money : statut `pending_payment`, à payer avant `paymentDueAt` (30 min), sinon annulée et stock remis en vente. À la livraison : `confirmed` tout de suite. 10 requêtes par minute et par compte.",
+        "description": "Réservé au **compte connecté** (ses propres commandes ; celle d'un autre compte répond 404). Jamais mis en cache.\n\nEn **une transaction** : panier verrouillé, stock **réservé** sur chaque variante (BR-012, pas de survente), montants calculés avec les prix lus sur ces variantes (BR-004), total comparé à `expectedTotal`, commande enregistrée, panier vidé. Au moindre refus, rien n'est gardé.\n\n**Idempotente** : la même `idempotencyKey` avec la même demande renvoie la commande déjà créée (200), jamais une deuxième ; avec une demande différente : `CLE_DEJA_UTILISEE`.\n\nAu plus **3 commandes ouvertes** (en attente de paiement, confirmées, en préparation) par compte.\n\n**Coupon** (`couponCode`, un seul) : vérifié et compté dans la même transaction (BR-030), sur les articles seulement ; rendu si la commande est annulée ou n'est pas payée à temps. Refus : erreurs `COUPON_*` (409 / 422).\n\nMobile Money : statut `pending_payment`, à payer avant `paymentDueAt` (30 min), sinon annulée et stock remis en vente. À la livraison : `confirmed` tout de suite. 10 requêtes par minute et par compte.",
         "operationId": "createOrder",
         "security": [
           {
@@ -2506,6 +2516,282 @@
           }
         }
       }
+    },
+    "/api/v1/admin/coupons": {
+      "post": {
+        "tags": ["Administration"],
+        "summary": "Créer un coupon",
+        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque changement est inscrit au journal d'audit.\n\nUn coupon : pourcentage (1 à 90 %, plafond possible) ou montant fixe, **sur les articles seulement** ; par défaut une fois par compte et pas sur les articles déjà en promotion (BR-031). Ses règles ne changent plus une fois créé.",
+        "operationId": "createCoupon",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouponCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Le coupon créé",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Coupon"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`COUPON_EXISTE` : un coupon porte déjà ce code",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Règle non respectée (pourcentage, plafond, dates, limites)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Administration"],
+        "summary": "Coupons, du plus récent au plus ancien",
+        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque changement est inscrit au journal d'audit.\n\nUn coupon : pourcentage (1 à 90 %, plafond possible) ou montant fixe, **sur les articles seulement** ; par défaut une fois par compte et pas sur les articles déjà en promotion (BR-031). Ses règles ne changent plus une fois créé.\n\nPage suivante : repasser `nextCursor` dans `before`.",
+        "operationId": "listCoupons",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Coupons par page (50 par défaut, 100 au plus)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "Position renvoyée par la page précédente (`nextCursor`)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Une page de coupons",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouponPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Paramètres invalides",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/coupons/{couponId}": {
+      "patch": {
+        "tags": ["Administration"],
+        "summary": "Activer ou désactiver un coupon",
+        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque changement est inscrit au journal d'audit.\n\nUn coupon : pourcentage (1 à 90 %, plafond possible) ou montant fixe, **sur les articles seulement** ; par défaut une fois par compte et pas sur les articles déjà en promotion (BR-031). Ses règles ne changent plus une fois créé.",
+        "operationId": "updateCoupon",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "couponId",
+            "in": "path",
+            "required": true,
+            "description": "UUID du coupon",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouponUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Le coupon",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Coupon"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps ou UUID invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`COUPON_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2627,7 +2913,14 @@
           },
           "action": {
             "type": "string",
-            "enum": ["role.granted", "role.revoked", "password.reset", "sessions.revoked_all"]
+            "enum": [
+              "role.granted",
+              "role.revoked",
+              "password.reset",
+              "sessions.revoked_all",
+              "coupon.created",
+              "coupon.updated"
+            ]
           },
           "actor": {
             "oneOf": [
@@ -2668,7 +2961,7 @@
                 "properties": {
                   "type": {
                     "type": "string",
-                    "const": "account"
+                    "enum": ["account", "coupon"]
                   },
                   "id": {
                     "type": "string",
@@ -3184,6 +3477,289 @@
         "required": ["category", "path", "children"],
         "additionalProperties": false
       },
+      "Coupon": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "code": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["percent", "fixed"],
+            "description": "percent : pourcentage ; fixed : montant en FCFA"
+          },
+          "value": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 10000000,
+            "description": "Pourcentage (1 à 90) ou montant en FCFA"
+          },
+          "maxDiscount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 10000000,
+                "description": "Montant en FCFA, entier (BR-004)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Plafond de la réduction en FCFA (pourcentage seulement)"
+          },
+          "minSubtotal": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Montant minimum d'articles, en FCFA (obligatoire pour un montant fixe, et supérieur à ce montant)"
+          },
+          "startsAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Valable à partir de (vide : tout de suite)"
+          },
+          "endsAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Valable jusqu'à (vide : sans fin)"
+          },
+          "usageLimit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 1000000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Utilisations au total (vide : sans limite)"
+          },
+          "perAccountLimit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Utilisations par compte (vide : sans limite)"
+          },
+          "stackableWithSales": {
+            "type": "boolean",
+            "description": "S'applique aussi aux articles déjà en promotion (prix barré) — BR-031"
+          },
+          "usedCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Utilisations comptées (commandes non annulées)"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "kind",
+          "value",
+          "maxDiscount",
+          "minSubtotal",
+          "startsAt",
+          "endsAt",
+          "usageLimit",
+          "perAccountLimit",
+          "stackableWithSales",
+          "usedCount",
+          "active",
+          "createdAt"
+        ],
+        "additionalProperties": false,
+        "description": "Coupon de réduction"
+      },
+      "CouponCreateRequest": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{2,18}[A-Za-z0-9]$",
+            "description": "Code coupon (4 à 20 lettres, chiffres ou tirets ; majuscules ou minuscules)"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["percent", "fixed"],
+            "description": "percent : pourcentage ; fixed : montant en FCFA"
+          },
+          "value": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 10000000,
+            "description": "Pourcentage (1 à 90) ou montant en FCFA"
+          },
+          "maxDiscount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 10000000,
+                "description": "Montant en FCFA, entier (BR-004)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Plafond de la réduction en FCFA (pourcentage seulement)"
+          },
+          "minSubtotal": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Montant minimum d'articles, en FCFA (obligatoire pour un montant fixe, et supérieur à ce montant)"
+          },
+          "startsAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Valable à partir de (vide : tout de suite)"
+          },
+          "endsAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Valable jusqu'à (vide : sans fin)"
+          },
+          "usageLimit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 1000000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Utilisations au total (vide : sans limite)"
+          },
+          "perAccountLimit": {
+            "description": "Utilisations par compte (1 par défaut ; null : sans limite)",
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stackableWithSales": {
+            "description": "Cumulable avec les prix barrés (non par défaut, BR-031)",
+            "type": "boolean"
+          }
+        },
+        "required": ["code", "kind", "value"],
+        "additionalProperties": false,
+        "description": "Nouveau coupon (administrateur)"
+      },
+      "CouponPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Coupon"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{20,120}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["items", "nextCursor"],
+        "additionalProperties": false,
+        "description": "Coupons, du plus récent au plus ancien"
+      },
+      "CouponUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean"
+          }
+        },
+        "required": ["active"],
+        "additionalProperties": false,
+        "description": "Activer ou désactiver un coupon (ses règles ne changent pas une fois créé)"
+      },
       "CreateOrderRequest": {
         "type": "object",
         "properties": {
@@ -3201,6 +3777,11 @@
           },
           "delivery": {
             "$ref": "#/components/schemas/DeliveryAddress"
+          },
+          "couponCode": {
+            "description": "Un seul coupon par commande (BR-030)",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{2,18}[A-Za-z0-9]$"
           },
           "payment": {
             "type": "object",
@@ -3464,6 +4045,14 @@
             "maximum": 9007199254740991,
             "description": "Montant en FCFA, entier (BR-004)"
           },
+          "discount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "couponCode": {
+            "type": ["string", "null"]
+          },
           "deliveryFee": {
             "type": "integer",
             "minimum": 0,
@@ -3607,6 +4196,8 @@
           "paymentMethod",
           "paymentPhone",
           "subtotal",
+          "discount",
+          "couponCode",
           "deliveryFee",
           "total",
           "delivery",
@@ -3711,6 +4302,35 @@
             "maximum": 9007199254740991,
             "description": "Articles commandables, en FCFA (prix du catalogue)"
           },
+          "discount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Réduction du coupon (articles seulement, jamais la livraison)"
+          },
+          "coupon": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "discount": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": ["code", "discount"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Coupon appliqué (refusé : erreur `COUPON_*`)"
+          },
           "deliveryFee": {
             "type": "integer",
             "minimum": 0,
@@ -3758,6 +4378,8 @@
         },
         "required": [
           "subtotal",
+          "discount",
+          "coupon",
           "deliveryFee",
           "total",
           "freeDeliveryThreshold",
@@ -3775,11 +4397,16 @@
           "cityId": {
             "type": "string",
             "maxLength": 40
+          },
+          "couponCode": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{2,18}[A-Za-z0-9]$",
+            "description": "Code coupon (4 à 20 lettres, chiffres ou tirets ; majuscules ou minuscules)"
           }
         },
         "required": ["cityId"],
         "additionalProperties": false,
-        "description": "Ville de livraison envisagée, pour calculer le total du panier"
+        "description": "Ville de livraison envisagée (et coupon), pour calculer le total du panier"
       },
       "OrderSummary": {
         "type": "object",
@@ -3887,7 +4514,16 @@
               "COMMANDE_INTROUVABLE",
               "ANNULATION_IMPOSSIBLE",
               "CLE_DEJA_UTILISEE",
-              "TROP_DE_COMMANDES_OUVERTES"
+              "TROP_DE_COMMANDES_OUVERTES",
+              "COUPON_INVALIDE",
+              "COUPON_EXPIRE",
+              "COUPON_EPUISE",
+              "COUPON_DEJA_UTILISE",
+              "COUPON_MINIMUM_NON_ATTEINT",
+              "COUPON_NON_APPLICABLE",
+              "COUPON_EXISTE",
+              "COUPON_INTROUVABLE",
+              "COUPON_TROP_D_ESSAIS"
             ]
           },
           "requestId": {
