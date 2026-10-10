@@ -2,12 +2,23 @@ import { HttpStatus } from "@nestjs/common";
 import { BusinessException } from "../../../http/business-exception.js";
 import { OrdersError, type OrdersErrorCode } from "../domain/orders-error.js";
 
-/** Statut HTTP de chaque erreur métier du module orders. */
+/** Statut HTTP de chaque erreur métier du module orders (panier et commandes). */
 const STATUS: Record<OrdersErrorCode, number> = {
   PANIER_PLEIN: HttpStatus.CONFLICT,
   PRODUIT_INDISPONIBLE: HttpStatus.CONFLICT,
   VARIANTE_INCONNUE: HttpStatus.NOT_FOUND,
   PANIER_OCCUPE: HttpStatus.CONFLICT,
+  // Commandes (S5-T02)
+  PANIER_VIDE: HttpStatus.CONFLICT,
+  PANIER_A_VERIFIER: HttpStatus.CONFLICT,
+  PRIX_MODIFIE: HttpStatus.CONFLICT,
+  ADRESSE_INVALIDE: HttpStatus.UNPROCESSABLE_ENTITY,
+  NUMERO_PAIEMENT_INVALIDE: HttpStatus.UNPROCESSABLE_ENTITY,
+  PAIEMENT_A_LA_LIVRAISON_INDISPONIBLE: HttpStatus.UNPROCESSABLE_ENTITY,
+  COMMANDE_INTROUVABLE: HttpStatus.NOT_FOUND,
+  ANNULATION_IMPOSSIBLE: HttpStatus.CONFLICT,
+  CLE_DEJA_UTILISEE: HttpStatus.CONFLICT,
+  TROP_DE_COMMANDES_OUVERTES: HttpStatus.CONFLICT,
 };
 
 /** Exécute un cas d'utilisation ; une erreur métier devient une réponse HTTP avec son code. */

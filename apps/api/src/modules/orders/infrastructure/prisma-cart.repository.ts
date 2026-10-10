@@ -5,6 +5,7 @@ import { TransactionContext } from "../../../database/transaction-context.js";
 import type { CartRepository, MergeOutcome } from "../application/ports.js";
 import { Cart, type CartLine } from "../domain/cart.js";
 import { OrdersError } from "../domain/orders-error.js";
+import { busyError, postgresCode } from "./postgres-errors.js";
 
 /** L'activité d'un panier consulté est notée au plus une fois par heure (une écriture de moins par page vue). */
 const TOUCH_EVERY_MS = 60 * 60_000;
@@ -15,14 +16,6 @@ const TOUCH_EVERY_MS = 60 * 60_000;
  * clients (relecture de sécurité du S5-T01).
  */
 const LOCK_TIMEOUT = "1s";
-
-/** Code d'erreur PostgreSQL d'une requête refusée, tel que le client Prisma 7 (adaptateur pg) le transmet. */
-function postgresCode(error: unknown): string | undefined {
-  const meta = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown } } } })
-    ?.meta;
-  const code = meta?.driverAdapterError?.cause?.originalCode;
-  return typeof code === "string" ? code : undefined;
-}
 
 /**
  * Paniers (schéma `orders`, S5-T01). Les modifications passent par `update` et `merge` : une transaction qui verrouille
@@ -124,13 +117,7 @@ export class PrismaCartRepository implements CartRepository {
       });
     } catch (error) {
       const code = postgresCode(error);
-      if (code === "55P03") {
-        throw new OrdersError(
-          "PANIER_OCCUPE",
-          "votre panier est en cours de mise à jour : réessayez dans un instant",
-          1,
-        );
-      }
+      if (code === "55P03") throw busyError();
       // Déclencheur des 50 lignes : n'arrive que si le code se trompait (le domaine refuse avant)
       if (code === "23514") {
         throw new OrdersError("PANIER_PLEIN", "votre panier contient déjà 50 produits différents");

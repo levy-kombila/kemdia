@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   MAX_PAGE_SIZE,
@@ -14,10 +15,22 @@ import {
   CartAddRequestSchema,
   CartMergeRequestSchema,
   ProblemDetailsSchema,
+  CreateOrderRequestSchema,
+  ORDER_ERROR_CODES,
+  ORDER_REFERENCE_ALPHABET,
+  ORDER_REFERENCE_PATTERN,
   openApiComponentSchemas,
   productQueryParams,
 } from "./index.js";
 import { demoCatalog, demoIds, uuidV5 } from "./demo/index.js";
+import {
+  CITIES,
+  ZONES,
+  codAvailability,
+  estimateDelivery,
+  getCity,
+  OTHER_NEIGHBORHOOD,
+} from "./delivery.js";
 
 describe("constantes", () => {
   it("les tranches de prix se suivent sans trou ni chevauchement", () => {
@@ -96,13 +109,21 @@ describe("schémas", () => {
       "CategoryNode",
       "CategoryTree",
       "CategoryView",
+      "CreateOrderRequest",
       "CurrentSession",
+      "DeliveryAddress",
       "Facets",
       "ForgotPasswordRequest",
       "Health",
       "LoginRequest",
       "LogoutAll",
       "OpenedSession",
+      "Order",
+      "OrderLine",
+      "OrderPage",
+      "OrderQuote",
+      "OrderQuoteRequest",
+      "OrderSummary",
       "ProblemDetails",
       "ProductDetail",
       "ProductPage",
@@ -235,5 +256,89 @@ describe("panier (S5-T01)", () => {
           .success,
       ).toBe(true);
     }
+  });
+});
+
+describe("commandes (S5-T02)", () => {
+  const order = {
+    idempotencyKey: randomUUID(),
+    expectedTotal: 12_000,
+    delivery: {
+      fullName: "Marie Nze",
+      phone: "+241077123456",
+      cityId: "libreville",
+      neighborhood: "Glass",
+      landmark: "Portail bleu",
+    },
+    payment: { method: "airtel", phone: "+241077123456" },
+  };
+
+  it("une commande ne contient ni article ni prix : seulement l'adresse, le paiement et le total attendu", () => {
+    expect(CreateOrderRequestSchema.safeParse(order).success).toBe(true);
+    expect(CreateOrderRequestSchema.safeParse({ ...order, items: [] }).success).toBe(false);
+    expect(CreateOrderRequestSchema.safeParse({ ...order, total: 1 }).success).toBe(false);
+    expect(
+      CreateOrderRequestSchema.safeParse({ ...order, payment: { method: "visa" } }).success,
+    ).toBe(false);
+    expect(CreateOrderRequestSchema.safeParse({ ...order, expectedTotal: 10.5 }).success).toBe(
+      false,
+    );
+    expect(
+      CreateOrderRequestSchema.safeParse({ ...order, idempotencyKey: undefined }).success,
+    ).toBe(false);
+  });
+
+  it("numéro de commande : KMD- et 6 caractères sans 0, O, 1 ni I", () => {
+    expect(ORDER_REFERENCE_ALPHABET).not.toMatch(/[0O1I]/);
+    expect(ORDER_REFERENCE_ALPHABET).toHaveLength(32);
+    expect(ORDER_REFERENCE_PATTERN.test("KMD-7F3K9Q")).toBe(true);
+    for (const bad of ["KMD-7F3K9", "KMD-7F3K9O", "kmd-7f3k9q", "KMD-000123"])
+      expect(ORDER_REFERENCE_PATTERN.test(bad)).toBe(false);
+  });
+
+  it("les codes d'erreur des commandes sont des codes de l'API", () => {
+    for (const code of ORDER_ERROR_CODES) {
+      expect(
+        ProblemDetailsSchema.safeParse({ type: "about:blank", title: "x", status: 409, code })
+          .success,
+      ).toBe(true);
+    }
+  });
+});
+
+describe("livraison (barèmes partagés, S5-T02)", () => {
+  it("13 villes, chacune dans une zone connue, sans quartier « Autre » en double", () => {
+    expect(CITIES).toHaveLength(13);
+    for (const city of CITIES) {
+      expect(ZONES[city.zone]).toBeDefined();
+      expect(city.neighborhoods).not.toContain(OTHER_NEIGHBORHOOD);
+    }
+    expect(getCity("inconnue")).toBeUndefined();
+  });
+
+  it("frais : base de la zone + supplément de la ville, offerts au-delà du seuil", () => {
+    expect(estimateDelivery("libreville", 10_000)?.fee).toBe(0);
+    expect(estimateDelivery("franceville", 10_000)?.fee).toBe(2_500);
+    expect(estimateDelivery("franceville", 50_000)?.fee).toBe(0);
+    expect(estimateDelivery("makokou", 1_000)?.fee).toBe(4_000);
+    expect(estimateDelivery("inconnue", 1_000)).toBeNull();
+  });
+
+  it("paiement à la livraison : Grand Libreville, 100 000 FCFA au plus (valeurs provisoires)", () => {
+    expect(codAvailability("libreville", 100_000)).toEqual({ allowed: true });
+    expect(codAvailability("libreville", 100_001).allowed).toBe(false);
+    expect(codAvailability("port-gentil", 1_000).allowed).toBe(false);
+  });
+});
+
+describe("barèmes gelés (S5-T02)", () => {
+  it("aucun code ne peut modifier un tarif ou une ville en cours de route", () => {
+    expect(Object.isFrozen(ZONES)).toBe(true);
+    expect(Object.isFrozen(ZONES.zone_1)).toBe(true);
+    expect(Object.isFrozen(CITIES)).toBe(true);
+    expect(Object.isFrozen(CITIES[0]!.neighborhoods)).toBe(true);
+    expect(() => {
+      (ZONES.zone_1 as { baseFee: number }).baseFee = 0;
+    }).toThrow(TypeError);
   });
 });

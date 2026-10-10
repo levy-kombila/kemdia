@@ -1,36 +1,37 @@
 # Cahier d'architecture — Kemdia
 
-| Version | Date       | Sprint | Changements                                                                                                                                                          |
-| ------- | ---------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0.1** | 2026-10-05 | S1     | Création : contexte, exigences, stack, architecture frontend, sécurité, DevOps                                                                                       |
-| **0.2** | 2026-10-05 | S1     | §7 pipeline CD complet, §8 architecture de déploiement (ADR-0005)                                                                                                    |
-| **0.3** | 2026-10-05 | S1     | §8 environnement de démonstration gratuit (Render), version inscrite dans l'image                                                                                    |
-| **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués                           |
-| **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests                               |
-| **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                                                |
-| **2.9** | 2026-10-10 | S5     | Panier serveur (ADR-0023) : §2.1 F4, §3.3 et §3.5 module et schéma `orders`, §3.7 routes `/cart`, §3.9 colonnes supprimées, §3.11 (nouvelle), §5.10 (nouvelle), §6.4 |
-| **2.8** | 2026-10-09 | S4     | Fin du Sprint 4 (v0.4.0) : écran de réveil de la démo (ADR-0022, §5.2, §5.9), colonnes obsolètes ignorées (§3.9) ; rapport de clôture                                |
-| **2.7** | 2026-10-09 | S4     | CSRF, CSP à nonce, limites (ADR-0021) : §3.7 limitation de débit, §5.2 rendu à la demande, §5.4 proxy, §5.9 `CLIENT_IP_HEADER`, §6                                   |
-| **2.6** | 2026-10-08 | S4     | Rôles et journal d'audit (ADR-0020) : §3.3 module `audit`, §3.5 schéma `audit`, §3.7 routes `/admin`, §3.9 rôles, §3.10 (nouvelle), §6                               |
-| **2.5** | 2026-10-08 | S4     | Site branché sur l'identité (ADR-0019) : §5.4 réécrit (actions serveur, cookies, en-tête, Mon compte), §6.2 mesures du site                                          |
-| **2.4** | 2026-10-08 | S4     | Mot de passe oublié (ADR-0018) : §3.7 routes `/auth/password/*` ; §3.9 `reset_tickets`, version du mot de passe ; §6.3                                               |
-| **2.3** | 2026-10-08 | S4     | Connexion et sessions (ADR-0017) : §3.7 routes `/auth/login`, `/session`, `/logout` ; §3.9 blocage par identifiant, sessions, ménage ; §6.3                          |
-| **2.2** | 2026-10-07 | S4     | Inscription et e-mails (ADR-0016) : §3.4 variables e-mail, §3.7 routes `/auth/signup`, §3.9 tickets et envoi, §6.3                                                   |
-| **2.1** | 2026-10-07 | S4     | Fondations du module `identity` (ADR-0015) : §3.4 `SMS_ENABLED`, §3.5, §3.9 (nouvelle), §5.4 SMS différé, §6.3, §6.4                                                 |
-| **2.0** | 2026-10-07 | S3     | Fin du Sprint 3 (v0.3.0) : démo avec `CATALOG_TIMEOUT_MS=90000` (§5.9) ; rapport de clôture                                                                          |
-| **1.9** | 2026-10-07 | S3     | Dette S3-T08 : mode fichier retiré (§3.2, §5.9), accueil chargé zone par zone (§5.2), TypeScript 6 / ESLint 10 (§4, ADR-0014), §7, §9                                |
-| **1.8** | 2026-10-07 | S3     | Démo Render avec l'API et une base Neon (ADR-0013) : §3.2, §3.5, §3.8 démarrage de démo, §5.9, §7 jobs image de l'API et démo, §8, §9                                |
-| **1.7** | 2026-10-06 | S3     | Image Docker de l'API et migrations au déploiement (ADR-0012) : §3.5, §3.8 (nouvelle), §6.3, §7 job « image de l'API », §8, §9                                       |
-| **1.6** | 2026-10-06 | S3     | Le site lit l'API (ADR-0011) : §3.2, §3.7 contrat `packages/contracts`, §5.1, §5.2, §5.7 panier par variante, §5.9 (nouvelle), §6.2, §7, §9                          |
-| **1.5** | 2026-10-06 | S3     | §3.7 API REST `/api/v1` et documentation OpenAPI (ADR-0010) ; §3.4 `docs/`, variables ; §4 ; §6.3 limitation de débit ; §9 tests de contrat                          |
-| **1.4** | 2026-10-06 | S3     | BR-005 : 3 niveaux de catégories (domaine + déclencheur SQL) ; Fitness déplacé sous Sport & Loisirs ; §2.1, §3.6, §6.3, §9                                           |
-| **1.3** | 2026-10-06 | S3     | §3.6 module `catalog` (ADR-0009) : domaine, cas d'utilisation, persistance, import de démonstration ; §2.1 F3 ; §6.3 ; §9 tests                                      |
-| **1.2** | 2026-10-06 | S3     | §3.5 base de données (ADR-0008) ; §3.4 dossier `database/`, `DATABASE_*` ; §4, §6.3, §7 job PostgreSQL, §8, §9 tests d'intégration                                   |
-| **1.1** | 2026-10-06 | S3     | §3.4 socle de l'API (`apps/api`, ADR-0007) ; §4 versions du backend ; §6.3 sécurité de l'API (ancien §6.3 → §6.4) ; §7 et §9 tests de l'API                          |
-| **0.9** | 2026-10-06 | S2     | §5.8 favoris, partage et aperçus, page vendeur ; §5.2 rendu à la demande (`SITE_URL`) ; §7 et §9 tests de bout en bout                                               |
-| **0.8** | 2026-10-05 | S2     | §5.7 tunnel de commande (port `OrderClient`, données envoyées) ; §6.2 mesures du tunnel                                                                              |
-| **0.7** | 2026-10-05 | S2     | §5.6 pages de liste (filtres) et panier ; §6.2 filtres par liste blanche                                                                                             |
-| **0.6** | 2026-10-05 | S2     | §5.5 charte graphique « place de marché » (Archivo à largeur variable, étiquette de prix), §5.6 structure des pages, §5.1 composants                                 |
+| Version | Date       | Sprint | Changements                                                                                                                                                                               |
+| ------- | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0.1** | 2026-10-05 | S1     | Création : contexte, exigences, stack, architecture frontend, sécurité, DevOps                                                                                                            |
+| **0.2** | 2026-10-05 | S1     | §7 pipeline CD complet, §8 architecture de déploiement (ADR-0005)                                                                                                                         |
+| **0.3** | 2026-10-05 | S1     | §8 environnement de démonstration gratuit (Render), version inscrite dans l'image                                                                                                         |
+| **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués                                                |
+| **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests                                                    |
+| **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                                                                     |
+| **3.0** | 2026-10-10 | S5     | Commandes (ADR-0024) : §2.1 F7 · F8, §3.5 schéma `orders`, §3.7 routes `/orders` et contrat 1.8.0, §3.12 (nouvelle : commandes, réservation du stock), §5.7 barèmes dans le contrat, §6.4 |
+| **2.9** | 2026-10-10 | S5     | Panier serveur (ADR-0023) : §2.1 F4, §3.3 et §3.5 module et schéma `orders`, §3.7 routes `/cart`, §3.9 colonnes supprimées, §3.11 (nouvelle), §5.10 (nouvelle), §6.4                      |
+| **2.8** | 2026-10-09 | S4     | Fin du Sprint 4 (v0.4.0) : écran de réveil de la démo (ADR-0022, §5.2, §5.9), colonnes obsolètes ignorées (§3.9) ; rapport de clôture                                                     |
+| **2.7** | 2026-10-09 | S4     | CSRF, CSP à nonce, limites (ADR-0021) : §3.7 limitation de débit, §5.2 rendu à la demande, §5.4 proxy, §5.9 `CLIENT_IP_HEADER`, §6                                                        |
+| **2.6** | 2026-10-08 | S4     | Rôles et journal d'audit (ADR-0020) : §3.3 module `audit`, §3.5 schéma `audit`, §3.7 routes `/admin`, §3.9 rôles, §3.10 (nouvelle), §6                                                    |
+| **2.5** | 2026-10-08 | S4     | Site branché sur l'identité (ADR-0019) : §5.4 réécrit (actions serveur, cookies, en-tête, Mon compte), §6.2 mesures du site                                                               |
+| **2.4** | 2026-10-08 | S4     | Mot de passe oublié (ADR-0018) : §3.7 routes `/auth/password/*` ; §3.9 `reset_tickets`, version du mot de passe ; §6.3                                                                    |
+| **2.3** | 2026-10-08 | S4     | Connexion et sessions (ADR-0017) : §3.7 routes `/auth/login`, `/session`, `/logout` ; §3.9 blocage par identifiant, sessions, ménage ; §6.3                                               |
+| **2.2** | 2026-10-07 | S4     | Inscription et e-mails (ADR-0016) : §3.4 variables e-mail, §3.7 routes `/auth/signup`, §3.9 tickets et envoi, §6.3                                                                        |
+| **2.1** | 2026-10-07 | S4     | Fondations du module `identity` (ADR-0015) : §3.4 `SMS_ENABLED`, §3.5, §3.9 (nouvelle), §5.4 SMS différé, §6.3, §6.4                                                                      |
+| **2.0** | 2026-10-07 | S3     | Fin du Sprint 3 (v0.3.0) : démo avec `CATALOG_TIMEOUT_MS=90000` (§5.9) ; rapport de clôture                                                                                               |
+| **1.9** | 2026-10-07 | S3     | Dette S3-T08 : mode fichier retiré (§3.2, §5.9), accueil chargé zone par zone (§5.2), TypeScript 6 / ESLint 10 (§4, ADR-0014), §7, §9                                                     |
+| **1.8** | 2026-10-07 | S3     | Démo Render avec l'API et une base Neon (ADR-0013) : §3.2, §3.5, §3.8 démarrage de démo, §5.9, §7 jobs image de l'API et démo, §8, §9                                                     |
+| **1.7** | 2026-10-06 | S3     | Image Docker de l'API et migrations au déploiement (ADR-0012) : §3.5, §3.8 (nouvelle), §6.3, §7 job « image de l'API », §8, §9                                                            |
+| **1.6** | 2026-10-06 | S3     | Le site lit l'API (ADR-0011) : §3.2, §3.7 contrat `packages/contracts`, §5.1, §5.2, §5.7 panier par variante, §5.9 (nouvelle), §6.2, §7, §9                                               |
+| **1.5** | 2026-10-06 | S3     | §3.7 API REST `/api/v1` et documentation OpenAPI (ADR-0010) ; §3.4 `docs/`, variables ; §4 ; §6.3 limitation de débit ; §9 tests de contrat                                               |
+| **1.4** | 2026-10-06 | S3     | BR-005 : 3 niveaux de catégories (domaine + déclencheur SQL) ; Fitness déplacé sous Sport & Loisirs ; §2.1, §3.6, §6.3, §9                                                                |
+| **1.3** | 2026-10-06 | S3     | §3.6 module `catalog` (ADR-0009) : domaine, cas d'utilisation, persistance, import de démonstration ; §2.1 F3 ; §6.3 ; §9 tests                                                           |
+| **1.2** | 2026-10-06 | S3     | §3.5 base de données (ADR-0008) ; §3.4 dossier `database/`, `DATABASE_*` ; §4, §6.3, §7 job PostgreSQL, §8, §9 tests d'intégration                                                        |
+| **1.1** | 2026-10-06 | S3     | §3.4 socle de l'API (`apps/api`, ADR-0007) ; §4 versions du backend ; §6.3 sécurité de l'API (ancien §6.3 → §6.4) ; §7 et §9 tests de l'API                                               |
+| **0.9** | 2026-10-06 | S2     | §5.8 favoris, partage et aperçus, page vendeur ; §5.2 rendu à la demande (`SITE_URL`) ; §7 et §9 tests de bout en bout                                                                    |
+| **0.8** | 2026-10-05 | S2     | §5.7 tunnel de commande (port `OrderClient`, données envoyées) ; §6.2 mesures du tunnel                                                                                                   |
+| **0.7** | 2026-10-05 | S2     | §5.6 pages de liste (filtres) et panier ; §6.2 filtres par liste blanche                                                                                                                  |
+| **0.6** | 2026-10-05 | S2     | §5.5 charte graphique « place de marché » (Archivo à largeur variable, étiquette de prix), §5.6 structure des pages, §5.1 composants                                                      |
 
 > Document vivant : chaque rapport de sprint (`docs/rapports/`) indique quelles sections il a modifiées.
 > Les sections marquées 🔜 seront rédigées au sprint indiqué.
@@ -84,20 +85,20 @@ Vision détaillée, personas et analyse de marché : [synthèse du KSAD](../refe
 Les **règles métier** (BR-xxx) et les **exigences fonctionnelles** (FR-xxx) issues du KSAD sont numérotées, rattachées à un module
 et à un sprint dans [`regles-metier.md`](regles-metier.md). Résumé :
 
-| #   | Exigence                                                                 | Sprint                               |
-| --- | ------------------------------------------------------------------------ | ------------------------------------ |
-| F1  | Parcourir le catalogue par catégories (3 niveaux au plus, BR-005)        | S1 ✅                                |
-| F2  | Rechercher, filtrer, trier, paginer                                      | S1 ✅ · S2 (filtres) · S3 (serveur)  |
-| F3  | Fiche produit (photos, prix, stock, livraison estimée, variantes)        | S1 ✅ · S3 ✅ (variantes, API)       |
-| F4  | Panier                                                                   | S1 ✅ (navigateur) · S5 ✅ (serveur) |
-| F5  | Ville / quartier de livraison au Gabon                                   | S1 ✅                                |
-| F6  | Compte client par e-mail ou téléphone (OTP)                              | S4                                   |
-| F7  | Commander et payer (Moov Money, Airtel Money, à la livraison)            | S5                                   |
-| F8  | Suivre sa commande                                                       | S5 · S7                              |
-| F9  | Vendeurs tiers : boutique, KYC, produits modérés, commandes, commissions | S6                                   |
-| F10 | Back-office : modération, KYC, commandes, livraisons                     | S6                                   |
-| F11 | Livraison via transporteur partenaire                                    | S7                                   |
-| F12 | Affiliation                                                              | Après MVP                            |
+| #   | Exigence                                                                 | Sprint                                        |
+| --- | ------------------------------------------------------------------------ | --------------------------------------------- |
+| F1  | Parcourir le catalogue par catégories (3 niveaux au plus, BR-005)        | S1 ✅                                         |
+| F2  | Rechercher, filtrer, trier, paginer                                      | S1 ✅ · S2 (filtres) · S3 (serveur)           |
+| F3  | Fiche produit (photos, prix, stock, livraison estimée, variantes)        | S1 ✅ · S3 ✅ (variantes, API)                |
+| F4  | Panier                                                                   | S1 ✅ (navigateur) · S5 ✅ (serveur)          |
+| F5  | Ville / quartier de livraison au Gabon                                   | S1 ✅                                         |
+| F6  | Compte client par e-mail ou téléphone (OTP)                              | S4                                            |
+| F7  | Commander et payer (Moov Money, Airtel Money, à la livraison)            | S5 (commande ✅ S5-T02 ; paiement S5-T04/T05) |
+| F8  | Suivre sa commande                                                       | S5 (statuts et historique ✅ S5-T02) · S7     |
+| F9  | Vendeurs tiers : boutique, KYC, produits modérés, commandes, commissions | S6                                            |
+| F10 | Back-office : modération, KYC, commandes, livraisons                     | S6                                            |
+| F11 | Livraison via transporteur partenaire                                    | S7                                            |
+| F12 | Affiliation                                                              | Après MVP                                     |
 
 ### 2.2 Non fonctionnelles
 
@@ -283,7 +284,7 @@ flowchart LR
       catalog[schéma catalog]
       identity[schéma identity — S4]
       auditdb[schéma audit — S4-T06<br/>ajout seul]
-      ordersdb[schéma orders — S5-T01<br/>paniers]
+      ordersdb[schéma orders — S5<br/>paniers, commandes]
       futurs[payments · vendors<br/>shipping — S5 à S7]
       pub[public : suivi des migrations]
     end
@@ -393,6 +394,10 @@ Décision : [ADR-0010](adr/0010-api-rest-openapi.md). Description complète : [`
 | `POST /api/v1/cart/items`                              | Ajouter une variante (quantités additionnées, ramenées au stock)                                       | aucun | 120/min/IP |
 | `PUT\|DELETE /api/v1/cart/items/{variantId}`           | Fixer la quantité d'une ligne / la retirer                                                             | aucun | 120/min/IP |
 | `POST /api/v1/cart/merge`                              | Réunir le panier du navigateur après la connexion (additionner, `ignored`) ; 10/min par compte         | aucun | 120/min/IP |
+| `POST /api/v1/orders/quote`                            | Total du panier pour une ville : frais, délai, paiement à la livraison possible ? (S5-T02)             | aucun | 120/min/IP |
+| `POST /api/v1/orders`                                  | Commander le panier : stock réservé (BR-012), total comparé, idempotente ; 10/min par compte           | aucun | 120/min/IP |
+| `GET /api/v1/orders`, `/orders/{reference}`            | Mes commandes (curseur), une commande et son historique                                                | aucun | 120/min/IP |
+| `POST /api/v1/orders/{reference}/cancel`               | Annuler avant l'expédition (Mobile Money payée : service client) ; 10/min par compte                   | aucun | 120/min/IP |
 | `GET /api/health`                                      | État de l'API et de la base                                                                            | aucun | aucune     |
 | `GET /api/v1/openapi.json`, `/api/docs`                | Documentation (si `API_DOCS`, désactivée par défaut en production)                                     | 5 min | aucune     |
 
@@ -430,6 +435,10 @@ Dépassement : 429, code `TROP_DE_REQUETES`, en-tête `Retry-After`. Contrat 1.6
 
 **Panier (S5-T01)** : codes `PANIER_PLEIN`, `PRODUIT_INDISPONIBLE`, `VARIANTE_INCONNUE`, `PANIER_OCCUPE` (liste `CART_ERROR_CODES` ; `API_ERROR_CODES` = identité + panier),
 limites `CART_MAX_LINES` (50), `CART_MAX_QUANTITY` (20), `CART_TTL_DAYS` (90). Contrat 1.7.0.
+
+**Commandes (S5-T02)** : `ORDER_ERROR_CODES` (`PANIER_VIDE`, `PANIER_A_VERIFIER`, `PRIX_MODIFIE`, `ADRESSE_INVALIDE`, `NUMERO_PAIEMENT_INVALIDE`,
+`PAIEMENT_A_LA_LIVRAISON_INDISPONIBLE`, `COMMANDE_INTROUVABLE`, `ANNULATION_IMPOSSIBLE`, `CLE_DEJA_UTILISEE`, `TROP_DE_COMMANDES_OUVERTES`), statuts, moyens de paiement,
+`PAYMENT_WINDOW_MINUTES` (30), `MAX_OPEN_ORDERS` (3) ; barèmes de livraison dans `@kemdia/contracts/delivery` (gelés). Contrat 1.8.0.
 
 ### 3.8 Image Docker de l'API (S3-T06)
 
@@ -582,6 +591,33 @@ src/modules/orders/
 Chaque réponse est calculée à partir du catalogue **au moment de la lecture** : prix actuel, `ok` / `reason` / `available` par ligne
 (BR-001), total des seules lignes commandables, `ok` global (passage en caisse possible). Une variante supprimée du catalogue est retirée
 du panier. Le panier ne réserve pas le stock (BR-012, à la commande).
+
+### 3.12 Commandes (S5-T02)
+
+Décision : [ADR-0024](adr/0024-commandes-reservation-stock.md). Fichiers ajoutés au module `orders` :
+
+```
+orders/
+├── domain/order.ts                    Statuts et transitions (BR-010), annulation par le client, numéro KMD-XXXXXX, paiement, montants
+├── domain/delivery-address.ts         Adresse (nom, mobile, ville, quartier, repère), Unicode normalisé
+├── application/order.service.ts       Devis, création (une transaction), lecture, annulation, paiements non reçus
+├── infrastructure/prisma-order.repository.ts   Panier verrouillé, commande + lignes + historique, curseur, SKIP LOCKED
+├── infrastructure/orders-transaction.ts        Verrous 3 s, connexion 3 s, transaction 10 s → PANIER_OCCUPE
+├── infrastructure/overdue-orders.ts            Toutes les minutes : commandes non payées en 30 min annulées, stock remis
+└── interface/order.controller.ts      /orders/quote, /orders, /orders/{reference}, /orders/{reference}/cancel
+catalog/
+├── application/stock.service.ts       Port public : réserver (tout ou rien) / remettre le stock
+└── infrastructure/prisma-stock.repository.ts   UPDATE … stock − q WHERE stock ≥ q, dans la transaction de la commande
+```
+
+| Table                  | Contenu                                                                                                                 | Règles SQL ajoutées à la main                                                                                                                                                                                 |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `orders`               | Numéro, compte, clé et empreinte d'idempotence, statut, paiement, montants, adresse copiée, délai, échéance, annulation | Montants (total = articles + livraison), formats, cohérence statut / échéance / annulation ; déclencheur : champs figés, statuts dans l'ordre prévu, échéance jamais repoussée ; ni suppression ni `TRUNCATE` |
+| `order_items`          | Copie figée de chaque article (titre, variante, image, prix unitaire, quantité, total de ligne)                         | Quantité 1 à 20, total de ligne exact ; ajout seul                                                                                                                                                            |
+| `order_status_history` | Chaque statut et sa date (suivi de commande)                                                                            | Ajout seul                                                                                                                                                                                                    |
+
+Une commande se crée **à partir du panier du compte** : la requête ne porte que l'adresse, le moyen de paiement, la clé d'idempotence et le
+total affiché. Stock réservé, montants calculés, commande enregistrée et panier vidé dans **une seule transaction**.
 
 ## 4. Choix technologiques
 
@@ -778,6 +814,10 @@ flowchart LR
 **Données envoyées au serveur** (`buildOrderRequest`) : `{ variantId, quantity }` pour chaque article (S3-T05), adresse, moyen et numéro de paiement.
 **Jamais de prix, de total ni de frais** : le serveur les recalcule (BR-004, faille CRIT-01 de l'ancien site).
 
+**Depuis le S5-T02** ([ADR-0024](adr/0024-commandes-reservation-stock.md)) : zones, villes, quartiers, frais et règles du paiement à la livraison vivent dans le contrat
+(`@kemdia/contracts/delivery`, gelés) ; `lib/delivery.ts` et `lib/checkout.ts` les réexportent. L'API calcule la facture avec le même code
+(`POST /orders/quote`), et la commande ne contient que l'adresse, le paiement, une clé d'idempotence et le total affiché. Branchement du tunnel : S5-T07.
+
 ### 5.8 Favoris, partage et page vendeur (S2-T04 à T06)
 
 | Fonction            | Fonctionnement                                                                                                                                  |
@@ -930,7 +970,7 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 ### 6.4 Prévu 🔜
 
 - Démo : régler `CLIENT_IP_HEADER` une fois l'en-tête fiable de Render vérifié ; collecte des violations de CSP (`report-to`).
-- S5 : signature des webhooks Mobile Money, idempotence des paiements, transactions SQL pour stock et coupons. Fait au S5-T01 : panier modifié sous verrou en une transaction, prix jamais reçus du navigateur, UUID normalisés.
+- S5 : signature des webhooks Mobile Money, idempotence des paiements, transactions SQL pour coupons. Fait au S5-T01 : panier modifié sous verrou en une transaction, prix jamais reçus du navigateur, UUID normalisés. Fait au S5-T02 : stock réservé dans la transaction de la commande (BR-012), commandes idempotentes, montants figés par la base, 3 commandes ouvertes au plus par compte.
 - S6 : écrans d'administration avec double authentification (MED-15) ; nouvelles actions au journal (KYC, modération).
 - S7 : deux rôles PostgreSQL (migrations / application sans droit de modifier les tables **ni de désactiver les déclencheurs du journal d'audit**), connexion chiffrée selon l'hébergement, sauvegardes chiffrées testées.
 

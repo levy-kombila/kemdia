@@ -31,8 +31,12 @@ export class TransactionContext {
     return this.current.getStore() !== undefined;
   }
 
-  run<T>(work: () => Promise<T>): Promise<T> {
+  /**
+   * `options` (S5-T02) : attente maximale d'une connexion (`maxWait`) et durée maximale de la transaction (`timeout`),
+   * en millisecondes ; par défaut ceux de Prisma (2 s et 5 s). Ignorées si la transaction est déjà ouverte.
+   */
+  run<T>(work: () => Promise<T>, options?: { maxWait?: number; timeout?: number }): Promise<T> {
     if (this.active) return work();
-    return this.prisma.$transaction((tx) => this.current.run(tx, work));
+    return this.prisma.$transaction((tx) => this.current.run(tx, work), options);
   }
 }
