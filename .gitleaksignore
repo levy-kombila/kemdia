@@ -9,3 +9,7 @@ c10280f758bf8ff7e64789e1efaf90e60ac973d2:apps/api/test/catalog-http.test.ts:gene
 # pour une clé, dans un test puis dans le commentaire qui l'expliquait ici. Aucune valeur secrète ; les deux lignes sont réécrites.
 a568709fd95b361b4300bd5558bfe09ec0a62e9c:apps/web/src/lib/catalog/index.test.ts:generic-api-key:52
 39b78db0e485558656a7440427ea752ccaa506aa:.gitleaksignore:generic-api-key:8
+# S5-T01 (PR #38) : faux positifs — la règle générique a pris l'adresse de l'API de test (« http://api:4000/api/v1/cart… »)
+# pour une clé, dans les tests de l'adaptateur du panier. Aucune valeur secrète ; adresses réécrites dans le commit suivant.
+131fc176960e28923813a973304379393c2aa26b:apps/web/src/lib/orders/api-cart.test.ts:generic-api-key:52
+131fc176960e28923813a973304379393c2aa26b:apps/web/src/lib/orders/api-cart.test.ts:generic-api-key:83

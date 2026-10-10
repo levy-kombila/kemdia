@@ -38,7 +38,13 @@ function api(response: Response | Error, visitorIp?: () => Promise<string | null
   );
   return {
     fetch,
-    cart: createCartApi({ url: "http://api:4000", key: KEY, timeoutMs: 1000, fetch, visitorIp }),
+    cart: createCartApi({
+      url: "http://serveur.test:4000",
+      key: KEY,
+      timeoutMs: 1000,
+      fetch,
+      visitorIp,
+    }),
   };
 }
 
@@ -49,7 +55,7 @@ describe("adaptateur API du panier (S5-T01)", () => {
     const { fetch, cart } = api(json(200, CART), () => Promise.resolve("203.0.113.5"));
     expect(await cart.add(TOKEN, VARIANT, 2)).toEqual({ ok: true, data: CART });
     const [url, init] = fetch.mock.calls[0]!;
-    expect(url).toBe("http://api:4000/api/v1/cart/items");
+    expect(url).toBe("http://serveur.test:4000/api/v1/cart/items");
     expect(init?.method).toBe("POST");
     expect(init?.cache).toBe("no-store");
     expect(init?.headers).toMatchObject({
@@ -68,7 +74,12 @@ describe("adaptateur API du panier (S5-T01)", () => {
         json(200, String(url).endsWith("/merge") ? { ...CART, ignored: 1 } : CART),
       );
     });
-    const cart = createCartApi({ url: "http://api:4000", key: KEY, timeoutMs: 1000, fetch });
+    const cart = createCartApi({
+      url: "http://serveur.test:4000",
+      key: KEY,
+      timeoutMs: 1000,
+      fetch,
+    });
     await cart.get(TOKEN);
     await cart.setQuantity(TOKEN, VARIANT, 3);
     await cart.remove(TOKEN, VARIANT);
@@ -76,11 +87,11 @@ describe("adaptateur API du panier (S5-T01)", () => {
     const merged = await cart.merge(TOKEN, MERGE_ID, [{ variantId: VARIANT, quantity: 1 }]);
     expect(merged).toEqual({ ok: true, data: { ...CART, ignored: 1 } });
     expect(calls).toEqual([
-      ["GET", "http://api:4000/api/v1/cart"],
-      ["PUT", `http://api:4000/api/v1/cart/items/${VARIANT}`],
-      ["DELETE", `http://api:4000/api/v1/cart/items/${VARIANT}`],
-      ["DELETE", "http://api:4000/api/v1/cart"],
-      ["POST", "http://api:4000/api/v1/cart/merge"],
+      ["GET", "http://serveur.test:4000/api/v1/cart"],
+      ["PUT", `http://serveur.test:4000/api/v1/cart/items/${VARIANT}`],
+      ["DELETE", `http://serveur.test:4000/api/v1/cart/items/${VARIANT}`],
+      ["DELETE", "http://serveur.test:4000/api/v1/cart"],
+      ["POST", "http://serveur.test:4000/api/v1/cart/merge"],
     ]);
     const body = JSON.parse(fetch.mock.calls[4]![1]!.body as string) as unknown;
     expect(body).toEqual({ mergeId: MERGE_ID, lines: [{ variantId: VARIANT, quantity: 1 }] });

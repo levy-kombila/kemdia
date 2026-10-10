@@ -13,7 +13,11 @@ vi.mock("next/headers", () => ({
   headers: () => Promise.resolve(new Headers()),
 }));
 vi.mock("@/lib/config/server-config", () => ({
-  catalogSource: () => ({ url: "http://api:4000", key: "k".repeat(40), timeoutMs: 1000 }),
+  catalogSource: () => ({
+    url: "http://serveur.test:4000",
+    key: "k".repeat(40),
+    timeoutMs: 1000,
+  }),
 }));
 const api = vi.hoisted(() => ({
   get: vi.fn(),
