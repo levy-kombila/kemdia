@@ -1,6 +1,7 @@
 import type { DescribedLine, ReservedVariant } from "../../catalog/index.js";
 import type { Cart, CartLine } from "../domain/cart.js";
 import type { DeliveryAddress } from "../domain/delivery-address.js";
+import type { Coupon, CouponRules } from "../domain/coupon.js";
 import type { CancelReason, OrderStatus, PaymentMethod, PricedLine } from "../domain/order.js";
 
 /** Panier enregistré (schéma PostgreSQL `orders`). */
@@ -60,6 +61,9 @@ export interface OrderRecord {
   paymentMethod: PaymentMethod;
   paymentPhone: string | null;
   subtotal: number;
+  /** Réduction du coupon (S5-T03) : total = articles − réduction + livraison */
+  discount: number;
+  couponCode: string | null;
   deliveryFee: number;
   total: number;
   delivery: DeliveryAddress & { daysMin: number; daysMax: number };
@@ -142,3 +146,38 @@ export const ORDER_STOCK = Symbol("ORDER_STOCK");
 /** Tirage au hasard (numéro de commande), remplaçable dans les tests. */
 export const ORDER_RANDOM = Symbol("ORDER_RANDOM");
 export type RandomBytes = (size: number) => Uint8Array;
+
+// --- Coupons (S5-T03, ADR-0025) ---
+
+/** Position dans la liste des coupons (date de création puis identifiant). */
+export interface CouponCursor {
+  createdAt: Date;
+  id: string;
+}
+
+export interface CouponRepository {
+  findByCode(code: string): Promise<Coupon | null>;
+  findById(id: string): Promise<Coupon | null>;
+  /** Verrouille le coupon jusqu'à la fin de la transaction (compteur et utilisations par compte relus sous verrou). */
+  lockByCode(code: string): Promise<Coupon | null>;
+  /** Utilisations de ce coupon par ce compte, commandes annulées non comptées. */
+  countUses(couponId: string, accountId: string): Promise<number>;
+  /** Compte une utilisation et l'attache à la commande (même transaction que la commande). */
+  redeem(use: {
+    couponId: string;
+    orderId: string;
+    accountId: string;
+    amount: number;
+    now: Date;
+  }): Promise<void>;
+  /** Commande annulée : l'utilisation est rendue (compteur −1) ; sans effet si la commande n'avait pas de coupon. */
+  releaseForOrder(orderId: string, now: Date): Promise<void>;
+  /** Crée le coupon ; `null` si le code existe déjà. */
+  create(rules: CouponRules, createdBy: string, now: Date): Promise<Coupon | null>;
+  setActive(id: string, active: boolean, now: Date): Promise<Coupon | null>;
+  list(
+    limit: number,
+    before?: CouponCursor,
+  ): Promise<{ items: Coupon[]; next: CouponCursor | null }>;
+}
+export const COUPON_REPOSITORY = Symbol("COUPON_REPOSITORY");

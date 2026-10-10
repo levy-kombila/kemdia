@@ -84,6 +84,9 @@ model Order {
   /// Numéro Mobile Money (+241…) ; vide pour le paiement à la livraison
   paymentPhone         String?             @map("payment_phone") @db.VarChar(13)
   subtotal             Int
+  /// Réduction du coupon (S5-T03), sur les articles seulement : total = articles − réduction + livraison
+  discount             Int                 @default(0)
+  couponCode           String?             @map("coupon_code") @db.VarChar(20)
   deliveryFee          Int                 @map("delivery_fee")
   total                Int
   deliveryName         String              @map("delivery_name") @db.VarChar(120)
@@ -100,6 +103,7 @@ model Order {
   cancelReason         CancelReason?       @map("cancel_reason")
   items                OrderItem[]
   history              OrderStatusChange[]
+  couponRedemption     CouponRedemption?
   createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime            @default(now()) @map("updated_at") @db.Timestamptz(3)
 
@@ -140,5 +144,63 @@ model OrderStatusChange {
 
   @@index([orderId, at])
   @@map("order_status_history")
+  @@schema("orders")
+}
+
+// ─── Coupons (S5-T03, ADR-0025) ───────────────────────────────────────────────────────────
+
+enum CouponKind {
+  PERCENT
+  FIXED
+
+  @@map("coupon_kind")
+  @@schema("orders")
+}
+
+/// Coupon de réduction. Ses règles sont figées par la base une fois créé : seuls l'activation et le compteur changent.
+model Coupon {
+  id                 String             @id @db.Uuid
+  /// En majuscules (saisie sans casse)
+  code               String             @unique @db.VarChar(20)
+  kind               CouponKind
+  /// Pourcentage (1 à 90) ou montant en FCFA
+  value              Int
+  maxDiscount        Int?               @map("max_discount")
+  minSubtotal        Int?               @map("min_subtotal")
+  startsAt           DateTime           @map("starts_at") @db.Timestamptz(3)
+  endsAt             DateTime?          @map("ends_at") @db.Timestamptz(3)
+  usageLimit         Int?               @map("usage_limit")
+  /// Utilisations comptées (commandes non annulées), changé de façon atomique (BR-030)
+  usedCount          Int                @default(0) @map("used_count")
+  perAccountLimit    Int?               @map("per_account_limit")
+  /// BR-031 : s'applique aussi aux articles déjà en promotion
+  stackableWithSales Boolean            @default(false) @map("stackable_with_sales")
+  active             Boolean            @default(true)
+  /// Administrateur qui l'a créé (module identity) : UUID seul
+  createdBy          String             @map("created_by") @db.Uuid
+  redemptions        CouponRedemption[]
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime           @default(now()) @map("updated_at") @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@map("coupons")
+  @@schema("orders")
+}
+
+/// Utilisation d'un coupon par une commande (une au plus par commande). Rendue si la commande est annulée.
+model CouponRedemption {
+  id         String    @id @db.Uuid
+  couponId   String    @map("coupon_id") @db.Uuid
+  coupon     Coupon    @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  orderId    String    @unique @map("order_id") @db.Uuid
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// Compte (module identity) : UUID seul
+  accountId  String    @map("account_id") @db.Uuid
+  amount     Int
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  releasedAt DateTime? @map("released_at") @db.Timestamptz(3)
+
+  @@index([couponId, accountId])
+  @@map("coupon_redemptions")
   @@schema("orders")
 }

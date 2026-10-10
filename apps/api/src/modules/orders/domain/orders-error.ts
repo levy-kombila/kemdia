@@ -15,7 +15,17 @@ export type OrdersErrorCode =
   | "COMMANDE_INTROUVABLE"
   | "ANNULATION_IMPOSSIBLE"
   | "CLE_DEJA_UTILISEE"
-  | "TROP_DE_COMMANDES_OUVERTES";
+  | "TROP_DE_COMMANDES_OUVERTES"
+  // Coupons (S5-T03, ADR-0025)
+  | "COUPON_INVALIDE"
+  | "COUPON_EXPIRE"
+  | "COUPON_EPUISE"
+  | "COUPON_DEJA_UTILISE"
+  | "COUPON_MINIMUM_NON_ATTEINT"
+  | "COUPON_NON_APPLICABLE"
+  | "COUPON_EXISTE"
+  | "COUPON_INTROUVABLE"
+  | "COUPON_TROP_D_ESSAIS";
 
 /** Une règle du panier ou de la commande n'est pas respectée. Le message est lisible par un humain, en français. */
 export class OrdersError extends Error {

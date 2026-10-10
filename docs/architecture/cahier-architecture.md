@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués                                                |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests                                                    |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                                                                     |
+| **3.1** | 2026-10-10 | S5     | Coupons (ADR-0025) : §3.7 routes `/admin/coupons` et contrat 1.9.0, §3.10 actions d'audit, §3.13 (nouvelle), §6.4                                                                         |
 | **3.0** | 2026-10-10 | S5     | Commandes (ADR-0024) : §2.1 F7 · F8, §3.5 schéma `orders`, §3.7 routes `/orders` et contrat 1.8.0, §3.12 (nouvelle : commandes, réservation du stock), §5.7 barèmes dans le contrat, §6.4 |
 | **2.9** | 2026-10-10 | S5     | Panier serveur (ADR-0023) : §2.1 F4, §3.3 et §3.5 module et schéma `orders`, §3.7 routes `/cart`, §3.9 colonnes supprimées, §3.11 (nouvelle), §5.10 (nouvelle), §6.4                      |
 | **2.8** | 2026-10-09 | S4     | Fin du Sprint 4 (v0.4.0) : écran de réveil de la démo (ADR-0022, §5.2, §5.9), colonnes obsolètes ignorées (§3.9) ; rapport de clôture                                                     |
@@ -397,6 +398,7 @@ Décision : [ADR-0010](adr/0010-api-rest-openapi.md). Description complète : [`
 | `POST /api/v1/orders/quote`                            | Total du panier pour une ville : frais, délai, paiement à la livraison possible ? (S5-T02)             | aucun | 120/min/IP |
 | `POST /api/v1/orders`                                  | Commander le panier : stock réservé (BR-012), total comparé, idempotente ; 10/min par compte           | aucun | 120/min/IP |
 | `GET /api/v1/orders`, `/orders/{reference}`            | Mes commandes (curseur), une commande et son historique                                                | aucun | 120/min/IP |
+| `POST\|GET /api/v1/admin/coupons`, `PATCH …/{id}`      | Coupons : créer, lister, activer / désactiver — admin, < 15 min, journal d'audit (S5-T03)              | aucun | 30/min/IP  |
 | `POST /api/v1/orders/{reference}/cancel`               | Annuler avant l'expédition (Mobile Money payée : service client) ; 10/min par compte                   | aucun | 120/min/IP |
 | `GET /api/health`                                      | État de l'API et de la base                                                                            | aucun | aucune     |
 | `GET /api/v1/openapi.json`, `/api/docs`                | Documentation (si `API_DOCS`, désactivée par défaut en production)                                     | 5 min | aucune     |
@@ -439,6 +441,9 @@ limites `CART_MAX_LINES` (50), `CART_MAX_QUANTITY` (20), `CART_TTL_DAYS` (90). C
 **Commandes (S5-T02)** : `ORDER_ERROR_CODES` (`PANIER_VIDE`, `PANIER_A_VERIFIER`, `PRIX_MODIFIE`, `ADRESSE_INVALIDE`, `NUMERO_PAIEMENT_INVALIDE`,
 `PAIEMENT_A_LA_LIVRAISON_INDISPONIBLE`, `COMMANDE_INTROUVABLE`, `ANNULATION_IMPOSSIBLE`, `CLE_DEJA_UTILISEE`, `TROP_DE_COMMANDES_OUVERTES`), statuts, moyens de paiement,
 `PAYMENT_WINDOW_MINUTES` (30), `MAX_OPEN_ORDERS` (3) ; barèmes de livraison dans `@kemdia/contracts/delivery` (gelés). Contrat 1.8.0.
+
+**Coupons (S5-T03)** : `couponCode` dans le devis et la commande ; `COUPON_ERROR_CODES` (`COUPON_INVALIDE`, `COUPON_EXPIRE`, `COUPON_EPUISE`, `COUPON_DEJA_UTILISE`,
+`COUPON_MINIMUM_NON_ATTEINT`, `COUPON_NON_APPLICABLE`, `COUPON_EXISTE`, `COUPON_INTROUVABLE`, `COUPON_TROP_D_ESSAIS`), `COUPON_LIMITS`. Contrat 1.9.0.
 
 ### 3.8 Image Docker de l'API (S3-T06)
 
@@ -549,12 +554,14 @@ src/modules/audit/
 └── interface/request-context.ts     Adresse IP vue par l'API, identifiant de requête
 ```
 
-| Action                 | Écrite par                         | Détails          |
-| ---------------------- | ---------------------------------- | ---------------- |
-| `role.granted`         | Administrateur ou commande serveur | `role`, `source` |
-| `role.revoked`         | Administrateur ou commande serveur | `role`, `source` |
-| `password.reset`       | Titulaire (mot de passe oublié)    | —                |
-| `sessions.revoked_all` | Titulaire (« tous mes appareils ») | `count` (si ≥ 1) |
+| Action                 | Écrite par                         | Détails                 |
+| ---------------------- | ---------------------------------- | ----------------------- |
+| `role.granted`         | Administrateur ou commande serveur | `role`, `source`        |
+| `role.revoked`         | Administrateur ou commande serveur | `role`, `source`        |
+| `password.reset`       | Titulaire (mot de passe oublié)    | —                       |
+| `sessions.revoked_all` | Titulaire (« tous mes appareils ») | `count` (si ≥ 1)        |
+| `coupon.created`       | Administrateur (S5-T03)            | `code`, `kind`, `value` |
+| `coupon.updated`       | Administrateur (S5-T03)            | `code`, `active`        |
 
 Table `audit.events` : identifiant, date (**posée par la base**), action, type et UUID de l'acteur, type et UUID de la cible, détails (JSON ≤ 2 Ko),
 adresse IP, identifiant de requête. Déclencheurs SQL : **aucune modification**, suppression seulement après 365 jours, `TRUNCATE` interdit.
@@ -618,6 +625,19 @@ catalog/
 
 Une commande se crée **à partir du panier du compte** : la requête ne porte que l'adresse, le moyen de paiement, la clé d'idempotence et le
 total affiché. Stock réservé, montants calculés, commande enregistrée et panier vidé dans **une seule transaction**.
+
+### 3.13 Coupons (S5-T03)
+
+Décision : [ADR-0025](adr/0025-coupons.md). Fichiers ajoutés au module `orders` : `domain/coupon.ts` (règles, réduction, BR-030 / BR-031),
+`application/coupon.service.ts` (administration + journal d'audit), `infrastructure/prisma-coupon.repository.ts`, `interface/coupon.controller.ts`.
+
+| Table                | Contenu                                                                                                 | Règles SQL ajoutées à la main                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `coupons`            | Code (majuscules), type, valeur, plafond, minimum, dates, limites, compteur, cumulable, actif, créateur | Valeurs et limites cohérentes, compteur ≤ limite ; règles figées (seuls activation et compteur changent) ; ni suppression ni `TRUNCATE`             |
+| `coupon_redemptions` | Coupon, commande (une au plus), compte, montant, date, remise                                           | Montant > 0 ; seule la remise peut être posée, une fois ; rien ne s'efface                                                                          |
+| `orders` (colonnes)  | `discount`, `coupon_code`                                                                               | total = articles − réduction + livraison, total > 0, réduction < articles, réduction ⇔ code ; figés ; annulation → utilisation rendue (déclencheur) |
+
+Dans la transaction de la commande, l'ordre des verrous est toujours **panier → variantes → coupon** (annulation : commande → variantes → coupon).
 
 ## 4. Choix technologiques
 
@@ -970,7 +990,7 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 ### 6.4 Prévu 🔜
 
 - Démo : régler `CLIENT_IP_HEADER` une fois l'en-tête fiable de Render vérifié ; collecte des violations de CSP (`report-to`).
-- S5 : signature des webhooks Mobile Money, idempotence des paiements, transactions SQL pour coupons. Fait au S5-T01 : panier modifié sous verrou en une transaction, prix jamais reçus du navigateur, UUID normalisés. Fait au S5-T02 : stock réservé dans la transaction de la commande (BR-012), commandes idempotentes, montants figés par la base, 3 commandes ouvertes au plus par compte.
+- S5 : signature des webhooks Mobile Money, idempotence des paiements. Fait au S5-T01 : panier modifié sous verrou en une transaction, prix jamais reçus du navigateur, UUID normalisés. Fait au S5-T02 : stock réservé dans la transaction de la commande (BR-012), commandes idempotentes, montants figés par la base, 3 commandes ouvertes au plus par compte. Fait au S5-T03 : coupons comptés de façon atomique (BR-030), jamais de commande à 0 FCFA, limite d'essais de codes.
 - S6 : écrans d'administration avec double authentification (MED-15) ; nouvelles actions au journal (KYC, modération).
 - S7 : deux rôles PostgreSQL (migrations / application sans droit de modifier les tables **ni de désactiver les déclencheurs du journal d'audit**), connexion chiffrée selon l'hébergement, sauvegardes chiffrées testées.
 

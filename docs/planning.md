@@ -140,15 +140,15 @@ Décisions : [ADR-0015](architecture/adr/0015-identite-sessions-otp.md) (session
 
 ## S5 — Modules `orders` + `payments` 🚧
 
-Décisions : [ADR-0023](architecture/adr/0023-panier-serveur.md) (panier serveur), [ADR-0024](architecture/adr/0024-commandes-reservation-stock.md) (commandes, réservation du stock).
+Décisions : [ADR-0023](architecture/adr/0023-panier-serveur.md) (panier serveur), [ADR-0024](architecture/adr/0024-commandes-reservation-stock.md) (commandes, réservation du stock), [ADR-0025](architecture/adr/0025-coupons.md) (coupons).
 Choix du 2026-10-10 : **compte obligatoire pour commander** ; paniers **additionnés** à la connexion ; connecté, panier **sur le serveur seul** ;
-paniers gardés **90 jours** ; numéro **KMD-7F3K9Q** ; **30 min** pour payer par Mobile Money ; annulation **avant l'expédition** ; prix changé → **nouveau total à confirmer** ; paiement à la livraison, coupons et Mobile Money : **en attente du client** (voir les [questions ouvertes](architecture/regles-metier.md#questions-ouvertes)).
+paniers gardés **90 jours** ; numéro **KMD-7F3K9Q** ; **30 min** pour payer par Mobile Money ; annulation **avant l'expédition** ; prix changé → **nouveau total à confirmer** ; coupons : pourcentage ou montant fixe, articles seulement, un par commande, rendus à l'annulation ; paiement à la livraison, coupons et Mobile Money : **en attente du client** (voir les [questions ouvertes](architecture/regles-metier.md#questions-ouvertes)).
 
 | ID     | Tâche                                                                                                                                                                   | Statut |
 | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | S5-T01 | Colonnes `failed_logins` / `locked_until` supprimées (ADR-0022, étape 2) ; module `orders` : panier serveur vérifié, réunion à la connexion, site branché — ADR-0023    | ✅     |
 | S5-T02 | Commande : adresse, frais de livraison calculés par l'API, réservation du stock dans la même transaction (BR-012), statuts, annulation (BR-010), idempotence — ADR-0024 | ✅     |
-| S5-T03 | Coupons : expiration et limite comptées de façon atomique (BR-030), cumul réglable (BR-031)                                                                             | ⏳     |
+| S5-T03 | Coupons : expiration et limite comptées de façon atomique (BR-030), cumul réglable (BR-031) ; administration par l'API, journal d'audit — ADR-0025                      | ✅     |
 | S5-T04 | Module `payments` : port fournisseur, états du paiement, paiement à la livraison (BR-011, FR-017), stock libéré si le paiement échoue                                   | ⏳     |
 | S5-T05 | Mobile Money en _sandbox_ (simulateur maison, puis Moov / Airtel ou agrégateur), webhooks signés, rejeu refusé                                                          | ⏳     |
 | S5-T06 | Factures (FR-015) : numérotation continue, PDF, envoi par e-mail                                                                                                        | ⏳     |

@@ -12,6 +12,8 @@ export function presentOrder(order: OrderRecord): Order {
     paymentMethod: order.paymentMethod,
     paymentPhone: order.paymentPhone,
     subtotal: order.subtotal,
+    discount: order.discount,
+    couponCode: order.couponCode,
     deliveryFee: order.deliveryFee,
     total: order.total,
     delivery: order.delivery,

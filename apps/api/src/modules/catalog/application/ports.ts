@@ -118,6 +118,8 @@ export interface ReservedVariant {
   variantName: string;
   image: string | null;
   price: number;
+  /** Prix barré : la variante est « en promotion » (coupons non cumulables, BR-031) */
+  compareAtPrice: number | null;
   quantity: number;
 }
 

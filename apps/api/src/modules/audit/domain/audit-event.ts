@@ -15,6 +15,10 @@ export const AUDIT_ACTIONS = [
   "password.reset",
   /** « Déconnecter tous mes appareils » (détails : count) */
   "sessions.revoked_all",
+  /** Coupon créé par un administrateur (détails : code, kind, value) — S5-T03 */
+  "coupon.created",
+  /** Coupon activé ou désactivé (détails : code, active) — S5-T03 */
+  "coupon.updated",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -24,7 +28,7 @@ export const AUDIT_RETENTION_DAYS = 365;
 /** Qui agit : un compte, ou le serveur lui-même (commande en ligne, tâche planifiée). */
 export type AuditActor = { type: "account"; id: string } | { type: "system" };
 
-export const AUDIT_TARGET_TYPES = ["account"] as const;
+export const AUDIT_TARGET_TYPES = ["account", "coupon"] as const;
 export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];
 
 export interface AuditTarget {

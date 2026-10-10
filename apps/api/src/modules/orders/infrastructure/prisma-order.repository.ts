@@ -54,6 +54,8 @@ function toRecord(row: OrderRow): OrderRecord {
     paymentMethod: METHOD_FROM_DB[row.paymentMethod],
     paymentPhone: row.paymentPhone,
     subtotal: row.subtotal,
+    discount: row.discount,
+    couponCode: row.couponCode,
     deliveryFee: row.deliveryFee,
     total: row.total,
     delivery: {
@@ -145,6 +147,8 @@ export class PrismaOrderRepository implements OrderRepository {
         paymentMethod: METHOD_TO_DB[order.paymentMethod],
         paymentPhone: order.paymentPhone,
         subtotal: order.subtotal,
+        discount: order.discount,
+        couponCode: order.couponCode,
         deliveryFee: order.deliveryFee,
         total: order.total,
         deliveryName: order.delivery.fullName,

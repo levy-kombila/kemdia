@@ -17,6 +17,9 @@ import {
   ProblemDetailsSchema,
   CreateOrderRequestSchema,
   ORDER_ERROR_CODES,
+  COUPON_CODE_PATTERN,
+  COUPON_ERROR_CODES,
+  CouponCreateRequestSchema,
   ORDER_REFERENCE_ALPHABET,
   ORDER_REFERENCE_PATTERN,
   openApiComponentSchemas,
@@ -109,6 +112,10 @@ describe("schémas", () => {
       "CategoryNode",
       "CategoryTree",
       "CategoryView",
+      "Coupon",
+      "CouponCreateRequest",
+      "CouponPage",
+      "CouponUpdateRequest",
       "CreateOrderRequest",
       "CurrentSession",
       "DeliveryAddress",
@@ -340,5 +347,39 @@ describe("barèmes gelés (S5-T02)", () => {
     expect(() => {
       (ZONES.zone_1 as { baseFee: number }).baseFee = 0;
     }).toThrow(TypeError);
+  });
+});
+
+describe("coupons (S5-T03)", () => {
+  it("code : 4 à 20 lettres, chiffres ou tirets, sans casse", () => {
+    for (const ok of ["NOEL", "bienvenue10", "SOLDES-2026", "A".repeat(20)])
+      expect(COUPON_CODE_PATTERN.test(ok)).toBe(true);
+    for (const bad of ["ABC", "A".repeat(21), "-NOEL", "NOEL-", "NO EL", "NOËL", "NOEL;DROP"])
+      expect(COUPON_CODE_PATTERN.test(bad)).toBe(false);
+  });
+
+  it("création : type et valeur obligatoires, champs inconnus refusés", () => {
+    expect(
+      CouponCreateRequestSchema.safeParse({ code: "NOEL", kind: "percent", value: 10 }).success,
+    ).toBe(true);
+    expect(
+      CouponCreateRequestSchema.safeParse({ code: "NOEL", kind: "gift", value: 10 }).success,
+    ).toBe(false);
+    expect(
+      CouponCreateRequestSchema.safeParse({ code: "NOEL", kind: "fixed", value: 10.5 }).success,
+    ).toBe(false);
+    expect(
+      CouponCreateRequestSchema.safeParse({ code: "NOEL", kind: "fixed", value: 500, usedCount: 0 })
+        .success,
+    ).toBe(false);
+  });
+
+  it("les codes d'erreur des coupons sont des codes de l'API", () => {
+    for (const code of COUPON_ERROR_CODES) {
+      expect(
+        ProblemDetailsSchema.safeParse({ type: "about:blank", title: "x", status: 422, code })
+          .success,
+      ).toBe(true);
+    }
   });
 });

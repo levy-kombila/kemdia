@@ -7,6 +7,8 @@ import {
   CART_TTL_DAYS,
   MAX_OPEN_ORDERS,
   ORDER_ERROR_CODES,
+  COUPON_ERROR_CODES,
+  COUPON_PERCENT_MAX,
   ORDER_REFERENCE_ALPHABET,
   ORDER_STATUSES,
   PAYMENT_METHODS,
@@ -14,6 +16,7 @@ import {
 } from "@kemdia/contracts/constants";
 import * as delivery from "@kemdia/contracts/delivery";
 import * as address from "../src/modules/orders/domain/delivery-address.js";
+import * as coupon from "../src/modules/orders/domain/coupon.js";
 import * as order from "../src/modules/orders/domain/order.js";
 import {
   CART_TTL_DAYS as DOMAIN_TTL,
@@ -51,7 +54,7 @@ describe("Panier : mêmes limites partout (S5-T01)", () => {
 
   it("chaque code d'erreur du panier et des commandes a son statut HTTP", () => {
     expect(Object.keys(ORDERS_ERROR_STATUS).sort()).toEqual(
-      [...CART_ERROR_CODES, ...ORDER_ERROR_CODES].sort(),
+      [...CART_ERROR_CODES, ...ORDER_ERROR_CODES, ...COUPON_ERROR_CODES].sort(),
     );
   });
 });
@@ -63,6 +66,7 @@ describe("Commandes : mêmes règles dans le domaine et dans le contrat (S5-T02)
     expect(order.REFERENCE_ALPHABET).toBe(ORDER_REFERENCE_ALPHABET);
     expect(order.PAYMENT_WINDOW_MS).toBe(PAYMENT_WINDOW_MINUTES * 60_000);
     expect(order.MAX_OPEN_ORDERS).toBe(MAX_OPEN_ORDERS);
+    expect(coupon.COUPON_PERCENT_MAX).toBe(COUPON_PERCENT_MAX);
   });
 
   it("adresse : repère et « Autre quartier »", () => {
