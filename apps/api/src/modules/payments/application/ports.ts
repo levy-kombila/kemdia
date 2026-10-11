@@ -80,6 +80,8 @@ export interface PaymentRequest {
   amount: number;
   method: Exclude<PaymentChannel, "cod">;
   phone: string;
+  /** Compte du client : le téléphone simulé ne montre que les demandes du compte connecté */
+  accountId: string;
 }
 
 /**
@@ -95,6 +97,24 @@ export interface PaymentProvider {
   request(payment: PaymentRequest): Promise<{ providerRef: string }>;
 }
 export const PAYMENT_PROVIDER = Symbol("PAYMENT_PROVIDER");
+
+// --- Notifications de l'opérateur (S5-T05, ADR-0027) ---
+
+/** Notifications déjà reçues : une notification (son identifiant) n'est traitée qu'une fois. */
+export interface ProviderEventRepository {
+  /** Enregistre la notification ; `false` si elle avait déjà été reçue (rien n'est écrit). */
+  record(event: { id: string; paymentId: string; type: string }, now: Date): Promise<boolean>;
+}
+export const PROVIDER_EVENT_REPOSITORY = Symbol("PROVIDER_EVENT_REPOSITORY");
+
+/**
+ * Clé partagée avec l'opérateur pour signer ses notifications. `null` : aucun opérateur branché, les notifications sont
+ * refusées. Simulateur : clé tirée au hasard au démarrage (choix du 2026-10-11).
+ */
+export interface WebhookKey {
+  readonly secret: Uint8Array | null;
+}
+export const WEBHOOK_KEY = Symbol("WEBHOOK_KEY");
 
 /** L'opérateur n'a pas accepté la demande (indisponible, délai dépassé…). */
 export class PaymentProviderError extends Error {

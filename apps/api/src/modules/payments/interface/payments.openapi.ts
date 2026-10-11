@@ -34,6 +34,8 @@ const PAYMENT_RULES = [
   "Paiement **Mobile Money** d'une commande en attente de paiement : l'opérateur demande au client de valider sur son téléphone.",
   "**3 essais** au plus, avec le **même opérateur** que la commande (autre numéro possible). Un essai attend la réponse **3 minutes** au plus (jamais au-delà de l'échéance de la commande), puis expire. Le résultat arrive par l'opérateur : interroger `GET` pour le suivre.",
 ].join("\n\n");
+const SANDBOX_RULES =
+  "**Bac à sable** (poste de développement et démo seulement) : le compte connecté voit les demandes de paiement envoyées à l'opérateur simulé. Valider ou refuser fait envoyer par l'opérateur simulé une notification **signée** à l'API, comme le vrai opérateur. Aucun argent ne circule.";
 const ADMIN_RULES =
   "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque action est inscrite au journal d'audit.";
 
@@ -174,6 +176,84 @@ export const paymentPaths = {
         ...admin,
         "404": problem("`REMBOURSEMENT_INTROUVABLE`"),
         "409": problem("`REMBOURSEMENT_DEJA_FAIT` (avec une autre référence) ou `PANIER_OCCUPE`"),
+      },
+    },
+  },
+  "/api/v1/webhooks/mobile-money": {
+    post: {
+      tags: ["Paiements"],
+      summary: "Notification de l'opérateur Mobile Money (signée)",
+      description: [
+        "Appelée par l'**opérateur**, sans session : la seule preuve est la signature.",
+        "En-tête `x-kemdia-signature: t=<secondes Unix>,v1=<HMAC-SHA256 hexadécimal>`, calculé sur `<t>.<corps brut>` avec la clé partagée. Signée il y a plus de **5 minutes** : refusée. Une notification déjà reçue (même `eventId`) est **ignorée** (200, `duplicate: true`).",
+        "Réponse 2xx : prise en compte ; sinon l'opérateur la renvoie. Aujourd'hui : opérateur simulé du bac à sable (poste de développement et démo).",
+      ].join("\n\n"),
+      operationId: "paymentNotification",
+      parameters: [
+        {
+          name: "x-kemdia-signature",
+          in: "header",
+          required: true,
+          description: "Signature de la notification",
+          schema: { type: "string" },
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("PaymentNotification") } },
+      },
+      responses: {
+        "200": json("PaymentNotificationAck", "Notification prise en compte, ou déjà reçue"),
+        "400": problem("Notification signée mais invalide (contenu, devise, montant absent)"),
+        "401": problem("`SIGNATURE_INVALIDE` ou `NOTIFICATION_EXPIREE` (plus de 5 minutes)"),
+        "404": problem("`PAIEMENT_INTROUVABLE` : essai inconnu ou autre référence d'opérateur"),
+        "409": problem("`PANIER_OCCUPE` : commande en cours de modification, à renvoyer"),
+        "429": problem("Trop de notifications (`TROP_DE_REQUETES`)"),
+        "503": problem("`PAIEMENT_INDISPONIBLE` : aucun opérateur branché"),
+      },
+    },
+  },
+  "/api/v1/sandbox/mobile-money/requests": {
+    get: {
+      tags: ["Bac à sable"],
+      summary: "Téléphone simulé : demandes de paiement en attente",
+      description: SANDBOX_RULES,
+      operationId: "sandboxRequests",
+      security: bearer,
+      responses: {
+        "200": json("SandboxPaymentRequestPage", "Demandes en attente du compte connecté"),
+        ...session,
+        "404": problem("Bac à sable indisponible (préproduction, production)"),
+      },
+    },
+  },
+  "/api/v1/sandbox/mobile-money/requests/{paymentId}": {
+    post: {
+      tags: ["Bac à sable"],
+      summary: "Téléphone simulé : valider (code PIN fictif) ou refuser",
+      description: `${SANDBOX_RULES}\n\nValider demande un code PIN fictif de **4 chiffres** ; au-delà de 500 000 FCFA, le solde fictif est insuffisant.`,
+      operationId: "sandboxDecide",
+      security: bearer,
+      parameters: [
+        {
+          name: "paymentId",
+          in: "path",
+          required: true,
+          description: "Identifiant de l'essai",
+          schema: { type: "string", format: "uuid" },
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("SandboxDecisionRequest") } },
+      },
+      responses: {
+        "200": json("SandboxDecision", "Réponse de l'opérateur simulé, notifiée à l'API"),
+        "400": problem("Corps ou identifiant invalide"),
+        ...session,
+        "404": problem("`DEMANDE_INTROUVABLE`, ou bac à sable indisponible"),
+        "422": problem("`CODE_PIN_INVALIDE`"),
+        "503": problem("`PAIEMENT_INDISPONIBLE` : notification non acceptée par l'API"),
       },
     },
   },

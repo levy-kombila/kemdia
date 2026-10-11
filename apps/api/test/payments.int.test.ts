@@ -611,7 +611,10 @@ describe("Paiements (PostgreSQL, HTTP)", () => {
   it("tâche planifiée : les essais sans réponse sont notés expirés", async () => {
     const order = await placeOrder();
     const started = matches(PaymentSchema, (await startPayment(order.reference).expect(201)).body);
-    expect(await app.get(StalePaymentsScheduler).run(new Date())).toBe(0);
+    await app.get(StalePaymentsScheduler).run(new Date());
+    expect((await prisma.payment.findUniqueOrThrow({ where: { id: started.id } })).status).toBe(
+      "PENDING",
+    );
     expect(
       await app.get(StalePaymentsScheduler).run(new Date(Date.now() + 4 * 60_000)),
     ).toBeGreaterThanOrEqual(1);

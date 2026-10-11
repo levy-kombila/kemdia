@@ -1,5 +1,9 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { VersioningType } from "@nestjs/common";
-import type { NestExpressApplication } from "@nestjs/platform-express";
+import type {
+  NestExpressApplication,
+  NestExpressBodyParserOptions,
+} from "@nestjs/platform-express";
 import helmet from "helmet";
 import type { AppConfig } from "../config/env.js";
 import { clientMiddleware } from "./client.js";
@@ -7,6 +11,15 @@ import { ProblemDetailsFilter } from "./problem-details.filter.js";
 
 /** Taille maximale d'un corps de requête JSON : une API de catalogue et de commande n'a pas besoin de plus. */
 export const BODY_LIMIT = "100kb";
+
+/** Adresses des notifications d'opérateurs : leur signature porte sur le corps BRUT, gardé tel quel (S5-T05). */
+export const WEBHOOK_PATH_PREFIX = "/api/v1/webhooks/";
+
+function keepRawBodyForWebhooks(req: IncomingMessage, _res: ServerResponse, buffer: Buffer): void {
+  if (req.url?.startsWith(WEBHOOK_PATH_PREFIX)) {
+    (req as IncomingMessage & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+  }
+}
 
 /**
  * Réglages HTTP communs à `main.ts` et aux tests : les tests vérifient donc la vraie configuration.
@@ -29,7 +42,12 @@ export function configureApp(app: NestExpressApplication, config: AppConfig): vo
       strictTransportSecurity: { maxAge: 63_072_000, includeSubDomains: true },
     }),
   );
-  app.useBodyParser("json", { limit: BODY_LIMIT });
+  // Corps JSON ; pour les notifications d'opérateurs, le corps brut est gardé (signature). `verify` est transmis tel
+  // quel à body-parser par Nest, mais absent de son type : d'où la conversion.
+  app.useBodyParser("json", {
+    limit: BODY_LIMIT,
+    verify: keepRawBodyForWebhooks,
+  } as NestExpressBodyParserOptions);
   // Qui appelle : visiteur transmis par le site (clé interne) ou adresse directe (S4-T07)
   app.use(clientMiddleware(config));
 

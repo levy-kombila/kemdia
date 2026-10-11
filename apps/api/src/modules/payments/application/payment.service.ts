@@ -127,6 +127,7 @@ export class PaymentService {
           amount: payment.amount,
           method: payment.method as "airtel" | "moov",
           phone: payment.phone!,
+          accountId,
         }),
         PROVIDER_TIMEOUT_MS,
       ));

@@ -88,6 +88,7 @@
 7. **Mobile Money** : agrégateur unique (qui gère Airtel + Moov) ou intégration directe de chaque opérateur ?
    _2026-10-10 : pas encore décidé, comptes marchands non ouverts. En attendant (S5-T05) : port neutre + simulateur « sandbox » maison (webhooks signés compris) ; le vrai fournisseur se branchera dessus. Le jalon v0.5.0 se fera sur ce simulateur._
    _S5-T04 : port `PaymentProvider` en place (fournisseur simulé en local et en démo, aucun en production) ; remboursements suivis à la main en attendant l'API du fournisseur._
+   _✅ S5-T05 : bac à sable en place (opérateur simulé, téléphone simulé, notifications signées). Le vrai fournisseur = un adaptateur et sa clé, à ajouter avec ton accord._
 8. ~~**Profondeur des catégories**~~ — ✅ **Tranchée le 2026-10-06 : 3 niveaux au plus** (règle BR-005).
    Le rayon « Mode › Sport › Fitness » était mal classé : « Fitness » et ses sous-catégories (Musculation, Yoga, Cardio,
    Accessoires fitness — 7 produits) sont déplacés sous « Sport & Loisirs ». Les adresses des pages ne changent pas.
