@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "1.10.0",
-    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main."
+    "version": "1.11.0",
+    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.\n- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo."
   },
   "servers": [
     {
@@ -35,6 +35,10 @@
     {
       "name": "Paiements",
       "description": "Paiement Mobile Money d'une commande du compte connecté (module payments, S5-T04)"
+    },
+    {
+      "name": "Bac à sable",
+      "description": "Téléphone simulé de l'opérateur Mobile Money (S5-T05) : poste de développement et démo seulement"
     },
     {
       "name": "Supervision",
@@ -3524,6 +3528,269 @@
           }
         }
       }
+    },
+    "/api/v1/webhooks/mobile-money": {
+      "post": {
+        "tags": ["Paiements"],
+        "summary": "Notification de l'opérateur Mobile Money (signée)",
+        "description": "Appelée par l'**opérateur**, sans session : la seule preuve est la signature.\n\nEn-tête `x-kemdia-signature: t=<secondes Unix>,v1=<HMAC-SHA256 hexadécimal>`, calculé sur `<t>.<corps brut>` avec la clé partagée. Signée il y a plus de **5 minutes** : refusée. Une notification déjà reçue (même `eventId`) est **ignorée** (200, `duplicate: true`).\n\nRéponse 2xx : prise en compte ; sinon l'opérateur la renvoie. Aujourd'hui : opérateur simulé du bac à sable (poste de développement et démo).",
+        "operationId": "paymentNotification",
+        "parameters": [
+          {
+            "name": "x-kemdia-signature",
+            "in": "header",
+            "required": true,
+            "description": "Signature de la notification",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentNotification"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notification prise en compte, ou déjà reçue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentNotificationAck"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Notification signée mais invalide (contenu, devise, montant absent)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SIGNATURE_INVALIDE` ou `NOTIFICATION_EXPIREE` (plus de 5 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`PAIEMENT_INTROUVABLE` : essai inconnu ou autre référence d'opérateur",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`PANIER_OCCUPE` : commande en cours de modification, à renvoyer",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de notifications (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`PAIEMENT_INDISPONIBLE` : aucun opérateur branché",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sandbox/mobile-money/requests": {
+      "get": {
+        "tags": ["Bac à sable"],
+        "summary": "Téléphone simulé : demandes de paiement en attente",
+        "description": "**Bac à sable** (poste de développement et démo seulement) : le compte connecté voit les demandes de paiement envoyées à l'opérateur simulé. Valider ou refuser fait envoyer par l'opérateur simulé une notification **signée** à l'API, comme le vrai opérateur. Aucun argent ne circule.",
+        "operationId": "sandboxRequests",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Demandes en attente du compte connecté",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SandboxPaymentRequestPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Bac à sable indisponible (préproduction, production)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de demandes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sandbox/mobile-money/requests/{paymentId}": {
+      "post": {
+        "tags": ["Bac à sable"],
+        "summary": "Téléphone simulé : valider (code PIN fictif) ou refuser",
+        "description": "**Bac à sable** (poste de développement et démo seulement) : le compte connecté voit les demandes de paiement envoyées à l'opérateur simulé. Valider ou refuser fait envoyer par l'opérateur simulé une notification **signée** à l'API, comme le vrai opérateur. Aucun argent ne circule.\n\nValider demande un code PIN fictif de **4 chiffres** ; au-delà de 500 000 FCFA, le solde fictif est insuffisant.",
+        "operationId": "sandboxDecide",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "paymentId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant de l'essai",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SandboxDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Réponse de l'opérateur simulé, notifiée à l'API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SandboxDecision"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps ou identifiant invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`DEMANDE_INTROUVABLE`, ou bac à sable indisponible",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`CODE_PIN_INVALIDE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de demandes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`PAIEMENT_INDISPONIBLE` : notification non acceptée par l'API",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5366,6 +5633,70 @@
         "additionalProperties": false,
         "description": "Tentative de paiement d'une commande"
       },
+      "PaymentNotification": {
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant unique de la notification : une notification déjà reçue est ignorée"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["payment.succeeded", "payment.failed"]
+          },
+          "paymentId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant de l'essai, envoyé par Kemdia avec la demande"
+          },
+          "providerRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{1,100}$",
+            "description": "Référence de l'opération chez l'opérateur"
+          },
+          "amount": {
+            "description": "Montant reçu (obligatoire pour « payment.succeeded »)",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "currency": {
+            "type": "string",
+            "const": "XAF"
+          },
+          "failureReason": {
+            "description": "Raison de l'échec (« payment.failed »)",
+            "type": "string",
+            "maxLength": 60
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": ["eventId", "type", "paymentId", "providerRef", "currency", "occurredAt"],
+        "additionalProperties": false,
+        "description": "Notification de l'opérateur, signée (en-tête x-kemdia-signature)"
+      },
+      "PaymentNotificationAck": {
+        "type": "object",
+        "properties": {
+          "received": {
+            "type": "boolean",
+            "const": true
+          },
+          "duplicate": {
+            "type": "boolean",
+            "description": "Notification déjà reçue : rien n'a changé"
+          }
+        },
+        "required": ["received", "duplicate"],
+        "additionalProperties": false
+      },
       "ProblemDetails": {
         "type": "object",
         "properties": {
@@ -5440,7 +5771,11 @@
               "PAIEMENT_INTROUVABLE",
               "REMBOURSEMENT_INTROUVABLE",
               "ENCAISSEMENT_IMPOSSIBLE",
-              "REMBOURSEMENT_DEJA_FAIT"
+              "REMBOURSEMENT_DEJA_FAIT",
+              "SIGNATURE_INVALIDE",
+              "NOTIFICATION_EXPIREE",
+              "DEMANDE_INTROUVABLE",
+              "CODE_PIN_INVALIDE"
             ]
           },
           "requestId": {
@@ -5885,6 +6220,86 @@
         "required": ["ticket", "channel", "sentTo", "resendInSeconds"],
         "additionalProperties": false,
         "description": "Réponse IDENTIQUE qu'un compte existe ou non (« si un compte existe, un code a été envoyé ») ; sans compte, rien n'est envoyé."
+      },
+      "SandboxDecision": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["succeeded", "failed"]
+          },
+          "failureReason": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["status", "failureReason"],
+        "additionalProperties": false,
+        "description": "Ce que l'opérateur simulé a répondu"
+      },
+      "SandboxDecisionRequest": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": ["approve", "decline"]
+          },
+          "pin": {
+            "description": "Code PIN fictif (4 chiffres), pour valider",
+            "type": "string",
+            "pattern": "^\\d{4}$"
+          }
+        },
+        "required": ["decision"],
+        "additionalProperties": false
+      },
+      "SandboxPaymentRequest": {
+        "type": "object",
+        "properties": {
+          "paymentId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "orderReference": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string",
+            "enum": ["airtel", "moov"]
+          },
+          "amount": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Montant en FCFA, entier (BR-004)"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": ["paymentId", "orderReference", "method", "amount", "phone", "createdAt"],
+        "additionalProperties": false,
+        "description": "Demande de paiement reçue par le téléphone simulé (bac à sable)"
+      },
+      "SandboxPaymentRequestPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SandboxPaymentRequest"
+            }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false
       },
       "SignupRequest": {
         "type": "object",

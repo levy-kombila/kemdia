@@ -9,6 +9,7 @@ import type {
 import type {
   NewPayment,
   PaymentRepository,
+  ProviderEventRepository,
   RefundReasonCode,
   RefundRecord,
   RefundRepository,
@@ -232,5 +233,22 @@ export class PrismaRefundRepository implements RefundRepository {
       data: { status: "DONE", externalReference, doneBy: adminId, doneAt: now, updatedAt: now },
     });
     return toRefund(row);
+  }
+}
+
+/** Notifications reçues (S5-T05) : l'identifiant est la clé primaire, un deuxième envoi n'écrit rien. */
+@Injectable()
+export class PrismaProviderEventRepository implements ProviderEventRepository {
+  constructor(private readonly tx: TransactionContext) {}
+
+  async record(
+    event: { id: string; paymentId: string; type: string },
+    now: Date,
+  ): Promise<boolean> {
+    const inserted = await this.tx.db.$executeRaw`
+      INSERT INTO "payments"."provider_events" ("id", "payment_id", "type", "received_at")
+      VALUES (${event.id}::uuid, ${event.paymentId}::uuid, ${event.type}, ${now})
+      ON CONFLICT ("id") DO NOTHING`;
+    return inserted === 1;
   }
 }

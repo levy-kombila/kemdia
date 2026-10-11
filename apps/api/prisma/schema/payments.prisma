@@ -104,3 +104,18 @@ model Refund {
   @@map("refunds")
   @@schema("payments")
 }
+
+/// Notification reçue de l'opérateur (S5-T05, ADR-0027) : son identifiant n'est accepté qu'une fois (rejeu refusé).
+/// En ajout seul.
+model ProviderEvent {
+  /// Identifiant de la notification, tiré par l'opérateur
+  id         String   @id @db.Uuid
+  /// Essai concerné : UUID seul
+  paymentId  String   @map("payment_id") @db.Uuid
+  type       String   @db.VarChar(30)
+  receivedAt DateTime @default(now()) @map("received_at") @db.Timestamptz(3)
+
+  @@index([paymentId])
+  @@map("provider_events")
+  @@schema("payments")
+}

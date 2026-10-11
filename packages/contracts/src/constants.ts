@@ -269,6 +269,22 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 export const MAX_PAYMENT_ATTEMPTS = 3;
 /** Durée d'un essai : au-delà, sans réponse de l'opérateur, l'essai est expiré et le client peut réessayer. */
 export const PAYMENT_ATTEMPT_MINUTES = 3;
+
+// --- Notifications de l'opérateur (S5-T05, ADR-0027) ---
+
+/**
+ * En-tête de signature d'une notification de paiement : `t=<secondes Unix>,v1=<HMAC-SHA256 hexadécimal>`, calculé sur
+ * `<t>.<corps brut>` avec la clé partagée avec l'opérateur.
+ */
+export const PAYMENT_SIGNATURE_HEADER = "x-kemdia-signature";
+/** Notification signée il y a plus de 5 minutes (ou dans plus de 5 minutes) : refusée (choix du 2026-10-11). */
+export const PAYMENT_SIGNATURE_TOLERANCE_SECONDS = 300;
+/** Types de notification envoyés par l'opérateur. */
+export const PAYMENT_NOTIFICATION_TYPES = ["payment.succeeded", "payment.failed"] as const;
+export type PaymentNotificationType = (typeof PAYMENT_NOTIFICATION_TYPES)[number];
+/** Téléphone simulé : code PIN fictif à 4 chiffres ; solde fictif de chaque compte Mobile Money du bac à sable. */
+export const SANDBOX_PIN_PATTERN = /^\d{4}$/;
+export const SANDBOX_BALANCE = 500_000;
 /** États d'un remboursement (suivi manuel par l'administrateur en attendant le fournisseur). */
 export const REFUND_STATUSES = ["to_do", "done"] as const;
 export type RefundStatus = (typeof REFUND_STATUSES)[number];
@@ -289,6 +305,11 @@ export const PAYMENT_ERROR_CODES = [
   "REMBOURSEMENT_INTROUVABLE",
   "ENCAISSEMENT_IMPOSSIBLE",
   "REMBOURSEMENT_DEJA_FAIT",
+  // Notifications de l'opérateur et bac à sable (S5-T05, ADR-0027)
+  "SIGNATURE_INVALIDE",
+  "NOTIFICATION_EXPIREE",
+  "DEMANDE_INTROUVABLE",
+  "CODE_PIN_INVALIDE",
 ] as const;
 export type PaymentErrorCode = (typeof PAYMENT_ERROR_CODES)[number];
 

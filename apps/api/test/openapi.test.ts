@@ -61,6 +61,9 @@ describe("Description OpenAPI", () => {
       "/api/v1/products",
       "/api/v1/products/facets",
       "/api/v1/products/{slug}",
+      "/api/v1/sandbox/mobile-money/requests",
+      "/api/v1/sandbox/mobile-money/requests/{paymentId}",
+      "/api/v1/webhooks/mobile-money",
     ]);
   });
 

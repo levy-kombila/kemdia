@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués                                                |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests                                                    |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                                                                     |
+| **3.3** | 2026-10-11 | S5     | Notifications signées et bac à sable (ADR-0027) : §3.7 routes et contrat 1.11.0, §3.14 notifications et opérateur simulé, §5.11 (nouvelle), §6.4                                          |
 | **3.2** | 2026-10-10 | S5     | Paiements (ADR-0026) : §3.3 module `payments`, §3.5 schéma `payments`, §3.7 routes et contrat 1.10.0, §3.10 actions d'audit, §3.14 (nouvelle), §6.4                                       |
 | **3.1** | 2026-10-10 | S5     | Coupons (ADR-0025) : §3.7 routes `/admin/coupons` et contrat 1.9.0, §3.10 actions d'audit, §3.13 (nouvelle), §6.4                                                                         |
 | **3.0** | 2026-10-10 | S5     | Commandes (ADR-0024) : §2.1 F7 · F8, §3.5 schéma `orders`, §3.7 routes `/orders` et contrat 1.8.0, §3.12 (nouvelle : commandes, réservation du stock), §5.7 barèmes dans le contrat, §6.4 |
@@ -376,42 +377,44 @@ erDiagram
 Décision : [ADR-0010](adr/0010-api-rest-openapi.md). Description complète : [`docs/api/openapi.json`](../api/openapi.json)
 (OpenAPI 3.1, générée depuis les schémas Zod) ; page interactive `/api/docs` en développement.
 
-| Route                                                  | Rôle                                                                                                   | Cache | Limite     |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ----- | ---------- |
-| `GET /api/v1/categories`                               | Arborescence complète (3 niveaux)                                                                      | 60 s  | 120/min/IP |
-| `GET /api/v1/categories/{slug}`                        | Catégorie, fil d'Ariane, sous-catégories ; 404 si inconnue                                             | 60 s  | 120/min/IP |
-| `GET /api/v1/products`                                 | Liste paginée : `category`, `q`, `sort`, `page`, `pageSize`, filtres, `scope=promotions`               | 60 s  | 120/min/IP |
-| `GET /api/v1/products/facets`                          | Compteurs des filtres (mêmes paramètres)                                                               | 60 s  | 120/min/IP |
-| `GET /api/v1/products/{slug}`                          | Fiche produit, variantes actives et leur stock ; 404 si brouillon ou archivé                           | 60 s  | 120/min/IP |
-| `POST /api/v1/availability`                            | BR-001 ligne par ligne (ne modifie rien)                                                               | aucun | 30/min/IP  |
-| `POST /api/v1/auth/signup`                             | Inscription : ticket + code ; **même réponse** si l'adresse a un compte (S4-T02)                       | aucun | 10/min/IP  |
-| `POST /api/v1/auth/signup/verify`                      | Ticket + code → compte créé, déjà vérifié, **et session ouverte** (BR-041)                             | aucun | 10/min/IP  |
-| `POST /api/v1/auth/signup/resend`                      | Nouveau code (60 s entre deux, 5 par heure)                                                            | aucun | 10/min/IP  |
-| `POST /api/v1/auth/login`                              | Connexion ; 3 essais puis 15 min par identifiant, même réponse si l'adresse n'a pas de compte (S4-T03) | aucun | 10/min/IP  |
-| `GET /api/v1/auth/session`                             | Session présentée (`Authorization: Bearer`) valable ? La prolonge                                      | aucun | 120/min/IP |
-| `POST /api/v1/auth/logout`, `/logout-all`              | Fermer cette session, ou toutes celles du compte                                                       | aucun | 10/min/IP  |
-| `POST /api/v1/auth/password/forgot`                    | Mot de passe oublié : ticket + code ; **même réponse, aucun e-mail** sans compte (S4-T04)              | aucun | 10/min/IP  |
-| `POST /api/v1/auth/password/resend`                    | Nouveau code (60 s entre deux, 5 par heure)                                                            | aucun | 10/min/IP  |
-| `POST /api/v1/auth/password/reset`                     | Ticket + code + nouveau mot de passe → **connecté ici, déconnecté ailleurs**, blocage levé             | aucun | 10/min/IP  |
-| `POST /api/v1/admin/accounts/lookup`                   | Retrouver un compte par e-mail ou téléphone (dans le corps) — **admin, connexion < 15 min** (S4-T06)   | aucun | 30/min/IP  |
-| `PUT\|DELETE /api/v1/admin/accounts/{id}/roles/{role}` | Accorder / retirer `vendor` ou `moderator` (jamais `admin`, jamais sur soi) — admin, < 15 min          | aucun | 30/min/IP  |
-| `GET /api/v1/admin/audit`                              | Journal d'audit, du plus récent au plus ancien (curseur, filtres) — admin, < 15 min                    | aucun | 30/min/IP  |
-| `GET\|DELETE /api/v1/cart`                             | Panier du compte connecté, **revérifié** (BR-001, prix BR-004) / le vider (S5-T01)                     | aucun | 120/min/IP |
-| `POST /api/v1/cart/items`                              | Ajouter une variante (quantités additionnées, ramenées au stock)                                       | aucun | 120/min/IP |
-| `PUT\|DELETE /api/v1/cart/items/{variantId}`           | Fixer la quantité d'une ligne / la retirer                                                             | aucun | 120/min/IP |
-| `POST /api/v1/cart/merge`                              | Réunir le panier du navigateur après la connexion (additionner, `ignored`) ; 10/min par compte         | aucun | 120/min/IP |
-| `POST /api/v1/orders/quote`                            | Total du panier pour une ville : frais, délai, paiement à la livraison possible ? (S5-T02)             | aucun | 120/min/IP |
-| `POST /api/v1/orders`                                  | Commander le panier : stock réservé (BR-012), total comparé, idempotente ; 10/min par compte           | aucun | 120/min/IP |
-| `GET /api/v1/orders`, `/orders/{reference}`            | Mes commandes (curseur), une commande et son historique                                                | aucun | 120/min/IP |
-| `POST\|GET /api/v1/admin/coupons`, `PATCH …/{id}`      | Coupons : créer, lister, activer / désactiver — admin, < 15 min, journal d'audit (S5-T03)              | aucun | 30/min/IP  |
-| `POST /api/v1/orders/{reference}/cancel`               | Annuler avant l'expédition (Mobile Money payée : service client) ; 10/min par compte                   | aucun | 120/min/IP |
-| `POST\|GET /api/v1/orders/{reference}/payments`        | Paiement Mobile Money : nouvel essai (3 au plus) / dernier essai (S5-T04) ; 10/min par compte          | aucun | 120/min/IP |
-| `GET\|PUT /api/v1/admin/settings/cod`                  | Réglage du paiement à la livraison (zones, total maximum) — admin, < 15 min, journal (S5-T04)          | aucun | 30/min/IP  |
-| `POST /api/v1/admin/orders/{reference}/cancel`         | Annuler une commande, même payée (remboursement à faire) — admin, < 15 min, journal (S5-T04)           | aucun | 30/min/IP  |
-| `POST /api/v1/admin/orders/{reference}/cod-collected`  | Noter l'encaissement à la livraison (montant exact) — admin, < 15 min, journal (S5-T04)                | aucun | 30/min/IP  |
-| `GET /api/v1/admin/refunds`, `POST …/{id}/done`        | Remboursements à faire / noter fait avec la référence de l'opérateur — admin, < 15 min (S5-T04)        | aucun | 30/min/IP  |
-| `GET /api/health`                                      | État de l'API et de la base                                                                            | aucun | aucune     |
-| `GET /api/v1/openapi.json`, `/api/docs`                | Documentation (si `API_DOCS`, désactivée par défaut en production)                                     | 5 min | aucune     |
+| Route                                                    | Rôle                                                                                                     | Cache | Limite     |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----- | ---------- |
+| `GET /api/v1/categories`                                 | Arborescence complète (3 niveaux)                                                                        | 60 s  | 120/min/IP |
+| `GET /api/v1/categories/{slug}`                          | Catégorie, fil d'Ariane, sous-catégories ; 404 si inconnue                                               | 60 s  | 120/min/IP |
+| `GET /api/v1/products`                                   | Liste paginée : `category`, `q`, `sort`, `page`, `pageSize`, filtres, `scope=promotions`                 | 60 s  | 120/min/IP |
+| `GET /api/v1/products/facets`                            | Compteurs des filtres (mêmes paramètres)                                                                 | 60 s  | 120/min/IP |
+| `GET /api/v1/products/{slug}`                            | Fiche produit, variantes actives et leur stock ; 404 si brouillon ou archivé                             | 60 s  | 120/min/IP |
+| `POST /api/v1/availability`                              | BR-001 ligne par ligne (ne modifie rien)                                                                 | aucun | 30/min/IP  |
+| `POST /api/v1/auth/signup`                               | Inscription : ticket + code ; **même réponse** si l'adresse a un compte (S4-T02)                         | aucun | 10/min/IP  |
+| `POST /api/v1/auth/signup/verify`                        | Ticket + code → compte créé, déjà vérifié, **et session ouverte** (BR-041)                               | aucun | 10/min/IP  |
+| `POST /api/v1/auth/signup/resend`                        | Nouveau code (60 s entre deux, 5 par heure)                                                              | aucun | 10/min/IP  |
+| `POST /api/v1/auth/login`                                | Connexion ; 3 essais puis 15 min par identifiant, même réponse si l'adresse n'a pas de compte (S4-T03)   | aucun | 10/min/IP  |
+| `GET /api/v1/auth/session`                               | Session présentée (`Authorization: Bearer`) valable ? La prolonge                                        | aucun | 120/min/IP |
+| `POST /api/v1/auth/logout`, `/logout-all`                | Fermer cette session, ou toutes celles du compte                                                         | aucun | 10/min/IP  |
+| `POST /api/v1/auth/password/forgot`                      | Mot de passe oublié : ticket + code ; **même réponse, aucun e-mail** sans compte (S4-T04)                | aucun | 10/min/IP  |
+| `POST /api/v1/auth/password/resend`                      | Nouveau code (60 s entre deux, 5 par heure)                                                              | aucun | 10/min/IP  |
+| `POST /api/v1/auth/password/reset`                       | Ticket + code + nouveau mot de passe → **connecté ici, déconnecté ailleurs**, blocage levé               | aucun | 10/min/IP  |
+| `POST /api/v1/admin/accounts/lookup`                     | Retrouver un compte par e-mail ou téléphone (dans le corps) — **admin, connexion < 15 min** (S4-T06)     | aucun | 30/min/IP  |
+| `PUT\|DELETE /api/v1/admin/accounts/{id}/roles/{role}`   | Accorder / retirer `vendor` ou `moderator` (jamais `admin`, jamais sur soi) — admin, < 15 min            | aucun | 30/min/IP  |
+| `GET /api/v1/admin/audit`                                | Journal d'audit, du plus récent au plus ancien (curseur, filtres) — admin, < 15 min                      | aucun | 30/min/IP  |
+| `GET\|DELETE /api/v1/cart`                               | Panier du compte connecté, **revérifié** (BR-001, prix BR-004) / le vider (S5-T01)                       | aucun | 120/min/IP |
+| `POST /api/v1/cart/items`                                | Ajouter une variante (quantités additionnées, ramenées au stock)                                         | aucun | 120/min/IP |
+| `PUT\|DELETE /api/v1/cart/items/{variantId}`             | Fixer la quantité d'une ligne / la retirer                                                               | aucun | 120/min/IP |
+| `POST /api/v1/cart/merge`                                | Réunir le panier du navigateur après la connexion (additionner, `ignored`) ; 10/min par compte           | aucun | 120/min/IP |
+| `POST /api/v1/orders/quote`                              | Total du panier pour une ville : frais, délai, paiement à la livraison possible ? (S5-T02)               | aucun | 120/min/IP |
+| `POST /api/v1/orders`                                    | Commander le panier : stock réservé (BR-012), total comparé, idempotente ; 10/min par compte             | aucun | 120/min/IP |
+| `GET /api/v1/orders`, `/orders/{reference}`              | Mes commandes (curseur), une commande et son historique                                                  | aucun | 120/min/IP |
+| `POST\|GET /api/v1/admin/coupons`, `PATCH …/{id}`        | Coupons : créer, lister, activer / désactiver — admin, < 15 min, journal d'audit (S5-T03)                | aucun | 30/min/IP  |
+| `POST /api/v1/orders/{reference}/cancel`                 | Annuler avant l'expédition (Mobile Money payée : service client) ; 10/min par compte                     | aucun | 120/min/IP |
+| `POST\|GET /api/v1/orders/{reference}/payments`          | Paiement Mobile Money : nouvel essai (3 au plus) / dernier essai (S5-T04) ; 10/min par compte            | aucun | 120/min/IP |
+| `GET\|PUT /api/v1/admin/settings/cod`                    | Réglage du paiement à la livraison (zones, total maximum) — admin, < 15 min, journal (S5-T04)            | aucun | 30/min/IP  |
+| `POST /api/v1/admin/orders/{reference}/cancel`           | Annuler une commande, même payée (remboursement à faire) — admin, < 15 min, journal (S5-T04)             | aucun | 30/min/IP  |
+| `POST /api/v1/admin/orders/{reference}/cod-collected`    | Noter l'encaissement à la livraison (montant exact) — admin, < 15 min, journal (S5-T04)                  | aucun | 30/min/IP  |
+| `POST /api/v1/webhooks/mobile-money`                     | Notification de l'opérateur : **signée** (HMAC-SHA256, 5 min), rejeu ignoré ; sans session (S5-T05)      | aucun | 600/min/IP |
+| `GET\|POST /api/v1/sandbox/mobile-money/requests[/{id}]` | Téléphone simulé : demandes du compte, valider (PIN fictif) / refuser — local et démo seulement (S5-T05) | aucun | 120/min/IP |
+| `GET /api/v1/admin/refunds`, `POST …/{id}/done`          | Remboursements à faire / noter fait avec la référence de l'opérateur — admin, < 15 min (S5-T04)          | aucun | 30/min/IP  |
+| `GET /api/health`                                        | État de l'API et de la base                                                                              | aucun | aucune     |
+| `GET /api/v1/openapi.json`, `/api/docs`                  | Documentation (si `API_DOCS`, désactivée par défaut en production)                                       | 5 min | aucune     |
 
 ```mermaid
 flowchart LR
@@ -679,7 +682,14 @@ stateDiagram-v2
 | `orders.orders` (colonne) | `paid_at` (payée)                                                                                        | Posée une fois, jamais sur une commande annulée ; la commande payée ne s'annule plus en ligne                                   |
 
 Fournisseur : simulé sur le poste de développement et la démo, **aucun** en préproduction et production (`PAIEMENT_INDISPONIBLE`)
-tant que la question ouverte n° 7 n'est pas tranchée. Le simulateur et les notifications signées arrivent au S5-T05.
+tant que la question ouverte n° 7 n'est pas tranchée.
+
+**Notifications signées et opérateur simulé (S5-T05, [ADR-0027](adr/0027-notifications-signees-bac-a-sable.md))** : l'opérateur
+prévient Kemdia par `POST /api/v1/webhooks/mobile-money`. Signature HMAC-SHA256 sur `<t>.<corps brut>` (en-tête
+`x-kemdia-signature`), vérifiée avant de lire le contenu, fenêtre de 5 minutes ; chaque notification est inscrite dans
+`payments.provider_events` (clé = son identifiant, ajout seul) dans la transaction qui applique le résultat : un rejeu ne change
+rien. L'**opérateur simulé** (`infrastructure/sandbox-operator.ts`, local et démo seulement, clé tirée au démarrage) reçoit les
+demandes, les montre sur le téléphone simulé du site et envoie la notification signée **par HTTP** à l'API, comme le vrai.
 
 ## 4. Choix technologiques
 
@@ -948,6 +958,20 @@ flowchart TB
 | Réponses vérifiées par le contrat ; journaux sans jeton ni contenu du panier                            | `lib/orders/api-cart.ts`                      |
 | Limites (50 lignes, 20 par ligne) lues dans le contrat, comme l'API                                     | `lib/cart.ts`                                 |
 
+### 5.11 Téléphone simulé (S5-T05)
+
+Page `/demo/telephone` ([ADR-0027](adr/0027-notifications-signees-bac-a-sable.md)) : existe seulement avec `APP_ENV` = `local`,
+`e2e` ou `demo` (sinon 404, comme quand l'API répond que le bac à sable est fermé) ; non indexée. Le client connecté voit les
+demandes de paiement Mobile Money de son compte, saisit un code PIN fictif et valide, ou refuse.
+
+| Fichier                                | Rôle                                                                                  |
+| -------------------------------------- | ------------------------------------------------------------------------------------- |
+| `app/demo/telephone/page.tsx`          | Page serveur : liste lue dans l'API avec le jeton de session                          |
+| `components/payments/SandboxInbox.tsx` | Cartes des demandes ; message de la dernière réponse gardé quand la demande disparaît |
+| `components/payments/AutoRefresh.tsx`  | Relit la page toutes les 5 s (onglet visible)                                         |
+| `lib/payments/sandbox-actions.ts`      | Action serveur : champs revérifiés (UUID, décision, PIN), puis API                    |
+| `lib/payments/api-sandbox.ts`          | Adaptateur `server-only` (clé interne + jeton), réponses vérifiées par le contrat     |
+
 ## 6. Sécurité
 
 ### 6.1 Principes
@@ -1032,7 +1056,7 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 ### 6.4 Prévu 🔜
 
 - Démo : régler `CLIENT_IP_HEADER` une fois l'en-tête fiable de Render vérifié ; collecte des violations de CSP (`report-to`).
-- S5 : signature des webhooks Mobile Money, idempotence des paiements. Fait au S5-T01 : panier modifié sous verrou en une transaction, prix jamais reçus du navigateur, UUID normalisés. Fait au S5-T02 : stock réservé dans la transaction de la commande (BR-012), commandes idempotentes, montants figés par la base, 3 commandes ouvertes au plus par compte. Fait au S5-T03 : coupons comptés de façon atomique (BR-030), jamais de commande à 0 FCFA, limite d'essais de codes. Fait au S5-T04 : résultat d'un paiement vérifié (référence, montant), argent non attendu → remboursement à faire, commande payée non annulable en ligne, 5 demandes par heure au plus vers un même numéro, paiements et remboursements jamais effacés.
+- S5 : signature des webhooks Mobile Money, idempotence des paiements. Fait au S5-T01 : panier modifié sous verrou en une transaction, prix jamais reçus du navigateur, UUID normalisés. Fait au S5-T02 : stock réservé dans la transaction de la commande (BR-012), commandes idempotentes, montants figés par la base, 3 commandes ouvertes au plus par compte. Fait au S5-T03 : coupons comptés de façon atomique (BR-030), jamais de commande à 0 FCFA, limite d'essais de codes. Fait au S5-T05 : notifications signées (HMAC-SHA256 sur le corps brut, 5 minutes), rejeu ignoré dans la même transaction (CRIT-01 traité), opérateur simulé jamais actif en production. Fait au S5-T04 : résultat d'un paiement vérifié (référence, montant), argent non attendu → remboursement à faire, commande payée non annulable en ligne, 5 demandes par heure au plus vers un même numéro, paiements et remboursements jamais effacés.
 - S6 : écrans d'administration avec double authentification (MED-15) ; nouvelles actions au journal (KYC, modération).
 - S7 : deux rôles PostgreSQL (migrations / application sans droit de modifier les tables **ni de désactiver les déclencheurs du journal d'audit**), connexion chiffrée selon l'hébergement, sauvegardes chiffrées testées.
 

@@ -5,11 +5,13 @@ import {
   MAX_PAYMENT_ATTEMPTS,
   PAYMENT_ATTEMPT_MINUTES,
   PAYMENT_ERROR_CODES,
+  PAYMENT_SIGNATURE_TOLERANCE_SECONDS,
   PAYMENT_STATUSES,
   REFUND_REASONS,
 } from "@kemdia/contracts/constants";
 import { DEFAULT_COD_RULE } from "@kemdia/contracts/delivery";
 import * as payment from "../src/modules/payments/domain/payment.js";
+import { SIGNATURE_TOLERANCE_SECONDS } from "../src/modules/payments/domain/webhook-signature.js";
 import { COD_MAX_TOTAL_LIMIT } from "../src/modules/orders/application/cod-settings.service.js";
 import { PAYMENTS_ERROR_STATUS } from "../src/modules/payments/interface/payments-http-errors.js";
 
@@ -25,6 +27,10 @@ describe("Paiements : mêmes règles dans le contrat, le domaine et la base (S5-
     expect(payment.MAX_PAYMENT_ATTEMPTS).toBe(MAX_PAYMENT_ATTEMPTS);
     expect(payment.ATTEMPT_MS).toBe(PAYMENT_ATTEMPT_MINUTES * 60_000);
     expect(migration).toContain(`CHECK ("attempt" BETWEEN 1 AND ${payment.MAX_PAYMENT_ROWS})`);
+  });
+
+  it("notifications : fenêtre de 5 minutes = contrat (S5-T05)", () => {
+    expect(SIGNATURE_TOLERANCE_SECONDS).toBe(PAYMENT_SIGNATURE_TOLERANCE_SECONDS);
   });
 
   it("chaque code d'erreur des paiements a son statut HTTP", () => {

@@ -10,7 +10,15 @@ export type PaymentsErrorCode =
   | "PAIEMENT_INTROUVABLE"
   | "REMBOURSEMENT_INTROUVABLE"
   | "REMBOURSEMENT_DEJA_FAIT"
-  | "ENCAISSEMENT_IMPOSSIBLE";
+  | "ENCAISSEMENT_IMPOSSIBLE"
+  // Notifications de l'opérateur et bac à sable (S5-T05, ADR-0027)
+  /** Signature absente, mal formée ou fausse. */
+  | "SIGNATURE_INVALIDE"
+  /** Signature authentique, mais hors de la fenêtre de 5 minutes. */
+  | "NOTIFICATION_EXPIREE"
+  /** Téléphone simulé : aucune demande en attente avec cet identifiant pour ce compte. */
+  | "DEMANDE_INTROUVABLE"
+  | "CODE_PIN_INVALIDE";
 
 /** Une règle du paiement n'est pas respectée. Le message est lisible par un humain, en français. */
 export class PaymentsError extends Error {

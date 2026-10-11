@@ -10,6 +10,9 @@ import {
   PAYMENT_STATUSES,
   REFUND_REASONS,
   REFUND_STATUSES,
+  PAYMENT_NOTIFICATION_TYPES,
+  PAYMENT_SIGNATURE_HEADER,
+  SANDBOX_PIN_PATTERN,
   COUPON_CODE_PATTERN,
   COUPON_KINDS,
   COUPON_LIMITS,
@@ -987,6 +990,80 @@ export const CodSettingsRequestSchema = z
 export type CodSettingsRequest = z.infer<typeof CodSettingsRequestSchema>;
 
 export const RefundIdParamsSchema = z.strictObject({ refundId: uuid });
+
+// --- Notifications de l'opérateur et bac à sable (S5-T05, ADR-0027) ---
+
+export const PaymentNotificationSchema = z
+  .strictObject({
+    eventId: uuid.describe(
+      "Identifiant unique de la notification : une notification déjà reçue est ignorée",
+    ),
+    type: z.enum(PAYMENT_NOTIFICATION_TYPES),
+    paymentId: uuid.describe("Identifiant de l'essai, envoyé par Kemdia avec la demande"),
+    providerRef: z
+      .string()
+      .regex(/^[A-Za-z0-9._:-]{1,100}$/)
+      .describe("Référence de l'opération chez l'opérateur"),
+    amount: fcfa.optional().describe("Montant reçu (obligatoire pour « payment.succeeded »)"),
+    currency: z.literal("XAF"),
+    failureReason: z.string().max(60).optional().describe("Raison de l'échec (« payment.failed »)"),
+    occurredAt: z.iso.datetime(),
+  })
+  .meta({
+    id: "PaymentNotification",
+    description: `Notification de l'opérateur, signée (en-tête ${PAYMENT_SIGNATURE_HEADER})`,
+  });
+export type PaymentNotification = z.infer<typeof PaymentNotificationSchema>;
+
+export const PaymentNotificationAckSchema = z
+  .object({
+    received: z.literal(true),
+    duplicate: z.boolean().describe("Notification déjà reçue : rien n'a changé"),
+  })
+  .meta({ id: "PaymentNotificationAck" });
+export type PaymentNotificationAck = z.infer<typeof PaymentNotificationAckSchema>;
+
+export const SandboxPaymentRequestSchema = z
+  .object({
+    paymentId: uuid,
+    orderReference: z.string(),
+    method: z.enum(["airtel", "moov"]),
+    amount: fcfa,
+    phone: z.string(),
+    createdAt: z.iso.datetime(),
+  })
+  .meta({
+    id: "SandboxPaymentRequest",
+    description: "Demande de paiement reçue par le téléphone simulé (bac à sable)",
+  });
+export type SandboxPaymentRequest = z.infer<typeof SandboxPaymentRequestSchema>;
+
+export const SandboxPaymentRequestPageSchema = z
+  .object({ items: z.array(SandboxPaymentRequestSchema).max(20) })
+  .meta({ id: "SandboxPaymentRequestPage" });
+export type SandboxPaymentRequestPage = z.infer<typeof SandboxPaymentRequestPageSchema>;
+
+export const SandboxDecisionRequestSchema = z
+  .strictObject({
+    decision: z.enum(["approve", "decline"]),
+    pin: z
+      .string()
+      .regex(SANDBOX_PIN_PATTERN)
+      .optional()
+      .describe("Code PIN fictif (4 chiffres), pour valider"),
+  })
+  .meta({ id: "SandboxDecisionRequest" });
+export type SandboxDecisionRequest = z.infer<typeof SandboxDecisionRequestSchema>;
+
+export const SandboxDecisionSchema = z
+  .object({
+    status: z.enum(["succeeded", "failed"]),
+    failureReason: z.string().nullable(),
+  })
+  .meta({ id: "SandboxDecision", description: "Ce que l'opérateur simulé a répondu" });
+export type SandboxDecision = z.infer<typeof SandboxDecisionSchema>;
+
+export const SandboxPaymentParamsSchema = z.strictObject({ paymentId: uuid });
 
 type JsonSchema = Record<string, unknown>;
 
