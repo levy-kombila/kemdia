@@ -133,6 +133,8 @@ export const AUDIT_ACTIONS = [
   "refund.done",
   "cod.collected",
   "settings.cod_updated",
+  // Factures (S5-T06)
+  "settings.billing_updated",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** Lignes par page du journal d'audit. */
@@ -285,6 +287,16 @@ export type PaymentNotificationType = (typeof PAYMENT_NOTIFICATION_TYPES)[number
 /** Téléphone simulé : code PIN fictif à 4 chiffres ; solde fictif de chaque compte Mobile Money du bac à sable. */
 export const SANDBOX_PIN_PATTERN = /^\d{4}$/;
 export const SANDBOX_BALANCE = 500_000;
+
+// --- Factures (S5-T06, ADR-0028) ---
+
+/** Facture (au paiement reçu) ou avoir (commande facturée puis annulée). */
+export const INVOICE_KINDS = ["invoice", "credit_note"] as const;
+export type InvoiceKind = (typeof INVOICE_KINDS)[number];
+/** « KMD-F-2026-000001 » (facture) ou « KMD-A-2026-000001 » (avoir) : par année, sans trou (choix du 2026-10-11). */
+export const INVOICE_NUMBER_PATTERN = /^KMD-[FA]-\d{4}-\d{6}$/;
+/** Mention par défaut : sous le seuil de 25 millions de FCFA (BR-023), en attendant l'expert-comptable (question 6). */
+export const DEFAULT_VAT_MENTION = "TVA non applicable";
 /** États d'un remboursement (suivi manuel par l'administrateur en attendant le fournisseur). */
 export const REFUND_STATUSES = ["to_do", "done"] as const;
 export type RefundStatus = (typeof REFUND_STATUSES)[number];
@@ -310,6 +322,8 @@ export const PAYMENT_ERROR_CODES = [
   "NOTIFICATION_EXPIREE",
   "DEMANDE_INTROUVABLE",
   "CODE_PIN_INVALIDE",
+  // Factures (S5-T06)
+  "FACTURE_INTROUVABLE",
 ] as const;
 export type PaymentErrorCode = (typeof PAYMENT_ERROR_CODES)[number];
 

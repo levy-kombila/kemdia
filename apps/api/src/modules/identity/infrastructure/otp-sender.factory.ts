@@ -2,10 +2,10 @@ import type { AppConfig } from "../../../config/env.js";
 import type { OtpChannel } from "../domain/identifier.js";
 import type { OtpSender } from "../application/ports.js";
 import { ConsoleOtpSender } from "./console-otp-sender.js";
-import { BrevoTransport } from "./email/brevo-transport.js";
+import { BrevoTransport } from "../../../mail/brevo-transport.js";
 import { EmailOtpSender } from "./email/email-otp-sender.js";
-import type { FetchLike } from "./email/http-mail.js";
-import { MailpitTransport } from "./email/mailpit-transport.js";
+import type { FetchLike } from "../../../mail/http-mail.js";
+import { MailpitTransport } from "../../../mail/mailpit-transport.js";
 
 /** Aucun canal : tout envoi est refusé (« CANAL_INDISPONIBLE ») au lieu de partir n'importe où. */
 export class NoOtpSender implements OtpSender {

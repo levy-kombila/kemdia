@@ -1,12 +1,9 @@
 import { OTP_TTL_MS } from "../../domain/otp.js";
 import type { OtpMessage } from "../../application/ports.js";
 
-export interface Email {
-  to: string;
-  subject: string;
-  text: string;
-  html: string;
-}
+import type { Email } from "../../../../mail/mail-transport.js";
+
+export type { Email };
 
 const minutes = OTP_TTL_MS / 60_000;
 

@@ -119,3 +119,87 @@ model ProviderEvent {
   @@map("provider_events")
   @@schema("payments")
 }
+
+// ─── Factures (S5-T06, ADR-0028) ──────────────────────────────────────────────────────────
+
+/// Informations de l'entreprise imprimées sur les factures (une seule ligne, id = 1), modifiées par un administrateur.
+model BillingSettings {
+  id            Int       @id @default(1) @db.SmallInt
+  /// Raison sociale
+  legalName     String    @map("legal_name") @db.VarChar(120)
+  address       String    @db.VarChar(200)
+  city          String    @db.VarChar(60)
+  phone         String    @db.VarChar(30)
+  email         String    @db.VarChar(120)
+  /// NIF (numéro d'identification fiscale)
+  taxId         String    @map("tax_id") @db.VarChar(40)
+  /// RCCM (registre du commerce)
+  tradeRegister String    @map("trade_register") @db.VarChar(40)
+  /// Mention de TVA (« TVA non applicable » tant que le seuil n'est pas atteint, BR-023)
+  vatMention    String    @map("vat_mention") @db.VarChar(120)
+  /// Dernier administrateur qui l'a changé (module identity) : UUID seul
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  updatedAt     DateTime? @map("updated_at") @db.Timestamptz(3)
+
+  @@map("billing_settings")
+  @@schema("payments")
+}
+
+/// Facture ou avoir.
+enum DocumentKind {
+  INVOICE
+  CREDIT_NOTE
+
+  @@map("document_kind")
+  @@schema("payments")
+}
+
+/// Dernier numéro attribué, par type et par année : la numérotation n'a jamais de trou (verrou de ligne, même transaction).
+model InvoiceCounter {
+  kind       DocumentKind
+  year       Int          @db.SmallInt
+  lastNumber Int          @map("last_number")
+
+  @@id([kind, year])
+  @@map("invoice_counters")
+  @@schema("payments")
+}
+
+/// Facture (au paiement reçu) ou avoir (commande facturée puis annulée). Figée : seul le suivi de l'e-mail change.
+model Invoice {
+  id                String         @id @db.Uuid
+  /// « KMD-F-2026-000001 » ou « KMD-A-2026-000001 »
+  number            String         @unique @db.VarChar(20)
+  kind              DocumentKind
+  /// Commande (module orders) : UUID seul, et son numéro
+  orderId           String         @map("order_id") @db.Uuid
+  orderReference    String         @map("order_reference") @db.VarChar(10)
+  /// Compte du client (module identity) : UUID seul
+  accountId         String         @map("account_id") @db.Uuid
+  /// Avoir : la facture qu'il annule
+  creditedInvoiceId String?        @unique @map("credited_invoice_id") @db.Uuid
+  issuedAt          DateTime       @map("issued_at") @db.Timestamptz(3)
+  subtotal          Int
+  discount          Int
+  deliveryFee       Int            @map("delivery_fee")
+  total             Int
+  vatMention        String         @map("vat_mention") @db.VarChar(120)
+  /// Copies figées : entreprise, client (nom, téléphone, adresse, e-mail), lignes
+  seller            Json
+  buyer             Json
+  lines             Json
+  paymentMethod     PaymentChannel @map("payment_method")
+  /// Référence de l'opération chez l'opérateur (Mobile Money) ; vide pour les espèces
+  paymentReference  String?        @map("payment_reference") @db.VarChar(100)
+  /// Envoi par e-mail : essais (5 au plus, de plus en plus espacés), prochain essai et date de réussite
+  emailAttempts     Int            @default(0) @map("email_attempts")
+  emailNextAt       DateTime?      @map("email_next_at") @db.Timestamptz(3)
+  emailSentAt       DateTime?      @map("email_sent_at") @db.Timestamptz(3)
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([orderId, kind])
+  @@index([accountId])
+  @@index([emailSentAt, emailNextAt])
+  @@map("invoices")
+  @@schema("payments")
+}

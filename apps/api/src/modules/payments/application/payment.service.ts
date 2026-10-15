@@ -11,6 +11,7 @@ import {
   type PaymentAttempt,
 } from "../domain/payment.js";
 import { PaymentsError } from "../domain/payments-error.js";
+import { InvoiceService } from "./invoice.service.js";
 import {
   PAYMENT_PROVIDER,
   PAYMENT_REPOSITORY,
@@ -70,6 +71,7 @@ export class PaymentService {
     @Inject(PAYMENT_REPOSITORY) private readonly payments: PaymentRepository,
     @Inject(REFUND_REPOSITORY) private readonly refunds: RefundRepository,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
+    private readonly invoices: InvoiceService,
   ) {}
 
   /** Demande (ou redemande) la validation du paiement sur le téléphone. */
@@ -220,7 +222,9 @@ export class PaymentService {
         order && received === payment.amount
           ? await this.orders.confirmPaid(order, received, now)
           : false;
-      if (confirmed) {
+      if (confirmed && order) {
+        // Facture établie au paiement reçu, dans la même transaction (S5-T06, FR-015)
+        await this.invoices.issueForPayment(order, paid, now);
         // Les autres essais encore en attente n'ont plus lieu d'être (pas de deuxième paiement)
         for (const other of await this.payments.listForOrder(payment.orderId)) {
           if (other.id !== payment.id && other.status === "pending") {

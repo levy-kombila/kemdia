@@ -3,6 +3,7 @@ import { AuditLog, type AuditContext } from "../../audit/index.js";
 import { OrderPayments, OrdersError, type OrderRecord } from "../../orders/index.js";
 import type { PaymentAttempt } from "../domain/payment.js";
 import { PaymentsError } from "../domain/payments-error.js";
+import { InvoiceService } from "./invoice.service.js";
 import {
   PAYMENT_REPOSITORY,
   REFUND_REPOSITORY,
@@ -29,6 +30,7 @@ export class PaymentAdminService {
     @Inject(PAYMENT_REPOSITORY) private readonly payments: PaymentRepository,
     @Inject(REFUND_REPOSITORY) private readonly refunds: RefundRepository,
     @Inject(AuditLog) private readonly audit: Pick<AuditLog, "record">,
+    private readonly invoices: InvoiceService,
   ) {}
 
   /**
@@ -62,6 +64,9 @@ export class PaymentAdminService {
         const refund = await this.refunds.createFor(paid, order.reference, "annulation_admin", now);
         if (refund) refunds.push(refund);
       }
+      // Commande facturée : avoir du même montant (S5-T06 ; la facture, elle, ne change jamais). En dernier : le
+      // compteur des avoirs reste verrouillé le moins longtemps possible
+      await this.invoices.issueCreditNote(order, now);
       await this.audit.record({
         action: "order.cancelled_by_admin",
         actor: { type: "account", id: adminId },
@@ -175,6 +180,8 @@ export class PaymentAdminService {
         },
         now,
       );
+      // Facture établie à l'encaissement (S5-T06, FR-015)
+      await this.invoices.issueForPayment(order, payment, now);
       await this.audit.record({
         action: "cod.collected",
         actor: { type: "account", id: adminId },

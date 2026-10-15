@@ -27,6 +27,8 @@ export const AUDIT_ACTIONS = [
   "cod.collected",
   /** Réglage du paiement à la livraison changé (détails : zones, maxTotal) — S5-T04 */
   "settings.cod_updated",
+  /** Informations de l'entreprise sur les factures changées (détails : legalName, taxId) — S5-T06 */
+  "settings.billing_updated",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

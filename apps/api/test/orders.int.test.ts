@@ -400,6 +400,9 @@ describe("Commandes (PostgreSQL, HTTP)", () => {
   });
 
   it("paiement non reçu à temps : annulée automatiquement, stock remis en vente", async () => {
+    // Base partagée : d'abord, les commandes échues laissées par d'autres tests (leur stock ne doit pas fausser les comptes)
+    await app.get(OverdueOrdersScheduler).run(new Date());
+    await prisma.$executeRawUnsafe(`UPDATE "catalog"."product_variants" SET "stock" = 50`);
     const [a, b] = variants;
     await addToCart(a!.id, 2);
     const late = await placeOrder();

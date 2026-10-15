@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { BREVO_SEND_URL, BrevoTransport } from "./brevo-transport.js";
+import { BREVO_SEND_URL, BrevoTransport } from "../../../../mail/brevo-transport.js";
 import { EmailOtpSender } from "./email-otp-sender.js";
 import { renderEmail } from "./email-templates.js";
-import type { FetchLike } from "./http-mail.js";
-import { MailpitTransport } from "./mailpit-transport.js";
+import type { FetchLike } from "../../../../mail/http-mail.js";
+import { MailpitTransport } from "../../../../mail/mailpit-transport.js";
 
 const KEY = `xkeysib-${"b".repeat(64)}-Secret123456`;
 const EMAIL = { to: "awa@exemple.ga", subject: "S", text: "T", html: "<p>H</p>" };

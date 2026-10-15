@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "1.11.0",
-    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.\n- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo."
+    "version": "1.12.0",
+    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.\n- Factures (S5-T06) : établies au paiement reçu, avoir à l'annulation, numéros par année sans trou, PDF et e-mail.\n- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo."
   },
   "servers": [
     {
@@ -3791,6 +3791,299 @@
           }
         }
       }
+    },
+    "/api/v1/orders/{reference}/invoices": {
+      "get": {
+        "tags": ["Paiements"],
+        "summary": "Facture (et avoir) de la commande",
+        "description": "Facture établie quand le paiement est reçu (Mobile Money confirmé, ou espèces encaissées) ; **avoir** du même montant si la commande facturée est annulée. Numéros par année, sans trou. Seul le client de la commande y a accès. Aussi envoyée par e-mail (PDF joint) à l'adresse vérifiée du compte.",
+        "operationId": "listInvoices",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "path",
+            "required": true,
+            "description": "Numéro de la commande (ex. KMD-7F3K9Q)",
+            "schema": {
+              "type": "string",
+              "pattern": "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Facture, puis avoir si la commande a été annulée (vide : pas encore payée)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Numéro de commande invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`COMMANDE_INTROUVABLE` (n'existe pas ou n'est pas à ce compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de demandes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{reference}/invoices/{number}": {
+      "get": {
+        "tags": ["Paiements"],
+        "summary": "Télécharger la facture ou l'avoir (PDF)",
+        "description": "Facture établie quand le paiement est reçu (Mobile Money confirmé, ou espèces encaissées) ; **avoir** du même montant si la commande facturée est annulée. Numéros par année, sans trou. Seul le client de la commande y a accès. Aussi envoyée par e-mail (PDF joint) à l'adresse vérifiée du compte.\n\nToujours le même PDF pour un même numéro (refait à partir de la copie figée).",
+        "operationId": "downloadInvoice",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "path",
+            "required": true,
+            "description": "Numéro de la commande (ex. KMD-7F3K9Q)",
+            "schema": {
+              "type": "string",
+              "pattern": "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "description": "Numéro de la facture (KMD-F-2026-000001) ou de l'avoir (KMD-A-2026-000001)",
+            "schema": {
+              "type": "string",
+              "pattern": "^KMD-[FA]-\\d{4}-\\d{6}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le PDF (en pièce jointe)",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Numéro de commande ou de facture invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`COMMANDE_INTROUVABLE` ou `FACTURE_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de demandes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/settings/billing": {
+      "get": {
+        "tags": ["Administration"],
+        "summary": "Informations de l'entreprise sur les factures",
+        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes** ; chaque changement au journal d'audit. Raison sociale, adresse, NIF, RCCM, mention de TVA : copiés et **figés** dans chaque nouvelle facture (une facture émise ne change jamais).",
+        "operationId": "getBillingSettings",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Les informations en vigueur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Administration"],
+        "summary": "Changer les informations de l'entreprise sur les factures",
+        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes** ; chaque changement au journal d'audit. Raison sociale, adresse, NIF, RCCM, mention de TVA : copiés et **figés** dans chaque nouvelle facture (une facture émise ne change jamais).",
+        "operationId": "updateBillingSettings",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillingSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Les nouvelles informations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3935,7 +4228,8 @@
               "order.cancelled_by_admin",
               "refund.done",
               "cod.collected",
-              "settings.cod_updated"
+              "settings.cod_updated",
+              "settings.billing_updated"
             ]
           },
           "actor": {
@@ -4129,6 +4423,143 @@
         },
         "required": ["ok", "lines"],
         "additionalProperties": false
+      },
+      "BillingSettings": {
+        "type": "object",
+        "properties": {
+          "legalName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "Raison sociale"
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "city": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 120,
+            "format": "email",
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "taxId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "description": "NIF"
+          },
+          "tradeRegister": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "description": "RCCM"
+          },
+          "vatMention": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "Mention de TVA imprimée sur les factures"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "legalName",
+          "address",
+          "city",
+          "phone",
+          "email",
+          "taxId",
+          "tradeRegister",
+          "vatMention",
+          "updatedAt"
+        ],
+        "additionalProperties": false,
+        "description": "Informations de l'entreprise (copiées et figées dans chaque facture)"
+      },
+      "BillingSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "legalName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "Raison sociale"
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "city": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 120,
+            "format": "email",
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "taxId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "description": "NIF"
+          },
+          "tradeRegister": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "description": "RCCM"
+          },
+          "vatMention": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "Mention de TVA imprimée sur les factures"
+          }
+        },
+        "required": [
+          "legalName",
+          "address",
+          "city",
+          "phone",
+          "email",
+          "taxId",
+          "tradeRegister",
+          "vatMention"
+        ],
+        "additionalProperties": false,
+        "description": "Informations de l'entreprise imprimées sur les factures"
       },
       "Cart": {
         "type": "object",
@@ -5041,6 +5472,51 @@
         "additionalProperties": false,
         "description": "État de l'API et de la base de données"
       },
+      "InvoiceList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceSummary"
+            }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false,
+        "description": "Facture de la commande, et son avoir si elle a été annulée"
+      },
+      "InvoiceSummary": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "string",
+            "pattern": "^KMD-[FA]-\\d{4}-\\d{6}$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["invoice", "credit_note"]
+          },
+          "orderReference": {
+            "type": "string"
+          },
+          "issuedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "total": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Montant en FCFA, entier (BR-004)"
+          }
+        },
+        "required": ["number", "kind", "orderReference", "issuedAt", "total"],
+        "additionalProperties": false,
+        "description": "Facture ou avoir d'une commande (PDF téléchargeable)"
+      },
       "LoginRequest": {
         "type": "object",
         "properties": {
@@ -5775,7 +6251,8 @@
               "SIGNATURE_INVALIDE",
               "NOTIFICATION_EXPIREE",
               "DEMANDE_INTROUVABLE",
-              "CODE_PIN_INVALIDE"
+              "CODE_PIN_INVALIDE",
+              "FACTURE_INTROUVABLE"
             ]
           },
           "requestId": {
