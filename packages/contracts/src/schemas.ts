@@ -36,6 +36,11 @@ import {
   SESSION_TOKEN_PATTERN,
   SIGNUP_TICKET_PATTERN,
   SLUG_PATTERN,
+  SHOP_KINDS,
+  SHOP_LIMITS,
+  SHOP_PAGE_DEFAULT,
+  SHOP_PAGE_MAX,
+  SHOP_STATUSES,
 } from "./constants.js";
 
 /**
@@ -470,7 +475,7 @@ export const AuditEventSchema = z
       z.object({ type: z.literal("system") }),
     ]),
     target: z
-      .object({ type: z.enum(["account", "coupon", "order", "refund"]), id: uuid })
+      .object({ type: z.enum(["account", "coupon", "order", "refund", "shop"]), id: uuid })
       .nullable(),
     details: z.record(z.string(), z.union([z.string(), z.int()])),
     ip: z.string().nullable().describe("Adresse vue par l'API"),
@@ -1125,6 +1130,102 @@ export const BillingSettingsSchema = BillingSettingsRequestSchema.extend({
   description: "Informations de l'entreprise (copiées et figées dans chaque facture)",
 });
 export type BillingSettings = z.infer<typeof BillingSettingsSchema>;
+
+// --- Boutiques des vendeurs (S6-T01, ADR-0032) ---
+
+/**
+ * Texte saisi : la longueur exacte (espaces retirés) est vérifiée par l'API (`BOUTIQUE_INVALIDE`, 422) ; ici, seulement
+ * une borne large pour refuser tôt un corps démesuré.
+ */
+const shopText = (max: number) => z.string().max(max * 2);
+
+export const ShopApplicationRequestSchema = z
+  .strictObject({
+    name: shopText(SHOP_LIMITS.nameMax).describe(
+      `Nom de la boutique (${SHOP_LIMITS.nameMin} à ${SHOP_LIMITS.nameMax} caractères, unique, sans « Kemdia »)`,
+    ),
+    city: shopText(SHOP_LIMITS.cityMax).describe("Ville où se trouve la boutique"),
+    phone: z.string().max(30).describe("Mobile gabonais de contact (06… ou 07…)"),
+    description: shopText(SHOP_LIMITS.descriptionMax).describe(
+      `Ce que vend la boutique (${SHOP_LIMITS.descriptionMin} à ${SHOP_LIMITS.descriptionMax} caractères)`,
+    ),
+  })
+  .meta({
+    id: "ShopApplicationRequest",
+    description:
+      "Demande d'ouverture de boutique (compte connecté) : examinée par un administrateur avant toute vente",
+  });
+export type ShopApplicationRequest = z.infer<typeof ShopApplicationRequestSchema>;
+
+const shopFields = {
+  id: uuid,
+  kind: z.enum(SHOP_KINDS).describe("kemdia : boutique de Kemdia ; partner : vendeur tiers"),
+  name: z.string(),
+  slug,
+  city: z.string(),
+  description: z.string(),
+  status: z.enum(SHOP_STATUSES),
+  statusReason: z
+    .string()
+    .nullable()
+    .describe("Motif du refus ou de la suspension, montré au vendeur"),
+  submittedAt: z.iso.datetime().describe("Dernière demande envoyée"),
+  reviewedAt: z.iso.datetime().nullable().describe("Dernière décision de l'administration"),
+};
+
+export const ShopSchema = z
+  .object({ ...shopFields, phone: z.string().nullable().describe("Mobile de contact") })
+  .meta({ id: "Shop", description: "La boutique du compte connecté" });
+export type Shop = z.infer<typeof ShopSchema>;
+
+export const AdminShopSchema = z
+  .object({
+    ...shopFields,
+    phone: z.string().nullable(),
+    ownerAccountId: uuid.nullable().describe("Compte du vendeur (vide : boutique Kemdia)"),
+    reviewedBy: uuid.nullable().describe("Administrateur de la dernière décision"),
+    createdAt: z.iso.datetime(),
+  })
+  .meta({ id: "AdminShop", description: "Une boutique vue par l'administration" });
+export type AdminShop = z.infer<typeof AdminShopSchema>;
+
+export const SHOP_CURSOR_PATTERN = /^[A-Za-z0-9_-]{20,120}$/;
+
+export const ShopListParamsSchema = z.strictObject({
+  status: z.enum(SHOP_STATUSES).optional(),
+  limit: z.coerce.number().int().min(1).max(SHOP_PAGE_MAX).default(SHOP_PAGE_DEFAULT),
+  after: z
+    .string()
+    .regex(SHOP_CURSOR_PATTERN)
+    .optional()
+    .describe("`nextCursor` de la page précédente"),
+});
+export type ShopListParams = z.infer<typeof ShopListParamsSchema>;
+
+export const AdminShopPageSchema = z
+  .object({
+    items: z.array(AdminShopSchema),
+    nextCursor: z.string().regex(SHOP_CURSOR_PATTERN).nullable(),
+  })
+  .meta({
+    id: "AdminShopPage",
+    description: "Boutiques, de la demande la plus ancienne à la plus récente (file d'attente)",
+  });
+export type AdminShopPage = z.infer<typeof AdminShopPageSchema>;
+
+export const ShopIdParamsSchema = z.strictObject({ shopId: uuidInput });
+
+export const ShopDecisionReasonSchema = z
+  .strictObject({
+    reason: z
+      .string()
+      .max(SHOP_LIMITS.reasonMax * 2)
+      .describe(
+        `Motif montré au vendeur (${SHOP_LIMITS.reasonMin} à ${SHOP_LIMITS.reasonMax} caractères)`,
+      ),
+  })
+  .meta({ id: "ShopDecisionReason", description: "Motif d'un refus ou d'une suspension" });
+export type ShopDecisionReason = z.infer<typeof ShopDecisionReasonSchema>;
 
 type JsonSchema = Record<string, unknown>;
 

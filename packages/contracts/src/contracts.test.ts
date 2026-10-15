@@ -24,6 +24,11 @@ import {
   ORDER_REFERENCE_PATTERN,
   openApiComponentSchemas,
   productQueryParams,
+  KEMDIA_SHOP_ID,
+  ShopApplicationRequestSchema,
+  ShopIdParamsSchema,
+  ShopListParamsSchema,
+  VENDOR_ERROR_CODES,
 } from "./index.js";
 import { demoCatalog, demoIds, uuidV5 } from "./demo/index.js";
 import {
@@ -99,6 +104,8 @@ describe("schémas", () => {
       "AdminAccount",
       "AdminAccountLookupRequest",
       "AdminCancelOrderRequest",
+      "AdminShop",
+      "AdminShopPage",
       "AuditEvent",
       "AuditPage",
       "AvailabilityRequest",
@@ -156,6 +163,9 @@ describe("schémas", () => {
       "SandboxDecisionRequest",
       "SandboxPaymentRequest",
       "SandboxPaymentRequestPage",
+      "Shop",
+      "ShopApplicationRequest",
+      "ShopDecisionReason",
       "SignupRequest",
       "SignupResendRequest",
       "SignupStarted",
@@ -407,6 +417,46 @@ describe("coupons (S5-T03)", () => {
     for (const code of COUPON_ERROR_CODES) {
       expect(
         ProblemDetailsSchema.safeParse({ type: "about:blank", title: "x", status: 422, code })
+          .success,
+      ).toBe(true);
+    }
+  });
+});
+
+describe("Boutiques (S6-T01)", () => {
+  const valid = {
+    name: "Chez Ali",
+    city: "Libreville",
+    phone: "077 12 34 56",
+    description: "Téléphones et accessoires d'origine.",
+  };
+
+  it("une demande n'a que ses quatre champs (jamais de statut ni de propriétaire)", () => {
+    expect(ShopApplicationRequestSchema.safeParse(valid).success).toBe(true);
+    expect(ShopApplicationRequestSchema.safeParse({ ...valid, status: "active" }).success).toBe(
+      false,
+    );
+    expect(
+      ShopApplicationRequestSchema.safeParse({ ...valid, ownerAccountId: randomUUID() }).success,
+    ).toBe(false);
+    expect(
+      ShopApplicationRequestSchema.safeParse({ ...valid, name: "x".repeat(121) }).success,
+    ).toBe(false);
+  });
+
+  it("identifiant de boutique ramené en minuscules ; file filtrée par statut connu", () => {
+    const id = randomUUID();
+    expect(ShopIdParamsSchema.parse({ shopId: id.toUpperCase() }).shopId).toBe(id);
+    expect(ShopListParamsSchema.safeParse({ status: "pending" }).success).toBe(true);
+    expect(ShopListParamsSchema.safeParse({ status: "deleted" }).success).toBe(false);
+    expect(ShopListParamsSchema.parse({}).limit).toBe(50);
+  });
+
+  it("la boutique Kemdia a un UUID valide ; les codes d'erreur des boutiques sont des codes de l'API", () => {
+    expect(ShopIdParamsSchema.safeParse({ shopId: KEMDIA_SHOP_ID }).success).toBe(true);
+    for (const code of VENDOR_ERROR_CODES) {
+      expect(
+        ProblemDetailsSchema.safeParse({ type: "about:blank", title: "x", status: 409, code })
           .success,
       ).toBe(true);
     }

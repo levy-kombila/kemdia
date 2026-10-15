@@ -37,6 +37,11 @@ describe("Description OpenAPI", () => {
       "/api/v1/admin/refunds/{refundId}/done",
       "/api/v1/admin/settings/billing",
       "/api/v1/admin/settings/cod",
+      "/api/v1/admin/shops",
+      "/api/v1/admin/shops/{shopId}",
+      "/api/v1/admin/shops/{shopId}/approve",
+      "/api/v1/admin/shops/{shopId}/reject",
+      "/api/v1/admin/shops/{shopId}/suspend",
       "/api/v1/auth/login",
       "/api/v1/auth/logout",
       "/api/v1/auth/logout-all",
@@ -66,6 +71,7 @@ describe("Description OpenAPI", () => {
       "/api/v1/products/{slug}",
       "/api/v1/sandbox/mobile-money/requests",
       "/api/v1/sandbox/mobile-money/requests/{paymentId}",
+      "/api/v1/vendors/shop",
       "/api/v1/webhooks/mobile-money",
     ]);
   });

@@ -7,9 +7,10 @@ import { couponPaths } from "../modules/orders/interface/coupon.openapi.js";
 import { paymentPaths } from "../modules/payments/interface/payments.openapi.js";
 import { orderPaths } from "../modules/orders/interface/order.openapi.js";
 import { identityPaths } from "../modules/identity/interface/identity.openapi.js";
+import { vendorsPaths } from "../modules/vendors/interface/vendors.openapi.js";
 
 /** Version du contrat HTTP (indépendante de la version de l'image) : à augmenter à chaque changement de l'API. */
-export const API_CONTRACT_VERSION = "1.13.0";
+export const API_CONTRACT_VERSION = "1.14.0";
 
 /** Document OpenAPI complet de l'API, généré à partir des schémas réellement utilisés. */
 export function buildOpenApiDocument(): Record<string, unknown> {
@@ -34,6 +35,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         "- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.",
         "- Factures (S5-T06) : établies au paiement reçu, avoir à l'annulation, numéros par année sans trou, PDF et e-mail.",
         "- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo.",
+        "- Boutiques (S6-T01) : un client demande à ouvrir sa boutique ; un administrateur la valide (rôle vendeur accordé), la refuse ou la suspend.",
       ].join("\n"),
     },
     servers: [{ url: "/", description: "Même adresse que cette documentation" }],
@@ -72,6 +74,11 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         description:
           "Téléphone simulé de l'opérateur Mobile Money (S5-T05) : poste de développement et démo seulement",
       },
+      {
+        name: "Boutiques",
+        description:
+          "Boutiques des vendeurs (module vendors, S6-T01) : demande du compte connecté, examen par l'administration",
+      },
       { name: "Supervision", description: "État du service" },
     ],
     paths: {
@@ -100,6 +107,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       ...couponPaths,
       ...codSettingsPaths,
       ...paymentPaths,
+      ...vendorsPaths,
     },
     // Schémas du contrat partagé avec le site (@kemdia/contracts)
     components: {
