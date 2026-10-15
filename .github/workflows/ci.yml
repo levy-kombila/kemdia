@@ -22,6 +22,39 @@ env:
   NEXT_TELEMETRY_DISABLED: 1
 
 jobs:
+  # Allègement (S5-T08, ADR-0030) : une PR qui ne change QUE de la documentation (docs/**, *.md) saute les jobs
+  # lourds (base de données, bout en bout, images). Ils sont « sautés », pas « en attente » : une vérification
+  # obligatoire sautée compte comme réussie. Les pushes sur main et les lancements manuels font toujours tout.
+  changes:
+    name: Ce qui a changé
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+    steps:
+      - id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename')
+          # Prudence : liste vide ou illisible → tout tourne
+          if [ -z "$files" ]; then echo "code=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if printf '%s\n' "$files" | grep -Ev '^docs/|\.md$' | grep -q .; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            echo "Documentation seulement : base de données, bout en bout et images sautés." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   quality:
     name: Lint · Types · Tests · Build
     runs-on: ubuntu-latest
@@ -64,6 +97,8 @@ jobs:
   database:
     name: API — migrations et intégration (PostgreSQL)
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     timeout-minutes: 10
     # Base éphémère : créée pour ce job, détruite à la fin. Mot de passe de test, sans valeur hors du job.
     services:
@@ -112,7 +147,8 @@ jobs:
   e2e:
     name: Bout en bout et performance (site + API + PostgreSQL)
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [changes, quality]
+    if: needs.changes.outputs.code == 'true'
     timeout-minutes: 30
     # Le site lit la VRAIE API (S3-T05) : base éphémère, détruite à la fin du job
     services:
