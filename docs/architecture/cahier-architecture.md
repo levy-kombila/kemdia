@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués                                                                            |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests                                                                                |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                                                                                                 |
+| **3.8** | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                        |
 | **3.7** | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                           |
 | **3.6** | 2026-10-15 | S5     | Fin du Sprint 5, v0.5.0 (ADR-0030) : §3.13 code promo de démonstration `DEMO10`, §5.13 (nouvelle : page `/demo` et bandeau), §7 CI allégée pour les PR de documentation                                               |
 | **3.5** | 2026-10-15 | S5     | Site branché sur les commandes (ADR-0029) : §3.7 contrat 1.13.0, §3.12 Mobile Money selon le fournisseur, §3.14 annulation par le client, §5.7 tunnel branché, §5.12 (nouvelle : « Mes commandes »), §6.4, §7 job e2e |
@@ -197,6 +198,7 @@ flowchart LR
     orders -->|encaisser| payments
     orders -->|expédier| shipping
     vendors -->|produits à modérer| catalog
+    vendors -->|rôle vendeur| identity
     payments -->|adaptateurs| mm[(Airtel Money<br/>Moov Money)]
     shipping -->|adaptateur| tr[(Transporteur)]
     api --> db[(PostgreSQL<br/>1 schéma par module)]
@@ -211,6 +213,10 @@ il lit le catalogue par son port public (`CatalogService.describeLines`) et prot
 
 Le module **`payments`** existe depuis le S5-T04 (§3.14, [ADR-0026](adr/0026-paiements.md)) : essais Mobile Money, encaissement à la
 livraison, remboursements. Il passe par le port public `OrderPayments` du module `orders`, seul à changer le statut d'une commande.
+
+Le module **`vendors`** existe depuis le S6-T01 (§3.16, [ADR-0032](adr/0032-boutiques-vendeurs.md)) : boutiques des vendeurs, demande
+et examen par l'administration. Il accorde et retire le rôle `vendor` par le port public `RoleService` du module `identity`, dans la
+même transaction que la décision ; chaque produit du catalogue désigne sa boutique par `shop_id` (UUID, sans relation).
 
 ### 3.4 Socle de l'API (`apps/api`, S3-T01)
 
@@ -296,7 +302,8 @@ flowchart LR
       auditdb[schéma audit — S4-T06<br/>ajout seul]
       ordersdb[schéma orders — S5<br/>paniers, commandes]
       paymentsdb[schéma payments — S5-T04<br/>paiements, remboursements]
-      futurs[vendors · shipping<br/>S6 à S7]
+      vendorsdb[schéma vendors — S6-T01<br/>boutiques]
+      futurs[shipping<br/>S7]
       pub[public : suivi des migrations]
     end
 ```
@@ -381,46 +388,49 @@ erDiagram
 Décision : [ADR-0010](adr/0010-api-rest-openapi.md). Description complète : [`docs/api/openapi.json`](../api/openapi.json)
 (OpenAPI 3.1, générée depuis les schémas Zod) ; page interactive `/api/docs` en développement.
 
-| Route                                                    | Rôle                                                                                                     | Cache | Limite     |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----- | ---------- |
-| `GET /api/v1/categories`                                 | Arborescence complète (3 niveaux)                                                                        | 60 s  | 120/min/IP |
-| `GET /api/v1/categories/{slug}`                          | Catégorie, fil d'Ariane, sous-catégories ; 404 si inconnue                                               | 60 s  | 120/min/IP |
-| `GET /api/v1/products`                                   | Liste paginée : `category`, `q`, `sort`, `page`, `pageSize`, filtres, `scope=promotions`                 | 60 s  | 120/min/IP |
-| `GET /api/v1/products/facets`                            | Compteurs des filtres (mêmes paramètres)                                                                 | 60 s  | 120/min/IP |
-| `GET /api/v1/products/{slug}`                            | Fiche produit, variantes actives et leur stock ; 404 si brouillon ou archivé                             | 60 s  | 120/min/IP |
-| `POST /api/v1/availability`                              | BR-001 ligne par ligne (ne modifie rien)                                                                 | aucun | 30/min/IP  |
-| `POST /api/v1/auth/signup`                               | Inscription : ticket + code ; **même réponse** si l'adresse a un compte (S4-T02)                         | aucun | 10/min/IP  |
-| `POST /api/v1/auth/signup/verify`                        | Ticket + code → compte créé, déjà vérifié, **et session ouverte** (BR-041)                               | aucun | 10/min/IP  |
-| `POST /api/v1/auth/signup/resend`                        | Nouveau code (60 s entre deux, 5 par heure)                                                              | aucun | 10/min/IP  |
-| `POST /api/v1/auth/login`                                | Connexion ; 3 essais puis 15 min par identifiant, même réponse si l'adresse n'a pas de compte (S4-T03)   | aucun | 10/min/IP  |
-| `GET /api/v1/auth/session`                               | Session présentée (`Authorization: Bearer`) valable ? La prolonge                                        | aucun | 120/min/IP |
-| `POST /api/v1/auth/logout`, `/logout-all`                | Fermer cette session, ou toutes celles du compte                                                         | aucun | 10/min/IP  |
-| `POST /api/v1/auth/password/forgot`                      | Mot de passe oublié : ticket + code ; **même réponse, aucun e-mail** sans compte (S4-T04)                | aucun | 10/min/IP  |
-| `POST /api/v1/auth/password/resend`                      | Nouveau code (60 s entre deux, 5 par heure)                                                              | aucun | 10/min/IP  |
-| `POST /api/v1/auth/password/reset`                       | Ticket + code + nouveau mot de passe → **connecté ici, déconnecté ailleurs**, blocage levé               | aucun | 10/min/IP  |
-| `POST /api/v1/admin/accounts/lookup`                     | Retrouver un compte par e-mail ou téléphone (dans le corps) — **admin, connexion < 15 min** (S4-T06)     | aucun | 30/min/IP  |
-| `PUT\|DELETE /api/v1/admin/accounts/{id}/roles/{role}`   | Accorder / retirer `vendor` ou `moderator` (jamais `admin`, jamais sur soi) — admin, < 15 min            | aucun | 30/min/IP  |
-| `GET /api/v1/admin/audit`                                | Journal d'audit, du plus récent au plus ancien (curseur, filtres) — admin, < 15 min                      | aucun | 30/min/IP  |
-| `GET\|DELETE /api/v1/cart`                               | Panier du compte connecté, **revérifié** (BR-001, prix BR-004) / le vider (S5-T01)                       | aucun | 120/min/IP |
-| `POST /api/v1/cart/items`                                | Ajouter une variante (quantités additionnées, ramenées au stock)                                         | aucun | 120/min/IP |
-| `PUT\|DELETE /api/v1/cart/items/{variantId}`             | Fixer la quantité d'une ligne / la retirer                                                               | aucun | 120/min/IP |
-| `POST /api/v1/cart/merge`                                | Réunir le panier du navigateur après la connexion (additionner, `ignored`) ; 10/min par compte           | aucun | 120/min/IP |
-| `POST /api/v1/orders/quote`                              | Total du panier pour une ville : frais, délai, paiement à la livraison possible ? (S5-T02)               | aucun | 120/min/IP |
-| `POST /api/v1/orders`                                    | Commander le panier : stock réservé (BR-012), total comparé, idempotente ; 10/min par compte             | aucun | 120/min/IP |
-| `GET /api/v1/orders`, `/orders/{reference}`              | Mes commandes (curseur), une commande et son historique                                                  | aucun | 120/min/IP |
-| `POST\|GET /api/v1/admin/coupons`, `PATCH …/{id}`        | Coupons : créer, lister, activer / désactiver — admin, < 15 min, journal d'audit (S5-T03)                | aucun | 30/min/IP  |
-| `POST /api/v1/orders/{reference}/cancel`                 | Annuler avant l'expédition (Mobile Money payée : service client) ; 10/min par compte                     | aucun | 120/min/IP |
-| `POST\|GET /api/v1/orders/{reference}/payments`          | Paiement Mobile Money : nouvel essai (3 au plus) / dernier essai (S5-T04) ; 10/min par compte            | aucun | 120/min/IP |
-| `GET\|PUT /api/v1/admin/settings/cod`                    | Réglage du paiement à la livraison (zones, total maximum) — admin, < 15 min, journal (S5-T04)            | aucun | 30/min/IP  |
-| `POST /api/v1/admin/orders/{reference}/cancel`           | Annuler une commande, même payée (remboursement à faire) — admin, < 15 min, journal (S5-T04)             | aucun | 30/min/IP  |
-| `POST /api/v1/admin/orders/{reference}/cod-collected`    | Noter l'encaissement à la livraison (montant exact) — admin, < 15 min, journal (S5-T04)                  | aucun | 30/min/IP  |
-| `POST /api/v1/webhooks/mobile-money`                     | Notification de l'opérateur : **signée** (HMAC-SHA256, 5 min), rejeu ignoré ; sans session (S5-T05)      | aucun | 600/min/IP |
-| `GET\|POST /api/v1/sandbox/mobile-money/requests[/{id}]` | Téléphone simulé : demandes du compte, valider (PIN fictif) / refuser — local et démo seulement (S5-T05) | aucun | 120/min/IP |
-| `GET /api/v1/orders/{reference}/invoices[/{numéro}]`     | Facture et avoir de la commande ; PDF à télécharger — son client seulement (S5-T06)                      | aucun | 120/min/IP |
-| `GET\|PUT /api/v1/admin/settings/billing`                | Informations de l'entreprise sur les factures — admin, < 15 min, journal (S5-T06)                        | aucun | 30/min/IP  |
-| `GET /api/v1/admin/refunds`, `POST …/{id}/done`          | Remboursements à faire / noter fait avec la référence de l'opérateur — admin, < 15 min (S5-T04)          | aucun | 30/min/IP  |
-| `GET /api/health`                                        | État de l'API et de la base                                                                              | aucun | aucune     |
-| `GET /api/v1/openapi.json`, `/api/docs`                  | Documentation (si `API_DOCS`, désactivée par défaut en production)                                       | 5 min | aucune     |
+| Route                                                    | Rôle                                                                                                                 | Cache | Limite       |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----- | ------------ |
+| `GET /api/v1/categories`                                 | Arborescence complète (3 niveaux)                                                                                    | 60 s  | 120/min/IP   |
+| `GET /api/v1/categories/{slug}`                          | Catégorie, fil d'Ariane, sous-catégories ; 404 si inconnue                                                           | 60 s  | 120/min/IP   |
+| `GET /api/v1/products`                                   | Liste paginée : `category`, `q`, `sort`, `page`, `pageSize`, filtres, `scope=promotions`                             | 60 s  | 120/min/IP   |
+| `GET /api/v1/products/facets`                            | Compteurs des filtres (mêmes paramètres)                                                                             | 60 s  | 120/min/IP   |
+| `GET /api/v1/products/{slug}`                            | Fiche produit, variantes actives et leur stock ; 404 si brouillon ou archivé                                         | 60 s  | 120/min/IP   |
+| `POST /api/v1/availability`                              | BR-001 ligne par ligne (ne modifie rien)                                                                             | aucun | 30/min/IP    |
+| `POST /api/v1/auth/signup`                               | Inscription : ticket + code ; **même réponse** si l'adresse a un compte (S4-T02)                                     | aucun | 10/min/IP    |
+| `POST /api/v1/auth/signup/verify`                        | Ticket + code → compte créé, déjà vérifié, **et session ouverte** (BR-041)                                           | aucun | 10/min/IP    |
+| `POST /api/v1/auth/signup/resend`                        | Nouveau code (60 s entre deux, 5 par heure)                                                                          | aucun | 10/min/IP    |
+| `POST /api/v1/auth/login`                                | Connexion ; 3 essais puis 15 min par identifiant, même réponse si l'adresse n'a pas de compte (S4-T03)               | aucun | 10/min/IP    |
+| `GET /api/v1/auth/session`                               | Session présentée (`Authorization: Bearer`) valable ? La prolonge                                                    | aucun | 120/min/IP   |
+| `POST /api/v1/auth/logout`, `/logout-all`                | Fermer cette session, ou toutes celles du compte                                                                     | aucun | 10/min/IP    |
+| `POST /api/v1/auth/password/forgot`                      | Mot de passe oublié : ticket + code ; **même réponse, aucun e-mail** sans compte (S4-T04)                            | aucun | 10/min/IP    |
+| `POST /api/v1/auth/password/resend`                      | Nouveau code (60 s entre deux, 5 par heure)                                                                          | aucun | 10/min/IP    |
+| `POST /api/v1/auth/password/reset`                       | Ticket + code + nouveau mot de passe → **connecté ici, déconnecté ailleurs**, blocage levé                           | aucun | 10/min/IP    |
+| `POST /api/v1/admin/accounts/lookup`                     | Retrouver un compte par e-mail ou téléphone (dans le corps) — **admin, connexion < 15 min** (S4-T06)                 | aucun | 30/min/IP    |
+| `PUT\|DELETE /api/v1/admin/accounts/{id}/roles/{role}`   | Accorder / retirer `vendor` ou `moderator` (jamais `admin`, jamais sur soi) — admin, < 15 min                        | aucun | 30/min/IP    |
+| `GET /api/v1/admin/audit`                                | Journal d'audit, du plus récent au plus ancien (curseur, filtres) — admin, < 15 min                                  | aucun | 30/min/IP    |
+| `GET\|DELETE /api/v1/cart`                               | Panier du compte connecté, **revérifié** (BR-001, prix BR-004) / le vider (S5-T01)                                   | aucun | 120/min/IP   |
+| `POST /api/v1/cart/items`                                | Ajouter une variante (quantités additionnées, ramenées au stock)                                                     | aucun | 120/min/IP   |
+| `PUT\|DELETE /api/v1/cart/items/{variantId}`             | Fixer la quantité d'une ligne / la retirer                                                                           | aucun | 120/min/IP   |
+| `POST /api/v1/cart/merge`                                | Réunir le panier du navigateur après la connexion (additionner, `ignored`) ; 10/min par compte                       | aucun | 120/min/IP   |
+| `POST /api/v1/orders/quote`                              | Total du panier pour une ville : frais, délai, paiement à la livraison possible ? (S5-T02)                           | aucun | 120/min/IP   |
+| `POST /api/v1/orders`                                    | Commander le panier : stock réservé (BR-012), total comparé, idempotente ; 10/min par compte                         | aucun | 120/min/IP   |
+| `GET /api/v1/orders`, `/orders/{reference}`              | Mes commandes (curseur), une commande et son historique                                                              | aucun | 120/min/IP   |
+| `POST\|GET /api/v1/admin/coupons`, `PATCH …/{id}`        | Coupons : créer, lister, activer / désactiver — admin, < 15 min, journal d'audit (S5-T03)                            | aucun | 30/min/IP    |
+| `POST /api/v1/orders/{reference}/cancel`                 | Annuler avant l'expédition (Mobile Money payée : service client) ; 10/min par compte                                 | aucun | 120/min/IP   |
+| `POST\|GET /api/v1/orders/{reference}/payments`          | Paiement Mobile Money : nouvel essai (3 au plus) / dernier essai (S5-T04) ; 10/min par compte                        | aucun | 120/min/IP   |
+| `GET\|PUT /api/v1/admin/settings/cod`                    | Réglage du paiement à la livraison (zones, total maximum) — admin, < 15 min, journal (S5-T04)                        | aucun | 30/min/IP    |
+| `POST /api/v1/admin/orders/{reference}/cancel`           | Annuler une commande, même payée (remboursement à faire) — admin, < 15 min, journal (S5-T04)                         | aucun | 30/min/IP    |
+| `POST /api/v1/admin/orders/{reference}/cod-collected`    | Noter l'encaissement à la livraison (montant exact) — admin, < 15 min, journal (S5-T04)                              | aucun | 30/min/IP    |
+| `POST /api/v1/webhooks/mobile-money`                     | Notification de l'opérateur : **signée** (HMAC-SHA256, 5 min), rejeu ignoré ; sans session (S5-T05)                  | aucun | 600/min/IP   |
+| `GET\|POST /api/v1/sandbox/mobile-money/requests[/{id}]` | Téléphone simulé : demandes du compte, valider (PIN fictif) / refuser — local et démo seulement (S5-T05)             | aucun | 120/min/IP   |
+| `GET /api/v1/orders/{reference}/invoices[/{numéro}]`     | Facture et avoir de la commande ; PDF à télécharger — son client seulement (S5-T06)                                  | aucun | 120/min/IP   |
+| `GET\|PUT /api/v1/admin/settings/billing`                | Informations de l'entreprise sur les factures — admin, < 15 min, journal (S5-T06)                                    | aucun | 30/min/IP    |
+| `GET /api/v1/admin/refunds`, `POST …/{id}/done`          | Remboursements à faire / noter fait avec la référence de l'opérateur — admin, < 15 min (S5-T04)                      | aucun | 30/min/IP    |
+| `POST\|GET /api/v1/vendors/shop`                         | Demander à ouvrir sa boutique (ou redemander après un refus) ; suivre la décision — compte connecté (S6-T01)         | aucun | 5/min/compte |
+| `GET /api/v1/admin/shops[/{id}]`                         | Boutiques, demande la plus ancienne d'abord (filtre par statut) — admin, < 15 min (S6-T01)                           | aucun | 30/min/IP    |
+| `POST /api/v1/admin/shops/{id}/approve\|reject\|suspend` | Valider (rôle vendeur accordé), refuser ou suspendre (rôle retiré), motif montré — admin, < 15 min, journal (S6-T01) | aucun | 30/min/IP    |
+| `GET /api/health`                                        | État de l'API et de la base                                                                                          | aucun | aucune       |
+| `GET /api/v1/openapi.json`, `/api/docs`                  | Documentation (si `API_DOCS`, désactivée par défaut en production)                                                   | 5 min | aucune       |
 
 ```mermaid
 flowchart LR
@@ -466,6 +476,12 @@ limites `CART_MAX_LINES` (50), `CART_MAX_QUANTITY` (20), `CART_TTL_DAYS` (90). C
 
 **Site branché (S5-T07, [ADR-0029](adr/0029-site-tunnel-commande-mes-commandes.md))** : `mobileMoney.allowed` dans le devis
 (`OrderQuote`), code `MOBILE_MONEY_INDISPONIBLE` (422) quand une commande Mobile Money est demandée sans fournisseur. Contrat 1.13.0.
+
+**Boutiques (S6-T01, [ADR-0032](adr/0032-boutiques-vendeurs.md))** : schémas `Shop`, `AdminShop`, `AdminShopPage`,
+`ShopApplicationRequest`, `ShopDecisionReason` ; `SHOP_STATUSES`, `SHOP_KINDS`, `SHOP_LIMITS`, `KEMDIA_SHOP_ID` ; codes
+`VENDOR_ERROR_CODES` (`BOUTIQUE_INVALIDE`, `BOUTIQUE_EXISTE`, `NOM_BOUTIQUE_PRIS`, `BOUTIQUE_INTROUVABLE`,
+`STATUT_BOUTIQUE_INCOMPATIBLE`, `BOUTIQUE_SUR_SOI_INTERDITE`, `PROPRIETAIRE_INACTIF`, `BOUTIQUE_OCCUPEE`) ; cible `shop` au journal.
+Contrat 1.14.0.
 
 ### 3.8 Image Docker de l'API (S3-T06)
 
@@ -576,19 +592,23 @@ src/modules/audit/
 └── interface/request-context.ts     Adresse IP vue par l'API, identifiant de requête
 ```
 
-| Action                     | Écrite par                         | Détails                                          |
-| -------------------------- | ---------------------------------- | ------------------------------------------------ |
-| `role.granted`             | Administrateur ou commande serveur | `role`, `source`                                 |
-| `role.revoked`             | Administrateur ou commande serveur | `role`, `source`                                 |
-| `password.reset`           | Titulaire (mot de passe oublié)    | —                                                |
-| `sessions.revoked_all`     | Titulaire (« tous mes appareils ») | `count` (si ≥ 1)                                 |
-| `coupon.created`           | Administrateur (S5-T03)            | `code`, `kind`, `value`                          |
-| `coupon.updated`           | Administrateur (S5-T03)            | `code`, `active`                                 |
-| `order.cancelled_by_admin` | Administrateur (S5-T04)            | `reference`, `previousStatus`, `refunds`, `note` |
-| `refund.done`              | Administrateur (S5-T04)            | `reference`, `amount`, `externalReference`       |
-| `cod.collected`            | Administrateur (S5-T04)            | `reference`, `amount`                            |
-| `settings.billing_updated` | Administrateur (S5-T06)            | `legalName`, `taxId`                             |
-| `settings.cod_updated`     | Administrateur (S5-T04)            | `zones`, `maxTotal`                              |
+| Action                     | Écrite par                         | Détails                                           |
+| -------------------------- | ---------------------------------- | ------------------------------------------------- |
+| `role.granted`             | Administrateur ou commande serveur | `role`, `source`                                  |
+| `role.revoked`             | Administrateur ou commande serveur | `role`, `source`                                  |
+| `password.reset`           | Titulaire (mot de passe oublié)    | —                                                 |
+| `sessions.revoked_all`     | Titulaire (« tous mes appareils ») | `count` (si ≥ 1)                                  |
+| `coupon.created`           | Administrateur (S5-T03)            | `code`, `kind`, `value`                           |
+| `coupon.updated`           | Administrateur (S5-T03)            | `code`, `active`                                  |
+| `order.cancelled_by_admin` | Administrateur (S5-T04)            | `reference`, `previousStatus`, `refunds`, `note`  |
+| `refund.done`              | Administrateur (S5-T04)            | `reference`, `amount`, `externalReference`        |
+| `cod.collected`            | Administrateur (S5-T04)            | `reference`, `amount`                             |
+| `settings.billing_updated` | Administrateur (S5-T06)            | `legalName`, `taxId`                              |
+| `settings.cod_updated`     | Administrateur (S5-T04)            | `zones`, `maxTotal`                               |
+| `shop.requested`           | Demandeur (S6-T01)                 | `name`, `previousName` (nouvelle demande)         |
+| `shop.approved`            | Administrateur (S6-T01)            | `name`, `from`, `to` (+ `role.granted`)           |
+| `shop.rejected`            | Administrateur (S6-T01)            | `name`, `from`, `to`, `reason` (100 caractères)   |
+| `shop.suspended`           | Administrateur (S6-T01)            | `name`, `from`, `to`, `reason` (+ `role.revoked`) |
 
 Table `audit.events` : identifiant, date (**posée par la base**), action, type et UUID de l'acteur, type et UUID de la cible, détails (JSON ≤ 2 Ko),
 adresse IP, identifiant de requête. Déclencheurs SQL : **aucune modification**, suppression seulement après 365 jours, `TRUNCATE` interdit.
@@ -740,6 +760,31 @@ flowchart LR
 
 En préproduction et en production, aucune facture n'est émise tant qu'un administrateur n'a pas renseigné l'entreprise : le paiement
 passe, la facture est établie par le rattrapage dès que c'est fait.
+
+### 3.16 Module `vendors` — boutiques (S6-T01)
+
+Décision : [ADR-0032](adr/0032-boutiques-vendeurs.md). Fichiers : `domain/shop.ts` (nettoyage et vérification de la demande, clé
+d'unicité du nom, cycle de vie, décisions), `application/shop.service.ts` (demande, examen, rôle vendeur), `infrastructure/`
+(dépôt Prisma, transaction avec délai de verrou), `interface/` (routes du demandeur et de l'administration, OpenAPI).
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending : demande (compte connecté)
+    pending --> active : valider (rôle vendeur accordé)
+    pending --> rejected : refuser (motif)
+    rejected --> pending : nouvelle demande
+    active --> suspended : suspendre (motif, rôle retiré)
+    suspended --> active : réactiver (rôle accordé)
+```
+
+| Table / colonne            | Contenu                                                                                                                  | Règles SQL ajoutées à la main                                                                                                                                                                                                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `vendors.shops`            | Type (Kemdia / vendeur), propriétaire, nom et sa clé, adresse lisible, ville, mobile, description, statut, motif, examen | Boutique Kemdia = identifiant imposé (donc une seule), sans propriétaire, active ; clé du nom vide ⇔ refusée (nom libéré) ; vendeur : propriétaire et mobile gabonais ; longueurs ; motif ⇔ refus ou suspension ; examinateur ≠ propriétaire ; uniques : propriétaire, clé du nom, adresse |
+| `catalog.products.shop_id` | Boutique qui vend le produit (UUID)                                                                                      | Valeur par défaut : la boutique Kemdia (`KEMDIA_SHOP_ID`) ; index                                                                                                                                                                                                                          |
+
+La boutique, le rôle vendeur et la ligne du journal changent **dans la même transaction**. Les tâches suivantes du S6 (produits des
+vendeurs, commandes vendeur) vérifieront **le rôle et une boutique active**, car un administrateur peut encore changer le rôle par
+les routes des rôles (S4-T06).
 
 ## 4. Choix technologiques
 
@@ -1136,7 +1181,7 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 
 - Démo : régler `CLIENT_IP_HEADER` une fois l'en-tête fiable de Render vérifié ; collecte des violations de CSP (`report-to`).
 - S5 : signature des webhooks Mobile Money, idempotence des paiements. Fait au S5-T01 : panier modifié sous verrou en une transaction, prix jamais reçus du navigateur, UUID normalisés. Fait au S5-T02 : stock réservé dans la transaction de la commande (BR-012), commandes idempotentes, montants figés par la base, 3 commandes ouvertes au plus par compte. Fait au S5-T03 : coupons comptés de façon atomique (BR-030), jamais de commande à 0 FCFA, limite d'essais de codes. Fait au S5-T06 : factures figées et numérotées sans trou par la base, PDF jamais en erreur sur un texte du client, e-mail réservé avant l'envoi (pas de doublon), aucune facture « à compléter » en production. Fait au S5-T05 : notifications signées (HMAC-SHA256 sur le corps brut, 5 minutes), rejeu ignoré dans la même transaction (CRIT-01 traité), opérateur simulé jamais actif en production. Fait au S5-T07 : aucun article ni prix envoyé par le site, montants du devis seulement, Mobile Money refusé sans fournisseur, demandes de paiement expirées à l'annulation par le client, factures relayées par le serveur du site (session, numéros revérifiés, jamais en cache, 2 Mo au plus), actions serveur revérifiant chaque argument. Fait au S5-T04 : résultat d'un paiement vérifié (référence, montant), argent non attendu → remboursement à faire, commande payée non annulable en ligne, 5 demandes par heure au plus vers un même numéro, paiements et remboursements jamais effacés.
-- S6 : écrans d'administration avec double authentification (MED-15) ; nouvelles actions au journal (KYC, modération).
+- S6 : écrans d'administration avec double authentification (MED-15) ; nouvelles actions au journal (KYC, modération). Fait au S6-T01 : une boutique par compte (verrou par compte), nom unique sans casse ni accents et signes ressemblants confondus, lettres ASCII et accentuées du français seulement, « Kemdia » interdit même déguisé (pas d'usurpation), nom libéré au refus, motifs et demandes au journal, caractères invisibles retirés, personne ne décide pour sa propre boutique, boutique + rôle + journal dans une transaction, mêmes règles en contraintes SQL.
 - S7 : deux rôles PostgreSQL (migrations / application sans droit de modifier les tables **ni de désactiver les déclencheurs du journal d'audit**), connexion chiffrée selon l'hébergement, sauvegardes chiffrées testées.
 
 ## 7. DevOps — CI/CD
