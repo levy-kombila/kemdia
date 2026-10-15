@@ -196,6 +196,34 @@ describe("<CheckoutFlow />", { timeout: 15_000 }, () => {
     expect(second.idempotencyKey).toBe(first.idempotencyKey);
   });
 
+  it("clé déjà utilisée (envoi précédent perdu) : panier relu, renvoi vers « Mes commandes », nouvelle clé", async () => {
+    orders.placeOrder
+      .mockResolvedValueOnce({
+        ok: false,
+        code: "CLE_DEJA_UTILISEE",
+        message: "Une commande a peut-être déjà été enregistrée.",
+      })
+      .mockResolvedValueOnce({ ok: true, reference: "KMD-7F3K9Q" });
+    const user = userEvent.setup();
+    renderFlow();
+    await fillAddress(user);
+    await user.click(screen.getByRole("button", { name: "Continuer" }));
+    await user.click(screen.getByRole("button", { name: "Continuer" }));
+    await user.click(await screen.findByRole("button", { name: /Commander et payer/ }));
+    expect(
+      await screen.findByText(/Une commande a peut-être déjà été enregistrée/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Voir mes commandes" })).toHaveAttribute(
+      "href",
+      "/compte/commandes",
+    );
+    expect(cart.syncCart).toHaveBeenCalledTimes(2);
+    await user.click(screen.getByRole("button", { name: /Commander et payer/ }));
+    await waitFor(() => expect(orders.placeOrder).toHaveBeenCalledTimes(2));
+    const [first, second] = orders.placeOrder.mock.calls.map((c) => c[0]);
+    expect(second.idempotencyKey).not.toBe(first.idempotencyKey);
+  });
+
   it("Mobile Money indisponible : paiement à la livraison proposé d'office ; au-delà du plafond, refusé", async () => {
     orders.quoteOrder.mockResolvedValue({
       ok: true,

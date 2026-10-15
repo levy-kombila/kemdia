@@ -162,6 +162,20 @@ describe("adaptateur API des commandes (S5-T07)", () => {
       ok: false,
       code: "INDISPONIBLE",
     });
+    // Taille non annoncée (envoi par morceaux) mais trop gros : lecture arrêtée à 2 Mo
+    let sent = 0;
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        sent += 500_000;
+        controller.enqueue(new Uint8Array(500_000).fill(37));
+      },
+    });
+    const chunked = new Response(endless, { headers: { "content-type": "application/pdf" } });
+    expect(await api(chunked).orders.invoicePdf(TOKEN, REF, INVOICE)).toEqual({
+      ok: false,
+      code: "INDISPONIBLE",
+    });
+    expect(sent).toBeLessThanOrEqual(INVOICE_PDF_MAX_BYTES + 1_000_000);
     expect(
       await api(problem(404, "FACTURE_INTROUVABLE")).orders.invoicePdf(TOKEN, REF, INVOICE),
     ).toEqual({

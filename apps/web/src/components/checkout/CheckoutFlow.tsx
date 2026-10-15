@@ -327,8 +327,11 @@ export function CheckoutFlow({ account }: { account: CheckoutAccount }) {
         setQuoteRound((n) => n + 1);
         break;
       case "CLE_DEJA_UTILISEE":
+        // Un envoi précédent (réponse perdue) a pu créer la commande : on le dit, panier relu (vidé s'il a été commandé).
+        // Une nouvelle clé seulement ensuite, pour une commande que le client choisit de repasser (relecture S5-T07)
         idempotencyKey.current = newUuid();
-        setProblem({ message: result.message });
+        await reload();
+        setProblem({ message: result.message, link: ORDERS_LINK });
         break;
       case "PANIER_VIDE":
       case "PANIER_A_VERIFIER":

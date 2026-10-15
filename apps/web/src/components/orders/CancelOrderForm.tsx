@@ -9,7 +9,14 @@ import { cancelOrder, type OrderActionState } from "@/lib/orders/order-actions";
  * Annulation par le client (avant l'expédition) : deux temps, pour ne pas annuler par un clic de trop. L'API revérifie
  * le compte et le statut ; une commande payée ne s'annule pas ici (service client, remboursement).
  */
-export function CancelOrderForm({ reference }: { reference: string }) {
+export function CancelOrderForm({
+  reference,
+  paymentPending = false,
+}: {
+  reference: string;
+  /** Une demande de paiement attend sur le téléphone : elle sera annulée aussi */
+  paymentPending?: boolean;
+}) {
   const [state, action, pending] = useActionState<OrderActionState, FormData>(cancelOrder, null);
   const [confirming, setConfirming] = useState(false);
 
@@ -24,6 +31,11 @@ export function CancelOrderForm({ reference }: { reference: string }) {
           <p className="text-sm font-semibold">
             Annuler la commande {reference} ? Les articles seront remis en vente.
           </p>
+          {paymentPending && (
+            <p className="text-ink-700 text-sm">
+              La demande de paiement envoyée sur votre téléphone sera annulée : ne la validez pas.
+            </p>
+          )}
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
               type="submit"

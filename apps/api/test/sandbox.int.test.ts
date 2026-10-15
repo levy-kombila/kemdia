@@ -278,6 +278,31 @@ describe("Bac à sable Mobile Money (PostgreSQL, HTTP)", () => {
     });
   });
 
+  it("annulation par le client : la demande en attente disparaît du téléphone, plus rien à valider (S5-T07)", async () => {
+    const { order, payment } = await placeOrderAndPay();
+    const inbox = async () =>
+      (await call("get", "/api/v1/sandbox/mobile-money/requests", client.token).expect(200))
+        .body as { items: { paymentId: string }[] };
+    expect((await inbox()).items.map((i) => i.paymentId)).toContain(payment.id);
+    await call("post", `/api/v1/orders/${order.reference}/cancel`, client.token).expect(200);
+    // Expirée dans la transaction de l'annulation, comme pour une annulation par un administrateur
+    const latest = matches(
+      PaymentSchema,
+      (await call("get", `/api/v1/orders/${order.reference}/payments`, client.token).expect(200))
+        .body,
+    );
+    expect(latest).toMatchObject({ status: "expired", failureReason: "commande_annulee" });
+    expect((await inbox()).items.map((i) => i.paymentId)).not.toContain(payment.id);
+    const late = await call(
+      "post",
+      `/api/v1/sandbox/mobile-money/requests/${payment.id}`,
+      client.token,
+    )
+      .send({ decision: "approve", pin: "1234" })
+      .expect(404);
+    expect(matches(ProblemDetailsSchema, late.body).code).toBe("DEMANDE_INTROUVABLE");
+  });
+
   it("notification : signature exigée, fenêtre de 5 minutes, rejeu ignoré sans rien changer", async () => {
     const { order, payment } = await placeOrderAndPay();
     await remember(payment);

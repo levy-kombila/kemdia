@@ -1,5 +1,10 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
-import { OrderPayments, validatePayment, type OrderRecord } from "../../orders/index.js";
+import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
+import {
+  OrderCancelHooks,
+  OrderPayments,
+  validatePayment,
+  type OrderRecord,
+} from "../../orders/index.js";
 import {
   attemptExpiry,
   attemptsLeft,
@@ -61,7 +66,7 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
  * (`applyProviderResult`).
  */
 @Injectable()
-export class PaymentService {
+export class PaymentService implements OnModuleInit {
   private readonly logger = new Logger("Paiements");
   /** Horloge (remplaçable dans les tests). */
   clock: () => Date = () => new Date();
@@ -72,7 +77,24 @@ export class PaymentService {
     @Inject(REFUND_REPOSITORY) private readonly refunds: RefundRepository,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
     private readonly invoices: InvoiceService,
+    private readonly cancelHooks: OrderCancelHooks,
   ) {}
+
+  /**
+   * Annulation par le client (S5-T07, relecture de sécurité) : ses demandes encore en attente sont expirées dans la
+   * même transaction, comme pour l'annulation par un administrateur. Le téléphone simulé ne les montre plus, et un
+   * résultat de l'opérateur arrivé quand même déclenche un remboursement « à faire » (ADR-0026).
+   */
+  onModuleInit(): void {
+    this.cancelHooks.onClientCancel(async (order, now) => {
+      const attempts = await this.payments.listForOrder(order.id);
+      for (const attempt of attempts.filter((a) => a.status === "pending")) {
+        await this.payments.complete(attempt.id, "expired", now, "commande_annulee");
+        // Simulateur : retirée du téléphone (en mémoire ; si la transaction échoue, l'essai expire en 3 minutes)
+        this.provider.cancel?.(attempt.id);
+      }
+    });
+  }
 
   /** Demande (ou redemande) la validation du paiement sur le téléphone. */
   async start(accountId: string, reference: string, phoneInput?: string): Promise<PaymentView> {

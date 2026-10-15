@@ -218,16 +218,48 @@ export function createOrdersApi(options: OrdersApiOptions) {
         console.error("[commandes] GET /{commande}/invoices/{numéro} : réponse inattendue");
         return { ok: false, code: "INDISPONIBLE" };
       }
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      // « %PDF- » au début, et pas plus que la taille annoncée permise
-      const isPdf = bytes.length > 5 && String.fromCharCode(...bytes.subarray(0, 5)) === "%PDF-";
-      if (!isPdf || bytes.length > INVOICE_PDF_MAX_BYTES) {
+      // Lu par morceaux, arrêté dès 2 Mo : une réponse sans taille annoncée ne peut pas remplir la mémoire
+      const bytes = await readAtMost(response, INVOICE_PDF_MAX_BYTES);
+      // « %PDF- » au début
+      const isPdf =
+        bytes !== null &&
+        bytes.length > 5 &&
+        String.fromCharCode(...bytes.subarray(0, 5)) === "%PDF-";
+      if (!isPdf) {
         console.error("[commandes] GET /{commande}/invoices/{numéro} : fichier non conforme");
         return { ok: false, code: "INDISPONIBLE" };
       }
       return { ok: true, data: bytes };
     },
   };
+}
+
+/** Corps de la réponse, ou `null` s'il dépasse `max` octets (lecture interrompue aussitôt). */
+async function readAtMost(
+  response: Response,
+  max: number,
+): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (!response.body) return new Uint8Array(0);
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 /** Route sans numéro de commande ni de facture (les journaux ne disent pas qui commande quoi). */

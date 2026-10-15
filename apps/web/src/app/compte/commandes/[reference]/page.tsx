@@ -146,7 +146,10 @@ export default async function OrderPage({
         <section className="space-y-2 rounded-xl bg-white p-5">
           <h2 className="text-lg font-extrabold">Besoin de changer quelque chose ?</h2>
           {order.canCancel ? (
-            <CancelOrderForm reference={order.reference} />
+            <CancelOrderForm
+              reference={order.reference}
+              paymentPending={latest?.status === "pending"}
+            />
           ) : order.status === "cancelled" || order.status === "delivered" ? (
             <p className="text-ink-700 text-sm">
               <Link href="/" className="text-brand-700 font-semibold underline">

@@ -9,6 +9,7 @@ import { IdentityModule } from "../identity/index.js";
 import { CartService } from "./application/cart.service.js";
 import { CodSettingsService } from "./application/cod-settings.service.js";
 import { CouponService } from "./application/coupon.service.js";
+import { OrderCancelHooks } from "./application/order-cancel-hooks.js";
 import { OrderPayments } from "./application/order-payments.service.js";
 import { OrderService } from "./application/order.service.js";
 import {
@@ -48,6 +49,7 @@ import { CartController } from "./interface/cart.controller.js";
     { provide: CART_REPOSITORY, useClass: PrismaCartRepository },
     { provide: CART_CATALOG, useExisting: CatalogService },
     OrderService,
+    OrderCancelHooks,
     CouponService,
     CodSettingsService,
     OrderPayments,
@@ -65,6 +67,6 @@ import { CartController } from "./interface/cart.controller.js";
       useFactory: (config: AppConfig) => ({ available: mobileMoneyAvailable(config) }),
     },
   ],
-  exports: [CartService, OrderService, OrderPayments],
+  exports: [CartService, OrderService, OrderPayments, OrderCancelHooks],
 })
 export class OrdersModule {}

@@ -80,9 +80,10 @@ describe("<CancelOrderForm />", () => {
   it("demande une confirmation avant d'annuler", async () => {
     actions.cancelOrder.mockResolvedValue({ tone: "success", message: "Commande annulée." });
     const user = userEvent.setup();
-    render(<CancelOrderForm reference={REF} />);
+    render(<CancelOrderForm reference={REF} paymentPending />);
     await user.click(screen.getByRole("button", { name: "Annuler la commande" }));
     expect(actions.cancelOrder).not.toHaveBeenCalled();
+    expect(screen.getByText(/ne la validez pas/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Non, la garder" }));
     await user.click(screen.getByRole("button", { name: "Annuler la commande" }));
     await user.click(screen.getByRole("button", { name: "Oui, annuler la commande" }));

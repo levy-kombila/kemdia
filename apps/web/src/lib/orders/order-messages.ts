@@ -22,7 +22,8 @@ const MESSAGES: Record<OrderFailureCode, string> = {
     "Le paiement Mobile Money n'est pas encore disponible : choisissez le paiement à la livraison.",
   COMMANDE_INTROUVABLE: "Cette commande est introuvable.",
   ANNULATION_IMPOSSIBLE: "Cette commande ne peut plus être annulée (déjà expédiée ou livrée).",
-  CLE_DEJA_UTILISEE: "La commande a changé pendant l'envoi : vérifiez-la et réessayez.",
+  CLE_DEJA_UTILISEE:
+    "Une commande a peut-être déjà été enregistrée lors d'un envoi précédent : vérifiez vos commandes avant de recommencer.",
   TROP_DE_COMMANDES_OUVERTES: `Vous avez déjà ${MAX_OPEN_ORDERS} commandes en cours : payez-en ou annulez-en une avant d'en passer une autre.`,
   PANIER_OCCUPE: "Votre panier est en cours de modification : réessayez dans un instant.",
   // Coupons

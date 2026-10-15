@@ -100,6 +100,11 @@ export class SandboxOperator implements PaymentProvider {
     return Promise.resolve({ providerRef });
   }
 
+  /** La commande a été annulée : la demande quitte le téléphone simulé (S5-T07). */
+  cancel(paymentId: string): void {
+    this.requests.delete(paymentId);
+  }
+
   /** Demandes en attente sur le téléphone du compte, de la plus récente à la plus ancienne (20 au plus). */
   pendingFor(accountId: string): SandboxRequestView[] {
     this.prune();

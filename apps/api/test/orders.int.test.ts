@@ -501,9 +501,15 @@ describe("Commandes (PostgreSQL, HTTP)", () => {
   it("sans fournisseur Mobile Money : le devis le dit, la commande Mobile Money est refusée (422), pas celle à la livraison", async () => {
     // Même objet que celui lu par OrderService : on simule un environnement sans fournisseur (préproduction, production)
     const mobileMoney = app.get<{ available: boolean }>(MOBILE_MONEY);
+    // Commande Mobile Money passée quand le fournisseur existait : renvoyée avec la même clé, elle reste rendue
+    const [a, b] = variants;
+    await addToCart(b!.id, 1);
+    const before = orderBody((await quote()).total);
+    const first = (await call("post", "/api/v1/orders").send(before).expect(201)).body as Order;
     mobileMoney.available = false;
     try {
-      const [a] = variants;
+      const replay = await call("post", "/api/v1/orders").send(before).expect(200);
+      expect((replay.body as Order).reference).toBe(first.reference);
       await addToCart(a!.id, 1);
       const { total, mobileMoney: offered } = await quote();
       expect(offered).toEqual({ allowed: false });
