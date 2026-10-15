@@ -140,7 +140,9 @@ test.describe("premier achat avec un compte neuf", () => {
     await expect(page.getByRole("heading", { name: "Votre panier est vide" })).toBeVisible();
   });
 
-  test("paiement à la livraison, puis annulation depuis « Mes commandes »", async ({ page }) => {
+  test("code promo DEMO10, paiement à la livraison, puis annulation depuis « Mes commandes »", async ({
+    page,
+  }) => {
     test.setTimeout(90_000);
     await page.goto("/connexion?retour=/");
     await signUp(page);
@@ -152,7 +154,11 @@ test.describe("premier achat avec un compte neuf", () => {
     await fillCheckout(page);
     await page.getByRole("radio", { name: /Paiement à la livraison/ }).check();
     await page.getByRole("button", { name: "Continuer" }).click();
-    await page.getByRole("button", { name: /Confirmer la commande/ }).click();
+    // Code promo de démonstration (S5-T08) : −10 % sur 70 000 FCFA
+    await page.getByLabel("Code promo").fill("demo10");
+    await page.getByRole("button", { name: "Appliquer" }).click();
+    await expect(page.getByText(/Code DEMO10 appliqué/)).toBeVisible();
+    await page.getByRole("button", { name: /Confirmer la commande · 63\s000/ }).click();
 
     await expect(page).toHaveURL(/\/compte\/commandes\/KMD-[A-Z0-9]{6}\?nouvelle=1$/);
     await expect(page.getByText(/votre commande est confirmée/)).toBeVisible();
@@ -163,4 +169,18 @@ test.describe("premier achat avec un compte neuf", () => {
     await expect(page.getByText(/Commande annulée/).first()).toBeVisible();
     await expect(page.getByText("Annulée").first()).toBeVisible();
   });
+});
+
+test("démonstration : bandeau sur chaque page, mode d'emploi du premier achat", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Tester un achat" }).click();
+  await expect(page).toHaveURL(/\/demo$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Tester un achat" })).toBeVisible();
+  await expect(page.getByText("DEMO10").first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "téléphone simulé" })).toHaveAttribute(
+    "href",
+    "/demo/telephone",
+  );
 });

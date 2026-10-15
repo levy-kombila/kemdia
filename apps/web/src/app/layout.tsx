@@ -4,6 +4,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { cookies } from "next/headers";
 import { connection } from "next/server";
+import { DemoBanner } from "@/components/layout/DemoBanner";
 import { Footer } from "@/components/layout/Footer";
 import { Suspense } from "react";
 import { Header, HeaderFallback } from "@/components/layout/Header";
@@ -11,6 +12,7 @@ import { WakeUpNotice } from "@/components/layout/WakeUpNotice";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { Providers } from "@/components/providers/Providers";
 import { SESSION_COOKIE } from "@/lib/auth/cookies";
+import { sandboxPageEnabled } from "@/lib/payments/sandbox";
 import { SITE, siteUrl } from "@/lib/site";
 
 /**
@@ -82,6 +84,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           Aller au contenu
         </a>
         <Providers signedIn={signedIn}>
+          {/* Bac à sable (S5-T08) : démo, poste de développement et tests seulement */}
+          {sandboxPageEnabled() && <DemoBanner />}
           {demo ? (
             // Démo gratuite (S4-T08) : la page part tout de suite avec un en-tête de réserve et, si l'API dort,
             // « La boutique se réveille… ». Réservé à la démo : en streaming, le statut 200 est envoyé avant que
