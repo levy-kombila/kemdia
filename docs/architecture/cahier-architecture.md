@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués                                                                            |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests                                                                                |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                                                                                                 |
+| **3.6** | 2026-10-15 | S5     | Fin du Sprint 5, v0.5.0 (ADR-0030) : §3.13 code promo de démonstration `DEMO10`, §5.13 (nouvelle : page `/demo` et bandeau), §7 CI allégée pour les PR de documentation                                               |
 | **3.5** | 2026-10-15 | S5     | Site branché sur les commandes (ADR-0029) : §3.7 contrat 1.13.0, §3.12 Mobile Money selon le fournisseur, §3.14 annulation par le client, §5.7 tunnel branché, §5.12 (nouvelle : « Mes commandes »), §6.4, §7 job e2e |
 | **3.4** | 2026-10-15 | S5     | Factures (ADR-0028) : §3.4 dossier `src/mail/`, §3.7 routes et contrat 1.12.0, §3.10 action d'audit, §3.15 (nouvelle), §6.4                                                                                           |
 | **3.3** | 2026-10-11 | S5     | Notifications signées et bac à sable (ADR-0027) : §3.7 routes et contrat 1.11.0, §3.14 notifications et opérateur simulé, §5.11 (nouvelle), §6.4                                                                      |
@@ -669,6 +670,10 @@ Décision : [ADR-0025](adr/0025-coupons.md). Fichiers ajoutés au module `orders
 
 Dans la transaction de la commande, l'ordre des verrous est toujours **panier → variantes → coupon** (annulation : commande → variantes → coupon).
 
+**Code promo de démonstration (S5-T08, [ADR-0030](adr/0030-demo-premier-achat-ci-allegee.md))** : `DEMO10` (10 %, 10 000 FCFA au plus,
+une fois par compte), constante `DEMO_COUPON` du contrat, créé par l'import de démonstration (`orders/infrastructure/demo-coupon.ts`)
+seulement sur la démo, ou sur le poste de développement avec une base locale (`demoCouponAllowed`). Jamais modifié s'il existe.
+
 ### 3.14 Paiements (S5-T04)
 
 Décision : [ADR-0026](adr/0026-paiements.md). Nouveau module `payments` (`domain/payment.ts` : essais, délais, comptage ;
@@ -1038,6 +1043,13 @@ Décision : [ADR-0029](adr/0029-site-tunnel-commande-mes-commandes.md). Compte o
 | `lib/orders/api-orders.ts`, `orders.ts`                       | Adaptateur `server-only` (clé interne + jeton), réponses vérifiées par le contrat ; journaux sans numéro ni jeton            |
 | `lib/orders/order-actions.ts`, `order-messages.ts`            | Actions serveur (devis, commande, réessai, annulation) ; messages en français pour chaque code                               |
 
+### 5.13 Démonstration du premier achat (S5-T08)
+
+Décision : [ADR-0030](adr/0030-demo-premier-achat-ci-allegee.md). Là où le bac à sable existe (`APP_ENV` = `local`, `e2e`, `demo`),
+le layout affiche un bandeau (`components/layout/DemoBanner.tsx` : « aucun vrai paiement », lien vers `/demo`) et la page
+`app/demo/page.tsx` explique le parcours en 4 étapes (compte, achat et `DEMO10`, téléphone simulé, facture). Ailleurs : ni bandeau,
+ni page (404). Non indexée.
+
 ## 6. Sécurité
 
 ### 6.1 Principes
@@ -1160,6 +1172,7 @@ flowchart LR
 | `apps/api/`                       | Lint, types, tests (avec couverture) et build dans la même étape « qualité » que le site (S3-T01)                                                                                                                                                                             |
 | Job « migrations et intégration » | Base PostgreSQL 18 éphémère : `db:deploy`, `db:check` (migrations = schéma), `test:int` (S3-T02)                                                                                                                                                                              |
 | Job « bout en bout » (S3-T05)     | Site construit avec une API **injoignable**, puis parcours et performance contre la vraie API (PostgreSQL 18, clé éphémère) ; aucune réponse 429 tolérée. Depuis le S5-T07 : API en `APP_ENV=demo` (opérateur simulé, factures) pour le premier achat complet (`E2E_SANDBOX`) |
+| Job « Ce qui a changé » (S5-T08)  | Une PR qui ne touche que `docs/**` ou `*.md` saute base de données, bout en bout et images (sautés = réussis) ; renommage, nom bizarre, API en panne, liste tronquée → tout tourne ; `main` et lancement manuel : tout tourne                                                 |
 | `apps/api/Dockerfile` (S3-T06)    | Image de l'API : multi-étapes, dépendances de production seules, non-root, moteur de migrations embarqué                                                                                                                                                                      |
 | Job « image de l'API » (S3-T06)   | Construction, Trivy, migrations sur une base **vide** puis relance, refus d'une configuration fausse, API en lecture seule → `database: ok`, publication GHCR (main)                                                                                                          |
 | Job « image de l'API » (S3-T07)   | Démarrage de démo sur une base **vide** (migrations + 50 produits + API), redémarrage sans doublon, refus hors démo ; publication Docker Hub publique (main)                                                                                                                  |

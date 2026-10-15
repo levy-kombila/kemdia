@@ -28,6 +28,7 @@ import { Account } from "../src/modules/identity/domain/account.js";
 import { requireIdentifier } from "../src/modules/identity/domain/identifier.js";
 import { PrismaAccountRepository } from "../src/modules/identity/infrastructure/prisma-account.repository.js";
 import { MOBILE_MONEY } from "../src/modules/orders/application/ports.js";
+import { ensureDemoCoupon } from "../src/modules/orders/infrastructure/demo-coupon.js";
 import { OverdueOrdersScheduler } from "../src/modules/orders/infrastructure/overdue-orders.js";
 import { testDatabaseUrl } from "./integration-db.js";
 
@@ -525,6 +526,27 @@ describe("Commandes (PostgreSQL, HTTP)", () => {
     } finally {
       mobileMoney.available = true;
     }
+  });
+
+  it("code promo de démonstration DEMO10 : créé une fois, jamais modifié, 10 % plafonnés à 10 000 FCFA (S5-T08)", async () => {
+    await ensureDemoCoupon(prisma);
+    // Désactivé par un administrateur : un nouvel import ne le réactive pas
+    await prisma.coupon.update({ where: { code: "DEMO10" }, data: { active: false } });
+    expect(await ensureDemoCoupon(prisma)).toBe("déjà présent");
+    expect((await prisma.coupon.findUniqueOrThrow({ where: { code: "DEMO10" } })).active).toBe(
+      false,
+    );
+    await prisma.coupon.update({ where: { code: "DEMO10" }, data: { active: true } });
+    expect(await prisma.coupon.count({ where: { code: "DEMO10" } })).toBe(1);
+
+    const expensive = variants.find((v) => v.price >= 150_000)!;
+    await addToCart(expensive.id, 1);
+    const res = await call("post", "/api/v1/orders/quote")
+      .send({ cityId: "libreville", couponCode: "demo10" })
+      .expect(200);
+    const q = matches(OrderQuoteSchema, res.body);
+    expect(q.coupon).toEqual({ code: "DEMO10", discount: 10_000 });
+    expect(q.total).toBe(expensive.price - 10_000 + q.deliveryFee);
   });
 
   it("panier tenu par une autre demande : 409 PANIER_OCCUPE au bout de 3 s au plus, rien n'est gardé", async () => {

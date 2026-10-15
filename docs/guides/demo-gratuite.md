@@ -212,6 +212,20 @@ n'expose pas le site hors de Cloudflare (ce qu'aucun test ne peut prouver).
 **Si l'adresse semble fausse un jour** (tous les visiteurs avec la même adresse, ou limites atteintes trop vite) : **vider**
 `CLIENT_IP_HEADER` sur Render. Le site cesse aussitôt de transmettre l'adresse ; les limites par compte et par identifiant restent.
 
+### 10. Tester le premier achat (S5-T08)
+
+Sur la démo, un bandeau « Site de démonstration : aucun vrai paiement » mène à la page **`/demo`**, qui explique le parcours :
+
+1. créer un compte (le code arrive par e-mail) ;
+2. ajouter des articles, commander à Libreville, essayer le code promo **`DEMO10`** (−10 %, 10 000 FCFA au plus, une fois par compte) ;
+3. payer par Airtel Money ou Moov Money avec un numéro **fictif**, puis valider sur **`/demo/telephone`** (code PIN de 4 chiffres au choix) ;
+4. suivre la commande dans « Mes commandes » et télécharger la facture PDF.
+
+`DEMO10` est créé automatiquement au démarrage de la démo (import de démonstration). Il n'existe jamais en préproduction ni en
+production. Un administrateur peut le désactiver : un redémarrage ne le réactive pas.
+
+> La démo ne se met à jour qu'après un passage de la CI sur `main`. Tant que GitHub Actions est bloqué, rien ne change sur Render.
+
 ## En cas de problème
 
 | Symptôme                                                                           | Cause probable et solution                                                                                                                                    |

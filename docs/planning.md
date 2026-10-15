@@ -9,18 +9,18 @@ Mobile Money (Moov, Airtel) et paiement à la livraison, lancement visé **fin 2
 
 ## Vue d'ensemble
 
-| Sprint    | Objectif                                                                                                | Statut      |
-| --------- | ------------------------------------------------------------------------------------------------------- | ----------- |
-| **S0**    | Décision de réécriture, choix de la stack, poste de travail                                             | ✅ Terminé  |
-| **S1**    | Fondations frontend + DevOps (CI/CD, sécurité, démo publique)                                           | ✅ Terminé  |
-| **S2**    | Intégration du KSAD + finitions frontend (comptes, tunnel de commande, filtres, tests E2E)              | ✅ Terminé  |
-| **S3**    | Backend NestJS + PostgreSQL, module `catalog`, site branché sur l'API                                   | ✅ Terminé  |
-| **S4**    | Module `identity` : comptes par e-mail ou téléphone (OTP), sécurité de connexion                        | ✅ Terminé  |
-| **S5**    | Modules `orders` + `payments` : commande, Mobile Money, paiement à la livraison                         | 🚧 En cours |
-| **S6**    | Module `vendors` + back-office : boutiques, KYC, modération, commissions                                | ⏳          |
-| **S7**    | Module `shipping` (transporteur) + préproduction (serveur, surveillance, sauvegardes, test d'intrusion) | ⏳          |
-| **S8**    | Bêta fermée (vendeurs partenaires + testeurs) puis lancement Gabon 🇬🇦                                   | ⏳          |
-| Après MVP | Affiliation, application mobile, suivi GPS, Kemdia Pay v2                                               | —           |
+| Sprint    | Objectif                                                                                                | Statut     |
+| --------- | ------------------------------------------------------------------------------------------------------- | ---------- |
+| **S0**    | Décision de réécriture, choix de la stack, poste de travail                                             | ✅ Terminé |
+| **S1**    | Fondations frontend + DevOps (CI/CD, sécurité, démo publique)                                           | ✅ Terminé |
+| **S2**    | Intégration du KSAD + finitions frontend (comptes, tunnel de commande, filtres, tests E2E)              | ✅ Terminé |
+| **S3**    | Backend NestJS + PostgreSQL, module `catalog`, site branché sur l'API                                   | ✅ Terminé |
+| **S4**    | Module `identity` : comptes par e-mail ou téléphone (OTP), sécurité de connexion                        | ✅ Terminé |
+| **S5**    | Modules `orders` + `payments` : commande, Mobile Money, paiement à la livraison                         | ✅ Terminé |
+| **S6**    | Module `vendors` + back-office : boutiques, KYC, modération, commissions                                | ⏳         |
+| **S7**    | Module `shipping` (transporteur) + préproduction (serveur, surveillance, sauvegardes, test d'intrusion) | ⏳         |
+| **S8**    | Bêta fermée (vendeurs partenaires + testeurs) puis lancement Gabon 🇬🇦                                   | ⏳         |
+| Après MVP | Affiliation, application mobile, suivi GPS, Kemdia Pay v2                                               | —          |
 
 ### Jalons
 
@@ -30,7 +30,7 @@ Mobile Money (Moov, Airtel) et paiement à la livraison, lancement visé **fin 2
 | v0.2.0 | Parcours client complet en démonstration : compte, commande, favoris, partage, tests de bout en bout | ✅ S2                      |
 | v0.3.0 | Catalogue servi par l'API et PostgreSQL                                                              | ✅ S3                      |
 | v0.4.0 | Comptes clients sécurisés : inscription par code, sessions, rôles, journal d'audit, CSRF/CSP/limites | ✅ S4                      |
-| v0.5.0 | Premier achat de bout en bout en environnement de test (Mobile Money _sandbox_)                      | fin S5                     |
+| v0.5.0 | Premier achat de bout en bout en environnement de test (Mobile Money _sandbox_)                      | ✅ S5                      |
 | v0.7.0 | Vendeurs partenaires opérationnels                                                                   | fin S6                     |
 | v1.0.0 | Lancement public                                                                                     | S8 (fin 2027 au plus tard) |
 
@@ -138,9 +138,9 @@ Décisions : [ADR-0015](architecture/adr/0015-identite-sessions-otp.md) (session
 | S4-T07 | CSRF (origine stricte), CSP à _nonce_, limites par visiteur et par compte, IP du visiteur au journal (HIGH-16, MED-05) — ADR-0021      | ✅     |
 | S4-T08 | Démo : écran « La boutique se réveille » ; colonnes obsolètes ignorées (suppression au S5-T01) ; versions 0.4.0 ; clôture — ADR-0022   | ✅     |
 
-## S5 — Modules `orders` + `payments` 🚧
+## S5 — Modules `orders` + `payments` ✅
 
-Décisions : [ADR-0023](architecture/adr/0023-panier-serveur.md) (panier serveur), [ADR-0024](architecture/adr/0024-commandes-reservation-stock.md) (commandes, réservation du stock), [ADR-0025](architecture/adr/0025-coupons.md) (coupons), [ADR-0029](architecture/adr/0029-site-tunnel-commande-mes-commandes.md) (site branché, « Mes commandes »).
+Décisions : [ADR-0023](architecture/adr/0023-panier-serveur.md) (panier serveur), [ADR-0024](architecture/adr/0024-commandes-reservation-stock.md) (commandes, réservation du stock), [ADR-0025](architecture/adr/0025-coupons.md) (coupons), [ADR-0029](architecture/adr/0029-site-tunnel-commande-mes-commandes.md) (site branché, « Mes commandes »), [ADR-0030](architecture/adr/0030-demo-premier-achat-ci-allegee.md) (démo du premier achat, CI allégée).
 Choix du 2026-10-10 : **compte obligatoire pour commander** ; paniers **additionnés** à la connexion ; connecté, panier **sur le serveur seul** ;
 paniers gardés **90 jours** ; numéro **KMD-7F3K9Q** ; **30 min** pour payer par Mobile Money ; annulation **avant l'expédition** ; prix changé → **nouveau total à confirmer** ; coupons : pourcentage ou montant fixe, articles seulement, un par commande, rendus à l'annulation ; paiement à la livraison, coupons et Mobile Money : **en attente du client** (voir les [questions ouvertes](architecture/regles-metier.md#questions-ouvertes)).
 
@@ -153,7 +153,7 @@ paniers gardés **90 jours** ; numéro **KMD-7F3K9Q** ; **30 min** pour payer pa
 | S5-T05 | Mobile Money en _sandbox_ : opérateur simulé et téléphone simulé, notifications signées (HMAC, 5 min), rejeu refusé — ADR-0027                                           | ✅     |
 | S5-T06 | Factures (FR-015) : au paiement reçu, numéros par année sans trou, avoir à l'annulation, PDF, envoi par e-mail — ADR-0028                                                | ✅     |
 | S5-T07 | Site branché : vrai tunnel de commande (compte obligatoire), devis et code promo, attente du paiement sur la page de la commande, « Mes commandes », factures — ADR-0029 | ✅     |
-| S5-T08 | Démo, parcours de bout en bout du premier achat, versions 0.5.0, clôture                                                                                                 | ⏳     |
+| S5-T08 | Démo du premier achat : page /demo et bandeau, code promo DEMO10 (démo seulement), CI allégée pour la documentation, versions 0.5.0, clôture — ADR-0030                  | ✅     |
 
 ## S5 à S8 — grandes lignes
 
