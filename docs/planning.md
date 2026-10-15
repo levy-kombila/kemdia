@@ -9,18 +9,18 @@ Mobile Money (Moov, Airtel) et paiement à la livraison, lancement visé **fin 2
 
 ## Vue d'ensemble
 
-| Sprint    | Objectif                                                                                                | Statut     |
-| --------- | ------------------------------------------------------------------------------------------------------- | ---------- |
-| **S0**    | Décision de réécriture, choix de la stack, poste de travail                                             | ✅ Terminé |
-| **S1**    | Fondations frontend + DevOps (CI/CD, sécurité, démo publique)                                           | ✅ Terminé |
-| **S2**    | Intégration du KSAD + finitions frontend (comptes, tunnel de commande, filtres, tests E2E)              | ✅ Terminé |
-| **S3**    | Backend NestJS + PostgreSQL, module `catalog`, site branché sur l'API                                   | ✅ Terminé |
-| **S4**    | Module `identity` : comptes par e-mail ou téléphone (OTP), sécurité de connexion                        | ✅ Terminé |
-| **S5**    | Modules `orders` + `payments` : commande, Mobile Money, paiement à la livraison                         | ✅ Terminé |
-| **S6**    | Module `vendors` + back-office : boutiques, KYC, modération, commissions                                | ⏳         |
-| **S7**    | Module `shipping` (transporteur) + préproduction (serveur, surveillance, sauvegardes, test d'intrusion) | ⏳         |
-| **S8**    | Bêta fermée (vendeurs partenaires + testeurs) puis lancement Gabon 🇬🇦                                   | ⏳         |
-| Après MVP | Affiliation, application mobile, suivi GPS, Kemdia Pay v2                                               | —          |
+| Sprint    | Objectif                                                                                                | Statut      |
+| --------- | ------------------------------------------------------------------------------------------------------- | ----------- |
+| **S0**    | Décision de réécriture, choix de la stack, poste de travail                                             | ✅ Terminé  |
+| **S1**    | Fondations frontend + DevOps (CI/CD, sécurité, démo publique)                                           | ✅ Terminé  |
+| **S2**    | Intégration du KSAD + finitions frontend (comptes, tunnel de commande, filtres, tests E2E)              | ✅ Terminé  |
+| **S3**    | Backend NestJS + PostgreSQL, module `catalog`, site branché sur l'API                                   | ✅ Terminé  |
+| **S4**    | Module `identity` : comptes par e-mail ou téléphone (OTP), sécurité de connexion                        | ✅ Terminé  |
+| **S5**    | Modules `orders` + `payments` : commande, Mobile Money, paiement à la livraison                         | ✅ Terminé  |
+| **S6**    | Module `vendors` + back-office : boutiques, KYC, modération, commissions                                | 🚧 En cours |
+| **S7**    | Module `shipping` (transporteur) + préproduction (serveur, surveillance, sauvegardes, test d'intrusion) | ⏳          |
+| **S8**    | Bêta fermée (vendeurs partenaires + testeurs) puis lancement Gabon 🇬🇦                                   | ⏳          |
+| Après MVP | Affiliation, application mobile, suivi GPS, Kemdia Pay v2                                               | —           |
 
 ### Jalons
 
@@ -154,6 +154,12 @@ paniers gardés **90 jours** ; numéro **KMD-7F3K9Q** ; **30 min** pour payer pa
 | S5-T06 | Factures (FR-015) : au paiement reçu, numéros par année sans trou, avoir à l'annulation, PDF, envoi par e-mail — ADR-0028                                                | ✅     |
 | S5-T07 | Site branché : vrai tunnel de commande (compte obligatoire), devis et code promo, attente du paiement sur la page de la commande, « Mes commandes », factures — ADR-0029 | ✅     |
 | S5-T08 | Démo du premier achat : page /demo et bandeau, code promo DEMO10 (démo seulement), CI allégée pour la documentation, versions 0.5.0, clôture — ADR-0030                  | ✅     |
+
+## S6 — Module `vendors` + back-office 🚧
+
+| ID     | Tâche                                                                                                                                                          | Statut |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| S6-T00 | Kemdia en ligne depuis Docker Desktop (tunnel Cloudflare) pour des tests à distance : scripts `en-ligne.ps1` / `hors-ligne.ps1`, base à part, Brevo — ADR-0031 | ✅     |
 
 ## S5 à S8 — grandes lignes
 
