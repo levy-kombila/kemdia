@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués                                                                            |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests                                                                                |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                                                                                                 |
+| **3.7** | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                           |
 | **3.6** | 2026-10-15 | S5     | Fin du Sprint 5, v0.5.0 (ADR-0030) : §3.13 code promo de démonstration `DEMO10`, §5.13 (nouvelle : page `/demo` et bandeau), §7 CI allégée pour les PR de documentation                                               |
 | **3.5** | 2026-10-15 | S5     | Site branché sur les commandes (ADR-0029) : §3.7 contrat 1.13.0, §3.12 Mobile Money selon le fournisseur, §3.14 annulation par le client, §5.7 tunnel branché, §5.12 (nouvelle : « Mes commandes »), §6.4, §7 job e2e |
 | **3.4** | 2026-10-15 | S5     | Factures (ADR-0028) : §3.4 dossier `src/mail/`, §3.7 routes et contrat 1.12.0, §3.10 action d'audit, §3.15 (nouvelle), §6.4                                                                                           |
@@ -1237,6 +1238,14 @@ flowchart LR
 | Secrets            | `DATABASE_URL`, `API_INTERNAL_KEY` : variables des services Render ; GitHub ne connaît que les deploy hooks                          |
 | Veille             | Site et API s'endorment après 15 min ; le site réveille l'API à son démarrage ; délai du catalogue 60 s sur la démo                  |
 | Limites            | Première visite après une pause : 1 à 2 min ; API publique (pas de réseau privé en gratuit) ; `TRUST_PROXY=0`                        |
+
+### 8.1 En ligne depuis le PC du développeur (S6-T00)
+
+Décision : [ADR-0031](adr/0031-en-ligne-docker-tunnel.md) ; guide : [en-ligne-docker.md](../guides/en-ligne-docker.md).
+Pour des tests à distance sans hébergeur : `deploy\windows\en-ligne.ps1` construit les images de production sur le PC et démarre
+le projet Compose `kemdia-en-ligne` (`deploy/en-ligne/compose.yml`) comme la démo Render (`APP_ENV=demo`), avec une base à part,
+des e-mails Brevo et un tunnel rapide Cloudflare (`….trycloudflare.com`). Seul le site passe par le tunnel (réseau `edge`) ;
+l'API et la base restent sur le réseau `backend`. `hors-ligne.ps1` coupe le tunnel d'abord ; `-Effacer` supprime la base des testeurs.
 
 ## 9. Qualité et tests
 

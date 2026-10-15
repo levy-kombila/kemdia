@@ -7,7 +7,7 @@
 # Comme la démo Render : APP_ENV=demo (catalogue de démonstration, code DEMO10, Mobile Money SIMULÉ), images de
 # production construites ici. Base À PART (volume kemdia-en-ligne-db) : rien ne se mélange à ta base de travail.
 # Seule porte d'entrée depuis Internet : le tunnel. Le site n'écoute que sur 127.0.0.1:3100 (ton PC) ;
-# l'API, la base et Mailpit ne sont joignables que dans le réseau Docker.
+# l'API et la base ne sont joignables que dans le réseau Docker (le tunnel ne voit que le site).
 # =============================================================================
 name: kemdia-en-ligne
 
