@@ -7,6 +7,7 @@ import {
 } from "../modules/catalog/infrastructure/demo-catalog.js";
 import { PrismaCategoryRepository } from "../modules/catalog/infrastructure/prisma-category.repository.js";
 import { PrismaProductRepository } from "../modules/catalog/infrastructure/prisma-product.repository.js";
+import { ensureDemoCoupon } from "../modules/orders/infrastructure/demo-coupon.js";
 import { PrismaService } from "./prisma.service.js";
 
 /**
@@ -17,12 +18,19 @@ import { PrismaService } from "./prisma.service.js";
  * - à l'image Docker, sur la démo Render : `node dist/database/start-demo.js` (refusé partout sauf `APP_ENV=demo`).
  *
  * Relançable sans créer de doublon (identifiants UUID v5 fixes, écriture par « upsert »).
+ * S5-T08 : sur la démo et le poste de développement seulement, le code promo de démonstration `DEMO10` est créé
+ * (jamais en préproduction, où `db:seed` est aussi permis).
  * N'affiche aucune valeur de configuration (l'adresse de la base contient un mot de passe).
  */
 
 type AppEnv = AppConfig["APP_ENV"];
 
-export type DemoImporter = (config: AppConfig) => Promise<{ categories: number; products: number }>;
+export type DemoImporter = (
+  config: AppConfig,
+) => Promise<{ categories: number; products: number; coupon?: "créé" | "déjà présent" }>;
+
+/** Environnements qui reçoivent le code promo de démonstration (S5-T08). */
+export const DEMO_COUPON_ENVS: readonly AppEnv[] = ["local", "demo"];
 
 export interface DemoImportOptions {
   env: NodeJS.ProcessEnv;
@@ -37,10 +45,12 @@ export interface DemoImportOptions {
 export const importDemoCatalog: DemoImporter = async (config) => {
   const prisma = new PrismaService(config);
   try {
-    return await importCatalog(prepareDemoCatalog(demoCatalog), {
+    const catalog = await importCatalog(prepareDemoCatalog(demoCatalog), {
       categories: new PrismaCategoryRepository(prisma),
       products: new PrismaProductRepository(prisma),
     });
+    if (!DEMO_COUPON_ENVS.includes(config.APP_ENV)) return catalog;
+    return { ...catalog, coupon: await ensureDemoCoupon(prisma) };
   } finally {
     await prisma.$disconnect();
   }
@@ -77,7 +87,8 @@ export async function runDemoImport({
     const result = await importer(config);
     log(
       `Catalogue de démonstration importé : ${result.categories} catégories, ${result.products} produits ` +
-        `(${((Date.now() - started) / 1000).toFixed(1)} s).`,
+        `(${((Date.now() - started) / 1000).toFixed(1)} s)` +
+        (result.coupon ? ` ; code promo de démonstration ${result.coupon}.` : "."),
     );
     return 0;
   } catch (problem) {

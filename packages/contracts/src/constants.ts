@@ -338,3 +338,16 @@ export const API_ERROR_CODES = [
   ...PAYMENT_ERROR_CODES,
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
+
+// --- Démonstration (S5-T08, ADR-0030) ---
+
+/**
+ * Code promo de démonstration : créé à l'import de la démo et sur le poste de développement SEULEMENT (jamais en
+ * préproduction ni en production). 10 %, réduction de 10 000 FCFA au plus, une fois par compte.
+ */
+export const DEMO_COUPON = {
+  code: "DEMO10",
+  percent: 10,
+  maxDiscount: 10_000,
+  perAccountLimit: 1,
+} as const;

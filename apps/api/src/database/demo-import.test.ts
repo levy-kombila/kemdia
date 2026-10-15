@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { describeError, runDemoImport, type DemoImporter } from "./demo-import.js";
+import {
+  DEMO_COUPON_ENVS,
+  describeError,
+  runDemoImport,
+  type DemoImporter,
+} from "./demo-import.js";
 
 const SECRET = "s3cret-pass";
 const DEMO = {
@@ -75,5 +80,11 @@ describe("runDemoImport (catalogue de démonstration)", () => {
     expect(describeError(Object.assign(new TypeError("x"), { code: `a b ${SECRET}` }))).toBe(
       "TypeError",
     );
+  });
+});
+
+describe("code promo de démonstration (S5-T08)", () => {
+  it("seulement sur la démo et le poste de développement, jamais en préproduction ni en production", () => {
+    expect([...DEMO_COUPON_ENVS].sort()).toEqual(["demo", "local"]);
   });
 });
