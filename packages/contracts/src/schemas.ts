@@ -13,6 +13,8 @@ import {
   PAYMENT_NOTIFICATION_TYPES,
   PAYMENT_SIGNATURE_HEADER,
   SANDBOX_PIN_PATTERN,
+  INVOICE_KINDS,
+  INVOICE_NUMBER_PATTERN,
   COUPON_CODE_PATTERN,
   COUPON_KINDS,
   COUPON_LIMITS,
@@ -1064,6 +1066,60 @@ export const SandboxDecisionSchema = z
 export type SandboxDecision = z.infer<typeof SandboxDecisionSchema>;
 
 export const SandboxPaymentParamsSchema = z.strictObject({ paymentId: uuid });
+
+// --- Factures (S5-T06, ADR-0028) ---
+
+export const InvoiceSummarySchema = z
+  .object({
+    number: z.string().regex(INVOICE_NUMBER_PATTERN),
+    kind: z.enum(INVOICE_KINDS),
+    orderReference: z.string(),
+    issuedAt: z.iso.datetime(),
+    total: fcfa,
+  })
+  .meta({
+    id: "InvoiceSummary",
+    description: "Facture ou avoir d'une commande (PDF téléchargeable)",
+  });
+export type InvoiceSummary = z.infer<typeof InvoiceSummarySchema>;
+
+export const InvoiceListSchema = z.object({ items: z.array(InvoiceSummarySchema).max(2) }).meta({
+  id: "InvoiceList",
+  description: "Facture de la commande, et son avoir si elle a été annulée",
+});
+export type InvoiceList = z.infer<typeof InvoiceListSchema>;
+
+export const InvoiceParamsSchema = z.strictObject({
+  reference: orderReference,
+  number: z.string().regex(INVOICE_NUMBER_PATTERN),
+});
+
+const billingText = (max: number) => z.string().trim().min(1).max(max);
+
+export const BillingSettingsRequestSchema = z
+  .strictObject({
+    legalName: billingText(120).describe("Raison sociale"),
+    address: billingText(200),
+    city: billingText(60),
+    phone: billingText(30),
+    email: z.email().max(120),
+    taxId: billingText(40).describe("NIF"),
+    tradeRegister: billingText(40).describe("RCCM"),
+    vatMention: billingText(120).describe("Mention de TVA imprimée sur les factures"),
+  })
+  .meta({
+    id: "BillingSettingsRequest",
+    description: "Informations de l'entreprise imprimées sur les factures",
+  });
+export type BillingSettingsRequest = z.infer<typeof BillingSettingsRequestSchema>;
+
+export const BillingSettingsSchema = BillingSettingsRequestSchema.extend({
+  updatedAt: z.iso.datetime().nullable(),
+}).meta({
+  id: "BillingSettings",
+  description: "Informations de l'entreprise (copiées et figées dans chaque facture)",
+});
+export type BillingSettings = z.infer<typeof BillingSettingsSchema>;
 
 type JsonSchema = Record<string, unknown>;
 

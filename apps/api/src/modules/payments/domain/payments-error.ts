@@ -18,7 +18,9 @@ export type PaymentsErrorCode =
   | "NOTIFICATION_EXPIREE"
   /** Téléphone simulé : aucune demande en attente avec cet identifiant pour ce compte. */
   | "DEMANDE_INTROUVABLE"
-  | "CODE_PIN_INVALIDE";
+  | "CODE_PIN_INVALIDE"
+  // Factures (S5-T06, ADR-0028)
+  | "FACTURE_INTROUVABLE";
 
 /** Une règle du paiement n'est pas respectée. Le message est lisible par un humain, en français. */
 export class PaymentsError extends Error {

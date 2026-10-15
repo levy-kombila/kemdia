@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués                                                |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests                                                    |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                                                                     |
+| **3.4** | 2026-10-15 | S5     | Factures (ADR-0028) : §3.4 dossier `src/mail/`, §3.7 routes et contrat 1.12.0, §3.10 action d'audit, §3.15 (nouvelle), §6.4                                                               |
 | **3.3** | 2026-10-11 | S5     | Notifications signées et bac à sable (ADR-0027) : §3.7 routes et contrat 1.11.0, §3.14 notifications et opérateur simulé, §5.11 (nouvelle), §6.4                                          |
 | **3.2** | 2026-10-10 | S5     | Paiements (ADR-0026) : §3.3 module `payments`, §3.5 schéma `payments`, §3.7 routes et contrat 1.10.0, §3.10 actions d'audit, §3.14 (nouvelle), §6.4                                       |
 | **3.1** | 2026-10-10 | S5     | Coupons (ADR-0025) : §3.7 routes `/admin/coupons` et contrat 1.9.0, §3.10 actions d'audit, §3.13 (nouvelle), §6.4                                                                         |
@@ -412,6 +413,8 @@ Décision : [ADR-0010](adr/0010-api-rest-openapi.md). Description complète : [`
 | `POST /api/v1/admin/orders/{reference}/cod-collected`    | Noter l'encaissement à la livraison (montant exact) — admin, < 15 min, journal (S5-T04)                  | aucun | 30/min/IP  |
 | `POST /api/v1/webhooks/mobile-money`                     | Notification de l'opérateur : **signée** (HMAC-SHA256, 5 min), rejeu ignoré ; sans session (S5-T05)      | aucun | 600/min/IP |
 | `GET\|POST /api/v1/sandbox/mobile-money/requests[/{id}]` | Téléphone simulé : demandes du compte, valider (PIN fictif) / refuser — local et démo seulement (S5-T05) | aucun | 120/min/IP |
+| `GET /api/v1/orders/{reference}/invoices[/{numéro}]`     | Facture et avoir de la commande ; PDF à télécharger — son client seulement (S5-T06)                      | aucun | 120/min/IP |
+| `GET\|PUT /api/v1/admin/settings/billing`                | Informations de l'entreprise sur les factures — admin, < 15 min, journal (S5-T06)                        | aucun | 30/min/IP  |
 | `GET /api/v1/admin/refunds`, `POST …/{id}/done`          | Remboursements à faire / noter fait avec la référence de l'opérateur — admin, < 15 min (S5-T04)          | aucun | 30/min/IP  |
 | `GET /api/health`                                        | État de l'API et de la base                                                                              | aucun | aucune     |
 | `GET /api/v1/openapi.json`, `/api/docs`                  | Documentation (si `API_DOCS`, désactivée par défaut en production)                                       | 5 min | aucune     |
@@ -578,6 +581,7 @@ src/modules/audit/
 | `order.cancelled_by_admin` | Administrateur (S5-T04)            | `reference`, `previousStatus`, `refunds`, `note` |
 | `refund.done`              | Administrateur (S5-T04)            | `reference`, `amount`, `externalReference`       |
 | `cod.collected`            | Administrateur (S5-T04)            | `reference`, `amount`                            |
+| `settings.billing_updated` | Administrateur (S5-T06)            | `legalName`, `taxId`                             |
 | `settings.cod_updated`     | Administrateur (S5-T04)            | `zones`, `maxTotal`                              |
 
 Table `audit.events` : identifiant, date (**posée par la base**), action, type et UUID de l'acteur, type et UUID de la cible, détails (JSON ≤ 2 Ko),
@@ -690,6 +694,32 @@ prévient Kemdia par `POST /api/v1/webhooks/mobile-money`. Signature HMAC-SHA256
 `payments.provider_events` (clé = son identifiant, ajout seul) dans la transaction qui applique le résultat : un rejeu ne change
 rien. L'**opérateur simulé** (`infrastructure/sandbox-operator.ts`, local et démo seulement, clé tirée au démarrage) reçoit les
 demandes, les montre sur le téléphone simulé du site et envoie la notification signée **par HTTP** à l'API, comme le vrai.
+
+### 3.15 Factures (S5-T06)
+
+Décision : [ADR-0028](adr/0028-factures.md). Ajouts au module `payments` : `domain/invoice.ts` (numéros, année du Gabon,
+montants), `application/invoice.service.ts` (émission, avoir, rattrapage, e-mails), `application/billing-settings.service.ts`,
+`infrastructure/invoice-pdf.ts` (pdf-lib), `infrastructure/invoice-mailer.ts`, `infrastructure/invoice-emails.ts` (tâche chaque
+minute). Transports d'e-mail partagés dans `src/mail/` ; contact du client par `AccountDirectory` (module identity).
+
+```mermaid
+flowchart LR
+    pay[Paiement reçu<br/>Mobile Money ou espèces] -->|même transaction| inv[Facture KMD-F-AAAA-NNNNNN<br/>copie figée]
+    cancel[Annulation admin<br/>commande facturée] -->|même transaction| cn[Avoir KMD-A-AAAA-NNNNNN]
+    inv --> job[Tâche chaque minute]
+    cn --> job
+    job -->|PDF joint, 5 essais espacés| mail[(E-mail vérifié)]
+    inv -->|GET …/invoices/numéro| pdf[PDF refait à l'identique]
+```
+
+| Table                       | Contenu                                                                                     | Règles SQL ajoutées à la main                                                                                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `payments.invoices`         | Numéro, type, commande, compte, avoir → facture, montants, copies (JSONB), paiement, e-mail | Format du numéro selon le type, montants cohérents ; figée (sauf suivi de l'e-mail, qui n'avance que) ; avoir = facture de la même commande, même montant ; rien ne s'efface |
+| `payments.invoice_counters` | Dernier numéro par type et par année                                                        | N'avance que d'un ; ne s'efface pas                                                                                                                                          |
+| `payments.billing_settings` | Une ligne : raison sociale, adresse, NIF, RCCM, mention de TVA                              | Une seule ligne, valeurs de départ « à compléter » ; ne s'efface pas                                                                                                         |
+
+En préproduction et en production, aucune facture n'est émise tant qu'un administrateur n'a pas renseigné l'entreprise : le paiement
+passe, la facture est établie par le rattrapage dès que c'est fait.
 
 ## 4. Choix technologiques
 
@@ -1056,7 +1086,7 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 ### 6.4 Prévu 🔜
 
 - Démo : régler `CLIENT_IP_HEADER` une fois l'en-tête fiable de Render vérifié ; collecte des violations de CSP (`report-to`).
-- S5 : signature des webhooks Mobile Money, idempotence des paiements. Fait au S5-T01 : panier modifié sous verrou en une transaction, prix jamais reçus du navigateur, UUID normalisés. Fait au S5-T02 : stock réservé dans la transaction de la commande (BR-012), commandes idempotentes, montants figés par la base, 3 commandes ouvertes au plus par compte. Fait au S5-T03 : coupons comptés de façon atomique (BR-030), jamais de commande à 0 FCFA, limite d'essais de codes. Fait au S5-T05 : notifications signées (HMAC-SHA256 sur le corps brut, 5 minutes), rejeu ignoré dans la même transaction (CRIT-01 traité), opérateur simulé jamais actif en production. Fait au S5-T04 : résultat d'un paiement vérifié (référence, montant), argent non attendu → remboursement à faire, commande payée non annulable en ligne, 5 demandes par heure au plus vers un même numéro, paiements et remboursements jamais effacés.
+- S5 : signature des webhooks Mobile Money, idempotence des paiements. Fait au S5-T01 : panier modifié sous verrou en une transaction, prix jamais reçus du navigateur, UUID normalisés. Fait au S5-T02 : stock réservé dans la transaction de la commande (BR-012), commandes idempotentes, montants figés par la base, 3 commandes ouvertes au plus par compte. Fait au S5-T03 : coupons comptés de façon atomique (BR-030), jamais de commande à 0 FCFA, limite d'essais de codes. Fait au S5-T06 : factures figées et numérotées sans trou par la base, PDF jamais en erreur sur un texte du client, e-mail réservé avant l'envoi (pas de doublon), aucune facture « à compléter » en production. Fait au S5-T05 : notifications signées (HMAC-SHA256 sur le corps brut, 5 minutes), rejeu ignoré dans la même transaction (CRIT-01 traité), opérateur simulé jamais actif en production. Fait au S5-T04 : résultat d'un paiement vérifié (référence, montant), argent non attendu → remboursement à faire, commande payée non annulable en ligne, 5 demandes par heure au plus vers un même numéro, paiements et remboursements jamais effacés.
 - S6 : écrans d'administration avec double authentification (MED-15) ; nouvelles actions au journal (KYC, modération).
 - S7 : deux rôles PostgreSQL (migrations / application sans droit de modifier les tables **ni de désactiver les déclencheurs du journal d'audit**), connexion chiffrée selon l'hébergement, sauvegardes chiffrées testées.
 

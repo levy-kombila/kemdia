@@ -1,6 +1,5 @@
-import type { Email } from "./email-templates.js";
-import type { MailTransport } from "./email-otp-sender.js";
 import { postJson, type FetchLike } from "./http-mail.js";
+import { attachmentsOf, base64, type Email, type MailTransport } from "./mail-transport.js";
 
 export const BREVO_SEND_URL = "https://api.brevo.com/v3/smtp/email";
 
@@ -28,7 +27,15 @@ export class BrevoTransport implements MailTransport {
         subject: email.subject,
         htmlContent: email.html,
         textContent: email.text,
-        tags: ["kemdia-identite"],
+        tags: [email.tag ?? "kemdia-identite"],
+        ...(email.attachments?.length
+          ? {
+              attachment: attachmentsOf(email).map((a) => ({
+                name: a.filename,
+                content: base64(a.content),
+              })),
+            }
+          : {}),
       },
       [201],
     );

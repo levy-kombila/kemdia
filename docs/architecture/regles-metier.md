@@ -52,25 +52,25 @@
 
 ## Exigences fonctionnelles (FR) — correspondance KSAD → sprint
 
-| FR              | Exigence                                                                               | Sprint                                                             |
-| --------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| FR-001          | Création de compte client, vendeur, livreur                                            | S4 (client) · S6 (vendeur) · après MVP (livreur)                   |
-| FR-004          | Connexion par e-mail **ou** numéro de téléphone                                        | S4                                                                 |
-| FR-012          | Mot de passe oublié (lien ou code OTP)                                                 | S4                                                                 |
-| FR-002          | Un vendeur publie un produit (description, images, prix)                               | S6                                                                 |
-| FR-005          | Recherche multicritère (catégorie, prix, avis, disponibilité)                          | S1 ✅ (partiel) · S2 (filtres) · S3 (serveur)                      |
-| FR-013          | Variantes de produits (tailles, couleurs) avec stocks distincts                        | S3 ✅ (API, [ADR-0009](adr/0009-modele-catalogue.md))              |
-| FR-006          | Ajouter, modifier, supprimer des articles du panier                                    | S1 ✅ (navigateur) · S5 ✅ (serveur, S5-T01)                       |
-| FR-014          | Panier conservé entre deux visites / liste de souhaits                                 | S1 ✅ (navigateur) · S2 (favoris) · S5 ✅ (compte, tous appareils) |
-| FR-007          | Valider le panier et passer commande — **compte obligatoire** (décision du 2026-10-10) | S5 (API ✅ S5-T02 ; site S5-T07)                                   |
-| FR-015          | Facture numérique après paiement                                                       | S5                                                                 |
-| FR-016          | Le vendeur valide ou refuse une commande                                               | S6                                                                 |
-| FR-003 / FR-009 | Paiement sécurisé : Moov Money, Airtel Money                                           | S5                                                                 |
-| FR-017          | Paiement à la livraison selon la zone                                                  | S5                                                                 |
-| FR-018          | Le livreur met à jour le statut (récupéré, en cours, livré)                            | S7                                                                 |
-| FR-010          | Suivi GPS en temps réel                                                                | ⏳ après MVP (KSAD : Kemdia Logistics)                             |
-| FR-019          | L'administrateur valide le KYC des vendeurs                                            | S6                                                                 |
-| FR-020          | Modération des avis                                                                    | S6                                                                 |
+| FR              | Exigence                                                                                                      | Sprint                                                             |
+| --------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| FR-001          | Création de compte client, vendeur, livreur                                                                   | S4 (client) · S6 (vendeur) · après MVP (livreur)                   |
+| FR-004          | Connexion par e-mail **ou** numéro de téléphone                                                               | S4                                                                 |
+| FR-012          | Mot de passe oublié (lien ou code OTP)                                                                        | S4                                                                 |
+| FR-002          | Un vendeur publie un produit (description, images, prix)                                                      | S6                                                                 |
+| FR-005          | Recherche multicritère (catégorie, prix, avis, disponibilité)                                                 | S1 ✅ (partiel) · S2 (filtres) · S3 (serveur)                      |
+| FR-013          | Variantes de produits (tailles, couleurs) avec stocks distincts                                               | S3 ✅ (API, [ADR-0009](adr/0009-modele-catalogue.md))              |
+| FR-006          | Ajouter, modifier, supprimer des articles du panier                                                           | S1 ✅ (navigateur) · S5 ✅ (serveur, S5-T01)                       |
+| FR-014          | Panier conservé entre deux visites / liste de souhaits                                                        | S1 ✅ (navigateur) · S2 (favoris) · S5 ✅ (compte, tous appareils) |
+| FR-007          | Valider le panier et passer commande — **compte obligatoire** (décision du 2026-10-10)                        | S5 (API ✅ S5-T02 ; site S5-T07)                                   |
+| FR-015          | Facture numérique après paiement. ✅ S5-T06 (ADR-0028) : au paiement reçu, avoir à l'annulation, PDF + e-mail | S5                                                                 |
+| FR-016          | Le vendeur valide ou refuse une commande                                                                      | S6                                                                 |
+| FR-003 / FR-009 | Paiement sécurisé : Moov Money, Airtel Money                                                                  | S5                                                                 |
+| FR-017          | Paiement à la livraison selon la zone                                                                         | S5                                                                 |
+| FR-018          | Le livreur met à jour le statut (récupéré, en cours, livré)                                                   | S7                                                                 |
+| FR-010          | Suivi GPS en temps réel                                                                                       | ⏳ après MVP (KSAD : Kemdia Logistics)                             |
+| FR-019          | L'administrateur valide le KYC des vendeurs                                                                   | S6                                                                 |
+| FR-020          | Modération des avis                                                                                           | S6                                                                 |
 
 ## Questions ouvertes
 
@@ -85,6 +85,7 @@
 4. **Affiliation** : lancée avec le MVP ou juste après ? commission fixe sur les produits Kemdia : quel montant ?
 5. **Transporteur** : COMAT confirmé ? mode d'échange (API, fichier, WhatsApp) ?
 6. **TVA** : seuil et modalités à valider avec un expert-comptable gabonais.
+   _S5-T06 : factures « TVA non applicable » (mention réglable par l'administrateur). Une TVA réelle demandera le détail HT / TVA. Les informations légales (raison sociale, NIF, RCCM) sont aussi à fournir : en production, aucune facture n'est émise avant._
 7. **Mobile Money** : agrégateur unique (qui gère Airtel + Moov) ou intégration directe de chaque opérateur ?
    _2026-10-10 : pas encore décidé, comptes marchands non ouverts. En attendant (S5-T05) : port neutre + simulateur « sandbox » maison (webhooks signés compris) ; le vrai fournisseur se branchera dessus. Le jalon v0.5.0 se fera sur ce simulateur._
    _S5-T04 : port `PaymentProvider` en place (fournisseur simulé en local et en démo, aucun en production) ; remboursements suivis à la main en attendant l'API du fournisseur._

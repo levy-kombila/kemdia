@@ -6,9 +6,17 @@ import { AuditModule } from "../audit/index.js";
 import { IdentityModule } from "../identity/index.js";
 import { OrdersModule } from "../orders/index.js";
 import { PaymentAdminService } from "./application/payment-admin.service.js";
+import { BillingSettingsService } from "./application/billing-settings.service.js";
+import { InvoiceService } from "./application/invoice.service.js";
 import { NotificationService } from "./application/notification.service.js";
 import { PaymentService } from "./application/payment.service.js";
 import {
+  BILLING_SETTINGS_REPOSITORY,
+  INVOICE_MAILER,
+  INVOICE_POLICY,
+  type InvoicePolicy,
+  INVOICE_RENDERER,
+  INVOICE_REPOSITORY,
   PAYMENT_PROVIDER,
   PAYMENT_REPOSITORY,
   PROVIDER_EVENT_REPOSITORY,
@@ -23,6 +31,16 @@ import {
   PrismaRefundRepository,
 } from "./infrastructure/prisma-payment.repository.js";
 import { SANDBOX_OPERATOR, SandboxOperator } from "./infrastructure/sandbox-operator.js";
+import { InvoiceEmailScheduler } from "./infrastructure/invoice-emails.js";
+import { MailInvoiceMailer } from "./infrastructure/invoice-mailer.js";
+import { PdfInvoiceRenderer } from "./infrastructure/invoice-pdf.js";
+import {
+  PrismaBillingSettingsRepository,
+  PrismaInvoiceRepository,
+} from "./infrastructure/prisma-invoice.repository.js";
+import { createMailTransport } from "../../mail/mail-transport.factory.js";
+import { BillingSettingsController } from "./interface/billing-settings.controller.js";
+import { InvoiceController } from "./interface/invoice.controller.js";
 import { SandboxController } from "./interface/sandbox.controller.js";
 import { WebhookController } from "./interface/webhook.controller.js";
 import { StalePaymentsScheduler } from "./infrastructure/stale-payments.js";
@@ -37,7 +55,14 @@ import { PaymentController } from "./interface/payment.controller.js";
  */
 @Module({
   imports: [OrdersModule, IdentityModule, AuditModule],
-  controllers: [PaymentController, PaymentAdminController, WebhookController, SandboxController],
+  controllers: [
+    PaymentController,
+    PaymentAdminController,
+    WebhookController,
+    SandboxController,
+    InvoiceController,
+    BillingSettingsController,
+  ],
   providers: [
     PaymentService,
     PaymentAdminService,
@@ -45,6 +70,26 @@ import { PaymentController } from "./interface/payment.controller.js";
     { provide: PAYMENT_REPOSITORY, useClass: PrismaPaymentRepository },
     { provide: REFUND_REPOSITORY, useClass: PrismaRefundRepository },
     NotificationService,
+    // Factures (S5-T06, ADR-0028)
+    InvoiceService,
+    BillingSettingsService,
+    InvoiceEmailScheduler,
+    { provide: INVOICE_REPOSITORY, useClass: PrismaInvoiceRepository },
+    { provide: BILLING_SETTINGS_REPOSITORY, useClass: PrismaBillingSettingsRepository },
+    { provide: INVOICE_RENDERER, useValue: new PdfInvoiceRenderer() },
+    // Préproduction, production : pas de facture tant que l'entreprise n'est pas renseignée (le reste : valeurs provisoires)
+    {
+      provide: INVOICE_POLICY,
+      inject: [APP_CONFIG],
+      useFactory: (config: AppConfig): InvoicePolicy => ({
+        requireCompleteSettings: config.APP_ENV === "staging" || config.APP_ENV === "production",
+      }),
+    },
+    {
+      provide: INVOICE_MAILER,
+      inject: [APP_CONFIG],
+      useFactory: (config: AppConfig) => new MailInvoiceMailer(createMailTransport(config)),
+    },
     { provide: PROVIDER_EVENT_REPOSITORY, useClass: PrismaProviderEventRepository },
     // Clé des notifications : tirée au démarrage pour l'opérateur simulé (choix du 2026-10-11) ; aucune ailleurs
     {

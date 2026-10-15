@@ -1,6 +1,5 @@
-import type { Email } from "./email-templates.js";
-import type { MailTransport } from "./email-otp-sender.js";
 import { postJson, type FetchLike } from "./http-mail.js";
+import { attachmentsOf, base64, type Email, type MailTransport } from "./mail-transport.js";
 
 /**
  * Mailpit : boîte de réception de TEST (docker compose), rien ne part sur Internet.
@@ -26,7 +25,16 @@ export class MailpitTransport implements MailTransport {
         Subject: email.subject,
         Text: email.text,
         HTML: email.html,
-        Tags: ["kemdia"],
+        Tags: [email.tag ?? "kemdia"],
+        ...(email.attachments?.length
+          ? {
+              Attachments: attachmentsOf(email).map((a) => ({
+                Filename: a.filename,
+                ContentType: a.contentType,
+                Content: base64(a.content),
+              })),
+            }
+          : {}),
       },
       [200],
     );

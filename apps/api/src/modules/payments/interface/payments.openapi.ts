@@ -36,6 +36,10 @@ const PAYMENT_RULES = [
 ].join("\n\n");
 const SANDBOX_RULES =
   "**Bac à sable** (poste de développement et démo seulement) : le compte connecté voit les demandes de paiement envoyées à l'opérateur simulé. Valider ou refuser fait envoyer par l'opérateur simulé une notification **signée** à l'API, comme le vrai opérateur. Aucun argent ne circule.";
+const INVOICE_RULES =
+  "Facture établie quand le paiement est reçu (Mobile Money confirmé, ou espèces encaissées) ; **avoir** du même montant si la commande facturée est annulée. Numéros par année, sans trou. Seul le client de la commande y a accès. Aussi envoyée par e-mail (PDF joint) à l'adresse vérifiée du compte.";
+const BILLING_RULES =
+  "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes** ; chaque changement au journal d'audit. Raison sociale, adresse, NIF, RCCM, mention de TVA : copiés et **figés** dans chaque nouvelle facture (une facture émise ne change jamais).";
 const ADMIN_RULES =
   "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque action est inscrite au journal d'audit.";
 
@@ -254,6 +258,79 @@ export const paymentPaths = {
         "404": problem("`DEMANDE_INTROUVABLE`, ou bac à sable indisponible"),
         "422": problem("`CODE_PIN_INVALIDE`"),
         "503": problem("`PAIEMENT_INDISPONIBLE` : notification non acceptée par l'API"),
+      },
+    },
+  },
+  "/api/v1/orders/{reference}/invoices": {
+    get: {
+      tags: ["Paiements"],
+      summary: "Facture (et avoir) de la commande",
+      description: INVOICE_RULES,
+      operationId: "listInvoices",
+      security: bearer,
+      parameters: [reference],
+      responses: {
+        "200": json(
+          "InvoiceList",
+          "Facture, puis avoir si la commande a été annulée (vide : pas encore payée)",
+        ),
+        "400": problem("Numéro de commande invalide"),
+        ...session,
+        "404": problem("`COMMANDE_INTROUVABLE` (n'existe pas ou n'est pas à ce compte)"),
+      },
+    },
+  },
+  "/api/v1/orders/{reference}/invoices/{number}": {
+    get: {
+      tags: ["Paiements"],
+      summary: "Télécharger la facture ou l'avoir (PDF)",
+      description: `${INVOICE_RULES}\n\nToujours le même PDF pour un même numéro (refait à partir de la copie figée).`,
+      operationId: "downloadInvoice",
+      security: bearer,
+      parameters: [
+        reference,
+        {
+          name: "number",
+          in: "path",
+          required: true,
+          description: "Numéro de la facture (KMD-F-2026-000001) ou de l'avoir (KMD-A-2026-000001)",
+          schema: { type: "string", pattern: "^KMD-[FA]-\\d{4}-\\d{6}$" },
+        },
+      ],
+      responses: {
+        "200": {
+          description: "Le PDF (en pièce jointe)",
+          content: { "application/pdf": { schema: { type: "string", format: "binary" } } },
+        },
+        "400": problem("Numéro de commande ou de facture invalide"),
+        ...session,
+        "404": problem("`COMMANDE_INTROUVABLE` ou `FACTURE_INTROUVABLE`"),
+      },
+    },
+  },
+  "/api/v1/admin/settings/billing": {
+    get: {
+      tags: ["Administration"],
+      summary: "Informations de l'entreprise sur les factures",
+      description: BILLING_RULES,
+      operationId: "getBillingSettings",
+      security: bearer,
+      responses: { "200": json("BillingSettings", "Les informations en vigueur"), ...admin },
+    },
+    put: {
+      tags: ["Administration"],
+      summary: "Changer les informations de l'entreprise sur les factures",
+      description: BILLING_RULES,
+      operationId: "updateBillingSettings",
+      security: bearer,
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("BillingSettingsRequest") } },
+      },
+      responses: {
+        "200": json("BillingSettings", "Les nouvelles informations"),
+        "400": problem("Corps invalide"),
+        ...admin,
       },
     },
   },

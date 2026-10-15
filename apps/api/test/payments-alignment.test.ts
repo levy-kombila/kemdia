@@ -10,10 +10,21 @@ import {
   REFUND_REASONS,
 } from "@kemdia/contracts/constants";
 import { DEFAULT_COD_RULE } from "@kemdia/contracts/delivery";
+import {
+  DEFAULT_VAT_MENTION,
+  INVOICE_KINDS,
+  INVOICE_NUMBER_PATTERN,
+} from "@kemdia/contracts/constants";
+import * as invoice from "../src/modules/payments/domain/invoice.js";
 import * as payment from "../src/modules/payments/domain/payment.js";
 import { SIGNATURE_TOLERANCE_SECONDS } from "../src/modules/payments/domain/webhook-signature.js";
 import { COD_MAX_TOTAL_LIMIT } from "../src/modules/orders/application/cod-settings.service.js";
 import { PAYMENTS_ERROR_STATUS } from "../src/modules/payments/interface/payments-http-errors.js";
+
+const factures = readFileSync(
+  new URL("../prisma/migrations/20261015120000_factures/migration.sql", import.meta.url),
+  "utf8",
+);
 
 /** Règles des paiements écrites dans le contrat, le domaine et la migration SQL (S5-T04) : si l'une change seule, échec. */
 const migration = readFileSync(
@@ -47,5 +58,17 @@ describe("Paiements : mêmes règles dans le contrat, le domaine et la base (S5-
       `VALUES (1, ARRAY[${DEFAULT_COD_RULE.zones.map((z) => `'${z}'`).join(", ")}]::VARCHAR(10)[], ${DEFAULT_COD_RULE.maxTotal})`,
     );
     expect(migration).toContain(`CHECK ("max_total" BETWEEN 0 AND ${COD_MAX_TOTAL_LIMIT})`);
+  });
+
+  it("factures : types, format des numéros, mention de TVA de départ = contrat (S5-T06)", () => {
+    expect([...invoice.INVOICE_KINDS]).toEqual([...INVOICE_KINDS]);
+    expect(INVOICE_NUMBER_PATTERN.test(invoice.formatInvoiceNumber("invoice", 2026, 1))).toBe(true);
+    expect(
+      INVOICE_NUMBER_PATTERN.test(invoice.formatInvoiceNumber("credit_note", 2026, 999_999)),
+    ).toBe(true);
+    expect(factures).toContain(`'${DEFAULT_VAT_MENTION}')`);
+    expect(factures).toContain(
+      `CHECK ("email_attempts" BETWEEN 0 AND ${invoice.MAX_EMAIL_ATTEMPTS})`,
+    );
   });
 });

@@ -29,6 +29,7 @@ import {
   IdentityCleanupScheduler,
   PrismaIdentityMaintenance,
 } from "./infrastructure/identity-maintenance.js";
+import { AccountDirectory } from "./application/account-directory.service.js";
 import { createOtpSender } from "./infrastructure/otp-sender.factory.js";
 import { PrismaLoginGuardRepository } from "./infrastructure/prisma-login-guard.repository.js";
 import { PrismaRoleRepository } from "./infrastructure/prisma-role.repository.js";
@@ -71,6 +72,7 @@ import { SessionGuard } from "./interface/session.guard.js";
     { provide: SESSION_REPOSITORY, useClass: PrismaSessionRepository },
     { provide: SIGNUP_TICKET_REPOSITORY, useClass: PrismaSignupTicketRepository },
     { provide: ACCOUNT_REPOSITORY, useClass: PrismaAccountRepository },
+    AccountDirectory,
     { provide: OTP_CHALLENGE_REPOSITORY, useClass: PrismaOtpChallengeRepository },
     { provide: PASSWORD_HASHER, useClass: Argon2PasswordHasher },
     { provide: OTP_SENDER, inject: [APP_CONFIG], useFactory: (c: AppConfig) => createOtpSender(c) },
@@ -82,6 +84,6 @@ import { SessionGuard } from "./interface/session.guard.js";
     },
   ],
   // Les autres modules protègent leurs routes avec SessionGuard ou @Authorize (S5 : commandes, S6 : vendeurs)
-  exports: [OtpService, SessionService, SessionGuard, RoleGuard, IDENTITY_CLOCK],
+  exports: [OtpService, SessionService, SessionGuard, RoleGuard, IDENTITY_CLOCK, AccountDirectory],
 })
 export class IdentityModule {}

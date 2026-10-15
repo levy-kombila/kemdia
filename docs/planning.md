@@ -151,7 +151,7 @@ paniers gardés **90 jours** ; numéro **KMD-7F3K9Q** ; **30 min** pour payer pa
 | S5-T03 | Coupons : expiration et limite comptées de façon atomique (BR-030), cumul réglable (BR-031) ; administration par l'API, journal d'audit — ADR-0025                      | ✅     |
 | S5-T04 | Module `payments` : port fournisseur, essais Mobile Money (3 au plus), paiement à la livraison réglable (BR-011, FR-017), remboursements suivis à la main — ADR-0026    | ✅     |
 | S5-T05 | Mobile Money en _sandbox_ : opérateur simulé et téléphone simulé, notifications signées (HMAC, 5 min), rejeu refusé — ADR-0027                                          | ✅     |
-| S5-T06 | Factures (FR-015) : numérotation continue, PDF, envoi par e-mail                                                                                                        | ⏳     |
+| S5-T06 | Factures (FR-015) : au paiement reçu, numéros par année sans trou, avoir à l'annulation, PDF, envoi par e-mail — ADR-0028                                               | ✅     |
 | S5-T07 | Site branché : vrai tunnel de commande (compte obligatoire), attente de validation sur le téléphone, « Mes commandes »                                                  | ⏳     |
 | S5-T08 | Démo, parcours de bout en bout du premier achat, versions 0.5.0, clôture                                                                                                | ⏳     |
 
