@@ -14,8 +14,11 @@ name: kemdia-en-ligne
 services:
   # Tunnel rapide Cloudflare (trycloudflare.com) : adresse HTTPS tirée au hasard à chaque lancement, sans compte
   tunnel:
-    image: cloudflare/cloudflared:2026.10.0
+    # Version ET empreinte épinglées : le tunnel voit tout le trafic (relecture de sécurité S6-T00)
+    image: cloudflare/cloudflared:2026.10.0@sha256:9b49eed8f62806d5d45ddf59ecefb5710429598ea6d3fcccd2af938f621b2b07
     command: ["tunnel", "--no-autoupdate", "--url", "http://web:3000"]
+    # Le tunnel ne joint que le site : ni l'API ni la base
+    networks: [edge]
     read_only: true
     cap_drop: [ALL]
     security_opt:
@@ -44,6 +47,7 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    networks: [edge, backend]
     read_only: true
     tmpfs:
       - /tmp
@@ -76,6 +80,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks: [backend]
     read_only: true
     tmpfs:
       - /tmp
@@ -93,6 +98,7 @@ services:
       POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --encoding=UTF8
       TZ: Africa/Libreville
     # Aucun port publié : la base n'est joignable que par l'API
+    networks: [backend]
     volumes:
       - kemdia-en-ligne-db:/var/lib/postgresql
     shm_size: 128mb
@@ -104,6 +110,12 @@ services:
       timeout: 3s
       retries: 10
     restart: unless-stopped
+
+networks:
+  # Tunnel ↔ site
+  edge:
+  # Site ↔ API ↔ base (le tunnel n'y est pas)
+  backend:
 
 volumes:
   # Comptes et commandes des testeurs : gardés entre deux lancements ; hors-ligne.ps1 -Effacer les supprime

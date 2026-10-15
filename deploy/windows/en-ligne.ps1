@@ -19,11 +19,23 @@ param()
 
 $Root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $Compose = Join-Path $Root 'deploy\en-ligne\compose.yml'
-Set-Location $Root
+Push-Location $Root
+
+# Variables de la session (secrets compris) : effacées à la sortie, même lancé depuis une console déjà ouverte
+$SessionVars = 'BREVO_API_KEY', 'EMAIL_FROM', 'EMAIL_FROM_NAME', 'KEMDIA_DB_PASSWORD', 'KEMDIA_INTERNAL_KEY',
+  'KEMDIA_VERSION', 'KEMDIA_SITE_URL'
+$Saved = @{}
+foreach ($name in $SessionVars) { $Saved[$name] = [Environment]::GetEnvironmentVariable($name) }
+
+function Restore-Session {
+  foreach ($name in $SessionVars) { [Environment]::SetEnvironmentVariable($name, $Saved[$name]) }
+  Pop-Location
+}
 
 function Fail([string]$Message) {
   Write-Host ''
   Write-Host "ARRÊT : $Message" -ForegroundColor Red
+  Restore-Session
   exit 1
 }
 
@@ -47,19 +59,29 @@ if ($LASTEXITCODE -ne 0) { Fail 'Docker Desktop ne répond pas. Lance-le, attend
 
 # --- 2. Clés Brevo, lues dans .env (jamais écrites) ----------------------------------------------
 Step 'Lecture des réglages e-mail (Brevo) dans .env'
+# EN_LIGNE_BREVO_API_KEY (conseillé) : une clé Brevo propre au mode en ligne, révocable sans toucher la démo Render
+$Names = 'EN_LIGNE_BREVO_API_KEY', 'BREVO_API_KEY', 'EMAIL_FROM', 'EMAIL_FROM_NAME'
 $settings = @{}
 $envFile = Join-Path $Root '.env'
 if (Test-Path $envFile) {
-  foreach ($line in Get-Content -LiteralPath $envFile -Encoding UTF8) {
-    if ($line -match '^\s*(BREVO_API_KEY|EMAIL_FROM|EMAIL_FROM_NAME)\s*=\s*(.*)$') {
-      $settings[$Matches[1]] = $Matches[2].Trim().Trim('"').Trim("'")
+  foreach ($raw in Get-Content -LiteralPath $envFile -Encoding UTF8) {
+    $line = $raw.Trim()
+    if ($line -eq '' -or $line.StartsWith('#')) { continue }
+    if ($line -match '^(?:export\s+)?([A-Z_]+)\s*=\s*(.*)$' -and $Names -contains $Matches[1]) {
+      $name = $Matches[1]
+      $value = $Matches[2].Trim()
+      if ($value -match '^"([^"]*)"' -or $value -match "^'([^']*)'") { $value = $Matches[1] }
+      else { $value = ($value -replace '\s+#.*$', '').Trim() }
+      # Comme dotenv : la première valeur l'emporte
+      if (-not $settings.ContainsKey($name)) { $settings[$name] = $value }
     }
   }
 }
-foreach ($name in 'BREVO_API_KEY', 'EMAIL_FROM', 'EMAIL_FROM_NAME') {
+foreach ($name in $Names) {
   $fromProcess = [Environment]::GetEnvironmentVariable($name)
   if ($fromProcess) { $settings[$name] = $fromProcess }
 }
+if ($settings['EN_LIGNE_BREVO_API_KEY']) { $settings['BREVO_API_KEY'] = $settings['EN_LIGNE_BREVO_API_KEY'] }
 if (-not $settings['BREVO_API_KEY'] -or -not $settings['EMAIL_FROM']) {
   Fail ("BREVO_API_KEY et EMAIL_FROM sont nécessaires (codes d'inscription et factures envoyés aux testeurs).`n" +
         "       Ajoute-les toi-même dans $envFile (mêmes valeurs que sur Render), par exemple :`n" +
@@ -87,13 +109,19 @@ if (-not $env:KEMDIA_SITE_URL) { $env:KEMDIA_SITE_URL = 'https://kemdia.invalid'
 
 # --- 4. Tunnel Cloudflare ------------------------------------------------------------------------
 Step 'Ouverture du tunnel Cloudflare'
-& docker compose -f $Compose up -d tunnel
+# Conteneur RECRÉÉ à chaque fois : ses journaux ne contiennent que l'adresse de CE lancement
+& docker compose -f $Compose up -d --force-recreate tunnel
 if ($LASTEXITCODE -ne 0) { Fail 'le tunnel ne démarre pas (voir le message ci-dessus).' }
 $url = $null
 for ($i = 0; $i -lt 60 -and -not $url; $i++) {
+  $running = (& docker compose -f $Compose ps --status running -q tunnel) | Out-String
+  if (-not $running.Trim()) {
+    Fail "le tunnel s'est arrêté (Cloudflare injoignable ?). Voir : docker compose -f $Compose logs tunnel"
+  }
   $logs = (& docker compose -f $Compose logs --no-color tunnel 2>&1) | Out-String
-  $found = [regex]::Matches($logs, 'https://[a-z0-9-]+\.trycloudflare\.com')
-  if ($found.Count -gt 0) { $url = $found[$found.Count - 1].Value } else { Start-Sleep -Seconds 1 }
+  # Ligne d'annonce de cloudflared (« |  https://mots-au-hasard.trycloudflare.com  | ») ; jamais api.trycloudflare.com
+  $found = [regex]::Match($logs, '\|\s+(https://(?!api\.)[a-z0-9]+(?:-[a-z0-9]+)+\.trycloudflare\.com)\s+\|')
+  if ($found.Success) { $url = $found.Groups[1].Value } else { Start-Sleep -Seconds 1 }
 }
 if (-not $url) { Fail "aucune adresse de tunnel après 60 s. Voir : docker compose -f $Compose logs tunnel" }
 $env:KEMDIA_SITE_URL = $url
@@ -131,3 +159,5 @@ Write-Host 'Sur ce PC uniquement : http://localhost:3100'
 Write-Host ''
 Write-Host 'Pour couper l''accès public : powershell -ExecutionPolicy Bypass -File deploy\windows\hors-ligne.ps1'
 Write-Host 'Pense à empêcher la mise en veille du PC pendant les tests.'
+Write-Host 'Premier test conseillé : te connecter par l''adresse du tunnel (vérifie les formulaires de bout en bout).'
+Restore-Session

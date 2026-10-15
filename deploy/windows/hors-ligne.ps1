@@ -38,6 +38,11 @@ if ($LASTEXITCODE -ne 0) { Write-Host 'ATTENTION : le tunnel ne s''est pas arrê
 if ($Effacer) {
   Write-Host '==> Arrêt et suppression du mode en ligne, base des testeurs comprise' -ForegroundColor Cyan
   & docker compose -f $Compose down -v
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host 'ATTENTION : la base n''a pas pu être supprimée ; son mot de passe est gardé.' -ForegroundColor Red
+    exit 1
+  }
+  # Seulement une fois la base supprimée : sinon le prochain lancement ne pourrait plus s'y connecter
   $stateFile = Join-Path $env:LOCALAPPDATA 'Kemdia\en-ligne\db-password.txt'
   if (Test-Path $stateFile) { Remove-Item -LiteralPath $stateFile }
 } else {
