@@ -1,41 +1,42 @@
 # Cahier d'architecture — Kemdia
 
-| Version | Date       | Sprint | Changements                                                                                                                                                                               |
-| ------- | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0.1** | 2026-10-05 | S1     | Création : contexte, exigences, stack, architecture frontend, sécurité, DevOps                                                                                                            |
-| **0.2** | 2026-10-05 | S1     | §7 pipeline CD complet, §8 architecture de déploiement (ADR-0005)                                                                                                                         |
-| **0.3** | 2026-10-05 | S1     | §8 environnement de démonstration gratuit (Render), version inscrite dans l'image                                                                                                         |
-| **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués                                                |
-| **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests                                                    |
-| **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                                                                     |
-| **3.4** | 2026-10-15 | S5     | Factures (ADR-0028) : §3.4 dossier `src/mail/`, §3.7 routes et contrat 1.12.0, §3.10 action d'audit, §3.15 (nouvelle), §6.4                                                               |
-| **3.3** | 2026-10-11 | S5     | Notifications signées et bac à sable (ADR-0027) : §3.7 routes et contrat 1.11.0, §3.14 notifications et opérateur simulé, §5.11 (nouvelle), §6.4                                          |
-| **3.2** | 2026-10-10 | S5     | Paiements (ADR-0026) : §3.3 module `payments`, §3.5 schéma `payments`, §3.7 routes et contrat 1.10.0, §3.10 actions d'audit, §3.14 (nouvelle), §6.4                                       |
-| **3.1** | 2026-10-10 | S5     | Coupons (ADR-0025) : §3.7 routes `/admin/coupons` et contrat 1.9.0, §3.10 actions d'audit, §3.13 (nouvelle), §6.4                                                                         |
-| **3.0** | 2026-10-10 | S5     | Commandes (ADR-0024) : §2.1 F7 · F8, §3.5 schéma `orders`, §3.7 routes `/orders` et contrat 1.8.0, §3.12 (nouvelle : commandes, réservation du stock), §5.7 barèmes dans le contrat, §6.4 |
-| **2.9** | 2026-10-10 | S5     | Panier serveur (ADR-0023) : §2.1 F4, §3.3 et §3.5 module et schéma `orders`, §3.7 routes `/cart`, §3.9 colonnes supprimées, §3.11 (nouvelle), §5.10 (nouvelle), §6.4                      |
-| **2.8** | 2026-10-09 | S4     | Fin du Sprint 4 (v0.4.0) : écran de réveil de la démo (ADR-0022, §5.2, §5.9), colonnes obsolètes ignorées (§3.9) ; rapport de clôture                                                     |
-| **2.7** | 2026-10-09 | S4     | CSRF, CSP à nonce, limites (ADR-0021) : §3.7 limitation de débit, §5.2 rendu à la demande, §5.4 proxy, §5.9 `CLIENT_IP_HEADER`, §6                                                        |
-| **2.6** | 2026-10-08 | S4     | Rôles et journal d'audit (ADR-0020) : §3.3 module `audit`, §3.5 schéma `audit`, §3.7 routes `/admin`, §3.9 rôles, §3.10 (nouvelle), §6                                                    |
-| **2.5** | 2026-10-08 | S4     | Site branché sur l'identité (ADR-0019) : §5.4 réécrit (actions serveur, cookies, en-tête, Mon compte), §6.2 mesures du site                                                               |
-| **2.4** | 2026-10-08 | S4     | Mot de passe oublié (ADR-0018) : §3.7 routes `/auth/password/*` ; §3.9 `reset_tickets`, version du mot de passe ; §6.3                                                                    |
-| **2.3** | 2026-10-08 | S4     | Connexion et sessions (ADR-0017) : §3.7 routes `/auth/login`, `/session`, `/logout` ; §3.9 blocage par identifiant, sessions, ménage ; §6.3                                               |
-| **2.2** | 2026-10-07 | S4     | Inscription et e-mails (ADR-0016) : §3.4 variables e-mail, §3.7 routes `/auth/signup`, §3.9 tickets et envoi, §6.3                                                                        |
-| **2.1** | 2026-10-07 | S4     | Fondations du module `identity` (ADR-0015) : §3.4 `SMS_ENABLED`, §3.5, §3.9 (nouvelle), §5.4 SMS différé, §6.3, §6.4                                                                      |
-| **2.0** | 2026-10-07 | S3     | Fin du Sprint 3 (v0.3.0) : démo avec `CATALOG_TIMEOUT_MS=90000` (§5.9) ; rapport de clôture                                                                                               |
-| **1.9** | 2026-10-07 | S3     | Dette S3-T08 : mode fichier retiré (§3.2, §5.9), accueil chargé zone par zone (§5.2), TypeScript 6 / ESLint 10 (§4, ADR-0014), §7, §9                                                     |
-| **1.8** | 2026-10-07 | S3     | Démo Render avec l'API et une base Neon (ADR-0013) : §3.2, §3.5, §3.8 démarrage de démo, §5.9, §7 jobs image de l'API et démo, §8, §9                                                     |
-| **1.7** | 2026-10-06 | S3     | Image Docker de l'API et migrations au déploiement (ADR-0012) : §3.5, §3.8 (nouvelle), §6.3, §7 job « image de l'API », §8, §9                                                            |
-| **1.6** | 2026-10-06 | S3     | Le site lit l'API (ADR-0011) : §3.2, §3.7 contrat `packages/contracts`, §5.1, §5.2, §5.7 panier par variante, §5.9 (nouvelle), §6.2, §7, §9                                               |
-| **1.5** | 2026-10-06 | S3     | §3.7 API REST `/api/v1` et documentation OpenAPI (ADR-0010) ; §3.4 `docs/`, variables ; §4 ; §6.3 limitation de débit ; §9 tests de contrat                                               |
-| **1.4** | 2026-10-06 | S3     | BR-005 : 3 niveaux de catégories (domaine + déclencheur SQL) ; Fitness déplacé sous Sport & Loisirs ; §2.1, §3.6, §6.3, §9                                                                |
-| **1.3** | 2026-10-06 | S3     | §3.6 module `catalog` (ADR-0009) : domaine, cas d'utilisation, persistance, import de démonstration ; §2.1 F3 ; §6.3 ; §9 tests                                                           |
-| **1.2** | 2026-10-06 | S3     | §3.5 base de données (ADR-0008) ; §3.4 dossier `database/`, `DATABASE_*` ; §4, §6.3, §7 job PostgreSQL, §8, §9 tests d'intégration                                                        |
-| **1.1** | 2026-10-06 | S3     | §3.4 socle de l'API (`apps/api`, ADR-0007) ; §4 versions du backend ; §6.3 sécurité de l'API (ancien §6.3 → §6.4) ; §7 et §9 tests de l'API                                               |
-| **0.9** | 2026-10-06 | S2     | §5.8 favoris, partage et aperçus, page vendeur ; §5.2 rendu à la demande (`SITE_URL`) ; §7 et §9 tests de bout en bout                                                                    |
-| **0.8** | 2026-10-05 | S2     | §5.7 tunnel de commande (port `OrderClient`, données envoyées) ; §6.2 mesures du tunnel                                                                                                   |
-| **0.7** | 2026-10-05 | S2     | §5.6 pages de liste (filtres) et panier ; §6.2 filtres par liste blanche                                                                                                                  |
-| **0.6** | 2026-10-05 | S2     | §5.5 charte graphique « place de marché » (Archivo à largeur variable, étiquette de prix), §5.6 structure des pages, §5.1 composants                                                      |
+| Version | Date       | Sprint | Changements                                                                                                                                                                                                           |
+| ------- | ---------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0.1** | 2026-10-05 | S1     | Création : contexte, exigences, stack, architecture frontend, sécurité, DevOps                                                                                                                                        |
+| **0.2** | 2026-10-05 | S1     | §7 pipeline CD complet, §8 architecture de déploiement (ADR-0005)                                                                                                                                                     |
+| **0.3** | 2026-10-05 | S1     | §8 environnement de démonstration gratuit (Render), version inscrite dans l'image                                                                                                                                     |
+| **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués                                                                            |
+| **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests                                                                                |
+| **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                                                                                                 |
+| **3.5** | 2026-10-15 | S5     | Site branché sur les commandes (ADR-0029) : §3.7 contrat 1.13.0, §3.12 Mobile Money selon le fournisseur, §3.14 annulation par le client, §5.7 tunnel branché, §5.12 (nouvelle : « Mes commandes »), §6.4, §7 job e2e |
+| **3.4** | 2026-10-15 | S5     | Factures (ADR-0028) : §3.4 dossier `src/mail/`, §3.7 routes et contrat 1.12.0, §3.10 action d'audit, §3.15 (nouvelle), §6.4                                                                                           |
+| **3.3** | 2026-10-11 | S5     | Notifications signées et bac à sable (ADR-0027) : §3.7 routes et contrat 1.11.0, §3.14 notifications et opérateur simulé, §5.11 (nouvelle), §6.4                                                                      |
+| **3.2** | 2026-10-10 | S5     | Paiements (ADR-0026) : §3.3 module `payments`, §3.5 schéma `payments`, §3.7 routes et contrat 1.10.0, §3.10 actions d'audit, §3.14 (nouvelle), §6.4                                                                   |
+| **3.1** | 2026-10-10 | S5     | Coupons (ADR-0025) : §3.7 routes `/admin/coupons` et contrat 1.9.0, §3.10 actions d'audit, §3.13 (nouvelle), §6.4                                                                                                     |
+| **3.0** | 2026-10-10 | S5     | Commandes (ADR-0024) : §2.1 F7 · F8, §3.5 schéma `orders`, §3.7 routes `/orders` et contrat 1.8.0, §3.12 (nouvelle : commandes, réservation du stock), §5.7 barèmes dans le contrat, §6.4                             |
+| **2.9** | 2026-10-10 | S5     | Panier serveur (ADR-0023) : §2.1 F4, §3.3 et §3.5 module et schéma `orders`, §3.7 routes `/cart`, §3.9 colonnes supprimées, §3.11 (nouvelle), §5.10 (nouvelle), §6.4                                                  |
+| **2.8** | 2026-10-09 | S4     | Fin du Sprint 4 (v0.4.0) : écran de réveil de la démo (ADR-0022, §5.2, §5.9), colonnes obsolètes ignorées (§3.9) ; rapport de clôture                                                                                 |
+| **2.7** | 2026-10-09 | S4     | CSRF, CSP à nonce, limites (ADR-0021) : §3.7 limitation de débit, §5.2 rendu à la demande, §5.4 proxy, §5.9 `CLIENT_IP_HEADER`, §6                                                                                    |
+| **2.6** | 2026-10-08 | S4     | Rôles et journal d'audit (ADR-0020) : §3.3 module `audit`, §3.5 schéma `audit`, §3.7 routes `/admin`, §3.9 rôles, §3.10 (nouvelle), §6                                                                                |
+| **2.5** | 2026-10-08 | S4     | Site branché sur l'identité (ADR-0019) : §5.4 réécrit (actions serveur, cookies, en-tête, Mon compte), §6.2 mesures du site                                                                                           |
+| **2.4** | 2026-10-08 | S4     | Mot de passe oublié (ADR-0018) : §3.7 routes `/auth/password/*` ; §3.9 `reset_tickets`, version du mot de passe ; §6.3                                                                                                |
+| **2.3** | 2026-10-08 | S4     | Connexion et sessions (ADR-0017) : §3.7 routes `/auth/login`, `/session`, `/logout` ; §3.9 blocage par identifiant, sessions, ménage ; §6.3                                                                           |
+| **2.2** | 2026-10-07 | S4     | Inscription et e-mails (ADR-0016) : §3.4 variables e-mail, §3.7 routes `/auth/signup`, §3.9 tickets et envoi, §6.3                                                                                                    |
+| **2.1** | 2026-10-07 | S4     | Fondations du module `identity` (ADR-0015) : §3.4 `SMS_ENABLED`, §3.5, §3.9 (nouvelle), §5.4 SMS différé, §6.3, §6.4                                                                                                  |
+| **2.0** | 2026-10-07 | S3     | Fin du Sprint 3 (v0.3.0) : démo avec `CATALOG_TIMEOUT_MS=90000` (§5.9) ; rapport de clôture                                                                                                                           |
+| **1.9** | 2026-10-07 | S3     | Dette S3-T08 : mode fichier retiré (§3.2, §5.9), accueil chargé zone par zone (§5.2), TypeScript 6 / ESLint 10 (§4, ADR-0014), §7, §9                                                                                 |
+| **1.8** | 2026-10-07 | S3     | Démo Render avec l'API et une base Neon (ADR-0013) : §3.2, §3.5, §3.8 démarrage de démo, §5.9, §7 jobs image de l'API et démo, §8, §9                                                                                 |
+| **1.7** | 2026-10-06 | S3     | Image Docker de l'API et migrations au déploiement (ADR-0012) : §3.5, §3.8 (nouvelle), §6.3, §7 job « image de l'API », §8, §9                                                                                        |
+| **1.6** | 2026-10-06 | S3     | Le site lit l'API (ADR-0011) : §3.2, §3.7 contrat `packages/contracts`, §5.1, §5.2, §5.7 panier par variante, §5.9 (nouvelle), §6.2, §7, §9                                                                           |
+| **1.5** | 2026-10-06 | S3     | §3.7 API REST `/api/v1` et documentation OpenAPI (ADR-0010) ; §3.4 `docs/`, variables ; §4 ; §6.3 limitation de débit ; §9 tests de contrat                                                                           |
+| **1.4** | 2026-10-06 | S3     | BR-005 : 3 niveaux de catégories (domaine + déclencheur SQL) ; Fitness déplacé sous Sport & Loisirs ; §2.1, §3.6, §6.3, §9                                                                                            |
+| **1.3** | 2026-10-06 | S3     | §3.6 module `catalog` (ADR-0009) : domaine, cas d'utilisation, persistance, import de démonstration ; §2.1 F3 ; §6.3 ; §9 tests                                                                                       |
+| **1.2** | 2026-10-06 | S3     | §3.5 base de données (ADR-0008) ; §3.4 dossier `database/`, `DATABASE_*` ; §4, §6.3, §7 job PostgreSQL, §8, §9 tests d'intégration                                                                                    |
+| **1.1** | 2026-10-06 | S3     | §3.4 socle de l'API (`apps/api`, ADR-0007) ; §4 versions du backend ; §6.3 sécurité de l'API (ancien §6.3 → §6.4) ; §7 et §9 tests de l'API                                                                           |
+| **0.9** | 2026-10-06 | S2     | §5.8 favoris, partage et aperçus, page vendeur ; §5.2 rendu à la demande (`SITE_URL`) ; §7 et §9 tests de bout en bout                                                                                                |
+| **0.8** | 2026-10-05 | S2     | §5.7 tunnel de commande (port `OrderClient`, données envoyées) ; §6.2 mesures du tunnel                                                                                                                               |
+| **0.7** | 2026-10-05 | S2     | §5.6 pages de liste (filtres) et panier ; §6.2 filtres par liste blanche                                                                                                                                              |
+| **0.6** | 2026-10-05 | S2     | §5.5 charte graphique « place de marché » (Archivo à largeur variable, étiquette de prix), §5.6 structure des pages, §5.1 composants                                                                                  |
 
 > Document vivant : chaque rapport de sprint (`docs/rapports/`) indique quelles sections il a modifiées.
 > Les sections marquées 🔜 seront rédigées au sprint indiqué.
@@ -461,6 +462,9 @@ limites `CART_MAX_LINES` (50), `CART_MAX_QUANTITY` (20), `CART_TTL_DAYS` (90). C
 **Coupons (S5-T03)** : `couponCode` dans le devis et la commande ; `COUPON_ERROR_CODES` (`COUPON_INVALIDE`, `COUPON_EXPIRE`, `COUPON_EPUISE`, `COUPON_DEJA_UTILISE`,
 `COUPON_MINIMUM_NON_ATTEINT`, `COUPON_NON_APPLICABLE`, `COUPON_EXISTE`, `COUPON_INTROUVABLE`, `COUPON_TROP_D_ESSAIS`), `COUPON_LIMITS`. Contrat 1.9.0.
 
+**Site branché (S5-T07, [ADR-0029](adr/0029-site-tunnel-commande-mes-commandes.md))** : `mobileMoney.allowed` dans le devis
+(`OrderQuote`), code `MOBILE_MONEY_INDISPONIBLE` (422) quand une commande Mobile Money est demandée sans fournisseur. Contrat 1.13.0.
+
 ### 3.8 Image Docker de l'API (S3-T06)
 
 Décision : [ADR-0012](adr/0012-image-api-migrations.md). Fichier : `apps/api/Dockerfile` (construit depuis la racine du dépôt).
@@ -647,6 +651,11 @@ catalog/
 Une commande se crée **à partir du panier du compte** : la requête ne porte que l'adresse, le moyen de paiement, la clé d'idempotence et le
 total affiché. Stock réservé, montants calculés, commande enregistrée et panier vidé dans **une seule transaction**.
 
+**Mobile Money selon le fournisseur (S5-T07, ADR-0029)** : `config/mobile-money.ts` dit si un paiement Mobile Money peut aboutir
+(aujourd'hui : opérateur simulé, poste de développement et démo). Le module `orders` le lit par le port `MOBILE_MONEY` : le devis
+l'indique (`mobileMoney.allowed`) et la création refuse une commande Mobile Money sans fournisseur (`MOBILE_MONEY_INDISPONIBLE`),
+**après** la recherche de la clé d'idempotence (une commande déjà créée est toujours rendue) et avant toute réservation de stock.
+
 ### 3.13 Coupons (S5-T03)
 
 Décision : [ADR-0025](adr/0025-coupons.md). Fichiers ajoutés au module `orders` : `domain/coupon.ts` (règles, réduction, BR-030 / BR-031),
@@ -694,6 +703,11 @@ prévient Kemdia par `POST /api/v1/webhooks/mobile-money`. Signature HMAC-SHA256
 `payments.provider_events` (clé = son identifiant, ajout seul) dans la transaction qui applique le résultat : un rejeu ne change
 rien. L'**opérateur simulé** (`infrastructure/sandbox-operator.ts`, local et démo seulement, clé tirée au démarrage) reçoit les
 demandes, les montre sur le téléphone simulé du site et envoie la notification signée **par HTTP** à l'API, comme le vrai.
+
+**Annulation par le client (S5-T07, ADR-0029)** : le module `orders` tient un registre `OrderCancelHooks` ; le module `payments`
+s'y inscrit au démarrage (`PaymentService.onModuleInit`). Dans la transaction de l'annulation, les essais encore en attente passent
+« expiré » (`commande_annulee`) et le fournisseur peut retirer la demande (`PaymentProvider.cancel`, facultatif : l'opérateur simulé
+l'enlève du téléphone). Un paiement validé malgré tout donne un remboursement « à faire » (inchangé).
 
 ### 3.15 Factures (S5-T06)
 
@@ -906,19 +920,27 @@ flowchart LR
     att --> ok
 ```
 
-| Choix                           | Raison                                                                                                      |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| **Point de repère** obligatoire | Au Gabon, on se repère plus souvent ainsi que par numéro de rue ; c'est ce qui permet au livreur de trouver |
-| Numéro de paiement pré-rempli   | Celui de l'adresse ; l'opérateur est déduit (07 → Airtel, 06 → Moov) et vérifié                             |
-| Paiement à la livraison         | Grisé avec la raison si la ville ou le montant ne le permettent pas (BR-011, valeurs provisoires)           |
-| Port `OrderClient`              | Adaptateur de démonstration en S2 ; API `orders` + `payments` en S5, sans changer l'interface               |
+| Choix                           | Raison                                                                                                            |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Point de repère** obligatoire | Au Gabon, on se repère plus souvent ainsi que par numéro de rue ; c'est ce qui permet au livreur de trouver       |
+| Numéro de paiement pré-rempli   | Celui de l'adresse ; l'opérateur est déduit (07 → Airtel, 06 → Moov) et vérifié                                   |
+| Paiement à la livraison         | Grisé avec la raison si la ville ou le montant ne le permettent pas (BR-011, valeurs provisoires)                 |
+| Montants du serveur             | Devis de l'API (`POST /orders/quote`) : frais, remise du code promo, total, moyens de paiement possibles (S5-T07) |
 
-**Données envoyées au serveur** (`buildOrderRequest`) : `{ variantId, quantity }` pour chaque article (S3-T05), adresse, moyen et numéro de paiement.
+**Données envoyées au serveur** (`buildOrderRequest`, S5-T07) : adresse, moyen et numéro de paiement ; l'action ajoute la clé d'idempotence,
+le total affiché et le code promo. **Aucun article** : l'API commande le panier du compte.
 **Jamais de prix, de total ni de frais** : le serveur les recalcule (BR-004, faille CRIT-01 de l'ancien site).
 
 **Depuis le S5-T02** ([ADR-0024](adr/0024-commandes-reservation-stock.md)) : zones, villes, quartiers, frais et règles du paiement à la livraison vivent dans le contrat
 (`@kemdia/contracts/delivery`, gelés) ; `lib/delivery.ts` et `lib/checkout.ts` les réexportent. L'API calcule la facture avec le même code
-(`POST /orders/quote`), et la commande ne contient que l'adresse, le paiement, une clé d'idempotence et le total affiché. Branchement du tunnel : S5-T07.
+(`POST /orders/quote`), et la commande ne contient que l'adresse, le paiement, une clé d'idempotence et le total affiché.
+
+**Branché sur l'API au S5-T07** ([ADR-0029](adr/0029-site-tunnel-commande-mes-commandes.md)) : la page exige un compte (sinon
+`/connexion?retour=/commande`) et pré-remplit le nom et le téléphone du compte. Le devis est demandé dès l'adresse validée, puis à chaque
+code promo ou changement du panier ; le bouton reste inactif tant que le devis n'est pas à jour. `PRIX_MODIFIE` → nouveau devis et
+nouveau total à confirmer ; `CLE_DEJA_UTILISEE` → panier relu et renvoi vers « Mes commandes ». Après la commande : `CartProvider.reload()`
+puis page de la commande (`?nouvelle=1`), où se fait l'attente du paiement Mobile Money (§5.12). L'adaptateur de démonstration
+`lib/orders/client.ts` est supprimé.
 
 ### 5.8 Favoris, partage et page vendeur (S2-T04 à T06)
 
@@ -1001,6 +1023,20 @@ demandes de paiement Mobile Money de son compte, saisit un code PIN fictif et va
 | `components/payments/AutoRefresh.tsx`  | Relit la page toutes les 5 s (onglet visible)                                         |
 | `lib/payments/sandbox-actions.ts`      | Action serveur : champs revérifiés (UUID, décision, PIN), puis API                    |
 | `lib/payments/api-sandbox.ts`          | Adaptateur `server-only` (clé interne + jeton), réponses vérifiées par le contrat     |
+
+### 5.12 « Mes commandes » et attente du paiement (S5-T07)
+
+Décision : [ADR-0029](adr/0029-site-tunnel-commande-mes-commandes.md). Compte obligatoire (`requireAccount`, retour après connexion).
+
+| Fichier                                                       | Rôle                                                                                                                         |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `app/compte/commandes/page.tsx`                               | Liste, 10 par page, de la plus récente à la plus ancienne (`?avant=` = curseur vérifié)                                      |
+| `app/compte/commandes/[reference]/page.tsx`                   | Détail : articles, totaux, livraison, paiement, factures, suivi, annulation ; relue toutes les 5 s si en attente de paiement |
+| `app/compte/commandes/[reference]/factures/[numero]/route.ts` | Relais du PDF (session, numéros revérifiés, pièce jointe, `nosniff`, `private, no-store`, 2 Mo au plus)                      |
+| `components/orders/PaymentPanel.tsx`                          | Attente Mobile Money : demande en cours, échec en clair, « Réessayer » (essais restants), lien vers le téléphone simulé      |
+| `components/orders/CancelOrderForm.tsx`                       | Annulation en deux temps (avertit si une demande attend sur le téléphone)                                                    |
+| `lib/orders/api-orders.ts`, `orders.ts`                       | Adaptateur `server-only` (clé interne + jeton), réponses vérifiées par le contrat ; journaux sans numéro ni jeton            |
+| `lib/orders/order-actions.ts`, `order-messages.ts`            | Actions serveur (devis, commande, réessai, annulation) ; messages en français pour chaque code                               |
 
 ## 6. Sécurité
 
@@ -1086,7 +1122,7 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 ### 6.4 Prévu 🔜
 
 - Démo : régler `CLIENT_IP_HEADER` une fois l'en-tête fiable de Render vérifié ; collecte des violations de CSP (`report-to`).
-- S5 : signature des webhooks Mobile Money, idempotence des paiements. Fait au S5-T01 : panier modifié sous verrou en une transaction, prix jamais reçus du navigateur, UUID normalisés. Fait au S5-T02 : stock réservé dans la transaction de la commande (BR-012), commandes idempotentes, montants figés par la base, 3 commandes ouvertes au plus par compte. Fait au S5-T03 : coupons comptés de façon atomique (BR-030), jamais de commande à 0 FCFA, limite d'essais de codes. Fait au S5-T06 : factures figées et numérotées sans trou par la base, PDF jamais en erreur sur un texte du client, e-mail réservé avant l'envoi (pas de doublon), aucune facture « à compléter » en production. Fait au S5-T05 : notifications signées (HMAC-SHA256 sur le corps brut, 5 minutes), rejeu ignoré dans la même transaction (CRIT-01 traité), opérateur simulé jamais actif en production. Fait au S5-T04 : résultat d'un paiement vérifié (référence, montant), argent non attendu → remboursement à faire, commande payée non annulable en ligne, 5 demandes par heure au plus vers un même numéro, paiements et remboursements jamais effacés.
+- S5 : signature des webhooks Mobile Money, idempotence des paiements. Fait au S5-T01 : panier modifié sous verrou en une transaction, prix jamais reçus du navigateur, UUID normalisés. Fait au S5-T02 : stock réservé dans la transaction de la commande (BR-012), commandes idempotentes, montants figés par la base, 3 commandes ouvertes au plus par compte. Fait au S5-T03 : coupons comptés de façon atomique (BR-030), jamais de commande à 0 FCFA, limite d'essais de codes. Fait au S5-T06 : factures figées et numérotées sans trou par la base, PDF jamais en erreur sur un texte du client, e-mail réservé avant l'envoi (pas de doublon), aucune facture « à compléter » en production. Fait au S5-T05 : notifications signées (HMAC-SHA256 sur le corps brut, 5 minutes), rejeu ignoré dans la même transaction (CRIT-01 traité), opérateur simulé jamais actif en production. Fait au S5-T07 : aucun article ni prix envoyé par le site, montants du devis seulement, Mobile Money refusé sans fournisseur, demandes de paiement expirées à l'annulation par le client, factures relayées par le serveur du site (session, numéros revérifiés, jamais en cache, 2 Mo au plus), actions serveur revérifiant chaque argument. Fait au S5-T04 : résultat d'un paiement vérifié (référence, montant), argent non attendu → remboursement à faire, commande payée non annulable en ligne, 5 demandes par heure au plus vers un même numéro, paiements et remboursements jamais effacés.
 - S6 : écrans d'administration avec double authentification (MED-15) ; nouvelles actions au journal (KYC, modération).
 - S7 : deux rôles PostgreSQL (migrations / application sans droit de modifier les tables **ni de désactiver les déclencheurs du journal d'audit**), connexion chiffrée selon l'hébergement, sauvegardes chiffrées testées.
 
@@ -1113,24 +1149,24 @@ flowchart LR
     prod -. échec .-> rb[retour arrière auto]
 ```
 
-| Fichier                           | Rôle                                                                                                                                                                 |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/ci.yml`        | Qualité → bout en bout → image → scan → publication GHCR + Docker Hub (main) → staging + démo                                                                        |
-| `.github/workflows/release.yml`   | Tag `vX.Y.Z` → promotion de l'image testée → Release GitHub → production                                                                                             |
-| `.github/workflows/_deploy.yml`   | Déploiement réutilisable : SSH restreint, test de fumée, retour arrière                                                                                              |
-| `.github/workflows/security.yml`  | Gitleaks, pnpm audit, Semgrep, ShellCheck ; CodeQL si dépôt public ; chaque lundi                                                                                    |
-| `.github/dependabot.yml`          | Mises à jour hebdomadaires (npm, actions épinglées par SHA, image Docker)                                                                                            |
-| `apps/web/Dockerfile`             | Multi-étapes, `standalone`, non-root, sans npm, healthcheck `/api/health`                                                                                            |
-| `apps/api/`                       | Lint, types, tests (avec couverture) et build dans la même étape « qualité » que le site (S3-T01)                                                                    |
-| Job « migrations et intégration » | Base PostgreSQL 18 éphémère : `db:deploy`, `db:check` (migrations = schéma), `test:int` (S3-T02)                                                                     |
-| Job « bout en bout » (S3-T05)     | Site construit avec une API **injoignable**, puis parcours et performance contre la vraie API (PostgreSQL 18, clé éphémère) ; aucune réponse 429 tolérée             |
-| `apps/api/Dockerfile` (S3-T06)    | Image de l'API : multi-étapes, dépendances de production seules, non-root, moteur de migrations embarqué                                                             |
-| Job « image de l'API » (S3-T06)   | Construction, Trivy, migrations sur une base **vide** puis relance, refus d'une configuration fausse, API en lecture seule → `database: ok`, publication GHCR (main) |
-| Job « image de l'API » (S3-T07)   | Démarrage de démo sur une base **vide** (migrations + 50 produits + API), redémarrage sans doublon, refus hors démo ; publication Docker Hub publique (main)         |
-| Job « démo » (S3-T07)             | Render : API d'abord (version + `database: ok`), puis site (version, en-têtes, fiche produit, `catalog: "api"`) ; chaque partie ignorée sans son deploy hook         |
-| Job « image » (S3-T05, S3-T08)    | Sans API, l'image refuse de démarrer (production comme démo) ; API muette → page d'erreur (500), jamais de catalogue de secours                                      |
-| `deploy/`                         | Scripts et configuration serveur (voir §8)                                                                                                                           |
-| `.husky/pre-commit`               | Formatage automatique avant chaque commit                                                                                                                            |
+| Fichier                           | Rôle                                                                                                                                                                                                                                                                          |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/ci.yml`        | Qualité → bout en bout → image → scan → publication GHCR + Docker Hub (main) → staging + démo                                                                                                                                                                                 |
+| `.github/workflows/release.yml`   | Tag `vX.Y.Z` → promotion de l'image testée → Release GitHub → production                                                                                                                                                                                                      |
+| `.github/workflows/_deploy.yml`   | Déploiement réutilisable : SSH restreint, test de fumée, retour arrière                                                                                                                                                                                                       |
+| `.github/workflows/security.yml`  | Gitleaks, pnpm audit, Semgrep, ShellCheck ; CodeQL si dépôt public ; chaque lundi                                                                                                                                                                                             |
+| `.github/dependabot.yml`          | Mises à jour hebdomadaires (npm, actions épinglées par SHA, image Docker)                                                                                                                                                                                                     |
+| `apps/web/Dockerfile`             | Multi-étapes, `standalone`, non-root, sans npm, healthcheck `/api/health`                                                                                                                                                                                                     |
+| `apps/api/`                       | Lint, types, tests (avec couverture) et build dans la même étape « qualité » que le site (S3-T01)                                                                                                                                                                             |
+| Job « migrations et intégration » | Base PostgreSQL 18 éphémère : `db:deploy`, `db:check` (migrations = schéma), `test:int` (S3-T02)                                                                                                                                                                              |
+| Job « bout en bout » (S3-T05)     | Site construit avec une API **injoignable**, puis parcours et performance contre la vraie API (PostgreSQL 18, clé éphémère) ; aucune réponse 429 tolérée. Depuis le S5-T07 : API en `APP_ENV=demo` (opérateur simulé, factures) pour le premier achat complet (`E2E_SANDBOX`) |
+| `apps/api/Dockerfile` (S3-T06)    | Image de l'API : multi-étapes, dépendances de production seules, non-root, moteur de migrations embarqué                                                                                                                                                                      |
+| Job « image de l'API » (S3-T06)   | Construction, Trivy, migrations sur une base **vide** puis relance, refus d'une configuration fausse, API en lecture seule → `database: ok`, publication GHCR (main)                                                                                                          |
+| Job « image de l'API » (S3-T07)   | Démarrage de démo sur une base **vide** (migrations + 50 produits + API), redémarrage sans doublon, refus hors démo ; publication Docker Hub publique (main)                                                                                                                  |
+| Job « démo » (S3-T07)             | Render : API d'abord (version + `database: ok`), puis site (version, en-têtes, fiche produit, `catalog: "api"`) ; chaque partie ignorée sans son deploy hook                                                                                                                  |
+| Job « image » (S3-T05, S3-T08)    | Sans API, l'image refuse de démarrer (production comme démo) ; API muette → page d'erreur (500), jamais de catalogue de secours                                                                                                                                               |
+| `deploy/`                         | Scripts et configuration serveur (voir §8)                                                                                                                                                                                                                                    |
+| `.husky/pre-commit`               | Formatage automatique avant chaque commit                                                                                                                                                                                                                                     |
 
 **Principes** : _build once, deploy many_ · déploiement par digest immuable · actions épinglées par SHA ·
 aucun secret dans Git · tout changement passe par une PR.
