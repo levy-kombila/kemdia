@@ -58,6 +58,11 @@ type CartApi = {
   setQuantity: (variantId: string, quantity: number) => void;
   remove: (variantId: string) => void;
   clear: () => void;
+  /**
+   * Connecté : relit le panier du compte (après une commande, l'API en a retiré les articles commandés — S5-T07).
+   * Sans effet pour le panier du navigateur.
+   */
+  reload: () => Promise<void>;
 };
 
 const CartContext = createContext<CartApi | null>(null);
@@ -275,6 +280,25 @@ export function CartProvider({
     else dispatch({ type: "clear" });
   }, [viaServer]);
 
+  const reload = useCallback(async () => {
+    if (modeRef.current !== "server") return;
+    // Les modifications en cours passent d'abord (même file d'attente)
+    await queue.current;
+    let result: Awaited<ReturnType<typeof syncCart>>;
+    try {
+      result = await syncCart([], undefined);
+    } catch {
+      return;
+    }
+    if (modeRef.current !== "server") return;
+    if (result.status === "signed-in") {
+      confirmed.current = fromServerCart(result.cart);
+      if (pending.current === 0) dispatch({ type: "hydrate", state: confirmed.current });
+    } else if (result.status === "guest") {
+      showLocal(readLocal());
+    }
+  }, [showLocal]);
+
   const api = useMemo<CartApi>(
     () => ({
       state,
@@ -287,8 +311,9 @@ export function CartProvider({
       setQuantity,
       remove,
       clear,
+      reload,
     }),
-    [state, hydrated, mode, add, setQuantity, remove, clear],
+    [state, hydrated, mode, add, setQuantity, remove, clear, reload],
   );
 
   const actions = useMemo<CartActions>(

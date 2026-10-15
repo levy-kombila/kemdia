@@ -1,25 +1,26 @@
 "use client";
 
+import type { OrderQuote } from "@kemdia/contracts";
+import { COUPON_CODE_PATTERN } from "@kemdia/contracts/constants";
 import {
   BadgeCheck,
-  CircleCheck,
   LoaderCircle,
   Lock,
   ShoppingCart,
   Smartphone,
+  Tag,
   Truck,
   Wallet,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useCart } from "@/components/providers/CartProvider";
 import { useDeliveryLocation } from "@/components/providers/LocationProvider";
 import { Field, FormAlert, SelectField, SubmitButton } from "@/components/ui/Field";
 import { formatGabonPhone, normalizeGabonPhone } from "@/lib/auth/validation";
-import type { CartLine } from "@/lib/cart";
 import {
   buildOrderRequest,
-  codAvailability,
   LANDMARK_MAX,
   OTHER_NEIGHBORHOOD,
   PAYMENT_METHODS,
@@ -32,35 +33,45 @@ import {
 import { cn } from "@/lib/cn";
 import { CITIES, deliveryWindow, estimateDelivery, getCity } from "@/lib/delivery";
 import { formatFCFA } from "@/lib/format";
-import { orderClient } from "@/lib/orders/client";
+import { placeOrder, quoteOrder } from "@/lib/orders/order-actions";
+import { newUuid } from "@/lib/uuid";
 import { OrderSummary } from "./OrderSummary";
 import { StepCard, type StepState } from "./StepCard";
 
 type Step = 1 | 2 | 3 | 4;
-type Phase =
-  | { name: "form" }
-  | { name: "awaiting-payment"; orderNumber: string }
-  | {
-      name: "done";
-      orderNumber: string;
-      lines: CartLine[];
-      total: number;
-      address: Address;
-      method: PaymentMethod;
-      when: string;
-    };
+
+/** Réponse du serveur à une demande de devis, rangée avec la clé de la demande (ville, code promo, panier). */
+type QuoteAnswer =
+  { key: string; ok: true; quote: OrderQuote } | { key: string; ok: false; message: string };
+
+/** Problème bloquant au moment de commander (au-dessus du bouton), avec un lien utile. */
+type Problem = { message: string; link?: { href: string; label: string } } | null;
+
+const CART_LINK = { href: "/panier", label: "Voir mon panier" };
+const ORDERS_LINK = { href: "/compte/commandes", label: "Voir mes commandes" };
 
 const stateOf = (n: Step, current: Step): StepState =>
   n < current ? "done" : n === current ? "current" : "todo";
 
-export function CheckoutFlow() {
-  const { state, hydrated, subtotal, canCheckout, clear } = useCart();
+const UNAVAILABLE = "Le service ne répond pas pour le moment. Réessayez dans un instant.";
+
+export type CheckoutAccount = { fullName: string; phone: string | null };
+
+/**
+ * Tunnel de commande branché sur l'API (S5-T07, ADR-0029). Le compte est obligatoire : la page redirige vers la
+ * connexion avant d'arriver ici. Tous les montants affichés comme définitifs viennent du DEVIS du serveur (frais,
+ * remise, total, moyens de paiement possibles) ; la commande part avec ce total (`expectedTotal`) : s'il a changé
+ * entre-temps, l'API refuse (`PRIX_MODIFIE`) et le client confirme le nouveau total.
+ * Après la commande : page de la commande (attente du paiement Mobile Money ou confirmation).
+ */
+export function CheckoutFlow({ account }: { account: CheckoutAccount }) {
+  const router = useRouter();
+  const { state, hydrated, mode, subtotal, canCheckout, reload } = useCart();
   const { location, setLocation } = useDeliveryLocation();
   const [step, setStep] = useState<Step>(1);
-  const [phase, setPhase] = useState<Phase>({ name: "form" });
   const [draft, setDraft] = useState<Address>({
-    fullName: "",
-    phone: "",
+    fullName: account.fullName,
+    phone: account.phone ? formatGabonPhone(account.phone) : "",
     cityId: "",
     neighborhood: "",
     landmark: "",
@@ -71,11 +82,24 @@ export function CheckoutFlow() {
     : { ...draft, cityId: location?.cityId ?? "", neighborhood: location?.neighborhood ?? "" };
   const setAddress = (update: (a: Address) => Address) => setDraft(update(address));
   const [errors, setErrors] = useState<AddressErrors>({});
-  const [method, setMethod] = useState<PaymentMethod>("airtel");
+  const [chosenMethod, setMethod] = useState<PaymentMethod>("airtel");
   const [payPhone, setPayPhone] = useState("");
   const [payError, setPayError] = useState<string | null>(null);
+  // Ville de l'adresse validée à l'étape 1 : c'est elle qui sert au devis
+  const [quotedCity, setQuotedCity] = useState<string | null>(null);
+  const [coupon, setCoupon] = useState<string | null>(null);
+  const [couponInput, setCouponInput] = useState("");
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponPending, setCouponPending] = useState(false);
+  // Dernière réponse, et dernier devis accepté (affiché pendant qu'un nouveau devis se calcule)
+  const [answer, setAnswer] = useState<QuoteAnswer | null>(null);
+  const [lastQuote, setLastQuote] = useState<OrderQuote | null>(null);
+  // Augmenté pour redemander le devis à l'identique (total changé entre-temps)
+  const [quoteRound, setQuoteRound] = useState(0);
   const [pending, setPending] = useState(false);
-  const [failure, setFailure] = useState(false);
+  const [problem, setProblem] = useState<Problem>(null);
+  // Une clé par commande voulue : renvoyée telle quelle à chaque nouvel essai (jamais deux commandes)
+  const idempotencyKey = useRef<string>("");
   const stepRef = useRef<HTMLOListElement>(null);
 
   // À chaque changement d'étape (pas au chargement), le titre de l'étape en cours reçoit le focus
@@ -88,12 +112,59 @@ export function CheckoutFlow() {
     stepRef.current?.querySelector<HTMLElement>('[aria-current="step"] h2')?.focus();
   }, [step]);
 
+  // Devis du serveur : ville validée, code promo accepté, contenu du panier (un autre onglet peut le changer)
+  const cartKey = state.lines.map((l) => `${l.variantId}:${l.quantity}`).join(",");
+  const quoteKey =
+    quotedCity && mode === "server"
+      ? `${quotedCity}|${coupon ?? ""}|${cartKey}|${quoteRound}`
+      : null;
+  const answered = useRef<string | null>(null);
+  useEffect(() => {
+    // Déjà répondu pour cette clé (code promo vérifié à l'instant) : pas de deuxième appel
+    if (!quoteKey || answered.current === quoteKey) return;
+    let cancelled = false;
+    quoteOrder(quotedCity!, coupon ?? undefined)
+      .catch(() => ({ ok: false as const, code: "INDISPONIBLE" as const, message: UNAVAILABLE }))
+      .then((result) => {
+        if (cancelled) return;
+        answered.current = quoteKey;
+        if (result.ok) {
+          setAnswer({ key: quoteKey, ok: true, quote: result.quote });
+          setLastQuote(result.quote);
+        } else if (coupon && result.code.startsWith("COUPON_")) {
+          // Le code n'est plus valable (expiré, épuisé…) : retiré, le devis repart sans lui
+          setCoupon(null);
+          setCouponError(result.message);
+        } else {
+          setAnswer({ key: quoteKey, ok: false, message: result.message || UNAVAILABLE });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [quoteKey, quotedCity, coupon]);
+
+  const fresh = answer && answer.key === quoteKey ? answer : null;
+  const quoteLoading = quoteKey !== null && fresh === null;
+  const quoteError = fresh && !fresh.ok ? fresh.message : null;
+  const quoteReady = fresh?.ok === true;
+  const current = fresh?.ok ? fresh.quote : lastQuote;
   const city = getCity(address.cityId);
-  const estimate = city ? estimateDelivery(city.id, subtotal) : null;
-  const fee = estimate?.fee ?? null;
-  const total = subtotal + (fee ?? 0);
-  const when = estimate ? deliveryWindow(new Date(), estimate.daysMin, estimate.daysMax) : "";
-  const cod = city ? codAvailability(city.id, total) : { allowed: false as const, reason: "" };
+  // Avant le devis : estimation locale (indicative) ; ensuite, les montants du serveur
+  const local = city ? estimateDelivery(city.id, subtotal) : null;
+  const fee = current ? current.deliveryFee : (local?.fee ?? null);
+  const total = current ? current.total : subtotal + (fee ?? 0);
+  const daysMin = current?.deliveryDaysMin ?? local?.daysMin;
+  const daysMax = current?.deliveryDaysMax ?? local?.daysMax;
+  const when = daysMin && daysMax ? deliveryWindow(new Date(), daysMin, daysMax) : "";
+  const remainingForFree = current
+    ? Math.max(0, current.freeDeliveryThreshold - (current.subtotal - current.discount))
+    : (local?.remainingForFree ?? 0);
+  const mobileMoneyAllowed = current?.mobileMoney.allowed ?? true;
+  const cod = current?.cod ?? { allowed: false, reason: "" };
+  // Mobile Money indisponible (préproduction, production sans fournisseur) : la livraison est proposée d'office
+  const method: PaymentMethod =
+    current && !mobileMoneyAllowed && chosenMethod !== "cod" && cod.allowed ? "cod" : chosenMethod;
 
   if (!hydrated)
     return (
@@ -104,7 +175,24 @@ export function CheckoutFlow() {
       />
     );
 
-  if (phase.name === "done") return <Confirmation {...phase} />;
+  // Connecté, mais le panier du compte n'a pas pu être lu : on ne commande pas un panier qu'on ne voit pas
+  if (mode !== "server") {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-xl bg-white px-6 py-14 text-center">
+        <ShoppingCart className="text-ink-400 size-12" aria-hidden />
+        <h1 className="text-xl font-extrabold">Votre panier n&apos;a pas pu être chargé</h1>
+        <p className="text-ink-500 max-w-sm text-sm">
+          Le service ne répond pas pour le moment. Rechargez la page dans un instant.
+        </p>
+        <Link
+          href="/commande"
+          className="bg-brand-600 mt-2 rounded-full px-6 py-3 font-semibold text-white"
+        >
+          Réessayer
+        </Link>
+      </div>
+    );
+  }
 
   if (state.lines.length === 0) {
     return (
@@ -122,7 +210,7 @@ export function CheckoutFlow() {
     );
   }
 
-  // Passage en caisse (S5-T01) : connecté, le panier vient d'être revérifié par le serveur (BR-001)
+  // Passage en caisse (S5-T01) : le panier du compte vient d'être revérifié par le serveur (BR-001)
   if (!canCheckout) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-xl bg-white px-6 py-14 text-center">
@@ -153,10 +241,12 @@ export function CheckoutFlow() {
       );
       return;
     }
+    setDraft(address);
     setLocation({
       cityId: address.cityId,
       neighborhood: address.neighborhood === OTHER_NEIGHBORHOOD ? null : address.neighborhood,
     });
+    setQuotedCity(address.cityId);
     // Numéro de paiement proposé par défaut : celui de l'adresse, avec l'opérateur correspondant
     const phone = normalizeGabonPhone(address.phone);
     if (phone && !payPhone) {
@@ -169,49 +259,105 @@ export function CheckoutFlow() {
   function submitPayment(e: FormEvent) {
     e.preventDefault();
     if (method === "cod" && !cod.allowed) return;
+    if (method !== "cod" && !mobileMoneyAllowed) return;
     const err = validatePaymentPhone(method, payPhone);
     setPayError(err);
     if (!err) setStep(4);
   }
 
-  async function placeOrder() {
-    if (pending) return;
-    setPending(true);
-    setFailure(false);
-    const lines = state.lines;
-    const result = await orderClient.placeOrder(
-      buildOrderRequest(lines, address, method, payPhone),
-    );
-    if (!result.ok) {
-      setPending(false);
-      setFailure(true);
+  async function applyCoupon(e: FormEvent) {
+    e.preventDefault();
+    const code = couponInput.trim().toUpperCase();
+    if (!COUPON_CODE_PATTERN.test(code)) {
+      setCouponError("Code promo : 4 à 20 lettres, chiffres ou tirets.");
       return;
     }
-    const done = {
-      name: "done" as const,
-      orderNumber: result.orderNumber,
-      lines,
-      total,
-      address,
-      method,
-      when,
-    };
-    if (result.status === "awaiting-payment") {
-      setPhase({ name: "awaiting-payment", orderNumber: result.orderNumber });
-      const paid = await orderClient.waitForPayment(result.orderNumber);
-      if (!paid.ok) {
-        setPhase({ name: "form" });
-        setPending(false);
-        setFailure(true);
-        return;
-      }
+    if (!quotedCity) return;
+    setCouponPending(true);
+    setCouponError(null);
+    // Vérifié tout de suite (message sous le champ) ; accepté, il entre dans le devis
+    const result = await quoteOrder(quotedCity, code).catch(() => null);
+    setCouponPending(false);
+    if (!result) {
+      setCouponError("Le service ne répond pas pour le moment. Réessayez dans un instant.");
+    } else if (result.ok) {
+      const key = `${quotedCity}|${code}|${cartKey}|${quoteRound}`;
+      answered.current = key;
+      setAnswer({ key, ok: true, quote: result.quote });
+      setLastQuote(result.quote);
+      setCoupon(code);
+      setCouponInput("");
+    } else {
+      setCouponError(result.message);
     }
-    clear();
-    setPhase(done);
-    window.scrollTo({ top: 0 });
+  }
+
+  async function submitOrder() {
+    if (pending || !current || !quoteReady) return;
+    setPending(true);
+    setProblem(null);
+    if (!idempotencyKey.current) idempotencyKey.current = newUuid();
+    const request = buildOrderRequest(address, method, payPhone);
+    const result = await placeOrder({
+      ...request,
+      idempotencyKey: idempotencyKey.current,
+      expectedTotal: current.total,
+      ...(coupon ? { couponCode: coupon } : {}),
+    }).catch(() => null);
+
+    if (result?.ok) {
+      // L'API a retiré les articles commandés du panier du compte : l'en-tête et le panier se mettent à jour
+      await reload();
+      const extra = result.paymentError ? `&paiement=${result.paymentError}` : "";
+      router.push(`/compte/commandes/${result.reference}?nouvelle=1${extra}`);
+      return;
+    }
+    setPending(false);
+    if (!result) {
+      // Réponse perdue : la même clé sera renvoyée, l'API rendra la commande si elle a été créée
+      setProblem({
+        message: "La commande n'a pas pu être envoyée. Vérifiez votre connexion et réessayez.",
+      });
+      return;
+    }
+    switch (result.code) {
+      case "PRIX_MODIFIE":
+        // Nouveau devis : le bouton affiche le nouveau total, le client confirme en connaissance de cause
+        setProblem({ message: result.message });
+        setQuoteRound((n) => n + 1);
+        break;
+      case "CLE_DEJA_UTILISEE":
+        idempotencyKey.current = newUuid();
+        setProblem({ message: result.message });
+        break;
+      case "PANIER_VIDE":
+      case "PANIER_A_VERIFIER":
+        await reload();
+        setProblem({ message: result.message, link: CART_LINK });
+        break;
+      default:
+        if (result.code.startsWith("COUPON_")) {
+          setCoupon(null);
+          setCouponError(result.message);
+        } else {
+          setProblem({
+            message: result.message,
+            link: result.code === "TROP_DE_COMMANDES_OUVERTES" ? ORDERS_LINK : undefined,
+          });
+        }
+    }
   }
 
   const neighborhoods = city?.neighborhoods ?? [];
+  const summary = (
+    <OrderSummary
+      lines={state.lines}
+      subtotal={current?.subtotal ?? subtotal}
+      fee={fee}
+      total={total}
+      coupon={current?.coupon}
+    />
+  );
 
   return (
     <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-[1fr_22rem]">
@@ -222,13 +368,7 @@ export function CheckoutFlow() {
             <Lock className="size-4" aria-hidden /> Paiement sécurisé
           </p>
         </div>
-        <FormAlert tone="info">
-          <strong>Mode démonstration</strong> : aucune commande n&apos;est enregistrée et aucun
-          paiement n&apos;est demandé.
-        </FormAlert>
-        <div className="lg:hidden">
-          <OrderSummary lines={state.lines} subtotal={subtotal} fee={fee} total={total} />
-        </div>
+        <div className="lg:hidden">{summary}</div>
 
         <ol ref={stepRef} className="space-y-3">
           <StepCard
@@ -325,15 +465,14 @@ export function CheckoutFlow() {
             state={stateOf(2, step)}
             onEdit={() => setStep(2)}
             summary={
-              estimate && (
+              fee !== null && (
                 <>
-                  À domicile, livraison prévue {when} ·{" "}
-                  {fee === 0 ? "offerte" : formatFCFA(fee ?? 0)}
+                  À domicile, livraison prévue {when} · {fee === 0 ? "offerte" : formatFCFA(fee)}
                 </>
               )
             }
           >
-            {estimate && city && (
+            {city && fee !== null && (
               <div className="space-y-4">
                 <div className="border-brand-600 bg-brand-50/40 flex items-start gap-3 rounded-xl border-2 p-4">
                   <Truck className="text-brand-600 mt-0.5 size-5 shrink-0" aria-hidden />
@@ -347,22 +486,19 @@ export function CheckoutFlow() {
                     </p>
                   </div>
                   <p className="font-semibold">
-                    {estimate.isFree ? (
-                      <span className="text-forest-700">Offerte</span>
-                    ) : (
-                      formatFCFA(estimate.fee)
-                    )}
+                    {fee === 0 ? <span className="text-forest-700">Offerte</span> : formatFCFA(fee)}
                   </p>
                 </div>
-                {estimate.remainingForFree > 0 && (
+                {remainingForFree > 0 && (
                   <p className="text-ink-700 text-sm">
-                    Ajoutez {formatFCFA(estimate.remainingForFree)} d&apos;articles pour une
-                    livraison offerte.{" "}
+                    Ajoutez {formatFCFA(remainingForFree)} d&apos;articles pour une livraison
+                    offerte.{" "}
                     <Link href="/panier" className="text-brand-700 font-semibold underline">
                       Retour au panier
                     </Link>
                   </p>
                 )}
+                {quoteError && <FormAlert>{quoteError}</FormAlert>}
                 <div className="sm:max-w-xs">
                   <button
                     type="button"
@@ -389,11 +525,25 @@ export function CheckoutFlow() {
             }
           >
             <form onSubmit={submitPayment} noValidate className="space-y-3">
+              {!current && quoteLoading && (
+                <p className="text-ink-500 flex items-center gap-2 text-sm" role="status">
+                  <LoaderCircle className="size-4 animate-spin" aria-hidden /> Vérification des
+                  moyens de paiement…
+                </p>
+              )}
               <fieldset className="space-y-2">
                 <legend className="sr-only">Moyen de paiement</legend>
                 {(Object.keys(PAYMENT_METHODS) as PaymentMethod[]).map((m) => {
-                  const disabled = m === "cod" && !cod.allowed;
+                  const disabled = !current || (m === "cod" ? !cod.allowed : !mobileMoneyAllowed);
                   const Icon = m === "cod" ? Wallet : Smartphone;
+                  const why =
+                    m === "cod"
+                      ? cod.allowed
+                        ? "Payez en espèces ou par Mobile Money à la réception."
+                        : cod.reason || "Indisponible pour cette ville ou ce montant."
+                      : mobileMoneyAllowed
+                        ? "Vous validez le paiement sur votre téléphone avec votre code secret."
+                        : "Bientôt disponible.";
                   return (
                     <label
                       key={m}
@@ -420,19 +570,13 @@ export function CheckoutFlow() {
                       <Icon className="text-ink-700 mt-0.5 size-5 shrink-0" aria-hidden />
                       <span className="flex-1 text-sm">
                         <span className="block font-semibold">{PAYMENT_METHODS[m].label}</span>
-                        <span className="text-ink-500">
-                          {m === "cod"
-                            ? disabled
-                              ? cod.reason
-                              : "Payez en espèces ou par Mobile Money à la réception."
-                            : "Vous validez le paiement sur votre téléphone avec votre code secret."}
-                        </span>
+                        <span className="text-ink-500">{why}</span>
                       </span>
                     </label>
                   );
                 })}
               </fieldset>
-              {method !== "cod" && (
+              {method !== "cod" && mobileMoneyAllowed && (
                 <Field
                   label={`Numéro ${PAYMENT_METHODS[method].label}`}
                   type="tel"
@@ -447,7 +591,7 @@ export function CheckoutFlow() {
                 />
               )}
               <div className="sm:max-w-xs">
-                <SubmitButton pending={false}>Continuer</SubmitButton>
+                <SubmitButton pending={!current}>Continuer</SubmitButton>
               </div>
             </form>
           </StepCard>
@@ -475,19 +619,76 @@ export function CheckoutFlow() {
                   <span>Vendu et expédié par Kemdia · retour gratuit sous 14 jours</span>
                 </li>
               </ul>
-              {failure && (
+
+              <div className="space-y-2">
+                {current?.coupon ? (
+                  <p className="text-forest-700 flex flex-wrap items-center gap-2" role="status">
+                    <Tag className="size-4" aria-hidden />
+                    Code <strong>{current.coupon.code}</strong> appliqué : −{" "}
+                    {formatFCFA(current.coupon.discount)}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCoupon(null);
+                        setCouponError(null);
+                      }}
+                      className="text-ink-700 underline"
+                    >
+                      Retirer
+                    </button>
+                  </p>
+                ) : (
+                  <form onSubmit={applyCoupon} noValidate className="flex items-start gap-2">
+                    <Field
+                      label="Code promo"
+                      className="flex-1 sm:max-w-xs"
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value)}
+                      error={couponError}
+                      autoComplete="off"
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                      maxLength={20}
+                    />
+                    <button
+                      type="submit"
+                      disabled={couponPending || couponInput.trim() === ""}
+                      aria-busy={couponPending}
+                      className="border-ink-200 hover:bg-ink-50 mt-7 flex h-12 items-center gap-2 rounded-full border-2 px-5 font-semibold disabled:opacity-60"
+                    >
+                      {couponPending && (
+                        <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                      )}
+                      Appliquer
+                    </button>
+                  </form>
+                )}
+              </div>
+
+              {problem && (
                 <FormAlert>
-                  La commande n&apos;a pas pu être passée. Vérifiez votre connexion et réessayez.
+                  {problem.message}
+                  {problem.link && (
+                    <>
+                      {" "}
+                      <Link href={problem.link.href} className="font-semibold underline">
+                        {problem.link.label}
+                      </Link>
+                    </>
+                  )}
                 </FormAlert>
               )}
+              {quoteError && !problem && <FormAlert>{quoteError}</FormAlert>}
               <button
                 type="button"
-                onClick={placeOrder}
-                disabled={pending}
-                aria-busy={pending}
+                onClick={submitOrder}
+                disabled={pending || !quoteReady}
+                aria-busy={pending || quoteLoading}
                 className="bg-accent-400 hover:bg-accent-300 text-ink-900 flex h-14 w-full items-center justify-center gap-2 rounded-full text-base font-bold transition disabled:opacity-70 sm:max-w-md"
               >
-                {pending && <LoaderCircle className="size-5 animate-spin" aria-hidden />}
+                {(pending || quoteLoading) && (
+                  <LoaderCircle className="size-5 animate-spin" aria-hidden />
+                )}
                 {method === "cod" ? "Confirmer la commande" : "Commander et payer"} ·{" "}
                 {formatFCFA(total)}
               </button>
@@ -496,132 +697,14 @@ export function CheckoutFlow() {
                 <Link href="/infos/cgv" className="underline" target="_blank">
                   conditions générales de vente
                 </Link>
-                . Le montant final est vérifié par nos serveurs.
+                . Le montant est celui calculé par nos serveurs.
               </p>
             </div>
           </StepCard>
         </ol>
       </div>
 
-      <div className="hidden lg:block">
-        <OrderSummary lines={state.lines} subtotal={subtotal} fee={fee} total={total} />
-      </div>
-
-      {phase.name === "awaiting-payment" && (
-        <AwaitingPayment method={method} phone={payPhone} total={total} />
-      )}
-    </div>
-  );
-}
-
-/** Écran d'attente Mobile Money : le client valide sur son téléphone (code secret). */
-function AwaitingPayment({
-  method,
-  phone,
-  total,
-}: {
-  method: PaymentMethod;
-  phone: string;
-  total: number;
-}) {
-  return (
-    <div
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="attente-titre"
-      aria-describedby="attente-texte"
-      className="bg-ink-900/60 fixed inset-0 z-[60] grid place-items-center p-4"
-    >
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center">
-        <span className="bg-brand-50 mx-auto grid size-16 place-items-center rounded-full">
-          <Smartphone className="text-brand-600 size-8 animate-pulse" aria-hidden />
-        </span>
-        <h2 id="attente-titre" className="mt-3 text-xl font-extrabold">
-          Validez sur votre téléphone
-        </h2>
-        <p id="attente-texte" className="text-ink-700 mt-2 text-sm">
-          Une demande {PAYMENT_METHODS[method].label} de <strong>{formatFCFA(total)}</strong> a été
-          envoyée au <strong>{phone}</strong>. Saisissez votre code secret pour confirmer.
-        </p>
-        <p
-          className="text-ink-500 mt-4 flex items-center justify-center gap-2 text-sm"
-          role="status"
-        >
-          <LoaderCircle className="size-4 animate-spin" aria-hidden /> En attente de votre
-          validation…
-        </p>
-        <p className="text-ink-500 mt-3 text-xs">Mode démonstration : la validation est simulée.</p>
-      </div>
-    </div>
-  );
-}
-
-function Confirmation({
-  orderNumber,
-  lines,
-  total,
-  address,
-  method,
-  when,
-}: Extract<Phase, { name: "done" }>) {
-  const city = getCity(address.cityId);
-  const firstName = address.fullName.trim().split(/\s+/)[0];
-  return (
-    <div className="mx-auto max-w-2xl space-y-3">
-      <div className="rounded-xl bg-white px-6 py-8 text-center">
-        <CircleCheck className="text-forest-600 mx-auto size-16" aria-hidden />
-        <h1 className="mt-3 text-2xl font-extrabold sm:text-3xl">
-          Merci {firstName}, votre commande est confirmée
-        </h1>
-        <p className="text-ink-500 mt-2">
-          Numéro de commande{" "}
-          <strong className="text-ink-900 font-price text-lg tracking-wide">{orderNumber}</strong>
-        </p>
-        <p className="text-ink-500 mt-1 text-xs">
-          Mode démonstration : aucune commande réelle n&apos;a été créée.
-        </p>
-      </div>
-      <dl className="divide-ink-100 grid divide-y rounded-xl bg-white text-sm">
-        <div className="flex gap-4 px-5 py-3.5">
-          <dt className="text-ink-500 w-28 shrink-0">Livraison</dt>
-          <dd>
-            Prévue <strong>{when}</strong>
-            <br />
-            {address.fullName},{" "}
-            {address.neighborhood !== OTHER_NEIGHBORHOOD && `${address.neighborhood}, `}
-            {city?.name} · {address.landmark}
-          </dd>
-        </div>
-        <div className="flex gap-4 px-5 py-3.5">
-          <dt className="text-ink-500 w-28 shrink-0">Paiement</dt>
-          <dd>
-            {PAYMENT_METHODS[method].label}
-            {method === "cod" ? " : à régler au livreur" : " : payé"} ·{" "}
-            <strong>{formatFCFA(total)}</strong>
-          </dd>
-        </div>
-        <div className="flex gap-4 px-5 py-3.5">
-          <dt className="text-ink-500 w-28 shrink-0">Articles</dt>
-          <dd>
-            {lines.map((l) => (
-              <span key={l.variantId} className="block">
-                {l.quantity} × {l.title}
-              </span>
-            ))}
-          </dd>
-        </div>
-      </dl>
-      <p className="text-ink-500 px-1 text-sm">
-        Le livreur vous appellera au {address.phone} avant de passer.
-      </p>
-      <div className="flex flex-wrap gap-2">
-        <Link
-          href="/"
-          className="bg-brand-600 hover:bg-brand-700 rounded-full px-6 py-3 font-semibold text-white"
-        >
-          Continuer mes achats
-        </Link>
-      </div>
+      <div className="hidden lg:block">{summary}</div>
     </div>
   );
 }
