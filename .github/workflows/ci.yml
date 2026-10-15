@@ -174,7 +174,9 @@ jobs:
       - name: Démarrer l'API
         env:
           NODE_ENV: production
-          APP_ENV: staging
+          # Comme la démo publique (S5-T07) : opérateur Mobile Money simulé et factures émises, pour parcourir le
+          # premier achat de bout en bout. Base éphémère du job : rien n'est réel.
+          APP_ENV: demo
           APP_VERSION: sha-${{ github.sha }}
           PORT: "4000"
           LOG_LEVEL: info
@@ -195,6 +197,7 @@ jobs:
           E2E_API_URL: http://127.0.0.1:4000
           E2E_ACCOUNT: "1"
           E2E_MAILPIT_URL: http://127.0.0.1:8025
+          E2E_SANDBOX: "1"
         run: pnpm --filter @kemdia/web e2e
       - name: Budget de performance (téléphone, 3G, cache vide), site branché sur l'API
         env:
