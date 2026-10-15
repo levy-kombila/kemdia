@@ -1,0 +1,110 @@
+# =============================================================================
+# Kemdia EN LIGNE depuis ton PC (S6-T00, ADR-0031) — tests à distance par un tunnel Cloudflare.
+#
+# NE PAS lancer à la main : utilise deploy\windows\en-ligne.ps1 (il prépare les variables ci-dessous)
+# et deploy\windows\hors-ligne.ps1 pour couper. Guide : docs/guides/en-ligne-docker.md.
+#
+# Comme la démo Render : APP_ENV=demo (catalogue de démonstration, code DEMO10, Mobile Money SIMULÉ), images de
+# production construites ici. Base À PART (volume kemdia-en-ligne-db) : rien ne se mélange à ta base de travail.
+# Seule porte d'entrée depuis Internet : le tunnel. Le site n'écoute que sur 127.0.0.1:3100 (ton PC) ;
+# l'API, la base et Mailpit ne sont joignables que dans le réseau Docker.
+# =============================================================================
+name: kemdia-en-ligne
+
+services:
+  # Tunnel rapide Cloudflare (trycloudflare.com) : adresse HTTPS tirée au hasard à chaque lancement, sans compte
+  tunnel:
+    image: cloudflare/cloudflared:2026.10.0
+    command: ["tunnel", "--no-autoupdate", "--url", "http://web:3000"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    # Jamais relancé tout seul (redémarrage du PC ou de Docker) : le site ne revient pas en ligne sans toi
+    restart: "no"
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        APP_VERSION: ${KEMDIA_VERSION:?lancer deploy\windows\en-ligne.ps1}
+    image: kemdia-web:en-ligne
+    environment:
+      APP_ENV: demo
+      # Adresse du tunnel (aperçus WhatsApp, liens absolus), lue au démarrage
+      SITE_URL: ${KEMDIA_SITE_URL:?lancer deploy\windows\en-ligne.ps1}
+      API_URL: http://api:4000
+      API_INTERNAL_KEY: ${KEMDIA_INTERNAL_KEY:?lancer deploy\windows\en-ligne.ps1}
+      # Adresse réelle du visiteur, posée par Cloudflare (limites par visiteur et journal d'audit)
+      CLIENT_IP_HEADER: cf-connecting-ip
+    ports:
+      # Ton PC seulement (pas ton Wi-Fi) : l'accès des testeurs passe par le tunnel
+      - "127.0.0.1:3100:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/apps/web/.next/cache
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  # Démarrage de démonstration : migrations, import du catalogue et de DEMO10, puis l'API (comme sur Render)
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+      args:
+        APP_VERSION: ${KEMDIA_VERSION:?lancer deploy\windows\en-ligne.ps1}
+    image: kemdia-api:en-ligne
+    command: ["node", "dist/database/start-demo.js"]
+    environment:
+      APP_ENV: demo
+      APP_VERSION: ${KEMDIA_VERSION:?lancer deploy\windows\en-ligne.ps1}
+      DATABASE_URL: postgresql://kemdia:${KEMDIA_DB_PASSWORD:?lancer deploy\windows\en-ligne.ps1}@db:5432/kemdia
+      API_INTERNAL_KEY: ${KEMDIA_INTERNAL_KEY:?lancer deploy\windows\en-ligne.ps1}
+      API_DOCS: "false"
+      # Vrais e-mails (codes d'inscription, factures) : clés lues dans ton .env par le script, jamais écrites
+      EMAIL_TRANSPORT: brevo
+      BREVO_API_KEY: ${BREVO_API_KEY:?BREVO_API_KEY manquant dans .env}
+      EMAIL_FROM: ${EMAIL_FROM:?EMAIL_FROM manquant dans .env}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Kemdia}
+    depends_on:
+      db:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: kemdia
+      POSTGRES_PASSWORD: ${KEMDIA_DB_PASSWORD:?lancer deploy\windows\en-ligne.ps1}
+      POSTGRES_DB: kemdia
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --encoding=UTF8
+      TZ: Africa/Libreville
+    # Aucun port publié : la base n'est joignable que par l'API
+    volumes:
+      - kemdia-en-ligne-db:/var/lib/postgresql
+    shm_size: 128mb
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kemdia -d kemdia"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  # Comptes et commandes des testeurs : gardés entre deux lancements ; hors-ligne.ps1 -Effacer les supprime
+  kemdia-en-ligne-db:

@@ -2,3 +2,5 @@
 *.jpg binary
 *.png binary
 *.webp binary
+# Scripts Windows PowerShell (S6-T00) : fins de ligne Windows, ouverts tels quels dans le Bloc-notes
+*.ps1 text eol=crlf
