@@ -20,7 +20,14 @@ describe("Signature des notifications (S5-T05)", () => {
     expect(verifyNotification(header, body, randomBytes(32), now)).toBe("invalide");
     expect(verifyNotification(undefined, body, secret, now)).toBe("invalide");
     expect(verifyNotification("t=abc,v1=00", body, secret, now)).toBe("invalide");
-    expect(verifyNotification(header.replace(/v1=./, "v1=0"), body, secret, now)).toBe("invalide");
+    // Premier caractère de la signature remplacé par un AUTRE (S6-T01 : remplacer par « 0 » ne changeait rien une fois
+    // sur 16, quand la signature commençait déjà par « 0 » : le test échouait au hasard)
+    const altered = header.replace(
+      /v1=(.)/,
+      (_, first: string) => `v1=${first === "0" ? "1" : "0"}`,
+    );
+    expect(altered).not.toBe(header);
+    expect(verifyNotification(altered, body, secret, now)).toBe("invalide");
     expect(verifyNotification(`${header},v0=00`, body, secret, now)).toBe("invalide");
   });
 

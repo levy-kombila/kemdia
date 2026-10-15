@@ -84,6 +84,15 @@ import { SessionGuard } from "./interface/session.guard.js";
     },
   ],
   // Les autres modules protègent leurs routes avec SessionGuard ou @Authorize (S5 : commandes, S6 : vendeurs)
-  exports: [OtpService, SessionService, SessionGuard, RoleGuard, IDENTITY_CLOCK, AccountDirectory],
+  exports: [
+    OtpService,
+    SessionService,
+    SessionGuard,
+    RoleGuard,
+    IDENTITY_CLOCK,
+    AccountDirectory,
+    // Le module vendors accorde et retire le rôle vendeur à la décision sur une boutique (S6-T01)
+    RoleService,
+  ],
 })
 export class IdentityModule {}

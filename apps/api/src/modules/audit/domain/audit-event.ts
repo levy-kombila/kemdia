@@ -29,6 +29,14 @@ export const AUDIT_ACTIONS = [
   "settings.cod_updated",
   /** Informations de l'entreprise sur les factures changées (détails : legalName, taxId) — S5-T06 */
   "settings.billing_updated",
+  /** Demande de boutique envoyée ou renvoyée après un refus (détails : name, previousName) — S6-T01 */
+  "shop.requested",
+  /** Boutique validée ou réactivée ; le rôle vendeur est accordé à part (détails : name, from, to) — S6-T01 */
+  "shop.approved",
+  /** Demande de boutique refusée (détails : name, from, to, reason) — S6-T01 */
+  "shop.rejected",
+  /** Boutique suspendue ; le rôle vendeur est retiré à part (détails : name, from, to, reason) — S6-T01 */
+  "shop.suspended",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -38,7 +46,7 @@ export const AUDIT_RETENTION_DAYS = 365;
 /** Qui agit : un compte, ou le serveur lui-même (commande en ligne, tâche planifiée). */
 export type AuditActor = { type: "account"; id: string } | { type: "system" };
 
-export const AUDIT_TARGET_TYPES = ["account", "coupon", "order", "refund"] as const;
+export const AUDIT_TARGET_TYPES = ["account", "coupon", "order", "refund", "shop"] as const;
 export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];
 
 export interface AuditTarget {

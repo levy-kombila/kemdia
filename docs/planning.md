@@ -157,9 +157,14 @@ paniers gardés **90 jours** ; numéro **KMD-7F3K9Q** ; **30 min** pour payer pa
 
 ## S6 — Module `vendors` + back-office 🚧
 
-| ID     | Tâche                                                                                                                                                          | Statut |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| S6-T00 | Kemdia en ligne depuis Docker Desktop (tunnel Cloudflare) pour des tests à distance : scripts `en-ligne.ps1` / `hors-ligne.ps1`, base à part, Brevo — ADR-0031 | ✅     |
+Décisions : [ADR-0031](architecture/adr/0031-en-ligne-docker-tunnel.md) (en ligne depuis Docker Desktop), [ADR-0032](architecture/adr/0032-boutiques-vendeurs.md) (boutiques des vendeurs).
+Choix du 2026-10-15 : **demande de boutique depuis un compte connecté, validée par un administrateur** ; une boutique par compte ; produits existants dans une **boutique « Kemdia » interne** ;
+S6-T01 en **API seule** ; demande **minimum** (nom, ville, mobile, description) ; commission : **en attente du client** (question ouverte n° 3).
+
+| ID     | Tâche                                                                                                                                                                                                                       | Statut |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| S6-T00 | Kemdia en ligne depuis Docker Desktop (tunnel Cloudflare) pour des tests à distance : scripts `en-ligne.ps1` / `hors-ligne.ps1`, base à part, Brevo — ADR-0031                                                              | ✅     |
+| S6-T01 | Fondations `vendors` : boutiques (une par compte), demande et examen par l'administration (valider / refuser / suspendre), rôle vendeur dans la même transaction, produits liés à une boutique (boutique Kemdia) — ADR-0032 | ✅     |
 
 ## S5 à S8 — grandes lignes
 

@@ -82,6 +82,7 @@
 2. **Coupons** : cumulables avec les ventes flash ?
    _2026-10-10 : pas encore décidé. En attendant (S5-T03) : non cumulable par défaut (proposition de BR-031), réglable coupon par coupon._
 3. **Commission marketplace** : taux unique ou par catégorie (8 % high-tech, 14 % mode…) ?
+   _2026-10-15 : pas encore de réponse du client. Le S6-T01 (boutiques) n'en dépend pas ; le réglage des taux arrivera avec la tâche des commissions (BR-020), sans valeur inventée._
 4. **Affiliation** : lancée avec le MVP ou juste après ? commission fixe sur les produits Kemdia : quel montant ?
 5. **Transporteur** : COMAT confirmé ? mode d'échange (API, fichier, WhatsApp) ?
 6. **TVA** : seuil et modalités à valider avec un expert-comptable gabonais.

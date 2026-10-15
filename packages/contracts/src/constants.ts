@@ -135,6 +135,11 @@ export const AUDIT_ACTIONS = [
   "settings.cod_updated",
   // Factures (S5-T06)
   "settings.billing_updated",
+  // Boutiques des vendeurs (S6-T01)
+  "shop.requested",
+  "shop.approved",
+  "shop.rejected",
+  "shop.suspended",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** Lignes par page du journal d'audit. */
@@ -329,6 +334,48 @@ export const PAYMENT_ERROR_CODES = [
 ] as const;
 export type PaymentErrorCode = (typeof PAYMENT_ERROR_CODES)[number];
 
+// --- Boutiques des vendeurs (S6-T01, ADR-0032) ---
+
+/**
+ * Statuts d'une boutique : `pending` (demande à examiner), `active` (validée : le compte a le rôle vendeur),
+ * `rejected` (refusée, le motif est montré au demandeur, qui peut redemander), `suspended` (suspendue : rôle retiré).
+ */
+export const SHOP_STATUSES = ["pending", "active", "rejected", "suspended"] as const;
+export type ShopStatus = (typeof SHOP_STATUSES)[number];
+/** `kemdia` : la boutique de Kemdia (produits vendus par Kemdia, sans commission ni validation) ; `partner` : vendeur tiers. */
+export const SHOP_KINDS = ["kemdia", "partner"] as const;
+export type ShopKind = (typeof SHOP_KINDS)[number];
+/** Identifiant fixe de la boutique Kemdia (« kemdia » en hexadécimal) : les produits existants lui appartiennent. */
+export const KEMDIA_SHOP_ID = "6b656d64-6961-4000-8000-000000000001";
+/** Longueurs des champs d'une demande de boutique (mêmes valeurs dans la migration SQL). */
+export const SHOP_LIMITS = {
+  nameMin: 3,
+  nameMax: 60,
+  cityMin: 2,
+  cityMax: 60,
+  descriptionMin: 20,
+  descriptionMax: 500,
+  reasonMin: 5,
+  reasonMax: 300,
+} as const;
+/** Boutiques par page (administration). */
+export const SHOP_PAGE_DEFAULT = 50;
+export const SHOP_PAGE_MAX = 100;
+
+/** Codes d'erreur métier des boutiques. */
+export const VENDOR_ERROR_CODES = [
+  "BOUTIQUE_INVALIDE",
+  "BOUTIQUE_EXISTE",
+  "NOM_BOUTIQUE_PRIS",
+  "BOUTIQUE_INTROUVABLE",
+  "STATUT_BOUTIQUE_INCOMPATIBLE",
+  "BOUTIQUE_SUR_SOI_INTERDITE",
+  "PROPRIETAIRE_INACTIF",
+  // Une autre opération verrouille la boutique : réessayer dans un instant
+  "BOUTIQUE_OCCUPEE",
+] as const;
+export type VendorErrorCode = (typeof VENDOR_ERROR_CODES)[number];
+
 /** Tous les codes d'erreur métier que l'API peut renvoyer. */
 export const API_ERROR_CODES = [
   ...IDENTITY_ERROR_CODES,
@@ -336,6 +383,7 @@ export const API_ERROR_CODES = [
   ...ORDER_ERROR_CODES,
   ...COUPON_ERROR_CODES,
   ...PAYMENT_ERROR_CODES,
+  ...VENDOR_ERROR_CODES,
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
 
