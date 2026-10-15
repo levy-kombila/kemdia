@@ -29,8 +29,28 @@ export type DemoImporter = (
   config: AppConfig,
 ) => Promise<{ categories: number; products: number; coupon?: "créé" | "déjà présent" }>;
 
-/** Environnements qui reçoivent le code promo de démonstration (S5-T08). */
-export const DEMO_COUPON_ENVS: readonly AppEnv[] = ["local", "demo"];
+/** Bases du poste de développement : machine locale, ou service `db` de docker compose. */
+const LOCAL_DB_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "db"]);
+
+/**
+ * Le code promo de démonstration peut-il être créé sur cette base (S5-T08, relecture de sécurité) ?
+ * - démo Render (`APP_ENV=demo`, jamais une valeur par défaut) : oui ;
+ * - poste de développement (`APP_ENV=local`, aussi la valeur par défaut quand `APP_ENV` manque) : seulement hors
+ *   `NODE_ENV=production` ET sur une base locale. Un `db:seed` lancé contre une vraie base distante sans `APP_ENV`
+ *   ne crée donc pas de coupon (le catalogue de démonstration, lui, reste importé comme avant) ;
+ * - préproduction, production : jamais.
+ */
+export function demoCouponAllowed(
+  config: Pick<AppConfig, "APP_ENV" | "NODE_ENV" | "DATABASE_URL">,
+): boolean {
+  if (config.APP_ENV === "demo") return true;
+  if (config.APP_ENV !== "local" || config.NODE_ENV === "production") return false;
+  try {
+    return LOCAL_DB_HOSTS.has(new URL(config.DATABASE_URL).hostname);
+  } catch {
+    return false;
+  }
+}
 
 export interface DemoImportOptions {
   env: NodeJS.ProcessEnv;
@@ -49,7 +69,7 @@ export const importDemoCatalog: DemoImporter = async (config) => {
       categories: new PrismaCategoryRepository(prisma),
       products: new PrismaProductRepository(prisma),
     });
-    if (!DEMO_COUPON_ENVS.includes(config.APP_ENV)) return catalog;
+    if (!demoCouponAllowed(config)) return catalog;
     return { ...catalog, coupon: await ensureDemoCoupon(prisma) };
   } finally {
     await prisma.$disconnect();

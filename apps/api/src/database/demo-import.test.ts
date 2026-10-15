@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  DEMO_COUPON_ENVS,
+  demoCouponAllowed,
   describeError,
   runDemoImport,
   type DemoImporter,
@@ -84,7 +84,30 @@ describe("runDemoImport (catalogue de démonstration)", () => {
 });
 
 describe("code promo de démonstration (S5-T08)", () => {
-  it("seulement sur la démo et le poste de développement, jamais en préproduction ni en production", () => {
-    expect([...DEMO_COUPON_ENVS].sort()).toEqual(["demo", "local"]);
+  const local = "postgresql://kemdia:kemdia@localhost:5432/kemdia";
+  const remote = "postgresql://kemdia:x@ep-preprod.eu-central-1.aws.neon.tech/kemdia";
+  const allowed = (APP_ENV: string, NODE_ENV: string, DATABASE_URL: string) =>
+    demoCouponAllowed({ APP_ENV, NODE_ENV, DATABASE_URL } as Parameters<
+      typeof demoCouponAllowed
+    >[0]);
+
+  it("démo Render : oui", () => {
+    expect(allowed("demo", "production", remote)).toBe(true);
+  });
+
+  it("poste de développement : seulement sur une base locale, hors NODE_ENV=production", () => {
+    expect(allowed("local", "development", local)).toBe(true);
+    expect(allowed("local", "development", "postgresql://k:k@db:5432/kemdia")).toBe(true);
+    expect(allowed("local", "development", "postgresql://k:k@127.0.0.1:5432/kemdia_e2e")).toBe(
+      true,
+    );
+    // APP_ENV absent (local par défaut) mais base distante : pas de coupon sur une vraie base
+    expect(allowed("local", "development", remote)).toBe(false);
+    expect(allowed("local", "production", local)).toBe(false);
+  });
+
+  it("préproduction et production : jamais", () => {
+    expect(allowed("staging", "production", local)).toBe(false);
+    expect(allowed("production", "production", local)).toBe(false);
   });
 });

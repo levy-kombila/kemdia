@@ -45,9 +45,20 @@ jobs:
           if [ "$EVENT" != "pull_request" ]; then
             echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
-          files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename')
-          # Prudence : liste vide ou illisible → tout tourne
-          if [ -z "$files" ]; then echo "code=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          all() { echo "code=true" >> "$GITHUB_OUTPUT"; exit 0; }
+          # Prudence (relecture S5-T08) : au moindre doute, tout tourne
+          # - API injoignable, liste vide ;
+          files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate \
+            --jq '.[] | .filename, (.previous_filename // empty)') || all
+          [ -n "$files" ] || all
+          # - nom avec un caractère de contrôle (un retour à la ligne couperait un nom en deux) ;
+          odd=$(gh api "repos/$REPO/pulls/$PR/files" --paginate \
+            --jq '.[] | .filename, (.previous_filename // empty) | select(test("[[:cntrl:]]"))') || all
+          [ -z "$odd" ] || all
+          # - liste tronquée (l'API s'arrête à 3000 fichiers).
+          total=$(gh api "repos/$REPO/pulls/$PR" --jq '.changed_files') || all
+          listed=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename' | wc -l) || all
+          [ "$total" -le 2999 ] && [ "$listed" -ge "$total" ] || all
           if printf '%s\n' "$files" | grep -Ev '^docs/|\.md$' | grep -q .; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
