@@ -223,6 +223,8 @@ export const ORDER_ERROR_CODES = [
   "CLE_DEJA_UTILISEE",
   // Trop de commandes encore ouvertes (non expédiées) sur ce compte : limite contre le blocage du stock
   "TROP_DE_COMMANDES_OUVERTES",
+  // Aucun fournisseur Mobile Money sur cet environnement (S5-T07) : seul le paiement à la livraison est possible
+  "MOBILE_MONEY_INDISPONIBLE",
 ] as const;
 export type OrderErrorCode = (typeof ORDER_ERROR_CODES)[number];
 

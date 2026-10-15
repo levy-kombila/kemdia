@@ -16,6 +16,8 @@ export type OrdersErrorCode =
   | "ANNULATION_IMPOSSIBLE"
   | "CLE_DEJA_UTILISEE"
   | "TROP_DE_COMMANDES_OUVERTES"
+  /** Aucun fournisseur Mobile Money sur cet environnement (S5-T07) : payer à la livraison. */
+  | "MOBILE_MONEY_INDISPONIBLE"
   // Coupons (S5-T03, ADR-0025)
   | "COUPON_INVALIDE"
   | "COUPON_EXPIRE"

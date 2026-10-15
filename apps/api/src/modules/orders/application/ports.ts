@@ -208,3 +208,13 @@ export interface CouponRepository {
   ): Promise<{ items: Coupon[]; next: CouponCursor | null }>;
 }
 export const COUPON_REPOSITORY = Symbol("COUPON_REPOSITORY");
+
+/**
+ * Mobile Money peut-il aboutir sur cet environnement (S5-T07, ADR-0029) ? Même règle que le choix du fournisseur dans
+ * le module payments (`config/mobile-money.ts`) : sans fournisseur, le devis ne propose pas Mobile Money et une
+ * commande Mobile Money est refusée (elle ne pourrait jamais être payée et bloquerait le stock 30 minutes).
+ */
+export interface MobileMoneyAvailability {
+  readonly available: boolean;
+}
+export const MOBILE_MONEY = Symbol("MOBILE_MONEY");

@@ -1,5 +1,8 @@
 import { Module } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
+import { APP_CONFIG } from "../../config/config.module.js";
+import type { AppConfig } from "../../config/env.js";
+import { mobileMoneyAvailable } from "../../config/mobile-money.js";
 import { CatalogModule, CatalogService, StockService } from "../catalog/index.js";
 import { AuditModule } from "../audit/index.js";
 import { IdentityModule } from "../identity/index.js";
@@ -13,6 +16,7 @@ import {
   CART_REPOSITORY,
   COD_SETTINGS_REPOSITORY,
   COUPON_REPOSITORY,
+  MOBILE_MONEY,
   ORDER_RANDOM,
   ORDER_REPOSITORY,
   ORDER_STOCK,
@@ -54,6 +58,12 @@ import { CartController } from "./interface/cart.controller.js";
     { provide: ORDERS_TRANSACTION, useClass: OrdersTransactionRunner },
     { provide: ORDER_STOCK, useExisting: StockService },
     { provide: ORDER_RANDOM, useValue: (size: number) => new Uint8Array(randomBytes(size)) },
+    // Même règle que le fournisseur du module payments (S5-T07, ADR-0029)
+    {
+      provide: MOBILE_MONEY,
+      inject: [APP_CONFIG],
+      useFactory: (config: AppConfig) => ({ available: mobileMoneyAvailable(config) }),
+    },
   ],
   exports: [CartService, OrderService, OrderPayments],
 })

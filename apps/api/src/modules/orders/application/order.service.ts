@@ -24,12 +24,14 @@ import { CartService } from "./cart.service.js";
 import {
   COD_SETTINGS_REPOSITORY,
   COUPON_REPOSITORY,
+  MOBILE_MONEY,
   ORDER_RANDOM,
   ORDER_REPOSITORY,
   ORDER_STOCK,
   ORDERS_TRANSACTION,
   type CodSettingsRepository,
   type CouponRepository,
+  type MobileMoneyAvailability,
   type OrderCursor,
   type OrderRecord,
   type OrderRepository,
@@ -50,6 +52,8 @@ export interface OrderQuoteView {
   deliveryDaysMax: number;
   cartOk: boolean;
   cod: { allowed: boolean; reason?: string };
+  /** Un fournisseur Mobile Money existe sur cet environnement (S5-T07) */
+  mobileMoney: { allowed: boolean };
 }
 
 export interface CreateOrderInput {
@@ -144,6 +148,7 @@ export class OrderService {
     private readonly carts: CartService,
     @Inject(COUPON_REPOSITORY) private readonly coupons: CouponRepository,
     @Inject(COD_SETTINGS_REPOSITORY) private readonly codSettings: CodSettingsRepository,
+    @Inject(MOBILE_MONEY) private readonly mobileMoney: MobileMoneyAvailability,
   ) {}
 
   /**
@@ -214,6 +219,7 @@ export class OrderService {
       cartOk: cart.ok,
       // Indiqué quel que soit le moyen choisi : le site grise l'option avec la raison (BR-011)
       cod: cod.allowed ? { allowed: true } : { allowed: false, reason: cod.reason },
+      mobileMoney: { allowed: this.mobileMoney.available },
     };
   }
 
@@ -225,6 +231,13 @@ export class OrderService {
     // Vérifications sans base d'abord : rien n'est verrouillé pour une adresse mal saisie
     const address = validateAddress(input.delivery, cityRule(input.delivery.cityId));
     const payment = validatePayment(input.payment.method, input.payment.phone);
+    // Sans fournisseur, la commande ne pourrait jamais être payée : refusée avant de toucher au stock (S5-T07)
+    if (payment.method !== "cod" && !this.mobileMoney.available) {
+      throw new OrdersError(
+        "MOBILE_MONEY_INDISPONIBLE",
+        "le paiement Mobile Money n'est pas encore disponible : choisissez le paiement à la livraison",
+      );
+    }
     const couponCode = couponCodeOf(input.couponCode);
     const idempotencyKey = input.idempotencyKey.toLowerCase();
     // Empreinte de ce qui est demandé : une clé déjà utilisée pour une autre commande est refusée (pas de confusion)
