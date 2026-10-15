@@ -13,7 +13,7 @@ import { first } from "@/lib/search-params";
 export const metadata: Metadata = { title: "Mon compte", robots: { index: false } };
 
 const FEATURES = [
-  { icon: Package, label: "Suivi de mes commandes", href: null },
+  { icon: Package, label: "Suivi de mes commandes", href: "/compte/commandes" },
   { icon: Heart, label: "Mes favoris", href: "/favoris" },
   { icon: MapPin, label: "Carnet d'adresses", href: null },
 ];

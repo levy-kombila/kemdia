@@ -27,6 +27,7 @@ import { SessionService } from "../src/modules/identity/index.js";
 import { Account } from "../src/modules/identity/domain/account.js";
 import { requireIdentifier } from "../src/modules/identity/domain/identifier.js";
 import { PrismaAccountRepository } from "../src/modules/identity/infrastructure/prisma-account.repository.js";
+import { MOBILE_MONEY } from "../src/modules/orders/application/ports.js";
 import { OverdueOrdersScheduler } from "../src/modules/orders/infrastructure/overdue-orders.js";
 import { testDatabaseUrl } from "./integration-db.js";
 
@@ -152,7 +153,13 @@ describe("Commandes (PostgreSQL, HTTP)", () => {
     const [a] = variants;
     await addToCart(a!.id, 1);
     const libreville = await quote("libreville");
-    expect(libreville).toMatchObject({ subtotal: a!.price, cartOk: true, cod: { allowed: true } });
+    expect(libreville).toMatchObject({
+      subtotal: a!.price,
+      cartOk: true,
+      cod: { allowed: true },
+      // Poste de développement : l'opérateur simulé est actif (S5-T07)
+      mobileMoney: { allowed: true },
+    });
     expect(libreville.total).toBe(libreville.subtotal + libreville.deliveryFee);
     const portGentil = await quote("port-gentil");
     expect(portGentil.cod.allowed).toBe(false);
@@ -489,6 +496,35 @@ describe("Commandes (PostgreSQL, HTTP)", () => {
     expect(await stockOf(variants[3]!.id)).toBe(50);
     await call("post", `/api/v1/orders/${opened[0]!.reference}/cancel`).expect(200);
     await call("post", "/api/v1/orders").send(orderBody(total)).expect(201);
+  });
+
+  it("sans fournisseur Mobile Money : le devis le dit, la commande Mobile Money est refusée (422), pas celle à la livraison", async () => {
+    // Même objet que celui lu par OrderService : on simule un environnement sans fournisseur (préproduction, production)
+    const mobileMoney = app.get<{ available: boolean }>(MOBILE_MONEY);
+    // Commande Mobile Money passée quand le fournisseur existait : renvoyée avec la même clé, elle reste rendue
+    const [a, b] = variants;
+    await addToCart(b!.id, 1);
+    const before = orderBody((await quote()).total);
+    const first = (await call("post", "/api/v1/orders").send(before).expect(201)).body as Order;
+    mobileMoney.available = false;
+    try {
+      const replay = await call("post", "/api/v1/orders").send(before).expect(200);
+      expect((replay.body as Order).reference).toBe(first.reference);
+      await addToCart(a!.id, 1);
+      const { total, mobileMoney: offered } = await quote();
+      expect(offered).toEqual({ allowed: false });
+      const refused = await call("post", "/api/v1/orders").send(orderBody(total)).expect(422);
+      expect(codeOf(refused.body)).toBe("MOBILE_MONEY_INDISPONIBLE");
+      // Rien n'est réservé, le panier reste tel quel
+      expect(await stockOf(a!.id)).toBe(50);
+      expect((await quote()).cartOk).toBe(true);
+      const cod = await call("post", "/api/v1/orders")
+        .send(orderBody(total, { payment: { method: "cod" } }))
+        .expect(201);
+      expect((cod.body as Order).status).toBe("confirmed");
+    } finally {
+      mobileMoney.available = true;
+    }
   });
 
   it("panier tenu par une autre demande : 409 PANIER_OCCUPE au bout de 3 s au plus, rien n'est gardé", async () => {

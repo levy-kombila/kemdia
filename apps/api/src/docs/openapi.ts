@@ -9,7 +9,7 @@ import { orderPaths } from "../modules/orders/interface/order.openapi.js";
 import { identityPaths } from "../modules/identity/interface/identity.openapi.js";
 
 /** Version du contrat HTTP (indépendante de la version de l'image) : à augmenter à chaque changement de l'API. */
-export const API_CONTRACT_VERSION = "1.12.0";
+export const API_CONTRACT_VERSION = "1.13.0";
 
 /** Document OpenAPI complet de l'API, généré à partir des schémas réellement utilisés. */
 export function buildOpenApiDocument(): Record<string, unknown> {

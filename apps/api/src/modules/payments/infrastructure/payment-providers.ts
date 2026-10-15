@@ -15,9 +15,7 @@ export class UnavailablePaymentProvider implements PaymentProvider {
 
 /**
  * Opérateur simulé (S5-T05, `SandboxOperator`) seulement sur le poste de développement, la démo et les tests ; jamais
- * en préproduction ni en production, même si `NODE_ENV` est mal réglé.
+ * en préproduction ni en production, même si `NODE_ENV` est mal réglé. Règle partagée avec le module orders
+ * (S5-T07) : elle vit dans la configuration.
  */
-export function sandboxEnabled(env: { APP_ENV: string; NODE_ENV: string }): boolean {
-  if (env.APP_ENV === "demo") return true;
-  return env.APP_ENV === "local" && env.NODE_ENV !== "production";
-}
+export { sandboxEnabled } from "../../../config/mobile-money.js";

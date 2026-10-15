@@ -6,7 +6,14 @@ import { Price } from "@/components/ui/Price";
 import type { CartLine } from "@/lib/cart";
 import { formatFCFA } from "@/lib/format";
 
-type Props = { lines: CartLine[]; subtotal: number; fee: number | null; total: number };
+type Props = {
+  lines: CartLine[];
+  subtotal: number;
+  fee: number | null;
+  total: number;
+  /** Code promo accepté par le serveur (S5-T07) */
+  coupon?: { code: string; discount: number } | null;
+};
 
 function Lines({ lines }: { lines: CartLine[] }) {
   return (
@@ -35,13 +42,19 @@ function Lines({ lines }: { lines: CartLine[] }) {
   );
 }
 
-function Totals({ subtotal, fee, total }: Omit<Props, "lines">) {
+function Totals({ subtotal, fee, total, coupon }: Omit<Props, "lines">) {
   return (
     <dl className="space-y-2 text-sm">
       <div className="flex justify-between">
         <dt>Articles</dt>
         <dd className="font-semibold">{formatFCFA(subtotal)}</dd>
       </div>
+      {coupon && (
+        <div className="text-forest-700 flex justify-between">
+          <dt>Code promo {coupon.code}</dt>
+          <dd className="font-semibold">− {formatFCFA(coupon.discount)}</dd>
+        </div>
+      )}
       <div className="flex justify-between">
         <dt>Livraison</dt>
         <dd className="font-semibold">

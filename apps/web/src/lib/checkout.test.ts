@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import type { CartLine } from "./cart";
 import {
   buildOrderRequest,
   codAvailability,
@@ -58,24 +57,21 @@ describe("validatePaymentPhone", () => {
 });
 
 describe("buildOrderRequest", () => {
-  it("n'envoie que la variante et la quantité, jamais de prix (S3-T05)", () => {
-    const lines: CartLine[] = [
-      {
-        variantId: "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a",
-        productId: "0b9f1c7e-3f5a-4b8e-9c2d-1a2b3c4d5e6f",
-        slug: "x",
-        title: "X",
-        variantName: "",
-        price: 1,
-        image: null,
-        quantity: 2,
-        maxQuantity: 5,
-      },
-    ];
-    const req = buildOrderRequest(lines, address, "airtel", "077123456");
-    expect(req.items).toEqual([{ variantId: "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a", quantity: 2 }]);
-    expect(JSON.stringify(req)).not.toMatch(/price|total|fee/i);
+  it("n'envoie que l'adresse et le paiement : ni article, ni prix, ni total (S5-T07, BR-004)", () => {
+    const req = buildOrderRequest(
+      { ...address, fullName: "  Marie   Nze ", landmark: " Face à la pharmacie " },
+      "airtel",
+      "077123456",
+    );
+    expect(Object.keys(req).sort()).toEqual(["delivery", "payment"]);
+    expect(JSON.stringify(req)).not.toMatch(/price|total|fee|items|variant/i);
+    expect(req.delivery.fullName).toBe("Marie Nze");
+    expect(req.delivery.landmark).toBe("Face à la pharmacie");
     expect(req.delivery.phone).toBe("+241077123456");
     expect(req.payment).toEqual({ method: "airtel", phone: "+241077123456" });
+  });
+
+  it("paiement à la livraison : aucun numéro de paiement", () => {
+    expect(buildOrderRequest(address, "cod", "077123456").payment).toEqual({ method: "cod" });
   });
 });

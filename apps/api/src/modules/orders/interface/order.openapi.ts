@@ -79,7 +79,7 @@ export const orderPaths = {
           "`PANIER_VIDE`, `PANIER_A_VERIFIER` (stock ou produit indisponible), `PRIX_MODIFIE` (le total a changé : relire le total), `CLE_DEJA_UTILISEE` (clé déjà servie pour une autre commande), `TROP_DE_COMMANDES_OUVERTES` (3 commandes non expédiées au plus) ou `PANIER_OCCUPE` (réessayer)",
         ),
         "422": problem(
-          "`ADRESSE_INVALIDE`, `NUMERO_PAIEMENT_INVALIDE` (07… Airtel, 06… Moov) ou `PAIEMENT_A_LA_LIVRAISON_INDISPONIBLE`",
+          "`ADRESSE_INVALIDE`, `NUMERO_PAIEMENT_INVALIDE` (07… Airtel, 06… Moov), `PAIEMENT_A_LA_LIVRAISON_INDISPONIBLE` ou `MOBILE_MONEY_INDISPONIBLE` (aucun fournisseur Mobile Money sur cet environnement : voir `mobileMoney` dans le devis)",
         ),
       },
     },

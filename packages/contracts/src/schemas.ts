@@ -654,6 +654,11 @@ export const OrderQuoteSchema = z
       .describe(
         "Paiement à la livraison possible pour cette ville et ce total (BR-011), sinon la raison",
       ),
+    mobileMoney: z
+      .object({ allowed: z.boolean() })
+      .describe(
+        "Paiement Mobile Money possible sur cet environnement (un fournisseur est branché) — S5-T07",
+      ),
   })
   .meta({
     id: "OrderQuote",

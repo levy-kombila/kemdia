@@ -21,15 +21,18 @@ import {
 } from "../domain/order.js";
 import { OrdersError } from "../domain/orders-error.js";
 import { CartService } from "./cart.service.js";
+import { OrderCancelHooks } from "./order-cancel-hooks.js";
 import {
   COD_SETTINGS_REPOSITORY,
   COUPON_REPOSITORY,
+  MOBILE_MONEY,
   ORDER_RANDOM,
   ORDER_REPOSITORY,
   ORDER_STOCK,
   ORDERS_TRANSACTION,
   type CodSettingsRepository,
   type CouponRepository,
+  type MobileMoneyAvailability,
   type OrderCursor,
   type OrderRecord,
   type OrderRepository,
@@ -50,6 +53,8 @@ export interface OrderQuoteView {
   deliveryDaysMax: number;
   cartOk: boolean;
   cod: { allowed: boolean; reason?: string };
+  /** Un fournisseur Mobile Money existe sur cet environnement (S5-T07) */
+  mobileMoney: { allowed: boolean };
 }
 
 export interface CreateOrderInput {
@@ -144,6 +149,8 @@ export class OrderService {
     private readonly carts: CartService,
     @Inject(COUPON_REPOSITORY) private readonly coupons: CouponRepository,
     @Inject(COD_SETTINGS_REPOSITORY) private readonly codSettings: CodSettingsRepository,
+    @Inject(MOBILE_MONEY) private readonly mobileMoney: MobileMoneyAvailability,
+    private readonly cancelHooks: OrderCancelHooks,
   ) {}
 
   /**
@@ -214,6 +221,7 @@ export class OrderService {
       cartOk: cart.ok,
       // Indiqué quel que soit le moyen choisi : le site grise l'option avec la raison (BR-011)
       cod: cod.allowed ? { allowed: true } : { allowed: false, reason: cod.reason },
+      mobileMoney: { allowed: this.mobileMoney.available },
     };
   }
 
@@ -243,6 +251,14 @@ export class OrderService {
           );
         }
         return { order: existing, created: false };
+      }
+      // Sans fournisseur, la commande ne pourrait jamais être payée : refusée avant de toucher au stock (S5-T07).
+      // Après la clé d'idempotence : une commande déjà créée est toujours rendue telle quelle (relecture S5-T07)
+      if (payment.method !== "cod" && !this.mobileMoney.available) {
+        throw new OrdersError(
+          "MOBILE_MONEY_INDISPONIBLE",
+          "le paiement Mobile Money n'est pas encore disponible : choisissez le paiement à la livraison",
+        );
       }
       if (!cart || cart.lines.length === 0) {
         throw new OrdersError("PANIER_VIDE", "votre panier est vide");
@@ -380,6 +396,8 @@ export class OrderService {
       // Utilisation du coupon rendue (choix du 2026-10-10)
       await this.coupons.releaseForOrder(order.id, now);
       await this.orders.setStatus(order.id, "cancelled", now, "client");
+      // Demandes de paiement encore en attente : expirées dans la même transaction (module payments, S5-T07)
+      await this.cancelHooks.run(order, now);
       return (await this.orders.findByReference(accountId, order.reference))!;
     });
   }

@@ -6,6 +6,7 @@ export { OrdersModule } from "./orders.module.js";
 export { CartService, type CartView, type CartLineView } from "./application/cart.service.js";
 export { OrderService } from "./application/order.service.js";
 export { OrderPayments } from "./application/order-payments.service.js";
+export { OrderCancelHooks } from "./application/order-cancel-hooks.js";
 export type { OrderRecord } from "./application/ports.js";
 export { validatePayment, type PaymentMethod } from "./domain/order.js";
 export { withOrdersErrors, ORDERS_ERROR_STATUS } from "./interface/orders-http-errors.js";

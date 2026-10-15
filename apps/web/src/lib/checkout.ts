@@ -1,10 +1,9 @@
 /**
  * Règles du tunnel de commande (S2-T02) — logique pure, testée.
- * Côté navigateur, ces contrôles servent au confort. Le serveur (Sprint 5, module orders) refera tout :
+ * Côté navigateur, ces contrôles servent au confort. Le serveur (module orders, S5-T07) refait tout :
  * prix relus en base (BR-004), stock réservé dans la même transaction (BR-012), zones du paiement à la livraison (BR-011).
  */
 import { normalizeGabonPhone, normalizeName, type MobileOperator } from "./auth/validation";
-import type { CartLine } from "./cart";
 import { LANDMARK_MAX, LANDMARK_MIN, OTHER_NEIGHBORHOOD } from "@kemdia/contracts/delivery";
 import { getCity } from "./delivery";
 
@@ -64,9 +63,11 @@ export function validatePaymentPhone(method: PaymentMethod, phone: string): stri
   return null;
 }
 
+/**
+ * Adresse et paiement envoyés à l'API (S5-T07) : les articles sont ceux du panier du COMPTE, lus par le serveur ;
+ * aucun article, aucun prix, aucun frais ne part du navigateur (BR-004, leçon CRIT-01 de l'ancien site).
+ */
 export type OrderRequest = {
-  /** Lignes de commande : la variante choisie et sa quantité, rien d'autre (S3-T05) */
-  items: { variantId: string; quantity: number }[];
   delivery: {
     fullName: string;
     phone: string;
@@ -77,19 +78,14 @@ export type OrderRequest = {
   payment: { method: PaymentMethod; phone?: string };
 };
 
-/**
- * Ce qui partira vers le serveur : identifiants et quantités SEULEMENT.
- * Aucun prix, aucun total, aucun frais : le serveur les recalcule (leçon CRIT-01 de l'ancien site).
- */
+/** Adresse et paiement nettoyés (espaces, numéros normalisés) : ce qui part vers l'API, rien d'autre. */
 export function buildOrderRequest(
-  lines: CartLine[],
   address: Address,
   method: PaymentMethod,
   paymentPhone: string,
 ): OrderRequest {
   const phone = normalizeGabonPhone(address.phone)?.value ?? "";
   return {
-    items: lines.map((l) => ({ variantId: l.variantId, quantity: l.quantity })),
     delivery: {
       fullName: address.fullName.trim().replace(/\s+/g, " "),
       phone,

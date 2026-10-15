@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "1.12.0",
+    "version": "1.13.0",
     "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.\n- Factures (S5-T06) : établies au paiement reçu, avoir à l'annulation, numéros par année sans trou, PDF et e-mail.\n- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo."
   },
   "servers": [
@@ -2265,7 +2265,7 @@
             }
           },
           "422": {
-            "description": "`ADRESSE_INVALIDE`, `NUMERO_PAIEMENT_INVALIDE` (07… Airtel, 06… Moov) ou `PAIEMENT_A_LA_LIVRAISON_INDISPONIBLE`",
+            "description": "`ADRESSE_INVALIDE`, `NUMERO_PAIEMENT_INVALIDE` (07… Airtel, 06… Moov), `PAIEMENT_A_LA_LIVRAISON_INDISPONIBLE` ou `MOBILE_MONEY_INDISPONIBLE` (aucun fournisseur Mobile Money sur cet environnement : voir `mobileMoney` dans le devis)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5950,6 +5950,17 @@
             "required": ["allowed"],
             "additionalProperties": false,
             "description": "Paiement à la livraison possible pour cette ville et ce total (BR-011), sinon la raison"
+          },
+          "mobileMoney": {
+            "type": "object",
+            "properties": {
+              "allowed": {
+                "type": "boolean"
+              }
+            },
+            "required": ["allowed"],
+            "additionalProperties": false,
+            "description": "Paiement Mobile Money possible sur cet environnement (un fournisseur est branché) — S5-T07"
           }
         },
         "required": [
@@ -5962,7 +5973,8 @@
           "deliveryDaysMin",
           "deliveryDaysMax",
           "cartOk",
-          "cod"
+          "cod",
+          "mobileMoney"
         ],
         "additionalProperties": false,
         "description": "Total calculé par le serveur (BR-004) avant la commande"
@@ -6231,6 +6243,7 @@
               "ANNULATION_IMPOSSIBLE",
               "CLE_DEJA_UTILISEE",
               "TROP_DE_COMMANDES_OUVERTES",
+              "MOBILE_MONEY_INDISPONIBLE",
               "COUPON_INVALIDE",
               "COUPON_EXPIRE",
               "COUPON_EPUISE",

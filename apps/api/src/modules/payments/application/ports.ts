@@ -96,6 +96,11 @@ export interface PaymentProvider {
   readonly available: boolean;
   /** Envoie la demande de validation sur le téléphone ; lève `PaymentProviderError` si l'opérateur ne répond pas. */
   request(payment: PaymentRequest): Promise<{ providerRef: string }>;
+  /**
+   * Retire une demande encore en attente (commande annulée par le client, S5-T07), au mieux : sans effet si
+   * l'opérateur ne le permet pas. Un paiement validé malgré tout est remboursé (remboursement « à faire », ADR-0026).
+   */
+  cancel?(paymentId: string): void;
 }
 export const PAYMENT_PROVIDER = Symbol("PAYMENT_PROVIDER");
 
