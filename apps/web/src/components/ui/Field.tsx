@@ -8,6 +8,7 @@ import {
   type ReactNode,
   type Ref,
   type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
 } from "react";
 import { cn } from "@/lib/cn";
 
@@ -160,6 +161,44 @@ export function SelectField({
       >
         {children}
       </select>
+      {hint && (
+        <div id={`${id}-hint`} className="text-ink-500 mt-1.5 text-sm">
+          {hint}
+        </div>
+      )}
+      {error && (
+        <p id={`${id}-error`} className="text-brand-700 mt-1.5 text-sm font-medium">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+type TextAreaFieldProps = TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  label: string;
+  error?: string | null;
+  hint?: ReactNode;
+};
+
+/** Zone de texte avec le même rendu et la même accessibilité que <Field> (S6-T06). */
+export function TextAreaField({ label, error, hint, className, ...props }: TextAreaFieldProps) {
+  const id = useId();
+  const describedBy = [error ? `${id}-error` : null, hint ? `${id}-hint` : null]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <div className={className}>
+      <label htmlFor={id} className="text-ink-800 mb-1.5 block text-sm font-semibold">
+        {label}
+      </label>
+      <textarea
+        id={id}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy || undefined}
+        className={inputClass}
+        {...props}
+      />
       {hint && (
         <div id={`${id}-hint`} className="text-ink-500 mt-1.5 text-sm">
           {hint}

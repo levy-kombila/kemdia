@@ -16,6 +16,7 @@ export default function robots(): MetadataRoute.Robots {
       disallow: [
         "/panier",
         "/compte",
+        "/vendeur",
         "/recherche",
         "/connexion",
         "/inscription",

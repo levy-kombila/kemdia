@@ -24,8 +24,12 @@ describe("rôles du compte (Mon compte, S4-T06)", () => {
     );
   });
 
-  it("vendeur seul : pas d'espace de l'équipe", () => {
+  it("vendeur seul : espace vendeur (S6-T06), pas d'espace de l'équipe", () => {
     render(<RoleList roles={["client", "vendor"]} />);
     expect(screen.queryByRole("link", { name: /espace de l'équipe/ })).toBeNull();
+    expect(screen.getByRole("link", { name: "Mon espace vendeur" })).toHaveAttribute(
+      "href",
+      "/vendeur",
+    );
   });
 });
