@@ -57,7 +57,8 @@ describe("Boutiques : mêmes règles partout (S6-T01)", () => {
   it("la boutique Kemdia a le même identifiant dans le contrat, la migration et Prisma", () => {
     // Valeur par défaut de shop_id, contrainte « une seule boutique Kemdia », ligne insérée
     expect(migration.split(KEMDIA_SHOP_ID).length - 1).toBe(3);
-    expect(catalogSchema).toContain(`@default("${KEMDIA_SHOP_ID}")`);
+    // dbgenerated : forme gardée par PostgreSQL, sinon db:check voit une différence (correctif du 2026-10-16)
+    expect(catalogSchema).toContain(`@default(dbgenerated("'${KEMDIA_SHOP_ID}'::uuid"))`);
   });
 
   it("chaque code d'erreur des boutiques et des produits des vendeurs a son statut HTTP", () => {

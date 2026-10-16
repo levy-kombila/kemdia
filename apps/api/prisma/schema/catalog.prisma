@@ -46,8 +46,10 @@ model Product {
   brand            String?          @db.VarChar(60)
   categoryId       String           @map("category_id") @db.Uuid
   category         Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  /// Boutique qui vend le produit (module vendors, UUID, S6-T01) ; par défaut la boutique Kemdia (KEMDIA_SHOP_ID)
-  shopId           String           @default("6b656d64-6961-4000-8000-000000000001") @map("shop_id") @db.Uuid
+  /// Boutique qui vend le produit (module vendors, UUID, S6-T01) ; par défaut la boutique Kemdia (KEMDIA_SHOP_ID).
+  /// `dbgenerated` : forme exacte gardée par PostgreSQL (`'…'::uuid`) ; avec `@default("…")`, `db:check` voyait
+  /// toujours une différence (Prisma réécrit la valeur, PostgreSQL la range de nouveau avec `::uuid`).
+  shopId           String           @default(dbgenerated("'6b656d64-6961-4000-8000-000000000001'::uuid")) @map("shop_id") @db.Uuid
   images           String[]         @default([])
   status           ProductStatus    @default(DRAFT)
   /// Boutique suspendue (S6-T02) : produit caché, quel que soit son statut ; tenu à jour par le module vendors

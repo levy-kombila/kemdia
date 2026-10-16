@@ -105,6 +105,12 @@ Dans l'espace cloud, le client Prisma a été généré avec un moteur factice e
 
 Aucune : pas de changement visible sur le site (API seule).
 
+**Correctif du 2026-10-16** (branche `fix/S6-db-check-shop-id`) : `db:check` signalait un écart (code 2) sur la valeur par
+défaut de `catalog.products.shop_id`. PostgreSQL la garde sous la forme `'6b656d64-…'::uuid`, que Prisma ne reconnaît pas comme
+le texte `@default("…")` du schéma (et la réécrire n'y changeait rien). Le schéma Prisma utilise maintenant
+`@default(dbgenerated("'…'::uuid"))`, la forme exacte de la base : **aucune migration, aucun changement de la base**. Vérifié
+avec le moteur de schéma de Prisma : « No difference detected » sur une base construite avec toutes les migrations.
+
 ## 7. Limites connues / dette technique
 
 - Pas encore d'écran (demande sur `/vendre`, espace vendeur, back-office) ni d'e-mail au demandeur à la décision.
