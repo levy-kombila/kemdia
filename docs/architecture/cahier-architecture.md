@@ -8,6 +8,7 @@
 | **0.4** | 2026-10-05 | S2     | Intégration du KSAD : vision et modèle économique (§1), MVP et règles métier (§2), modules du backend (§3.3, ADR-0006), concepts expliqués                                                                            |
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests                                                                                |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                                                                                                 |
+| **4.0** | 2026-10-16 | S6     | Double authentification de l'équipe (ADR-0034, MED-15) : §3.4 `TOTP_ENCRYPTION_KEY`, §3.7 routes `/auth/2fa` et contrat 1.16.0, §3.10 actions `mfa.*`, §3.18 (nouvelle), §6.4                                         |
 | **3.9** | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                  |
 | **3.8** | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                        |
 | **3.7** | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                           |
@@ -262,26 +263,27 @@ Un autre module n'entre que par `index.ts`.
 
 **Configuration** (vérifiée au démarrage ; liste complète dans `apps/api/.env.example`) :
 
-| Variable                        | Défaut                          | Règle en production                                                    |
-| ------------------------------- | ------------------------------- | ---------------------------------------------------------------------- |
-| `NODE_ENV`                      | `development`                   | `production`                                                           |
-| `APP_ENV`                       | `local`                         | `demo`, `staging` ou `production`                                      |
-| `APP_VERSION`                   | `dev`                           | **Obligatoire** (fournie par le pipeline)                              |
-| `HOST`, `PORT`                  | `0.0.0.0:4000`                  | —                                                                      |
-| `LOG_LEVEL`                     | `info`                          | `debug` et `trace` **interdits**                                       |
-| `CORS_ORIGINS`                  | vide (fermé)                    | HTTPS uniquement                                                       |
-| `TRUST_PROXY`                   | `0`                             | `1` derrière Caddy                                                     |
-| `DATABASE_URL`                  | base locale de `docker compose` | **Obligatoire**, adresse de développement refusée ; jamais journalisée |
-| `DATABASE_POOL_MAX`             | `10`                            | 1 à 50                                                                 |
-| `DATABASE_STATEMENT_TIMEOUT_MS` | `10000`                         | 100 à 60 000                                                           |
-| `RATE_LIMIT_PER_MINUTE`         | `120`                           | 10 à 10 000                                                            |
-| `API_INTERNAL_KEY`              | aucune                          | Secret du serveur (32 à 128 caractères) ; jamais dans Git              |
-| `API_DOCS`                      | `true` (dév.)                   | `false` par défaut                                                     |
-| `SMS_ENABLED`                   | `false`                         | `true` seulement quand un fournisseur SMS est branché (ADR-0015)       |
-| `EMAIL_TRANSPORT`               | `console` (poste) / `none`      | `brevo` sur la démo ; `console` refusé hors du poste (ADR-0016)        |
-| `MAILPIT_URL`                   | `http://localhost:8025`         | — (boîte de test locale ; interdite en production)                     |
-| `BREVO_API_KEY`                 | aucune                          | **Secret** ; obligatoire avec `brevo`                                  |
-| `EMAIL_FROM`, `EMAIL_FROM_NAME` | `no-reply@kemdia.local`, Kemdia | Avec `brevo` : adresse vérifiée dans Brevo (obligatoire)               |
+| Variable                        | Défaut                          | Règle en production                                                                                                                       |
+| ------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                      | `development`                   | `production`                                                                                                                              |
+| `APP_ENV`                       | `local`                         | `demo`, `staging` ou `production`                                                                                                         |
+| `APP_VERSION`                   | `dev`                           | **Obligatoire** (fournie par le pipeline)                                                                                                 |
+| `HOST`, `PORT`                  | `0.0.0.0:4000`                  | —                                                                                                                                         |
+| `LOG_LEVEL`                     | `info`                          | `debug` et `trace` **interdits**                                                                                                          |
+| `CORS_ORIGINS`                  | vide (fermé)                    | HTTPS uniquement                                                                                                                          |
+| `TRUST_PROXY`                   | `0`                             | `1` derrière Caddy                                                                                                                        |
+| `DATABASE_URL`                  | base locale de `docker compose` | **Obligatoire**, adresse de développement refusée ; jamais journalisée                                                                    |
+| `DATABASE_POOL_MAX`             | `10`                            | 1 à 50                                                                                                                                    |
+| `DATABASE_STATEMENT_TIMEOUT_MS` | `10000`                         | 100 à 60 000                                                                                                                              |
+| `RATE_LIMIT_PER_MINUTE`         | `120`                           | 10 à 10 000                                                                                                                               |
+| `API_INTERNAL_KEY`              | aucune                          | Secret du serveur (32 à 128 caractères) ; jamais dans Git                                                                                 |
+| `TOTP_ENCRYPTION_KEY`           | clé de dév. (local, démo)       | Secret : chiffrement des secrets de la double authentification (32 octets base64url, S6-T03) ; absente ailleurs = routes d'équipe fermées |
+| `API_DOCS`                      | `true` (dév.)                   | `false` par défaut                                                                                                                        |
+| `SMS_ENABLED`                   | `false`                         | `true` seulement quand un fournisseur SMS est branché (ADR-0015)                                                                          |
+| `EMAIL_TRANSPORT`               | `console` (poste) / `none`      | `brevo` sur la démo ; `console` refusé hors du poste (ADR-0016)                                                                           |
+| `MAILPIT_URL`                   | `http://localhost:8025`         | — (boîte de test locale ; interdite en production)                                                                                        |
+| `BREVO_API_KEY`                 | aucune                          | **Secret** ; obligatoire avec `brevo`                                                                                                     |
+| `EMAIL_FROM`, `EMAIL_FROM_NAME` | `no-reply@kemdia.local`, Kemdia | Avec `brevo` : adresse vérifiée dans Brevo (obligatoire)                                                                                  |
 
 Une valeur invalide arrête l'API (code de sortie 1) avec la liste des variables en cause, **sans afficher leur valeur**.
 
@@ -402,6 +404,7 @@ Décision : [ADR-0010](adr/0010-api-rest-openapi.md). Description complète : [`
 | `POST /api/v1/auth/signup/resend`                                               | Nouveau code (60 s entre deux, 5 par heure)                                                                                                     | aucun | 10/min/IP                    |
 | `POST /api/v1/auth/login`                                                       | Connexion ; 3 essais puis 15 min par identifiant, même réponse si l'adresse n'a pas de compte (S4-T03)                                          | aucun | 10/min/IP                    |
 | `GET /api/v1/auth/session`                                                      | Session présentée (`Authorization: Bearer`) valable ? La prolonge                                                                               | aucun | 120/min/IP                   |
+| `GET /api/v1/auth/2fa`, `POST …/setup\|enable\|verify\|recovery-codes`          | Double authentification de l'équipe : QR code (mot de passe), activation, confirmation 15 min, codes de secours (S6-T03)                        | aucun | 5 à 10/min/compte            |
 | `POST /api/v1/auth/logout`, `/logout-all`                                       | Fermer cette session, ou toutes celles du compte                                                                                                | aucun | 10/min/IP                    |
 | `POST /api/v1/auth/password/forgot`                                             | Mot de passe oublié : ticket + code ; **même réponse, aucun e-mail** sans compte (S4-T04)                                                       | aucun | 10/min/IP                    |
 | `POST /api/v1/auth/password/resend`                                             | Nouveau code (60 s entre deux, 5 par heure)                                                                                                     | aucun | 10/min/IP                    |
@@ -602,28 +605,33 @@ src/modules/audit/
 └── interface/request-context.ts     Adresse IP vue par l'API, identifiant de requête
 ```
 
-| Action                     | Écrite par                         | Détails                                           |
-| -------------------------- | ---------------------------------- | ------------------------------------------------- |
-| `role.granted`             | Administrateur ou commande serveur | `role`, `source`                                  |
-| `role.revoked`             | Administrateur ou commande serveur | `role`, `source`                                  |
-| `password.reset`           | Titulaire (mot de passe oublié)    | —                                                 |
-| `sessions.revoked_all`     | Titulaire (« tous mes appareils ») | `count` (si ≥ 1)                                  |
-| `coupon.created`           | Administrateur (S5-T03)            | `code`, `kind`, `value`                           |
-| `coupon.updated`           | Administrateur (S5-T03)            | `code`, `active`                                  |
-| `order.cancelled_by_admin` | Administrateur (S5-T04)            | `reference`, `previousStatus`, `refunds`, `note`  |
-| `refund.done`              | Administrateur (S5-T04)            | `reference`, `amount`, `externalReference`        |
-| `cod.collected`            | Administrateur (S5-T04)            | `reference`, `amount`                             |
-| `settings.billing_updated` | Administrateur (S5-T06)            | `legalName`, `taxId`                              |
-| `settings.cod_updated`     | Administrateur (S5-T04)            | `zones`, `maxTotal`                               |
-| `shop.requested`           | Demandeur (S6-T01)                 | `name`, `previousName` (nouvelle demande)         |
-| `shop.approved`            | Administrateur (S6-T01)            | `name`, `from`, `to` (+ `role.granted`)           |
-| `shop.rejected`            | Administrateur (S6-T01)            | `name`, `from`, `to`, `reason` (100 caractères)   |
-| `product.submitted`        | Vendeur (S6-T02)                   | `title`, `reason`, `from`                         |
-| `product.approved`         | Modérateur (S6-T02)                | `title`, `from`, `to`                             |
-| `product.rejected`         | Modérateur (S6-T02)                | `title`, `from`, `to`, `reason`                   |
-| `product.archived`         | Vendeur (S6-T02)                   | `title`, `from`                                   |
-| `product.variant_updated`  | Vendeur (S6-T02)                   | `sku`, prix / prix barré / stock avant et après   |
-| `shop.suspended`           | Administrateur (S6-T01)            | `name`, `from`, `to`, `reason` (+ `role.revoked`) |
+| Action                                    | Écrite par                         | Détails                                              |
+| ----------------------------------------- | ---------------------------------- | ---------------------------------------------------- |
+| `role.granted`                            | Administrateur ou commande serveur | `role`, `source`                                     |
+| `role.revoked`                            | Administrateur ou commande serveur | `role`, `source`                                     |
+| `password.reset`                          | Titulaire (mot de passe oublié)    | —                                                    |
+| `sessions.revoked_all`                    | Titulaire (« tous mes appareils ») | `count` (si ≥ 1)                                     |
+| `coupon.created`                          | Administrateur (S5-T03)            | `code`, `kind`, `value`                              |
+| `coupon.updated`                          | Administrateur (S5-T03)            | `code`, `active`                                     |
+| `order.cancelled_by_admin`                | Administrateur (S5-T04)            | `reference`, `previousStatus`, `refunds`, `note`     |
+| `refund.done`                             | Administrateur (S5-T04)            | `reference`, `amount`, `externalReference`           |
+| `cod.collected`                           | Administrateur (S5-T04)            | `reference`, `amount`                                |
+| `settings.billing_updated`                | Administrateur (S5-T06)            | `legalName`, `taxId`                                 |
+| `settings.cod_updated`                    | Administrateur (S5-T04)            | `zones`, `maxTotal`                                  |
+| `mfa.enabled`, `mfa.recovery_regenerated` | Titulaire (S6-T03)                 | —                                                    |
+| `mfa.recovery_used`                       | Titulaire (S6-T03)                 | `remaining`                                          |
+| `mfa.failed`                              | Titulaire (S6-T03)                 | `attempts`, `today`                                  |
+| `mfa.locked`                              | Titulaire (S6-T03)                 | `attempts`, `scope` (15min ou 24h), `sessionsClosed` |
+| `mfa.reset`                               | Serveur (S6-T03)                   | `source`, `sessionsClosed`, `password`               |
+| `shop.requested`                          | Demandeur (S6-T01)                 | `name`, `previousName` (nouvelle demande)            |
+| `shop.approved`                           | Administrateur (S6-T01)            | `name`, `from`, `to` (+ `role.granted`)              |
+| `shop.rejected`                           | Administrateur (S6-T01)            | `name`, `from`, `to`, `reason` (100 caractères)      |
+| `product.submitted`                       | Vendeur (S6-T02)                   | `title`, `reason`, `from`                            |
+| `product.approved`                        | Modérateur (S6-T02)                | `title`, `from`, `to`                                |
+| `product.rejected`                        | Modérateur (S6-T02)                | `title`, `from`, `to`, `reason`                      |
+| `product.archived`                        | Vendeur (S6-T02)                   | `title`, `from`                                      |
+| `product.variant_updated`                 | Vendeur (S6-T02)                   | `sku`, prix / prix barré / stock avant et après      |
+| `shop.suspended`                          | Administrateur (S6-T01)            | `name`, `from`, `to`, `reason` (+ `role.revoked`)    |
 
 Table `audit.events` : identifiant, date (**posée par la base**), action, type et UUID de l'acteur, type et UUID de la cible, détails (JSON ≤ 2 Ko),
 adresse IP, identifiant de requête. Déclencheurs SQL : **aucune modification**, suppression seulement après 365 jours, `TRUNCATE` interdit.
@@ -835,6 +843,35 @@ journal) ; le stock se change avec la valeur lue (`previousStock`), sinon `STOCK
 
 Ordre des verrous (pas d'interblocage) : vendeur boutique (partagé) → produit → variantes ; suspension boutique → produits ;
 réservation produits (partagé) → variantes ; toujours dans l'ordre des identifiants.
+
+### 3.18 Double authentification de l'équipe (S6-T03)
+
+Décision : [ADR-0034](adr/0034-double-authentification-equipe.md) (MED-15). Module `identity` : `domain/totp.ts` (RFC 6238),
+`domain/second-factor.ts`, `application/second-factor.service.ts`, `infrastructure/aes-secret-box.ts` (AES-256-GCM),
+`infrastructure/prisma-second-factor.repository.ts`, `interface/second-factor.controller.ts`, commande `src/cli/mfa-reset.ts`.
+
+```mermaid
+sequenceDiagram
+    participant M as Modérateur / admin
+    participant API
+    M->>API: route d'équipe (session non confirmée)
+    API-->>M: 403 DEUX_FACTEURS_A_ACTIVER
+    M->>API: POST /auth/2fa/setup (mot de passe)
+    API-->>M: secret (QR code) + avis e-mail
+    M->>API: POST /auth/2fa/enable (1er code)
+    API-->>M: 10 codes de secours (une fois), session confirmée 15 min
+    M->>API: route d'équipe → 200
+    Note over M,API: après 15 min : 403 DEUX_FACTEURS_REQUIS → POST /auth/2fa/verify (code)
+```
+
+| Table / colonne                      | Contenu                                                   | Règles SQL ajoutées à la main                                           |
+| ------------------------------------ | --------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `identity.second_factors`            | Secret chiffré, activation, dernière période, échecs 24 h | 49 octets, version 1 ; période qui ne recule jamais ; compteur cohérent |
+| `identity.recovery_codes`            | Empreinte SHA-256 de chaque code, date d'usage            | Empreinte hexadécimale ; un code utilisé ne change plus                 |
+| `identity.sessions.second_factor_at` | Dernière confirmation de la session                       | —                                                                       |
+
+Essais : 3 échecs en 15 minutes → session fermée et 15 minutes de blocage ; 10 échecs en 24 heures → toutes les sessions du compte
+fermées. `mfa:reset` (commande serveur) supprime la 2FA, ferme les sessions et rend le mot de passe inutilisable.
 
 ## 4. Choix technologiques
 
@@ -1231,7 +1268,7 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 
 - Démo : régler `CLIENT_IP_HEADER` une fois l'en-tête fiable de Render vérifié ; collecte des violations de CSP (`report-to`).
 - S5 : signature des webhooks Mobile Money, idempotence des paiements. Fait au S5-T01 : panier modifié sous verrou en une transaction, prix jamais reçus du navigateur, UUID normalisés. Fait au S5-T02 : stock réservé dans la transaction de la commande (BR-012), commandes idempotentes, montants figés par la base, 3 commandes ouvertes au plus par compte. Fait au S5-T03 : coupons comptés de façon atomique (BR-030), jamais de commande à 0 FCFA, limite d'essais de codes. Fait au S5-T06 : factures figées et numérotées sans trou par la base, PDF jamais en erreur sur un texte du client, e-mail réservé avant l'envoi (pas de doublon), aucune facture « à compléter » en production. Fait au S5-T05 : notifications signées (HMAC-SHA256 sur le corps brut, 5 minutes), rejeu ignoré dans la même transaction (CRIT-01 traité), opérateur simulé jamais actif en production. Fait au S5-T07 : aucun article ni prix envoyé par le site, montants du devis seulement, Mobile Money refusé sans fournisseur, demandes de paiement expirées à l'annulation par le client, factures relayées par le serveur du site (session, numéros revérifiés, jamais en cache, 2 Mo au plus), actions serveur revérifiant chaque argument. Fait au S5-T04 : résultat d'un paiement vérifié (référence, montant), argent non attendu → remboursement à faire, commande payée non annulable en ligne, 5 demandes par heure au plus vers un même numéro, paiements et remboursements jamais effacés.
-- S6 : écrans d'administration avec double authentification (MED-15) ; nouvelles actions au journal (KYC, modération). Fait au S6-T02 : produits des vendeurs invisibles jusqu'à la validation, validation de la seule version lue (`PRODUIT_MODIFIE`), jamais sur sa propre boutique, boutique suspendue = produits cachés partout (y compris la réservation du stock), stock jamais écrasé (`previousStock`), textes invisibles refusés, panier sans titre non modéré, file bornée, prix et stock tracés. Fait au S6-T01 : une boutique par compte (verrou par compte), nom unique sans casse ni accents et signes ressemblants confondus, lettres ASCII et accentuées du français seulement, « Kemdia » interdit même déguisé (pas d'usurpation), nom libéré au refus, motifs et demandes au journal, caractères invisibles retirés, personne ne décide pour sa propre boutique, boutique + rôle + journal dans une transaction, mêmes règles en contraintes SQL.
+- S6 : écrans d'administration ; double authentification (MED-15) faite au S6-T03 : TOTP obligatoire pour l'équipe, confirmation par session (15 min), secrets chiffrés, codes de secours, essais limités sur 15 min et 24 h, avis au titulaire, remise à zéro qui invalide le mot de passe ; nouvelles actions au journal (KYC, modération). Fait au S6-T02 : produits des vendeurs invisibles jusqu'à la validation, validation de la seule version lue (`PRODUIT_MODIFIE`), jamais sur sa propre boutique, boutique suspendue = produits cachés partout (y compris la réservation du stock), stock jamais écrasé (`previousStock`), textes invisibles refusés, panier sans titre non modéré, file bornée, prix et stock tracés. Fait au S6-T01 : une boutique par compte (verrou par compte), nom unique sans casse ni accents et signes ressemblants confondus, lettres ASCII et accentuées du français seulement, « Kemdia » interdit même déguisé (pas d'usurpation), nom libéré au refus, motifs et demandes au journal, caractères invisibles retirés, personne ne décide pour sa propre boutique, boutique + rôle + journal dans une transaction, mêmes règles en contraintes SQL.
 - S7 : deux rôles PostgreSQL (migrations / application sans droit de modifier les tables **ni de désactiver les déclencheurs du journal d'audit**), connexion chiffrée selon l'hébergement, sauvegardes chiffrées testées.
 
 ## 7. DevOps — CI/CD

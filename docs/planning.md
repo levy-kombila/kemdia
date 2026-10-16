@@ -157,16 +157,18 @@ paniers gardés **90 jours** ; numéro **KMD-7F3K9Q** ; **30 min** pour payer pa
 
 ## S6 — Module `vendors` + back-office 🚧
 
-Décisions : [ADR-0031](architecture/adr/0031-en-ligne-docker-tunnel.md) (en ligne depuis Docker Desktop), [ADR-0032](architecture/adr/0032-boutiques-vendeurs.md) (boutiques des vendeurs), [ADR-0033](architecture/adr/0033-produits-vendeurs-moderation.md) (produits des vendeurs, modération).
+Décisions : [ADR-0031](architecture/adr/0031-en-ligne-docker-tunnel.md) (en ligne depuis Docker Desktop), [ADR-0032](architecture/adr/0032-boutiques-vendeurs.md) (boutiques des vendeurs), [ADR-0033](architecture/adr/0033-produits-vendeurs-moderation.md) (produits des vendeurs, modération), [ADR-0034](architecture/adr/0034-double-authentification-equipe.md) (double authentification de l'équipe).
 Choix du 2026-10-15 : **demande de boutique depuis un compte connecté, validée par un administrateur** ; une boutique par compte ; produits existants dans une **boutique « Kemdia » interne** ;
 S6-T01 en **API seule** ; demande **minimum** (nom, ville, mobile, description) ; commission : **en attente du client** (question ouverte n° 3).
 Choix du 2026-10-16 (S6-T02) : modération par un **modérateur ou un administrateur** ; **prix et stock libres**, le reste revalidé (produit caché en attendant) ; **photos dans une tâche suivante** ; **API seule**.
+Choix du 2026-10-16 (S6-T03) : double authentification **obligatoire pour modérateurs et administrateurs**, **application TOTP**, **codes de secours + commande serveur**, clé `TOTP_ENCRYPTION_KEY` **ajoutée par le propriétaire**.
 
 | ID     | Tâche                                                                                                                                                                                                                                                      | Statut |
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | S6-T00 | Kemdia en ligne depuis Docker Desktop (tunnel Cloudflare) pour des tests à distance : scripts `en-ligne.ps1` / `hors-ligne.ps1`, base à part, Brevo — ADR-0031                                                                                             | ✅     |
 | S6-T01 | Fondations `vendors` : boutiques (une par compte), demande et examen par l'administration (valider / refuser / suspendre), rôle vendeur dans la même transaction, produits liés à une boutique (boutique Kemdia) — ADR-0032                                | ✅     |
 | S6-T02 | Produits des vendeurs et modération (BR-003) : création, invisibles jusqu'à la validation (modérateur ou admin, version lue), contenu modifié → nouvelle modération, prix et stock libres (stock protégé), boutique suspendue = produits cachés — ADR-0033 | ✅     |
+| S6-T03 | Double authentification de l'équipe (MED-15) : application TOTP obligatoire pour modérateurs et administrateurs, confirmation par session (15 min), 10 codes de secours, commande `mfa:reset` — ADR-0034                                                   | ✅     |
 
 ## S5 à S8 — grandes lignes
 
