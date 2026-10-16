@@ -140,6 +140,12 @@ export const AUDIT_ACTIONS = [
   "shop.approved",
   "shop.rejected",
   "shop.suspended",
+  // Produits des vendeurs et modération (S6-T02)
+  "product.submitted",
+  "product.approved",
+  "product.rejected",
+  "product.archived",
+  "product.variant_updated",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** Lignes par page du journal d'audit. */
@@ -362,6 +368,35 @@ export const SHOP_LIMITS = {
 export const SHOP_PAGE_DEFAULT = 50;
 export const SHOP_PAGE_MAX = 100;
 
+// --- Produits des vendeurs et modération (S6-T02, ADR-0033) ---
+
+/** Statuts d'un produit de vendeur, vus par le vendeur et la modération. */
+export const VENDOR_PRODUCT_STATUSES = [
+  "draft",
+  "pending",
+  "published",
+  "rejected",
+  "archived",
+] as const;
+export type VendorProductStatus = (typeof VENDOR_PRODUCT_STATUSES)[number];
+/** Limites des produits d'un vendeur (mêmes valeurs dans le domaine et la migration SQL). */
+export const VENDOR_PRODUCT_LIMITS = {
+  titleMin: 5,
+  titleMax: 120,
+  descriptionMin: 30,
+  descriptionMax: 5_000,
+  brandMin: 2,
+  brandMax: 60,
+  variantsMax: 20,
+  variantNameMax: 80,
+  reasonMin: 5,
+  reasonMax: 300,
+} as const;
+/** Produits d'une boutique en attente de modération au plus (la file ne s'inonde pas). */
+export const MAX_PENDING_PRODUCTS_PER_SHOP = 50;
+export const VENDOR_PRODUCT_PAGE_DEFAULT = 50;
+export const VENDOR_PRODUCT_PAGE_MAX = 100;
+
 /** Codes d'erreur métier des boutiques. */
 export const VENDOR_ERROR_CODES = [
   "BOUTIQUE_INVALIDE",
@@ -373,6 +408,19 @@ export const VENDOR_ERROR_CODES = [
   "PROPRIETAIRE_INACTIF",
   // Une autre opération verrouille la boutique : réessayer dans un instant
   "BOUTIQUE_OCCUPEE",
+  // Produits des vendeurs et modération (S6-T02)
+  "BOUTIQUE_INACTIVE",
+  "PRODUIT_INVALIDE",
+  "CATEGORIE_INCONNUE",
+  "PRODUIT_INTROUVABLE",
+  "VARIANTE_INTROUVABLE",
+  "STATUT_PRODUIT_INCOMPATIBLE",
+  "PRODUIT_SUR_SOI_INTERDIT",
+  // Le stock disponible a changé (commande) depuis que le vendeur l'a lu : le relire
+  "STOCK_MODIFIE",
+  // Le produit a changé depuis que le modérateur l'a lu : relire avant de décider
+  "PRODUIT_MODIFIE",
+  "TROP_DE_PRODUITS_EN_ATTENTE",
 ] as const;
 export type VendorErrorCode = (typeof VENDOR_ERROR_CODES)[number];
 

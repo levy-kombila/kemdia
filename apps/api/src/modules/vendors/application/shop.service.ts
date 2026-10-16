@@ -12,10 +12,12 @@ import {
 } from "../domain/shop.js";
 import { VendorsError } from "../domain/vendors-error.js";
 import {
+  SHOP_LISTING,
   SHOP_REPOSITORY,
   VENDORS_RANDOM,
   VENDORS_TRANSACTION,
   type ShopCursor,
+  type ShopListing,
   type ShopRepository,
   type VendorsRandom,
   type VendorsTransaction,
@@ -78,6 +80,7 @@ export class ShopService {
     @Inject(AuditLog) private readonly audit: Pick<AuditLog, "record">,
     @Inject(RoleService) private readonly roles: Pick<RoleService, "grant" | "revoke">,
     @Inject(VENDORS_RANDOM) private readonly random: VendorsRandom,
+    @Inject(SHOP_LISTING) private readonly listing: ShopListing,
   ) {}
 
   /** Demande d'ouverture (ou nouvelle demande après un refus) par le compte connecté. */
@@ -152,6 +155,9 @@ export class ShopService {
       // Le rôle d'abord : un compte fermé entre-temps fait échouer toute la décision (rien n'est écrit)
       if (decision !== "reject") await this.changeVendorRole(actor, shop, decision, context);
       if (!(await this.shops.update(next, now))) throw nameTaken();
+      // Suspendue : ses produits disparaissent du site ; validée ou réactivée : ils reviennent (S6-T02)
+      if (decision !== "reject")
+        await this.listing.setShopSuspended(shop.id, decision === "suspend");
       await this.audit.record({
         action: AUDIT_ACTION[decision],
         actor: { type: "account", id: actor.accountId },

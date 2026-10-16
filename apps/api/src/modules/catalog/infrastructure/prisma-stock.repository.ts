@@ -28,6 +28,14 @@ export class PrismaStockRepository implements StockRepository {
     // Hors transaction, une réservation partielle ne pourrait pas être annulée : refus net
     if (!this.tx.active) throw new Error("réservation du stock hors transaction");
     const db = this.tx.db;
+    // Produits verrouillés en partage AVANT les variantes, dans l'ordre des identifiants (relecture S6-T02) : une
+    // modification, une modération ou une suspension en cours finit d'abord, puis la réservation relit son statut ;
+    // un produit caché à l'instant n'est jamais réservé. Même ordre partout : pas d'interblocage.
+    const variantIds = lines.map((line) => line.variantId);
+    await db.$executeRaw`
+      SELECT 1 FROM "catalog"."products"
+      WHERE "id" IN (SELECT "product_id" FROM "catalog"."product_variants" WHERE "id" = ANY(${variantIds}::uuid[]))
+      ORDER BY "id" FOR SHARE`;
     const reserved: ReservedVariant[] = [];
     for (const { variantId, quantity } of lines) {
       const rows = await db.$queryRaw<Row[]>`
@@ -37,6 +45,7 @@ export class PrismaStockRepository implements StockRepository {
         WHERE v."id" = ${variantId}::uuid
           AND p."id" = v."product_id"
           AND p."status" = 'PUBLISHED'
+          AND NOT p."shop_suspended"
           AND v."is_active"
           AND v."stock" >= ${quantity}
         RETURNING v."id", v."product_id", v."name", v."price", v."compare_at_price", p."title", p."images"[1] AS "image",

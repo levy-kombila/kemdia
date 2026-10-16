@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "1.14.0",
-    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.\n- Factures (S5-T06) : établies au paiement reçu, avoir à l'annulation, numéros par année sans trou, PDF et e-mail.\n- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo.\n- Boutiques (S6-T01) : un client demande à ouvrir sa boutique ; un administrateur la valide (rôle vendeur accordé), la refuse ou la suspend."
+    "version": "1.15.0",
+    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.\n- Factures (S5-T06) : établies au paiement reçu, avoir à l'annulation, numéros par année sans trou, PDF et e-mail.\n- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo.\n- Boutiques (S6-T01) : un client demande à ouvrir sa boutique ; un administrateur la valide (rôle vendeur accordé), la refuse ou la suspend.\n- Produits des vendeurs (S6-T02) : invisibles jusqu'à leur validation par la modération (BR-003) ; cachés si la boutique est suspendue."
   },
   "servers": [
     {
@@ -43,6 +43,14 @@
     {
       "name": "Boutiques",
       "description": "Boutiques des vendeurs (module vendors, S6-T01) : demande du compte connecté, examen par l'administration"
+    },
+    {
+      "name": "Produits des vendeurs",
+      "description": "Produits de la boutique du compte connecté (module vendors, S6-T02) : création, modification, archivage"
+    },
+    {
+      "name": "Modération",
+      "description": "Validation ou refus des produits des vendeurs (S6-T02, BR-003) : modérateurs et administrateurs"
     },
     {
       "name": "Supervision",
@@ -4729,6 +4737,1123 @@
           }
         }
       }
+    },
+    "/api/v1/vendors/products": {
+      "post": {
+        "tags": ["Produits des vendeurs"],
+        "summary": "Créer un produit (envoyé en modération)",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nPas encore de photos (tâche suivante) : le site affiche une image neutre.",
+        "operationId": "createVendorProduct",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VendorProductCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Le produit créé (statut « pending »)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorProduct"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle vendeur requis) ou `BOUTIQUE_INACTIVE` (aucune boutique active pour ce compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`TROP_DE_PRODUITS_EN_ATTENTE` (50 produits de la boutique attendent déjà) ou `BOUTIQUE_OCCUPEE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`PRODUIT_INVALIDE` (champ mal rempli, détail dans le message) ou `CATEGORIE_INCONNUE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Produits des vendeurs"],
+        "summary": "Produits de ma boutique, du plus récent au plus ancien",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nPas encore de photos (tâche suivante) : le site affiche une image neutre.",
+        "operationId": "listVendorProducts",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Seulement les produits dans cet état",
+            "schema": {
+              "type": "string",
+              "enum": ["draft", "pending", "published", "rejected", "archived"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Produits par page (50 par défaut, 100 au plus)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "`nextCursor` de la page précédente",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Une page de produits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorProductPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Paramètre invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle vendeur requis) ou `BOUTIQUE_INACTIVE` (aucune boutique active pour ce compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vendors/products/{productId}": {
+      "get": {
+        "tags": ["Produits des vendeurs"],
+        "summary": "Un produit de ma boutique",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nPas encore de photos (tâche suivante) : le site affiche une image neutre.",
+        "operationId": "getVendorProduct",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant du produit",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le produit (motif affiché en cas de refus)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorProduct"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle vendeur requis) ou `BOUTIQUE_INACTIVE` (aucune boutique active pour ce compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`PRODUIT_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Produits des vendeurs"],
+        "summary": "Modifier le contenu (repasse en modération)",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nPas encore de photos (tâche suivante) : le site affiche une image neutre.",
+        "operationId": "updateVendorProductContent",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant du produit",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VendorProductContentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Le produit, en attente de modération",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorProduct"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps ou identifiant invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle vendeur requis) ou `BOUTIQUE_INACTIVE` (aucune boutique active pour ce compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`PRODUIT_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STATUT_PRODUIT_INCOMPATIBLE` (produit archivé), `TROP_DE_PRODUITS_EN_ATTENTE` ou `BOUTIQUE_OCCUPEE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`PRODUIT_INVALIDE` ou `CATEGORIE_INCONNUE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vendors/products/{productId}/variants/{variantId}": {
+      "patch": {
+        "tags": ["Produits des vendeurs"],
+        "summary": "Prix, stock ou activation d'une variante (sans modération)",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nPas encore de photos (tâche suivante) : le site affiche une image neutre.\n\nLe **stock** est la quantité disponible, hors commandes en cours. Pour le changer, renvoyer aussi `previousStock` (la valeur lue) : si une commande l'a modifié entre-temps, la requête est refusée (`STOCK_MODIFIE`) au lieu d'écraser la réservation.",
+        "operationId": "updateVendorVariant",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant du produit",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "variantId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant de la variante",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VendorVariantUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Le produit après la modification",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorProduct"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps ou identifiant invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle vendeur requis) ou `BOUTIQUE_INACTIVE` (aucune boutique active pour ce compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`PRODUIT_INTROUVABLE` ou `VARIANTE_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STOCK_MODIFIE` (relire le stock), `STATUT_PRODUIT_INCOMPATIBLE` (dernière variante active) ou `BOUTIQUE_OCCUPEE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`PRODUIT_INVALIDE` (prix barré inférieur au prix…)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vendors/products/{productId}/archive": {
+      "post": {
+        "tags": ["Produits des vendeurs"],
+        "summary": "Retirer de la vente (archiver)",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nPas encore de photos (tâche suivante) : le site affiche une image neutre.\n\nUn produit n'est jamais supprimé : il peut figurer dans des commandes (BR-002).",
+        "operationId": "archiveVendorProduct",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant du produit",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le produit archivé",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorProduct"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle vendeur requis) ou `BOUTIQUE_INACTIVE` (aucune boutique active pour ce compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`PRODUIT_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STATUT_PRODUIT_INCOMPATIBLE` (déjà archivé) ou `BOUTIQUE_OCCUPEE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vendors/products/{productId}/restore": {
+      "post": {
+        "tags": ["Produits des vendeurs"],
+        "summary": "Remettre en vente (repasse en modération)",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nPas encore de photos (tâche suivante) : le site affiche une image neutre.",
+        "operationId": "restoreVendorProduct",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant du produit",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le produit, en attente de modération",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorProduct"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle vendeur requis) ou `BOUTIQUE_INACTIVE` (aucune boutique active pour ce compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`PRODUIT_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STATUT_PRODUIT_INCOMPATIBLE` (pas archivé), `TROP_DE_PRODUITS_EN_ATTENTE` ou `BOUTIQUE_OCCUPEE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/moderation/products": {
+      "get": {
+        "tags": ["Modération"],
+        "summary": "Produits à modérer, de la demande la plus ancienne à la plus récente",
+        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque décision est inscrite au journal d'audit.\n\nSeulement un produit **en attente**, et seulement **la version lue** : la décision porte le `submittedAt` lu ; si le vendeur a renvoyé le produit depuis, elle est refusée (`PRODUIT_MODIFIE`). Personne ne modère un produit de sa propre boutique. Un produit validé n'est visible que si sa boutique n'est pas suspendue.\n\nPage suivante : repasser `nextCursor` dans `after`.",
+        "operationId": "listProductsToModerate",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "pending (par défaut) : la file à examiner",
+            "schema": {
+              "type": "string",
+              "enum": ["pending", "published", "rejected"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Produits par page (50 par défaut, 100 au plus)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "`nextCursor` de la page précédente",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Une page de produits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModerationProductPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Paramètre invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle modérateur requis), `RECONNEXION_REQUISE` (connexion de plus de 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/moderation/products/{productId}": {
+      "get": {
+        "tags": ["Modération"],
+        "summary": "Un produit de vendeur",
+        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque décision est inscrite au journal d'audit.\n\nSeulement un produit **en attente**, et seulement **la version lue** : la décision porte le `submittedAt` lu ; si le vendeur a renvoyé le produit depuis, elle est refusée (`PRODUIT_MODIFIE`). Personne ne modère un produit de sa propre boutique. Un produit validé n'est visible que si sa boutique n'est pas suspendue.",
+        "operationId": "getProductToModerate",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant du produit",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le produit et sa boutique",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModerationProduct"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle modérateur requis), `RECONNEXION_REQUISE` (connexion de plus de 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`PRODUIT_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/moderation/products/{productId}/approve": {
+      "post": {
+        "tags": ["Modération"],
+        "summary": "Valider un produit (visible des clients)",
+        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque décision est inscrite au journal d'audit.\n\nSeulement un produit **en attente**, et seulement **la version lue** : la décision porte le `submittedAt` lu ; si le vendeur a renvoyé le produit depuis, elle est refusée (`PRODUIT_MODIFIE`). Personne ne modère un produit de sa propre boutique. Un produit validé n'est visible que si sa boutique n'est pas suspendue.",
+        "operationId": "approveProduct",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant du produit",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductApproval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Le produit après la décision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModerationProduct"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle modérateur requis), `RECONNEXION_REQUISE` (connexion de plus de 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`PRODUIT_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STATUT_PRODUIT_INCOMPATIBLE` (pas en attente), `PRODUIT_MODIFIE` (le vendeur l'a renvoyé depuis votre lecture : relire) ou `BOUTIQUE_OCCUPEE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/moderation/products/{productId}/reject": {
+      "post": {
+        "tags": ["Modération"],
+        "summary": "Refuser un produit (motif montré au vendeur)",
+        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque décision est inscrite au journal d'audit.\n\nSeulement un produit **en attente**, et seulement **la version lue** : la décision porte le `submittedAt` lu ; si le vendeur a renvoyé le produit depuis, elle est refusée (`PRODUIT_MODIFIE`). Personne ne modère un produit de sa propre boutique. Un produit validé n'est visible que si sa boutique n'est pas suspendue.",
+        "operationId": "rejectProduct",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant du produit",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductModerationReason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Le produit après la décision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModerationProduct"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps ou identifiant invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle modérateur requis), `RECONNEXION_REQUISE` (connexion de plus de 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`PRODUIT_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STATUT_PRODUIT_INCOMPATIBLE` (pas en attente), `PRODUIT_MODIFIE` (le vendeur l'a renvoyé depuis votre lecture : relire) ou `BOUTIQUE_OCCUPEE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`PRODUIT_INVALIDE` : motif trop court ou trop long",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5014,7 +6139,12 @@
               "shop.requested",
               "shop.approved",
               "shop.rejected",
-              "shop.suspended"
+              "shop.suspended",
+              "product.submitted",
+              "product.approved",
+              "product.rejected",
+              "product.archived",
+              "product.variant_updated"
             ]
           },
           "actor": {
@@ -5056,7 +6186,7 @@
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["account", "coupon", "order", "refund", "shop"]
+                    "enum": ["account", "coupon", "order", "refund", "shop", "product"]
                   },
                   "id": {
                     "type": "string",
@@ -6331,6 +7461,185 @@
         "required": ["revoked"],
         "additionalProperties": false
       },
+      "ModerationProduct": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "description": "Adresse lisible (ex. « telephones-portables »)"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "brand": {
+            "type": ["string", "null"]
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "pending", "published", "rejected", "archived"]
+          },
+          "moderationReason": {
+            "description": "Motif du refus, montré au vendeur",
+            "type": ["string", "null"]
+          },
+          "visible": {
+            "type": "boolean",
+            "description": "Visible des clients : en ligne ET boutique non suspendue"
+          },
+          "submittedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Dernier envoi en modération"
+          },
+          "reviewedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Dernière décision de la modération"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VendorVariant"
+            }
+          },
+          "shop": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "description": "Identifiant UUID (BR-042)"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["pending", "active", "rejected", "suspended"]
+                  }
+                },
+                "required": ["id", "name", "status"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Boutique du vendeur"
+          },
+          "reviewedBy": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Identifiant UUID (BR-042)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Modérateur de la dernière décision"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "description",
+          "brand",
+          "categoryId",
+          "images",
+          "status",
+          "moderationReason",
+          "visible",
+          "submittedAt",
+          "reviewedAt",
+          "createdAt",
+          "updatedAt",
+          "variants",
+          "shop",
+          "reviewedBy"
+        ],
+        "additionalProperties": false,
+        "description": "Un produit de vendeur vu par la modération"
+      },
+      "ModerationProductPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModerationProduct"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{20,120}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["items", "nextCursor"],
+        "additionalProperties": false,
+        "description": "Produits à modérer, de la demande la plus ancienne à la plus récente"
+      },
       "OpenedSession": {
         "type": "object",
         "properties": {
@@ -7058,7 +8367,17 @@
               "STATUT_BOUTIQUE_INCOMPATIBLE",
               "BOUTIQUE_SUR_SOI_INTERDITE",
               "PROPRIETAIRE_INACTIF",
-              "BOUTIQUE_OCCUPEE"
+              "BOUTIQUE_OCCUPEE",
+              "BOUTIQUE_INACTIVE",
+              "PRODUIT_INVALIDE",
+              "CATEGORIE_INCONNUE",
+              "PRODUIT_INTROUVABLE",
+              "VARIANTE_INTROUVABLE",
+              "STATUT_PRODUIT_INCOMPATIBLE",
+              "PRODUIT_SUR_SOI_INTERDIT",
+              "STOCK_MODIFIE",
+              "PRODUIT_MODIFIE",
+              "TROP_DE_PRODUITS_EN_ATTENTE"
             ]
           },
           "requestId": {
@@ -7069,6 +8388,20 @@
         "required": ["type", "title", "status"],
         "additionalProperties": false,
         "description": "Erreur au format Problem Details (RFC 9457)"
+      },
+      "ProductApproval": {
+        "type": "object",
+        "properties": {
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "description": "`submittedAt` du produit tel que le modérateur l'a lu : refusé (`PRODUIT_MODIFIE`) si le vendeur l'a renvoyé depuis"
+          }
+        },
+        "required": ["submittedAt"],
+        "additionalProperties": false,
+        "description": "Validation de la version lue par le modérateur"
       },
       "ProductDetail": {
         "type": "object",
@@ -7200,6 +8533,25 @@
         ],
         "additionalProperties": false,
         "description": "Fiche produit"
+      },
+      "ProductModerationReason": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 600,
+            "description": "Motif montré au vendeur (5 à 300 caractères)"
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "description": "`submittedAt` du produit tel que le modérateur l'a lu : refusé (`PRODUIT_MODIFIE`) si le vendeur l'a renvoyé depuis"
+          }
+        },
+        "required": ["reason", "submittedAt"],
+        "additionalProperties": false,
+        "description": "Refus de la version lue par le modérateur, avec un motif"
       },
       "ProductPage": {
         "type": "object",
@@ -7892,6 +9244,379 @@
         ],
         "additionalProperties": false,
         "description": "Variante d'un produit, avec son propre stock (FR-013)"
+      },
+      "VendorProduct": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "description": "Adresse lisible (ex. « telephones-portables »)"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "brand": {
+            "type": ["string", "null"]
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "pending", "published", "rejected", "archived"]
+          },
+          "moderationReason": {
+            "description": "Motif du refus, montré au vendeur",
+            "type": ["string", "null"]
+          },
+          "visible": {
+            "type": "boolean",
+            "description": "Visible des clients : en ligne ET boutique non suspendue"
+          },
+          "submittedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Dernier envoi en modération"
+          },
+          "reviewedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Dernière décision de la modération"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VendorVariant"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "description",
+          "brand",
+          "categoryId",
+          "images",
+          "status",
+          "moderationReason",
+          "visible",
+          "submittedAt",
+          "reviewedAt",
+          "createdAt",
+          "updatedAt",
+          "variants"
+        ],
+        "additionalProperties": false,
+        "description": "Un produit de la boutique du compte connecté"
+      },
+      "VendorProductContentRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 240,
+            "description": "Titre (5 à 120 caractères)"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "description": "Description (30 à 5000 caractères)"
+          },
+          "brand": {
+            "description": "Marque (vide : sans marque)",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Catégorie du produit (casse ignorée)"
+          }
+        },
+        "required": ["title", "description", "categoryId"],
+        "additionalProperties": false,
+        "description": "Titre, description, marque, catégorie : le produit repasse en modération (caché en attendant)"
+      },
+      "VendorProductCreateRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 240,
+            "description": "Titre (5 à 120 caractères)"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "description": "Description (30 à 5000 caractères)"
+          },
+          "brand": {
+            "description": "Marque (vide : sans marque)",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Catégorie du produit (casse ignorée)"
+          },
+          "variants": {
+            "minItems": 1,
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VendorVariantInput"
+            }
+          }
+        },
+        "required": ["title", "description", "categoryId", "variants"],
+        "additionalProperties": false,
+        "description": "Nouveau produit d'un vendeur : envoyé en modération, invisible jusqu'à sa validation (BR-003)"
+      },
+      "VendorProductPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VendorProduct"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{20,120}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["items", "nextCursor"],
+        "additionalProperties": false,
+        "description": "Produits de la boutique, du plus récent au plus ancien"
+      },
+      "VendorVariant": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "attributes": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "price": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Montant en FCFA, entier (BR-004)"
+          },
+          "compareAtPrice": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Montant en FCFA, entier (BR-004)"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stock": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "sku",
+          "name",
+          "attributes",
+          "price",
+          "compareAtPrice",
+          "stock",
+          "isActive"
+        ],
+        "additionalProperties": false,
+        "description": "Variante d'un produit de vendeur"
+      },
+      "VendorVariantInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "description": "Nom de la variante (« Noir · 128 Go »)"
+          },
+          "attributes": {
+            "description": "Caractéristiques : { « couleur » : « Noir » } (10 au plus)",
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          "price": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 100000000,
+            "description": "Prix en FCFA, entier (BR-004)"
+          },
+          "compareAtPrice": {
+            "description": "Prix barré, supérieur au prix",
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 100000000,
+                "description": "Prix en FCFA, entier (BR-004)"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stock": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000,
+            "description": "Quantité disponible (hors commandes en cours)"
+          }
+        },
+        "required": ["name", "price", "stock"],
+        "additionalProperties": false,
+        "description": "Variante d'un nouveau produit"
+      },
+      "VendorVariantUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "price": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 100000000,
+            "description": "Prix en FCFA, entier (BR-004)"
+          },
+          "compareAtPrice": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 100000000,
+                "description": "Prix en FCFA, entier (BR-004)"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stock": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000,
+            "description": "Quantité disponible (hors commandes en cours)"
+          },
+          "previousStock": {
+            "description": "Stock lu avant la modification : obligatoire avec `stock` (refusé s'il a changé)",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "isActive": {
+            "description": "Variante proposée à la vente",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Prix, prix barré, stock ou activation d'une variante : sans nouvelle modération"
       }
     },
     "securitySchemes": {

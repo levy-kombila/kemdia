@@ -2,12 +2,19 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   KEMDIA_SHOP_ID,
+  VENDOR_PRODUCT_LIMITS,
+  VENDOR_PRODUCT_STATUSES,
   SHOP_LIMITS,
   SHOP_STATUSES,
   VENDOR_ERROR_CODES,
 } from "@kemdia/contracts/constants";
+import { VENDOR_PRODUCT_RULES } from "../src/modules/catalog/domain/vendor-product.js";
+import { PRODUCT_STATUSES } from "../src/modules/catalog/domain/product.js";
 import { SHOP_RULES } from "../src/modules/vendors/domain/shop.js";
-import { VENDORS_ERROR_STATUS } from "../src/modules/vendors/interface/vendors-http-errors.js";
+import {
+  CATALOG_ERROR_CODES_FOR_VENDORS,
+  VENDORS_ERROR_STATUS,
+} from "../src/modules/vendors/interface/vendors-http-errors.js";
 
 /**
  * Règles des boutiques écrites à quatre endroits : contrat (site), domaine de l'API, migration SQL et schéma Prisma
@@ -15,6 +22,10 @@ import { VENDORS_ERROR_STATUS } from "../src/modules/vendors/interface/vendors-h
  */
 const migration = readFileSync(
   new URL("../prisma/migrations/20261015210000_boutiques/migration.sql", import.meta.url),
+  "utf8",
+);
+const productMigration = readFileSync(
+  new URL("../prisma/migrations/20261016091000_produits_vendeurs/migration.sql", import.meta.url),
   "utf8",
 );
 const catalogSchema = readFileSync(
@@ -49,7 +60,20 @@ describe("Boutiques : mêmes règles partout (S6-T01)", () => {
     expect(catalogSchema).toContain(`@default("${KEMDIA_SHOP_ID}")`);
   });
 
-  it("chaque code d'erreur des boutiques a son statut HTTP", () => {
-    expect(Object.keys(VENDORS_ERROR_STATUS).sort()).toEqual([...VENDOR_ERROR_CODES].sort());
+  it("chaque code d'erreur des boutiques et des produits des vendeurs a son statut HTTP", () => {
+    expect(
+      [...Object.keys(VENDORS_ERROR_STATUS), ...CATALOG_ERROR_CODES_FOR_VENDORS].sort(),
+    ).toEqual([...VENDOR_ERROR_CODES].sort());
+  });
+
+  it("produits des vendeurs (S6-T02) : limites et statuts identiques dans le domaine, le contrat et le SQL", () => {
+    expect(VENDOR_PRODUCT_RULES).toEqual(VENDOR_PRODUCT_LIMITS);
+    expect(VENDOR_PRODUCT_STATUSES.map((s) => s.toUpperCase()).sort()).toEqual(
+      [...PRODUCT_STATUSES].sort(),
+    );
+    expect(productMigration).toContain(
+      `char_length("moderation_reason") BETWEEN ${VENDOR_PRODUCT_LIMITS.reasonMin} AND ${VENDOR_PRODUCT_LIMITS.reasonMax}`,
+    );
+    expect(productMigration).toContain(`"shop_id" <> '${KEMDIA_SHOP_ID}'`);
   });
 });

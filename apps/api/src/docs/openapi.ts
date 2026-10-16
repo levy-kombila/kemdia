@@ -7,10 +7,10 @@ import { couponPaths } from "../modules/orders/interface/coupon.openapi.js";
 import { paymentPaths } from "../modules/payments/interface/payments.openapi.js";
 import { orderPaths } from "../modules/orders/interface/order.openapi.js";
 import { identityPaths } from "../modules/identity/interface/identity.openapi.js";
-import { vendorsPaths } from "../modules/vendors/interface/vendors.openapi.js";
+import { vendorProductPaths, vendorsPaths } from "../modules/vendors/interface/vendors.openapi.js";
 
 /** Version du contrat HTTP (indépendante de la version de l'image) : à augmenter à chaque changement de l'API. */
-export const API_CONTRACT_VERSION = "1.14.0";
+export const API_CONTRACT_VERSION = "1.15.0";
 
 /** Document OpenAPI complet de l'API, généré à partir des schémas réellement utilisés. */
 export function buildOpenApiDocument(): Record<string, unknown> {
@@ -36,6 +36,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         "- Factures (S5-T06) : établies au paiement reçu, avoir à l'annulation, numéros par année sans trou, PDF et e-mail.",
         "- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo.",
         "- Boutiques (S6-T01) : un client demande à ouvrir sa boutique ; un administrateur la valide (rôle vendeur accordé), la refuse ou la suspend.",
+        "- Produits des vendeurs (S6-T02) : invisibles jusqu'à leur validation par la modération (BR-003) ; cachés si la boutique est suspendue.",
       ].join("\n"),
     },
     servers: [{ url: "/", description: "Même adresse que cette documentation" }],
@@ -79,6 +80,16 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         description:
           "Boutiques des vendeurs (module vendors, S6-T01) : demande du compte connecté, examen par l'administration",
       },
+      {
+        name: "Produits des vendeurs",
+        description:
+          "Produits de la boutique du compte connecté (module vendors, S6-T02) : création, modification, archivage",
+      },
+      {
+        name: "Modération",
+        description:
+          "Validation ou refus des produits des vendeurs (S6-T02, BR-003) : modérateurs et administrateurs",
+      },
       { name: "Supervision", description: "État du service" },
     ],
     paths: {
@@ -108,6 +119,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       ...codSettingsPaths,
       ...paymentPaths,
       ...vendorsPaths,
+      ...vendorProductPaths,
     },
     // Schémas du contrat partagé avec le site (@kemdia/contracts)
     components: {

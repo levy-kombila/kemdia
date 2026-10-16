@@ -3,11 +3,14 @@
 // Règles complémentaires posées en SQL dans la migration (Prisma ne sait pas les décrire) :
 // prix > 0, stock >= 0, prix barré > prix, note entre 0 et 5.
 
-/// Statut d'un produit : DRAFT (préparation, modération BR-003), PUBLISHED (visible), ARCHIVED (désactivé, BR-002).
+/// Statut d'un produit : DRAFT (préparation), PENDING (en attente de modération, BR-003), PUBLISHED (visible),
+/// REJECTED (refusé par la modération, S6-T02), ARCHIVED (désactivé, BR-002).
 enum ProductStatus {
   DRAFT
   PUBLISHED
   ARCHIVED
+  PENDING
+  REJECTED
 
   @@map("product_status")
   @@schema("catalog")
@@ -36,33 +39,41 @@ model Category {
 
 /// Produit. `price` et `compareAtPrice` reprennent la variante active la moins chère (tri et filtres par prix).
 model Product {
-  id             String           @id @db.Uuid
-  slug           String           @unique @db.VarChar(120)
-  title          String           @db.VarChar(120)
-  description    String           @default("")
-  brand          String?          @db.VarChar(60)
-  categoryId     String           @map("category_id") @db.Uuid
-  category       Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  id               String           @id @db.Uuid
+  slug             String           @unique @db.VarChar(120)
+  title            String           @db.VarChar(120)
+  description      String           @default("")
+  brand            String?          @db.VarChar(60)
+  categoryId       String           @map("category_id") @db.Uuid
+  category         Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   /// Boutique qui vend le produit (module vendors, UUID, S6-T01) ; par défaut la boutique Kemdia (KEMDIA_SHOP_ID)
-  shopId         String           @default("6b656d64-6961-4000-8000-000000000001") @map("shop_id") @db.Uuid
-  images         String[]         @default([])
-  status         ProductStatus    @default(DRAFT)
-  price          Int
-  compareAtPrice Int?             @map("compare_at_price")
-  rating         Float            @default(0)
-  reviewCount    Int              @default(0) @map("review_count")
-  isFeatured     Boolean          @default(false) @map("is_featured")
-  isBestseller   Boolean          @default(false) @map("is_bestseller")
-  isNew          Boolean          @default(false) @map("is_new")
+  shopId           String           @default("6b656d64-6961-4000-8000-000000000001") @map("shop_id") @db.Uuid
+  images           String[]         @default([])
+  status           ProductStatus    @default(DRAFT)
+  /// Boutique suspendue (S6-T02) : produit caché, quel que soit son statut ; tenu à jour par le module vendors
+  shopSuspended    Boolean          @default(false) @map("shop_suspended")
+  /// Modération (BR-003, S6-T02) : dernière demande du vendeur, motif d'un refus, dernière décision
+  submittedAt      DateTime?        @map("submitted_at") @db.Timestamptz(3)
+  moderationReason String?          @map("moderation_reason") @db.VarChar(300)
+  reviewedBy       String?          @map("reviewed_by") @db.Uuid
+  reviewedAt       DateTime?        @map("reviewed_at") @db.Timestamptz(3)
+  price            Int
+  compareAtPrice   Int?             @map("compare_at_price")
+  rating           Float            @default(0)
+  reviewCount      Int              @default(0) @map("review_count")
+  isFeatured       Boolean          @default(false) @map("is_featured")
+  isBestseller     Boolean          @default(false) @map("is_bestseller")
+  isNew            Boolean          @default(false) @map("is_new")
   /// Titre, marque, catégorie et caractéristiques en minuscules sans accents (recherche)
-  searchText     String           @default("") @map("search_text")
-  variants       ProductVariant[]
-  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  searchText       String           @default("") @map("search_text")
+  variants         ProductVariant[]
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@index([categoryId])
   @@index([shopId])
   @@index([status, price])
+  @@index([status, submittedAt, id])
   @@map("products")
   @@schema("catalog")
 }

@@ -96,6 +96,12 @@ export class PrismaShopRepository implements ShopRepository {
       SELECT pg_advisory_xact_lock(hashtext('vendors.shop_owner'), hashtext(${accountId}))`;
   }
 
+  async shareLockByOwner(accountId: string): Promise<Shop | null> {
+    const rows = await this.tx.db.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "vendors"."shops" WHERE "owner_account_id" = ${accountId}::uuid FOR SHARE`;
+    return rows[0] ? this.findById(rows[0].id) : null;
+  }
+
   async isNameTaken(nameKey: string, exceptId?: string): Promise<boolean> {
     const row = await this.tx.db.shop.findUnique({ where: { nameKey }, select: { id: true } });
     return row !== null && row.id !== exceptId;
