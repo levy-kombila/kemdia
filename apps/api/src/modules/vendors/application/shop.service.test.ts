@@ -26,6 +26,7 @@ class InMemoryShops implements ShopRepository {
   findByOwner = (accountId: string) =>
     Promise.resolve(this.copy([...this.rows.values()].find((s) => s.ownerAccountId === accountId)));
   lockById = (id: string) => this.findById(id);
+  shareLockByOwner = (accountId: string) => this.findByOwner(accountId);
   lockOwner = (accountId: string) => {
     this.locks.push(accountId);
     return Promise.resolve();
@@ -70,6 +71,7 @@ function setup(options: { roleError?: IdentityError } = {}) {
   const shops = new InMemoryShops();
   const audit: AuditEntry[] = [];
   const roleCalls: string[] = [];
+  const listing: string[] = [];
   let ids = 0;
   let suffixes = 0;
   const service = new ShopService(
@@ -91,9 +93,15 @@ function setup(options: { roleError?: IdentityError } = {}) {
       uuid: () => `00000000-0000-4000-8000-${String(++ids).padStart(12, "0")}`,
       slugSuffix: () => ["ab12", "cd34", "ef56"][suffixes++ % 3]!,
     },
+    {
+      setShopSuspended: (shopId: string, suspended: boolean) => {
+        listing.push(`${suspended ? "cacher" : "montrer"} ${shopId}`);
+        return Promise.resolve(0);
+      },
+    },
   );
   service.clock = () => new Date("2026-10-15T20:00:00.000Z");
-  return { service, shops, audit, roleCalls };
+  return { service, shops, audit, roleCalls, listing };
 }
 
 const codeOf = async (promise: Promise<unknown>) =>
@@ -190,11 +198,13 @@ describe("ShopService : décisions de l'administration (S6-T01)", () => {
   });
 
   it("suspendre retire le rôle ; réactiver le rend", async () => {
-    const { service, roleCalls, audit } = setup();
+    const { service, roleCalls, audit, listing } = setup();
     const shop = await service.apply(AWA, APPLICATION, CTX);
     await service.decide(admin, shop.id, "approve", null, CTX);
     await service.decide(admin, shop.id, "suspend", "Contrefaçons signalées", CTX);
     await service.decide(admin, shop.id, "approve", null, CTX);
+    // S6-T02 : les produits de la boutique sont cachés à la suspension, montrés à la réactivation
+    expect(listing).toEqual([`montrer ${shop.id}`, `cacher ${shop.id}`, `montrer ${shop.id}`]);
     expect(roleCalls).toEqual([
       `grant vendor ${AWA}`,
       `revoke vendor ${AWA}`,

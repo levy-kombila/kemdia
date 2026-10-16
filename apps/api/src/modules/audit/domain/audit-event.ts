@@ -37,6 +37,16 @@ export const AUDIT_ACTIONS = [
   "shop.rejected",
   /** Boutique suspendue ; le rôle vendeur est retiré à part (détails : name, from, to, reason) — S6-T01 */
   "shop.suspended",
+  /** Produit d'un vendeur envoyé en modération : création, contenu modifié, remise en vente (détails : title, reason, from) — S6-T02 */
+  "product.submitted",
+  /** Produit validé par la modération (détails : title, from, to) — S6-T02 */
+  "product.approved",
+  /** Produit refusé par la modération (détails : title, from, to, reason) — S6-T02 */
+  "product.rejected",
+  /** Produit retiré de la vente par son vendeur (détails : title, from) — S6-T02 */
+  "product.archived",
+  /** Prix, prix barré, stock ou activation d'une variante changés par le vendeur (détails : sku, avant / après) — S6-T02 */
+  "product.variant_updated",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -46,7 +56,14 @@ export const AUDIT_RETENTION_DAYS = 365;
 /** Qui agit : un compte, ou le serveur lui-même (commande en ligne, tâche planifiée). */
 export type AuditActor = { type: "account"; id: string } | { type: "system" };
 
-export const AUDIT_TARGET_TYPES = ["account", "coupon", "order", "refund", "shop"] as const;
+export const AUDIT_TARGET_TYPES = [
+  "account",
+  "coupon",
+  "order",
+  "refund",
+  "shop",
+  "product",
+] as const;
 export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];
 
 export interface AuditTarget {

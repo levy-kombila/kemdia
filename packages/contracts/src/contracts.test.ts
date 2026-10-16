@@ -29,6 +29,8 @@ import {
   ShopIdParamsSchema,
   ShopListParamsSchema,
   VENDOR_ERROR_CODES,
+  VendorProductCreateRequestSchema,
+  VendorVariantUpdateRequestSchema,
 } from "./index.js";
 import { demoCatalog, demoIds, uuidV5 } from "./demo/index.js";
 import {
@@ -139,6 +141,8 @@ describe("schémas", () => {
       "InvoiceSummary",
       "LoginRequest",
       "LogoutAll",
+      "ModerationProduct",
+      "ModerationProductPage",
       "OpenedSession",
       "Order",
       "OrderLine",
@@ -150,7 +154,9 @@ describe("schémas", () => {
       "PaymentNotification",
       "PaymentNotificationAck",
       "ProblemDetails",
+      "ProductApproval",
       "ProductDetail",
+      "ProductModerationReason",
       "ProductPage",
       "ProductSummary",
       "Refund",
@@ -173,6 +179,13 @@ describe("schémas", () => {
       "SignupVerifyRequest",
       "StartPaymentRequest",
       "Variant",
+      "VendorProduct",
+      "VendorProductContentRequest",
+      "VendorProductCreateRequest",
+      "VendorProductPage",
+      "VendorVariant",
+      "VendorVariantInput",
+      "VendorVariantUpdateRequest",
     ]);
   });
 
@@ -460,5 +473,44 @@ describe("Boutiques (S6-T01)", () => {
           .success,
       ).toBe(true);
     }
+  });
+});
+
+describe("Produits des vendeurs (S6-T02)", () => {
+  const variant = { name: "Rouge", price: 5_000, stock: 3 };
+  const product = {
+    title: "Pagne wax",
+    description: "Pagne wax 100 % coton.",
+    categoryId: randomUUID(),
+    variants: [variant],
+  };
+
+  it("une création n'a ni statut, ni boutique, ni référence de variante", () => {
+    expect(VendorProductCreateRequestSchema.safeParse(product).success).toBe(true);
+    expect(
+      VendorProductCreateRequestSchema.safeParse({ ...product, status: "published" }).success,
+    ).toBe(false);
+    expect(
+      VendorProductCreateRequestSchema.safeParse({ ...product, shopId: randomUUID() }).success,
+    ).toBe(false);
+    expect(
+      VendorProductCreateRequestSchema.safeParse({
+        ...product,
+        variants: [{ ...variant, sku: "X-1" }],
+      }).success,
+    ).toBe(false);
+    expect(VendorProductCreateRequestSchema.safeParse({ ...product, variants: [] }).success).toBe(
+      false,
+    );
+  });
+
+  it("variante : stock et stock lu vont ensemble ; prix entier positif ; rien à modifier refusé", () => {
+    expect(VendorVariantUpdateRequestSchema.safeParse({ stock: 4, previousStock: 3 }).success).toBe(
+      true,
+    );
+    expect(VendorVariantUpdateRequestSchema.safeParse({ stock: 4 }).success).toBe(false);
+    expect(VendorVariantUpdateRequestSchema.safeParse({ price: 10.5 }).success).toBe(false);
+    expect(VendorVariantUpdateRequestSchema.safeParse({ price: 0 }).success).toBe(false);
+    expect(VendorVariantUpdateRequestSchema.safeParse({}).success).toBe(false);
   });
 });

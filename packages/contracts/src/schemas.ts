@@ -41,6 +41,10 @@ import {
   SHOP_PAGE_DEFAULT,
   SHOP_PAGE_MAX,
   SHOP_STATUSES,
+  VENDOR_PRODUCT_LIMITS,
+  VENDOR_PRODUCT_PAGE_DEFAULT,
+  VENDOR_PRODUCT_PAGE_MAX,
+  VENDOR_PRODUCT_STATUSES,
 } from "./constants.js";
 
 /**
@@ -475,7 +479,10 @@ export const AuditEventSchema = z
       z.object({ type: z.literal("system") }),
     ]),
     target: z
-      .object({ type: z.enum(["account", "coupon", "order", "refund", "shop"]), id: uuid })
+      .object({
+        type: z.enum(["account", "coupon", "order", "refund", "shop", "product"]),
+        id: uuid,
+      })
       .nullable(),
     details: z.record(z.string(), z.union([z.string(), z.int()])),
     ip: z.string().nullable().describe("Adresse vue par l'API"),
@@ -1226,6 +1233,217 @@ export const ShopDecisionReasonSchema = z
   })
   .meta({ id: "ShopDecisionReason", description: "Motif d'un refus ou d'une suspension" });
 export type ShopDecisionReason = z.infer<typeof ShopDecisionReasonSchema>;
+
+// --- Produits des vendeurs et modération (S6-T02, ADR-0033) ---
+
+const L = VENDOR_PRODUCT_LIMITS;
+/** Borne large : la longueur exacte (espaces retirés) est vérifiée par l'API (`PRODUIT_INVALIDE`, 422). */
+const loose = (max: number) => z.string().max(max * 2);
+const vendorPrice = z.int().positive().max(100_000_000).describe("Prix en FCFA, entier (BR-004)");
+const vendorStock = z
+  .int()
+  .nonnegative()
+  .max(1_000_000)
+  .describe("Quantité disponible (hors commandes en cours)");
+
+const productContentFields = {
+  title: loose(L.titleMax).describe(`Titre (${L.titleMin} à ${L.titleMax} caractères)`),
+  description: loose(L.descriptionMax).describe(
+    `Description (${L.descriptionMin} à ${L.descriptionMax} caractères)`,
+  ),
+  brand: loose(L.brandMax).nullable().optional().describe("Marque (vide : sans marque)"),
+  categoryId: uuid.describe("Catégorie du produit (casse ignorée)"),
+};
+
+export const VendorVariantInputSchema = z
+  .strictObject({
+    name: loose(L.variantNameMax).describe("Nom de la variante (« Noir · 128 Go »)"),
+    attributes: z
+      .record(z.string().max(30), z.string().max(40))
+      .refine((value) => Object.keys(value).length <= 10, "10 caractéristiques au plus")
+      .optional()
+      .describe("Caractéristiques : { « couleur » : « Noir » } (10 au plus)"),
+    price: vendorPrice,
+    compareAtPrice: vendorPrice.nullable().optional().describe("Prix barré, supérieur au prix"),
+    stock: vendorStock,
+  })
+  .meta({ id: "VendorVariantInput", description: "Variante d'un nouveau produit" });
+
+export const VendorProductCreateRequestSchema = z
+  .strictObject({
+    ...productContentFields,
+    variants: z.array(VendorVariantInputSchema).min(1).max(L.variantsMax),
+  })
+  .meta({
+    id: "VendorProductCreateRequest",
+    description:
+      "Nouveau produit d'un vendeur : envoyé en modération, invisible jusqu'à sa validation (BR-003)",
+  });
+export type VendorProductCreateRequest = z.infer<typeof VendorProductCreateRequestSchema>;
+
+export const VendorProductContentRequestSchema = z.strictObject(productContentFields).meta({
+  id: "VendorProductContentRequest",
+  description:
+    "Titre, description, marque, catégorie : le produit repasse en modération (caché en attendant)",
+});
+export type VendorProductContentRequest = z.infer<typeof VendorProductContentRequestSchema>;
+
+export const VendorVariantUpdateRequestSchema = z
+  .strictObject({
+    price: vendorPrice.optional(),
+    compareAtPrice: vendorPrice.nullable().optional(),
+    stock: vendorStock.optional(),
+    previousStock: vendorStock
+      .optional()
+      .describe("Stock lu avant la modification : obligatoire avec `stock` (refusé s'il a changé)"),
+    isActive: z.boolean().optional().describe("Variante proposée à la vente"),
+  })
+  .refine((body) => (body.stock === undefined) === (body.previousStock === undefined), {
+    message: "« stock » et « previousStock » vont ensemble",
+  })
+  .refine(
+    (body) =>
+      body.price !== undefined ||
+      body.compareAtPrice !== undefined ||
+      body.stock !== undefined ||
+      body.isActive !== undefined,
+    { message: "rien à modifier" },
+  )
+  .meta({
+    id: "VendorVariantUpdateRequest",
+    description: "Prix, prix barré, stock ou activation d'une variante : sans nouvelle modération",
+  });
+export type VendorVariantUpdateRequest = z.infer<typeof VendorVariantUpdateRequestSchema>;
+
+export const VendorVariantSchema = z
+  .object({
+    id: uuid,
+    sku: z.string(),
+    name: z.string(),
+    attributes: z.record(z.string(), z.string()),
+    price: fcfa,
+    compareAtPrice: fcfa.nullable(),
+    stock: z.int().nonnegative(),
+    isActive: z.boolean(),
+  })
+  .meta({ id: "VendorVariant", description: "Variante d'un produit de vendeur" });
+
+const vendorProductFields = {
+  id: uuid,
+  slug,
+  title: z.string(),
+  description: z.string(),
+  brand: z.string().nullable(),
+  categoryId: uuid,
+  images: z.array(z.string()),
+  status: z.enum(VENDOR_PRODUCT_STATUSES),
+  moderationReason: z.string().nullable().describe("Motif du refus, montré au vendeur"),
+  visible: z.boolean().describe("Visible des clients : en ligne ET boutique non suspendue"),
+  submittedAt: z.iso.datetime().nullable().describe("Dernier envoi en modération"),
+  reviewedAt: z.iso.datetime().nullable().describe("Dernière décision de la modération"),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+  variants: z.array(VendorVariantSchema),
+};
+
+export const VendorProductSchema = z
+  .object(vendorProductFields)
+  .meta({ id: "VendorProduct", description: "Un produit de la boutique du compte connecté" });
+export type VendorProduct = z.infer<typeof VendorProductSchema>;
+
+export const VENDOR_PRODUCT_CURSOR_PATTERN = /^[A-Za-z0-9_-]{20,120}$/;
+
+export const VendorProductListParamsSchema = z.strictObject({
+  status: z.enum(VENDOR_PRODUCT_STATUSES).optional(),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(VENDOR_PRODUCT_PAGE_MAX)
+    .default(VENDOR_PRODUCT_PAGE_DEFAULT),
+  after: z.string().regex(VENDOR_PRODUCT_CURSOR_PATTERN).optional(),
+});
+export type VendorProductListParams = z.infer<typeof VendorProductListParamsSchema>;
+
+export const VendorProductPageSchema = z
+  .object({
+    items: z.array(VendorProductSchema),
+    nextCursor: z.string().regex(VENDOR_PRODUCT_CURSOR_PATTERN).nullable(),
+  })
+  .meta({
+    id: "VendorProductPage",
+    description: "Produits de la boutique, du plus récent au plus ancien",
+  });
+export type VendorProductPage = z.infer<typeof VendorProductPageSchema>;
+
+export const VendorProductIdParamsSchema = z.strictObject({ productId: uuidInput });
+export const VendorVariantParamsSchema = z.strictObject({
+  productId: uuidInput,
+  variantId: uuidInput,
+});
+
+export const ModerationProductSchema = z
+  .object({
+    ...vendorProductFields,
+    shop: z
+      .object({ id: uuid, name: z.string(), status: z.enum(SHOP_STATUSES) })
+      .nullable()
+      .describe("Boutique du vendeur"),
+    reviewedBy: uuid.nullable().describe("Modérateur de la dernière décision"),
+  })
+  .meta({ id: "ModerationProduct", description: "Un produit de vendeur vu par la modération" });
+export type ModerationProduct = z.infer<typeof ModerationProductSchema>;
+
+export const ModerationListParamsSchema = z.strictObject({
+  status: z
+    .enum(["pending", "published", "rejected"])
+    .default("pending")
+    .describe("pending (par défaut) : la file à examiner"),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(VENDOR_PRODUCT_PAGE_MAX)
+    .default(VENDOR_PRODUCT_PAGE_DEFAULT),
+  after: z.string().regex(VENDOR_PRODUCT_CURSOR_PATTERN).optional(),
+});
+export type ModerationListParams = z.infer<typeof ModerationListParamsSchema>;
+
+export const ModerationProductPageSchema = z
+  .object({
+    items: z.array(ModerationProductSchema),
+    nextCursor: z.string().regex(VENDOR_PRODUCT_CURSOR_PATTERN).nullable(),
+  })
+  .meta({
+    id: "ModerationProductPage",
+    description: "Produits à modérer, de la demande la plus ancienne à la plus récente",
+  });
+export type ModerationProductPage = z.infer<typeof ModerationProductPageSchema>;
+
+const seenSubmittedAt = z.iso
+  .datetime()
+  .describe(
+    "`submittedAt` du produit tel que le modérateur l'a lu : refusé (`PRODUIT_MODIFIE`) si le vendeur l'a renvoyé depuis",
+  );
+
+export const ProductApprovalSchema = z
+  .strictObject({ submittedAt: seenSubmittedAt })
+  .meta({ id: "ProductApproval", description: "Validation de la version lue par le modérateur" });
+export type ProductApproval = z.infer<typeof ProductApprovalSchema>;
+
+export const ProductModerationReasonSchema = z
+  .strictObject({
+    reason: z
+      .string()
+      .max(L.reasonMax * 2)
+      .describe(`Motif montré au vendeur (${L.reasonMin} à ${L.reasonMax} caractères)`),
+    submittedAt: seenSubmittedAt,
+  })
+  .meta({
+    id: "ProductModerationReason",
+    description: "Refus de la version lue par le modérateur, avec un motif",
+  });
+export type ProductModerationReason = z.infer<typeof ProductModerationReasonSchema>;
 
 type JsonSchema = Record<string, unknown>;
 

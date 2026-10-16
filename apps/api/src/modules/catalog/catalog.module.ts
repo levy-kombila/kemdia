@@ -1,11 +1,25 @@
 import { Module } from "@nestjs/common";
+import { randomBytes, randomUUID } from "node:crypto";
 import { CatalogService } from "./application/catalog.service.js";
-import { CATEGORY_REPOSITORY, PRODUCT_REPOSITORY, STOCK_REPOSITORY } from "./application/ports.js";
+import {
+  CATALOG_RANDOM,
+  CATEGORY_REPOSITORY,
+  PRODUCT_REPOSITORY,
+  STOCK_REPOSITORY,
+  VENDOR_PRODUCT_REPOSITORY,
+} from "./application/ports.js";
+import { VendorCatalog } from "./application/vendor-catalog.service.js";
+import { PrismaVendorProductRepository } from "./infrastructure/prisma-vendor-product.repository.js";
 import { StockService } from "./application/stock.service.js";
 import { PrismaStockRepository } from "./infrastructure/prisma-stock.repository.js";
 import { PrismaCategoryRepository } from "./infrastructure/prisma-category.repository.js";
 import { PrismaProductRepository } from "./infrastructure/prisma-product.repository.js";
 import { CatalogController } from "./interface/catalog.controller.js";
+
+/** `size` caractères tirés au hasard (cryptographiquement) dans `alphabet`. */
+function pick(alphabet: string, size: number): string {
+  return Array.from(randomBytes(size), (byte) => alphabet[byte % alphabet.length]).join("");
+}
 
 /**
  * Module catalog (ADR-0006) : catégories, produits, variantes, stock.
@@ -20,7 +34,18 @@ import { CatalogController } from "./interface/catalog.controller.js";
     { provide: STOCK_REPOSITORY, useClass: PrismaStockRepository },
     { provide: CATEGORY_REPOSITORY, useClass: PrismaCategoryRepository },
     { provide: PRODUCT_REPOSITORY, useClass: PrismaProductRepository },
+    // Produits des vendeurs et modération (S6-T02) : utilisé par le module vendors, qui décide des droits
+    VendorCatalog,
+    { provide: VENDOR_PRODUCT_REPOSITORY, useClass: PrismaVendorProductRepository },
+    {
+      provide: CATALOG_RANDOM,
+      useValue: {
+        uuid: () => randomUUID(),
+        slugSuffix: (size: number) => pick("abcdefghijklmnopqrstuvwxyz0123456789", size),
+        skuPrefix: () => pick("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8),
+      },
+    },
   ],
-  exports: [CatalogService, StockService],
+  exports: [CatalogService, StockService, VendorCatalog],
 })
 export class CatalogModule {}

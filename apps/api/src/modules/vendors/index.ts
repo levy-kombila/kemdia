@@ -5,6 +5,8 @@
  */
 export { VendorsModule } from "./vendors.module.js";
 export { ShopService } from "./application/shop.service.js";
+export { VendorProductService } from "./application/vendor-product.service.js";
+export { ProductModerationService } from "./application/product-moderation.service.js";
 export type { Shop, ShopKind, ShopStatus } from "./domain/shop.js";
 export { VendorsError, type VendorsErrorCode } from "./domain/vendors-error.js";
 export { withVendorsErrors, VENDORS_ERROR_STATUS } from "./interface/vendors-http-errors.js";

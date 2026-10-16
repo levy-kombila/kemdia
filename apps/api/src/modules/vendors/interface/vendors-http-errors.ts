@@ -1,5 +1,6 @@
 import { HttpStatus } from "@nestjs/common";
 import { BusinessException } from "../../../http/business-exception.js";
+import { CatalogError, type CatalogErrorCode } from "../../catalog/index.js";
 import { IdentityError } from "../../identity/index.js";
 import { VendorsError, type VendorsErrorCode } from "../domain/vendors-error.js";
 
@@ -13,6 +14,37 @@ const STATUS: Record<VendorsErrorCode, number> = {
   BOUTIQUE_SUR_SOI_INTERDITE: HttpStatus.FORBIDDEN,
   PROPRIETAIRE_INACTIF: HttpStatus.CONFLICT,
   BOUTIQUE_OCCUPEE: HttpStatus.CONFLICT,
+  // Produits des vendeurs et modération (S6-T02)
+  BOUTIQUE_INACTIVE: HttpStatus.FORBIDDEN,
+  PRODUIT_SUR_SOI_INTERDIT: HttpStatus.FORBIDDEN,
+};
+
+/**
+ * Erreurs du catalogue renvoyées par les routes des vendeurs et de la modération (S6-T02) : code de l'API et statut.
+ * Les règles de détail d'un produit (prix, stock, référence, caractéristique…) sont toutes un `PRODUIT_INVALIDE`.
+ */
+const CATALOG: Record<CatalogErrorCode, { code: string; status: number }> = {
+  IDENTIFIANT_INVALIDE: { code: "PRODUIT_INVALIDE", status: HttpStatus.UNPROCESSABLE_ENTITY },
+  SLUG_INVALIDE: { code: "PRODUIT_INVALIDE", status: HttpStatus.UNPROCESSABLE_ENTITY },
+  PRIX_INVALIDE: { code: "PRODUIT_INVALIDE", status: HttpStatus.UNPROCESSABLE_ENTITY },
+  STOCK_INVALIDE: { code: "PRODUIT_INVALIDE", status: HttpStatus.UNPROCESSABLE_ENTITY },
+  PRODUIT_INVALIDE: { code: "PRODUIT_INVALIDE", status: HttpStatus.UNPROCESSABLE_ENTITY },
+  VARIANTE_INVALIDE: { code: "PRODUIT_INVALIDE", status: HttpStatus.UNPROCESSABLE_ENTITY },
+  CATEGORIE_INVALIDE: { code: "PRODUIT_INVALIDE", status: HttpStatus.UNPROCESSABLE_ENTITY },
+  ARBORESCENCE_INVALIDE: { code: "PRODUIT_INVALIDE", status: HttpStatus.UNPROCESSABLE_ENTITY },
+  CATEGORIE_INCONNUE: { code: "CATEGORIE_INCONNUE", status: HttpStatus.UNPROCESSABLE_ENTITY },
+  PRODUIT_INTROUVABLE: { code: "PRODUIT_INTROUVABLE", status: HttpStatus.NOT_FOUND },
+  VARIANTE_INTROUVABLE: { code: "VARIANTE_INTROUVABLE", status: HttpStatus.NOT_FOUND },
+  STATUT_PRODUIT_INCOMPATIBLE: {
+    code: "STATUT_PRODUIT_INCOMPATIBLE",
+    status: HttpStatus.CONFLICT,
+  },
+  STOCK_MODIFIE: { code: "STOCK_MODIFIE", status: HttpStatus.CONFLICT },
+  PRODUIT_MODIFIE: { code: "PRODUIT_MODIFIE", status: HttpStatus.CONFLICT },
+  TROP_DE_PRODUITS_EN_ATTENTE: {
+    code: "TROP_DE_PRODUITS_EN_ATTENTE",
+    status: HttpStatus.CONFLICT,
+  },
 };
 
 const capitalize = (message: string) => message.charAt(0).toUpperCase() + message.slice(1);
@@ -31,6 +63,10 @@ export async function withVendorsErrors<T>(run: () => Promise<T>): Promise<T> {
         retryAfter,
       );
     }
+    if (error instanceof CatalogError) {
+      const { code, status } = CATALOG[error.code];
+      throw new BusinessException(status, capitalize(error.message), code);
+    }
     // Défense en profondeur : la garde HTTP refuse déjà un non-administrateur avant le cas d'utilisation
     if (error instanceof IdentityError && error.code === "ACCES_REFUSE") {
       throw new BusinessException(HttpStatus.FORBIDDEN, capitalize(error.message), error.code);
@@ -40,3 +76,7 @@ export async function withVendorsErrors<T>(run: () => Promise<T>): Promise<T> {
 }
 
 export const VENDORS_ERROR_STATUS = STATUS;
+/** Codes de l'API produits à partir des erreurs du catalogue (test d'alignement). */
+export const CATALOG_ERROR_CODES_FOR_VENDORS = [
+  ...new Set(Object.values(CATALOG).map((entry) => entry.code)),
+];

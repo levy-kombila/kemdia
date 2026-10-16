@@ -101,11 +101,14 @@ export class CatalogService {
     return { category, path: tree.path(category.id), children: tree.children(category.id) };
   }
 
-  /** Fiche produit : seuls les produits publiés sont visibles (brouillons et archives → introuvable). */
+  /**
+   * Fiche produit : seuls les produits visibles (publiés, boutique non suspendue) ; brouillons, produits en modération,
+   * refusés, archivés → introuvable.
+   */
   async getProduct(slug: string): Promise<Product | null> {
     if (!/^[a-z0-9-]{1,120}$/.test(slug)) return null;
     const product = await this.products.findBySlug(slug);
-    return product?.status === "PUBLISHED" ? product : null;
+    return product?.isVisible ? product : null;
   }
 
   /** Liste paginée : catégorie (et sous-catégories), recherche, filtres, tri. Catégorie inconnue → liste vide. */
@@ -188,17 +191,22 @@ export class CatalogService {
       const product = productOf.get(id);
       if (!product) return { ...line, ok: false, reason: "VARIANTE_INCONNUE", variant: null };
       const variant = product.variants.find((v) => v.id === id)!;
-      const sellable = product.status === "PUBLISHED" && variant.isActive;
+      const sellable = product.isVisible && variant.isActive;
       return {
         ...line,
         ...product.checkOrderable(id, line.quantity),
+        // Produit invisible (en modération, refusé, archivé, boutique suspendue) : ni son titre ni sa photo, qui
+        // peuvent ne pas avoir été modérés (relecture de sécurité S6-T02)
         variant: {
           variantId: variant.id,
           productId: product.id,
           slug: product.slug,
-          title: product.title,
-          variantName: product.variants.filter((v) => v.isActive).length > 1 ? variant.name : "",
-          image: product.images[0] ?? null,
+          title: product.isVisible ? product.title : "Produit indisponible",
+          variantName:
+            product.isVisible && product.variants.filter((v) => v.isActive).length > 1
+              ? variant.name
+              : "",
+          image: product.isVisible ? (product.images[0] ?? null) : null,
           price: variant.price,
           compareAtPrice: variant.compareAtPrice,
           stock: sellable ? variant.stock : 0,

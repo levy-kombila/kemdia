@@ -214,7 +214,9 @@ export class PrismaProductRepository implements ProductRepository {
 
 function whereOf(c: ProductCriteria): Prisma.ProductWhereInput {
   return {
+    // Même règle que Product.isVisible : publié ET boutique non suspendue (S6-T02)
     status: "PUBLISHED",
+    shopSuspended: false,
     ...(c.categoryIds ? { categoryId: { in: [...c.categoryIds] } } : {}),
     // Les mots ne contiennent que [a-z0-9] (searchable) : aucun joker SQL possible
     ...(c.terms.length ? { AND: c.terms.map((term) => ({ searchText: { contains: term } })) } : {}),
@@ -250,6 +252,7 @@ function toDomain(row: ProductRow): Product {
     isFeatured: row.isFeatured,
     isBestseller: row.isBestseller,
     isNew: row.isNew,
+    shopSuspended: row.shopSuspended,
     variants: row.variants.map((v) => ({
       id: v.id,
       sku: v.sku,

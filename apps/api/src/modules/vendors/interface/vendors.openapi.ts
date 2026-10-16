@@ -178,3 +178,288 @@ export const vendorsPaths = {
     true,
   ),
 };
+
+// --- Produits des vendeurs et modération (S6-T02) ---
+
+const productIdParam = {
+  name: "productId",
+  in: "path",
+  required: true,
+  description: "Identifiant du produit",
+  schema: { type: "string", format: "uuid" },
+};
+const variantIdParam = {
+  name: "variantId",
+  in: "path",
+  required: true,
+  description: "Identifiant de la variante",
+  schema: { type: "string", format: "uuid" },
+};
+const pageParams = (statuses: string[], description: string) => [
+  {
+    name: "status",
+    in: "query",
+    description,
+    schema: { type: "string", enum: statuses },
+  },
+  {
+    name: "limit",
+    in: "query",
+    description: "Produits par page (50 par défaut, 100 au plus)",
+    schema: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+  },
+  {
+    name: "after",
+    in: "query",
+    description: "`nextCursor` de la page précédente",
+    schema: { type: "string" },
+  },
+];
+
+const VENDOR_RULES = [
+  "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.",
+  "Un produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.",
+  "Pas encore de photos (tâche suivante) : le site affiche une image neutre.",
+].join("\n\n");
+const vendorErrors = {
+  ...sessionErrors,
+  "403": problem(
+    "`ACCES_REFUSE` (rôle vendeur requis) ou `BOUTIQUE_INACTIVE` (aucune boutique active pour ce compte)",
+  ),
+  "429": problem("Trop de requêtes pour ce compte (`TROP_DE_REQUETES`)"),
+};
+const vendorProduct = (description: string) => json("VendorProduct", description);
+
+const MODERATION_RULES = [
+  "Réservé aux **modérateurs** et aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque décision est inscrite au journal d'audit.",
+  "Seulement un produit **en attente**, et seulement **la version lue** : la décision porte le `submittedAt` lu ; si le vendeur a renvoyé le produit depuis, elle est refusée (`PRODUIT_MODIFIE`). Personne ne modère un produit de sa propre boutique. Un produit validé n'est visible que si sa boutique n'est pas suspendue.",
+].join("\n\n");
+const moderationErrors = {
+  ...sessionErrors,
+  "403": problem(
+    "`ACCES_REFUSE` (rôle modérateur requis), `RECONNEXION_REQUISE` (connexion de plus de 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
+  ),
+  "429": problem("Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)"),
+};
+
+export const vendorProductPaths = {
+  "/api/v1/vendors/products": {
+    post: {
+      tags: ["Produits des vendeurs"],
+      summary: "Créer un produit (envoyé en modération)",
+      description: VENDOR_RULES,
+      operationId: "createVendorProduct",
+      security: bearer,
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("VendorProductCreateRequest") } },
+      },
+      responses: {
+        "201": vendorProduct("Le produit créé (statut « pending »)"),
+        "400": problem("Corps invalide"),
+        ...vendorErrors,
+        "409": problem(
+          "`TROP_DE_PRODUITS_EN_ATTENTE` (50 produits de la boutique attendent déjà) ou `BOUTIQUE_OCCUPEE`",
+        ),
+        "422": problem(
+          "`PRODUIT_INVALIDE` (champ mal rempli, détail dans le message) ou `CATEGORIE_INCONNUE`",
+        ),
+      },
+    },
+    get: {
+      tags: ["Produits des vendeurs"],
+      summary: "Produits de ma boutique, du plus récent au plus ancien",
+      description: VENDOR_RULES,
+      operationId: "listVendorProducts",
+      security: bearer,
+      parameters: pageParams(
+        ["draft", "pending", "published", "rejected", "archived"],
+        "Seulement les produits dans cet état",
+      ),
+      responses: {
+        "200": json("VendorProductPage", "Une page de produits"),
+        "400": problem("Paramètre invalide"),
+        ...vendorErrors,
+      },
+    },
+  },
+  "/api/v1/vendors/products/{productId}": {
+    get: {
+      tags: ["Produits des vendeurs"],
+      summary: "Un produit de ma boutique",
+      description: VENDOR_RULES,
+      operationId: "getVendorProduct",
+      security: bearer,
+      parameters: [productIdParam],
+      responses: {
+        "200": vendorProduct("Le produit (motif affiché en cas de refus)"),
+        "400": problem("Identifiant invalide"),
+        ...vendorErrors,
+        "404": problem("`PRODUIT_INTROUVABLE`"),
+      },
+    },
+    put: {
+      tags: ["Produits des vendeurs"],
+      summary: "Modifier le contenu (repasse en modération)",
+      description: VENDOR_RULES,
+      operationId: "updateVendorProductContent",
+      security: bearer,
+      parameters: [productIdParam],
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("VendorProductContentRequest") } },
+      },
+      responses: {
+        "200": vendorProduct("Le produit, en attente de modération"),
+        "400": problem("Corps ou identifiant invalide"),
+        ...vendorErrors,
+        "404": problem("`PRODUIT_INTROUVABLE`"),
+        "409": problem(
+          "`STATUT_PRODUIT_INCOMPATIBLE` (produit archivé), `TROP_DE_PRODUITS_EN_ATTENTE` ou `BOUTIQUE_OCCUPEE`",
+        ),
+        "422": problem("`PRODUIT_INVALIDE` ou `CATEGORIE_INCONNUE`"),
+      },
+    },
+  },
+  "/api/v1/vendors/products/{productId}/variants/{variantId}": {
+    patch: {
+      tags: ["Produits des vendeurs"],
+      summary: "Prix, stock ou activation d'une variante (sans modération)",
+      description: `${VENDOR_RULES}\n\nLe **stock** est la quantité disponible, hors commandes en cours. Pour le changer, renvoyer aussi \`previousStock\` (la valeur lue) : si une commande l'a modifié entre-temps, la requête est refusée (\`STOCK_MODIFIE\`) au lieu d'écraser la réservation.`,
+      operationId: "updateVendorVariant",
+      security: bearer,
+      parameters: [productIdParam, variantIdParam],
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("VendorVariantUpdateRequest") } },
+      },
+      responses: {
+        "200": vendorProduct("Le produit après la modification"),
+        "400": problem("Corps ou identifiant invalide"),
+        ...vendorErrors,
+        "404": problem("`PRODUIT_INTROUVABLE` ou `VARIANTE_INTROUVABLE`"),
+        "409": problem(
+          "`STOCK_MODIFIE` (relire le stock), `STATUT_PRODUIT_INCOMPATIBLE` (dernière variante active) ou `BOUTIQUE_OCCUPEE`",
+        ),
+        "422": problem("`PRODUIT_INVALIDE` (prix barré inférieur au prix…)"),
+      },
+    },
+  },
+  "/api/v1/vendors/products/{productId}/archive": {
+    post: {
+      tags: ["Produits des vendeurs"],
+      summary: "Retirer de la vente (archiver)",
+      description: `${VENDOR_RULES}\n\nUn produit n'est jamais supprimé : il peut figurer dans des commandes (BR-002).`,
+      operationId: "archiveVendorProduct",
+      security: bearer,
+      parameters: [productIdParam],
+      responses: {
+        "200": vendorProduct("Le produit archivé"),
+        "400": problem("Identifiant invalide"),
+        ...vendorErrors,
+        "404": problem("`PRODUIT_INTROUVABLE`"),
+        "409": problem("`STATUT_PRODUIT_INCOMPATIBLE` (déjà archivé) ou `BOUTIQUE_OCCUPEE`"),
+      },
+    },
+  },
+  "/api/v1/vendors/products/{productId}/restore": {
+    post: {
+      tags: ["Produits des vendeurs"],
+      summary: "Remettre en vente (repasse en modération)",
+      description: VENDOR_RULES,
+      operationId: "restoreVendorProduct",
+      security: bearer,
+      parameters: [productIdParam],
+      responses: {
+        "200": vendorProduct("Le produit, en attente de modération"),
+        "400": problem("Identifiant invalide"),
+        ...vendorErrors,
+        "404": problem("`PRODUIT_INTROUVABLE`"),
+        "409": problem(
+          "`STATUT_PRODUIT_INCOMPATIBLE` (pas archivé), `TROP_DE_PRODUITS_EN_ATTENTE` ou `BOUTIQUE_OCCUPEE`",
+        ),
+      },
+    },
+  },
+  "/api/v1/moderation/products": {
+    get: {
+      tags: ["Modération"],
+      summary: "Produits à modérer, de la demande la plus ancienne à la plus récente",
+      description: `${MODERATION_RULES}\n\nPage suivante : repasser \`nextCursor\` dans \`after\`.`,
+      operationId: "listProductsToModerate",
+      security: bearer,
+      parameters: pageParams(
+        ["pending", "published", "rejected"],
+        "pending (par défaut) : la file à examiner",
+      ),
+      responses: {
+        "200": json("ModerationProductPage", "Une page de produits"),
+        "400": problem("Paramètre invalide"),
+        ...moderationErrors,
+      },
+    },
+  },
+  "/api/v1/moderation/products/{productId}": {
+    get: {
+      tags: ["Modération"],
+      summary: "Un produit de vendeur",
+      description: MODERATION_RULES,
+      operationId: "getProductToModerate",
+      security: bearer,
+      parameters: [productIdParam],
+      responses: {
+        "200": json("ModerationProduct", "Le produit et sa boutique"),
+        "400": problem("Identifiant invalide"),
+        ...moderationErrors,
+        "404": problem("`PRODUIT_INTROUVABLE`"),
+      },
+    },
+  },
+  "/api/v1/moderation/products/{productId}/approve": {
+    post: {
+      tags: ["Modération"],
+      summary: "Valider un produit (visible des clients)",
+      description: MODERATION_RULES,
+      operationId: "approveProduct",
+      security: bearer,
+      parameters: [productIdParam],
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("ProductApproval") } },
+      },
+      responses: {
+        "200": json("ModerationProduct", "Le produit après la décision"),
+        "400": problem("Identifiant invalide"),
+        ...moderationErrors,
+        "404": problem("`PRODUIT_INTROUVABLE`"),
+        "409": problem(
+          "`STATUT_PRODUIT_INCOMPATIBLE` (pas en attente), `PRODUIT_MODIFIE` (le vendeur l'a renvoyé depuis votre lecture : relire) ou `BOUTIQUE_OCCUPEE`",
+        ),
+      },
+    },
+  },
+  "/api/v1/moderation/products/{productId}/reject": {
+    post: {
+      tags: ["Modération"],
+      summary: "Refuser un produit (motif montré au vendeur)",
+      description: MODERATION_RULES,
+      operationId: "rejectProduct",
+      security: bearer,
+      parameters: [productIdParam],
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("ProductModerationReason") } },
+      },
+      responses: {
+        "200": json("ModerationProduct", "Le produit après la décision"),
+        "400": problem("Corps ou identifiant invalide"),
+        ...moderationErrors,
+        "404": problem("`PRODUIT_INTROUVABLE`"),
+        "409": problem(
+          "`STATUT_PRODUIT_INCOMPATIBLE` (pas en attente), `PRODUIT_MODIFIE` (le vendeur l'a renvoyé depuis votre lecture : relire) ou `BOUTIQUE_OCCUPEE`",
+        ),
+        "422": problem("`PRODUIT_INVALIDE` : motif trop court ou trop long"),
+      },
+    },
+  },
+};

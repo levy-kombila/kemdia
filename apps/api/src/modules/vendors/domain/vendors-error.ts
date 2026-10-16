@@ -14,7 +14,12 @@ export type VendorsErrorCode =
   /** Le compte du vendeur est fermé ou n'existe plus : la boutique ne peut pas être validée. */
   | "PROPRIETAIRE_INACTIF"
   /** Une autre opération verrouille la boutique ou la demande : réessayer dans un instant. */
-  | "BOUTIQUE_OCCUPEE";
+  | "BOUTIQUE_OCCUPEE"
+  // Produits des vendeurs et modération (S6-T02)
+  /** Le compte n'a pas de boutique active (en attente, refusée, suspendue ou aucune). */
+  | "BOUTIQUE_INACTIVE"
+  /** Un modérateur ne décide jamais pour un produit de sa propre boutique. */
+  | "PRODUIT_SUR_SOI_INTERDIT";
 
 /** Une règle des boutiques n'est pas respectée. Le message est lisible par un humain, en français. */
 export class VendorsError extends Error {

@@ -55,7 +55,8 @@ export function assertStock(value: number): number {
 /** Texte obligatoire, espaces superflus retirés, longueur bornée. */
 export function requiredText(value: string, what: string, max: number): string {
   const text = value.trim().replace(/\s+/g, " ");
-  if (!text || text.length > max) {
+  // En caractères, comme PostgreSQL (`char_length`) : un emoji compte pour un (relecture S6-T02)
+  if (!text || [...text].length > max) {
     throw new CatalogError("PRODUIT_INVALIDE", `${what} : obligatoire, ${max} caractères au plus`);
   }
   return text;

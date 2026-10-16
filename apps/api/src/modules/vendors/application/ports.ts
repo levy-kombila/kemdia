@@ -22,6 +22,11 @@ export interface ShopRepository {
    * créent jamais deux boutiques, même quand aucune ligne n'existe encore à verrouiller).
    */
   lockOwner(accountId: string): Promise<void>;
+  /**
+   * Boutique du compte, verrouillée en partage jusqu'à la fin de la transaction (S6-T02) : une suspension attend la fin
+   * de l'écriture du vendeur, et le vendeur n'écrit jamais pour une boutique suspendue entre-temps.
+   */
+  shareLockByOwner(accountId: string): Promise<Shop | null>;
   /** Une AUTRE boutique que `exceptId` a-t-elle cette clé de nom ? */
   isNameTaken(nameKey: string, exceptId?: string): Promise<boolean>;
   /** Une AUTRE boutique que `exceptId` a-t-elle cette adresse ? */
@@ -35,6 +40,12 @@ export interface ShopRepository {
     limit: number;
     after?: ShopCursor | undefined;
   }): Promise<{ items: Shop[]; next: ShopCursor | null }>;
+}
+
+/** Produits d'une boutique dans le catalogue : cachés à la suspension, montrés à la réactivation (S6-T02). */
+export const SHOP_LISTING = Symbol("SHOP_LISTING");
+export interface ShopListing {
+  setShopSuspended(shopId: string, suspended: boolean): Promise<number>;
 }
 
 /** Transaction de la base, partagée avec le module identity (rôle) et le journal d'audit. */

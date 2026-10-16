@@ -22,6 +22,20 @@ export type {
   StockLine,
 } from "./application/ports.js";
 export { StockService, StockUnavailableError } from "./application/stock.service.js";
+// Produits des vendeurs et modération (S6-T02)
+export {
+  VendorCatalog,
+  type VendorProductInput,
+  type VendorVariantInput,
+  type VendorVariantPatch,
+} from "./application/vendor-catalog.service.js";
+export type {
+  VendorProductCursor,
+  VendorProductRecord,
+  VendorVariantRecord,
+} from "./application/ports.js";
+export { CatalogError, type CatalogErrorCode } from "./domain/catalog-error.js";
+export { VENDOR_PRODUCT_RULES, type ModerationDecision } from "./domain/vendor-product.js";
 export { SORT_KEYS } from "./application/ports.js";
 export type { ProductSearchInput } from "./application/product-search.js";
 export type { Category, CategoryNode } from "./domain/category.js";

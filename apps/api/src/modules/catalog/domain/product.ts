@@ -11,11 +11,13 @@ import {
 
 /**
  * Statut d'un produit :
- * - PUBLISHED : visible et commandable (si du stock existe) ;
- * - DRAFT : en préparation ou en attente de modération (BR-003, vendeurs au S6) ;
+ * - PUBLISHED : visible et commandable (si du stock existe et si sa boutique n'est pas suspendue) ;
+ * - DRAFT : en préparation ;
+ * - PENDING : produit d'un vendeur en attente de modération (BR-003, S6-T02) ;
+ * - REJECTED : refusé par la modération (motif montré au vendeur) ;
  * - ARCHIVED : désactivé, jamais supprimé s'il a des commandes (BR-002).
  */
-export const PRODUCT_STATUSES = ["DRAFT", "PUBLISHED", "ARCHIVED"] as const;
+export const PRODUCT_STATUSES = ["DRAFT", "PUBLISHED", "ARCHIVED", "PENDING", "REJECTED"] as const;
 export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
 
 export const MAX_VARIANTS = 50;
@@ -54,6 +56,8 @@ export interface ProductProps {
   isBestseller: boolean;
   isNew: boolean;
   variants: readonly VariantProps[];
+  /** Boutique suspendue (S6-T02) : le produit est caché, quel que soit son statut. Faux par défaut. */
+  shopSuspended?: boolean;
 }
 
 /** Réponse à « puis-je commander N exemplaires de cette variante ? » (BR-001). */
@@ -124,6 +128,7 @@ export class Product {
   readonly isBestseller: boolean;
   readonly isNew: boolean;
   readonly variants: readonly Variant[];
+  readonly shopSuspended: boolean;
 
   private constructor(props: ProductProps) {
     this.id = assertUuid(props.id, "produit");
@@ -146,6 +151,7 @@ export class Product {
     this.isFeatured = props.isFeatured;
     this.isBestseller = props.isBestseller;
     this.isNew = props.isNew;
+    this.shopSuspended = props.shopSuspended ?? false;
 
     if (props.variants.length === 0) throw invalid("au moins une variante");
     if (props.variants.length > MAX_VARIANTS) throw invalid(`${MAX_VARIANTS} variantes au plus`);
@@ -162,6 +168,11 @@ export class Product {
   /** Crée un produit en vérifiant toutes ses règles ; lève une `CatalogError` sinon. */
   static create(props: ProductProps): Product {
     return new Product(props);
+  }
+
+  /** Visible des clients (fiche, listes, panier, commande) : publié ET boutique non suspendue. */
+  get isVisible(): boolean {
+    return this.status === "PUBLISHED" && !this.shopSuspended;
   }
 
   private get activeVariants(): readonly Variant[] {
@@ -189,7 +200,7 @@ export class Product {
 
   /** BR-001 : visible comme « en stock » seulement s'il est publié et qu'une variante active a du stock. */
   get isAvailable(): boolean {
-    return this.status === "PUBLISHED" && this.activeVariants.some((v) => v.stock > 0);
+    return this.isVisible && this.activeVariants.some((v) => v.stock > 0);
   }
 
   /** Texte servant à la recherche : titre, marque, catégorie, caractéristiques (sans accents). */
@@ -205,7 +216,7 @@ export class Product {
    * (La réservation du stock, dans la même transaction que la commande, est la règle BR-012 du S5.)
    */
   checkOrderable(variantId: string, quantity: number): Orderability {
-    if (this.status !== "PUBLISHED") return { ok: false, reason: "PRODUIT_INDISPONIBLE" };
+    if (!this.isVisible) return { ok: false, reason: "PRODUIT_INDISPONIBLE" };
     const variant = this.variants.find((v) => v.id === variantId);
     if (!variant) return { ok: false, reason: "VARIANTE_INCONNUE" };
     if (!variant.isActive) return { ok: false, reason: "PRODUIT_INDISPONIBLE" };
