@@ -27,7 +27,11 @@ const IMAGE_TYPES: readonly string[] = PRODUCT_IMAGE_TYPES;
 export function isImageUpload(req: IncomingMessage): boolean {
   const type = (req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
   return (
-    req.method === "POST" && IMAGE_UPLOAD_PATH.test(req.url ?? "") && IMAGE_TYPES.includes(type)
+    req.method === "POST" &&
+    IMAGE_UPLOAD_PATH.test(req.url ?? "") &&
+    IMAGE_TYPES.includes(type) &&
+    // Sans jeton de session, la route refusera (401) : inutile de lire 5 Mo pour rien
+    /^Bearer \S+$/.test(req.headers.authorization ?? "")
   );
 }
 

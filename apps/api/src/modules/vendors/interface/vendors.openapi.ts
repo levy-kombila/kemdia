@@ -463,3 +463,130 @@ export const vendorProductPaths = {
     },
   },
 };
+
+const imageIdParam = {
+  name: "imageId",
+  in: "path",
+  required: true,
+  description: "Identifiant de la photo (celui de son adresse `/images/v/<id>.webp`)",
+  schema: { type: "string", format: "uuid" },
+};
+const webp = (description: string) => ({
+  description,
+  headers: {
+    ETag: { description: "Empreinte de la photo", schema: { type: "string" } },
+    "Cache-Control": { description: "`private, no-store`", schema: { type: "string" } },
+  },
+  content: { "image/webp": { schema: { type: "string", format: "binary" } } },
+});
+const PHOTO_RULES = [
+  "Photos d'un produit de **ma** boutique (S6-T04, ADR-0035), 10 au plus. Fichier **JPEG, PNG ou WebP** de **5 Mo** au plus, 200 pixels au moins de chaque côté, 40 mégapixels au plus.",
+  "Le fichier n'est jamais gardé tel quel : il est **réencodé en WebP** (1 600 px et vignette de 480 px), redressé, et **toutes ses métadonnées sont retirées** (position GPS, appareil). Le format est reconnu par le contenu, pas par le nom ni le type annoncé.",
+  "Ajouter une photo **renvoie le produit en modération** (BR-003) ; la retirer ou changer l'ordre ne le fait pas. Une photo n'est servie au public que si son produit est validé et sa boutique active.",
+].join("\n\n");
+
+export const productImagePaths = {
+  "/api/v1/vendors/products/{productId}/images": {
+    post: {
+      tags: ["Produits des vendeurs"],
+      summary: "Ajouter une photo (le produit repasse en modération)",
+      description: `${PHOTO_RULES}\n\nCorps : **le fichier lui-même** (pas de formulaire ni de JSON), avec l'en-tête \`Content-Type\` \`image/jpeg\`, \`image/png\` ou \`image/webp\`. 20 envois par minute et par compte.`,
+      operationId: "addVendorProductImage",
+      security: bearer,
+      parameters: [productIdParam],
+      requestBody: {
+        required: true,
+        content: {
+          "image/jpeg": { schema: { type: "string", format: "binary" } },
+          "image/png": { schema: { type: "string", format: "binary" } },
+          "image/webp": { schema: { type: "string", format: "binary" } },
+        },
+      },
+      responses: {
+        "201": vendorProduct(
+          "Le produit, en attente de modération, avec la nouvelle photo en dernier",
+        ),
+        "400": problem("Identifiant invalide"),
+        ...vendorErrors,
+        "404": problem("`PRODUIT_INTROUVABLE`"),
+        "409": problem(
+          "`TROP_DE_PHOTOS` (10 déjà), `STATUT_PRODUIT_INCOMPATIBLE` (archivé), `TROP_DE_PRODUITS_EN_ATTENTE` ou `BOUTIQUE_OCCUPEE`",
+        ),
+        "413": problem(
+          "Fichier de plus de 5 Mo (`IMAGE_TROP_GRANDE`), ou image de plus de 40 mégapixels",
+        ),
+        "415": problem("`FORMAT_IMAGE_INVALIDE` : pas un JPEG, PNG ou WebP lisible"),
+        "422": problem("`IMAGE_TROP_PETITE` : moins de 200 pixels d'un côté"),
+      },
+    },
+    put: {
+      tags: ["Produits des vendeurs"],
+      summary: "Changer l'ordre des photos (sans nouvelle modération)",
+      description: `${PHOTO_RULES}\n\nToutes les photos du produit, chacune une fois ; la première devient la principale.`,
+      operationId: "reorderVendorProductImages",
+      security: bearer,
+      parameters: [productIdParam],
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("ProductImageOrderRequest") } },
+      },
+      responses: {
+        "200": vendorProduct("Le produit, photos dans le nouvel ordre"),
+        "400": problem("Corps invalide"),
+        ...vendorErrors,
+        "404": problem("`PRODUIT_INTROUVABLE`"),
+        "409": problem("`BOUTIQUE_OCCUPEE`"),
+        "422": problem("`PRODUIT_INVALIDE` : liste différente des photos du produit"),
+      },
+    },
+  },
+  "/api/v1/vendors/products/{productId}/images/{imageId}": {
+    get: {
+      tags: ["Produits des vendeurs"],
+      summary: "Voir une photo (quel que soit le statut du produit)",
+      description: PHOTO_RULES,
+      operationId: "getVendorProductImage",
+      security: bearer,
+      parameters: [productIdParam, imageIdParam],
+      responses: {
+        "200": webp("La grande image (WebP)"),
+        "304": { description: "Inchangée (`If-None-Match`)" },
+        "400": problem("Identifiant invalide"),
+        ...vendorErrors,
+        "404": problem("`PRODUIT_INTROUVABLE` ou `PHOTO_INTROUVABLE`"),
+      },
+    },
+    delete: {
+      tags: ["Produits des vendeurs"],
+      summary: "Retirer une photo (tout de suite, effacée)",
+      description: `${PHOTO_RULES}\n\nLa photo est effacée et n'est plus jamais servie (les copies en cache disparaissent en quelques minutes). Inscrit au journal d'audit.`,
+      operationId: "deleteVendorProductImage",
+      security: bearer,
+      parameters: [productIdParam, imageIdParam],
+      responses: {
+        "200": vendorProduct("Le produit sans cette photo"),
+        "400": problem("Identifiant invalide"),
+        ...vendorErrors,
+        "404": problem("`PRODUIT_INTROUVABLE` ou `PHOTO_INTROUVABLE`"),
+        "409": problem("`BOUTIQUE_OCCUPEE`"),
+      },
+    },
+  },
+  "/api/v1/moderation/products/{productId}/images/{imageId}": {
+    get: {
+      tags: ["Modération"],
+      summary: "Voir une photo d'un produit à modérer",
+      description: `${MODERATION_RULES}\n\nQuel que soit le statut du produit : la modération voit ce qu'elle valide. 120 photos par minute.`,
+      operationId: "getModerationProductImage",
+      security: bearer,
+      parameters: [productIdParam, imageIdParam],
+      responses: {
+        "200": webp("La grande image (WebP)"),
+        "304": { description: "Inchangée (`If-None-Match`)" },
+        "400": problem("Identifiant invalide"),
+        ...moderationErrors,
+        "404": problem("`PRODUIT_INTROUVABLE` ou `PHOTO_INTROUVABLE`"),
+      },
+    },
+  },
+};
