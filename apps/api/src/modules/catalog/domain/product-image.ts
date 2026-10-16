@@ -106,14 +106,19 @@ export function vendorImageId(path: string): string | null {
   return VENDOR_PATH.exec(path)?.[1] ?? null;
 }
 
-/** Une photo de plus : 10 au plus par produit. */
-export function withAddedImage(images: readonly string[], imageId: string): string[] {
+/** Reste-t-il de la place pour une photo ? 10 au plus par produit. */
+export function assertRoomForImage(images: readonly string[]): void {
   if (images.length >= PRODUCT_IMAGE_RULES.maxPerProduct) {
     throw new CatalogError(
       "TROP_DE_PHOTOS",
       `${PRODUCT_IMAGE_RULES.maxPerProduct} photos au plus par produit : retirez-en une d'abord`,
     );
   }
+}
+
+/** Une photo de plus (voir `assertRoomForImage`). */
+export function withAddedImage(images: readonly string[], imageId: string): string[] {
+  assertRoomForImage(images);
   return [...images, vendorImagePath(imageId)];
 }
 

@@ -5,6 +5,7 @@ import { CatalogError } from "../domain/catalog-error.js";
 import { CategoryTree } from "../domain/category.js";
 import { Product, type ProductStatus } from "../domain/product.js";
 import {
+  assertRoomForImage,
   checkUpload,
   photoNotFound,
   reordered,
@@ -247,6 +248,16 @@ export class VendorCatalog {
     return this.processor.process(bytes);
   }
 
+  /**
+   * Vérification rapide, SANS verrou, avant le réencodage (relecture S6-T04) : produit de la boutique, pas archivé,
+   * place pour une photo. Évite de réencoder pour rien ; `addImage` revérifie tout sous verrou.
+   */
+  async checkImageRoom(shopId: string, productId: string, now: Date): Promise<void> {
+    const product = await this.get(shopId, productId);
+    onContentChange(state(product), now);
+    assertRoomForImage(product.images);
+  }
+
   /** Ajoute une photo (10 au plus) : le produit repasse en modération (choix du 2026-10-16, BR-003). */
   async addImage(
     shopId: string,
@@ -270,12 +281,15 @@ export class VendorCatalog {
     productId: string,
     imageId: string,
     now: Date,
-  ): Promise<VendorProductRecord> {
+  ): Promise<{ after: VendorProductRecord; sha256: string | null }> {
     const before = await this.lockOwned(shopId, productId);
     const images = withoutImage(before.images, imageId);
+    const id = imageId.toLowerCase();
+    // Empreinte gardée au journal : une photo illicite retirée laisse une trace (relecture S6-T04)
+    const sha256 = (await this.images.describe(id))?.sha256 ?? null;
     const after = await this.write({ ...before, images, updatedAt: now });
-    await this.images.delete(imageId.toLowerCase());
-    return after;
+    await this.images.delete(id, before.id);
+    return { after, sha256 };
   }
 
   /** Nouvel ordre des photos (la première est la principale) : sans nouvelle modération. */
@@ -307,12 +321,16 @@ export class VendorCatalog {
    * servir de Kemdia pour héberger une image non modérée.
    */
   async publicImage(imageId: string, size: ImageSize): Promise<StoredImage> {
-    const stored = await this.images.read(imageId.toLowerCase(), size);
-    if (!stored) throw photoNotFound();
-    const product = await this.products.findById(stored.productId);
+    const id = imageId.toLowerCase();
+    // Produit vérifié AVANT de lire les octets : une photo non publique ne coûte qu'une petite lecture
+    const owner = await this.images.describe(id);
+    if (!owner) throw photoNotFound();
+    const product = await this.products.findById(owner.productId);
     if (!product || product.status !== "PUBLISHED" || product.shopSuspended) throw photoNotFound();
     // Retirée de la liste (en cours d'effacement) : plus servie
-    if (!product.images.some((path) => vendorImageId(path) === stored.id)) throw photoNotFound();
+    if (!product.images.some((path) => vendorImageId(path) === id)) throw photoNotFound();
+    const stored = await this.images.read(id, size);
+    if (!stored || stored.productId !== product.id) throw photoNotFound();
     return stored;
   }
 

@@ -1,5 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { PRODUCT_IMAGE_LIMITS, PRODUCT_IMAGE_TYPES } from "@kemdia/contracts/constants";
+import {
+  PRODUCT_IMAGE_LIMITS,
+  PRODUCT_IMAGE_TYPES,
+  SESSION_TOKEN_PATTERN,
+} from "@kemdia/contracts/constants";
 import { VersioningType } from "@nestjs/common";
 import type {
   NestExpressApplication,
@@ -24,15 +28,52 @@ export const WEBHOOK_PATH_PREFIX = "/api/v1/webhooks/";
 const IMAGE_UPLOAD_PATH = /^\/api\/v1\/vendors\/products\/[^/?#]+\/images\/?(?:\?.*)?$/;
 const IMAGE_TYPES: readonly string[] = PRODUCT_IMAGE_TYPES;
 
+const hasSessionToken = (header: string | undefined): boolean =>
+  !!header && header.startsWith("Bearer ") && SESSION_TOKEN_PATTERN.test(header.slice(7));
+
 export function isImageUpload(req: IncomingMessage): boolean {
   const type = (req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
   return (
     req.method === "POST" &&
     IMAGE_UPLOAD_PATH.test(req.url ?? "") &&
     IMAGE_TYPES.includes(type) &&
-    // Sans jeton de session, la route refusera (401) : inutile de lire 5 Mo pour rien
-    /^Bearer \S+$/.test(req.headers.authorization ?? "")
+    // Sans jeton de session bien formé, la route refusera (401) : inutile de lire 5 Mo pour rien
+    hasSessionToken(req.headers.authorization)
   );
+}
+
+/** Envois de photos traités en même temps au plus, pour toute l'API (lecture du corps comprise). */
+export const MAX_CONCURRENT_UPLOADS = 6;
+
+/**
+ * Le corps d'une photo (5 Mo) est lu AVANT les contrôles de la route (session, limites) : on borne donc le nombre
+ * d'envois en cours. Au-delà : 503 et « réessayez dans quelques secondes », sans lire le fichier (relecture S6-T04).
+ */
+export function limitConcurrentUploads(max = MAX_CONCURRENT_UPLOADS) {
+  let active = 0;
+  return (req: IncomingMessage, res: ServerResponse, next: () => void): void => {
+    if (!isImageUpload(req)) return next();
+    if (active >= max) {
+      res.statusCode = 503;
+      res.setHeader("Retry-After", "5");
+      res.setHeader("Content-Type", "application/problem+json");
+      res.setHeader("Connection", "close");
+      res.end(
+        JSON.stringify({
+          type: "about:blank",
+          title: "Service indisponible",
+          status: 503,
+          detail: "Trop d'envois de photos en même temps : réessayez dans quelques secondes",
+        }),
+      );
+      return;
+    }
+    active += 1;
+    res.once("close", () => {
+      active -= 1;
+    });
+    next();
+  };
 }
 
 function keepRawBodyForWebhooks(req: IncomingMessage, _res: ServerResponse, buffer: Buffer): void {
@@ -62,6 +103,8 @@ export function configureApp(app: NestExpressApplication, config: AppConfig): vo
       strictTransportSecurity: { maxAge: 63_072_000, includeSubDomains: true },
     }),
   );
+  // Photos : nombre d'envois en cours borné AVANT la lecture de leur corps
+  app.use(limitConcurrentUploads());
   // Corps JSON ; pour les notifications d'opérateurs, le corps brut est gardé (signature). `verify` est transmis tel
   // quel à body-parser par Nest, mais absent de son type : d'où la conversion.
   app.useBodyParser("json", {

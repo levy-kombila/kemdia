@@ -36,6 +36,19 @@ describe("Relais des photos des vendeurs (S6-T04)", () => {
     expect(init?.redirect).toBe("error");
   });
 
+  it("transmet l'adresse du visiteur : la limite de l'API s'applique à lui, pas au site entier", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(image(webp())));
+    await fetchVendorImage(
+      { url: "http://api.test", key: KEY, timeoutMs: 1000, fetch, visitorIp: "41.158.1.2" },
+      ID,
+      "large",
+      null,
+    );
+    expect(new Headers(fetch.mock.calls[0]![1]?.headers).get("x-kemdia-client-ip")).toBe(
+      "41.158.1.2",
+    );
+  });
+
   it("transmet une empreinte bien formée (304), jamais une autre", async () => {
     const first = call(new Response(null, { status: 304, headers: { etag: ETAG } }), ETAG);
     expect(await first.result).toEqual({ status: 304, etag: ETAG });

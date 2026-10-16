@@ -513,10 +513,13 @@ export const productImagePaths = {
           "`TROP_DE_PHOTOS` (10 déjà), `STATUT_PRODUIT_INCOMPATIBLE` (archivé), `TROP_DE_PRODUITS_EN_ATTENTE` ou `BOUTIQUE_OCCUPEE`",
         ),
         "413": problem(
-          "Fichier de plus de 5 Mo (`IMAGE_TROP_GRANDE`), ou image de plus de 40 mégapixels",
+          "Fichier de plus de 5 Mo, image de plus de 40 mégapixels ou trop longue à traiter (`IMAGE_TROP_GRANDE`)",
         ),
         "415": problem("`FORMAT_IMAGE_INVALIDE` : pas un JPEG, PNG ou WebP lisible"),
         "422": problem("`IMAGE_TROP_PETITE` : moins de 200 pixels d'un côté"),
+        "503": problem(
+          "Trop d'envois de photos en même temps sur toute l'API : réessayer après `Retry-After` secondes",
+        ),
       },
     },
     put: {

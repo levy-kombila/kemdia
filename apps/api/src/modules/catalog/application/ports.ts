@@ -250,6 +250,9 @@ export interface StoredImage {
  */
 export interface ProductImageStore {
   save(imageId: string, productId: string, image: ProcessedImage, now: Date): Promise<void>;
+  /** Produit et empreinte d'une photo, SANS ses octets (contrôle d'accès avant toute lecture coûteuse). */
+  describe(imageId: string): Promise<{ productId: string; sha256: string } | null>;
   read(imageId: string, size: ImageSize): Promise<StoredImage | null>;
-  delete(imageId: string): Promise<void>;
+  /** Efface la photo de CE produit (rien si elle appartient à un autre). */
+  delete(imageId: string, productId: string): Promise<void>;
 }

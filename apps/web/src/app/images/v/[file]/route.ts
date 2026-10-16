@@ -1,6 +1,7 @@
 import { fetchVendorImage } from "@/lib/catalog/api-vendor-image";
 import { parseVendorImageFile } from "@/lib/catalog/vendor-image";
 import { catalogSource } from "@/lib/config/server-config";
+import { UNKNOWN_VISITOR, clientIpHeaderName, visitorIp } from "@/lib/security/client-ip";
 
 /**
  * Photos des produits des vendeurs (S6-T04, ADR-0035), à la même adresse que le site (« /images/v/<id>.webp », vignette
@@ -27,8 +28,10 @@ export async function GET(
   const { file } = await params;
   const wanted = parseVendorImageFile(file);
   if (!wanted) return text(404, "Photo introuvable.", MISSING_CACHE);
+  const ipHeader = clientIpHeaderName();
+  const ip = ipHeader ? (visitorIp(request.headers, ipHeader) ?? UNKNOWN_VISITOR) : null;
   const result = await fetchVendorImage(
-    catalogSource(),
+    { ...catalogSource(), visitorIp: ip },
     wanted.imageId,
     wanted.size,
     request.headers.get("if-none-match"),

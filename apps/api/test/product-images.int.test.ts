@@ -269,7 +269,12 @@ describe("Photos des produits des vendeurs (PostgreSQL, HTTP)", () => {
       where: { targetId: product.id, action: "product.submitted" },
       orderBy: { occurredAt: "asc" },
     });
-    expect(audit.at(-1)?.details).toMatchObject({ reason: "photo", from: "published" });
+    expect(audit.at(-1)?.details).toMatchObject({
+      reason: "photo",
+      from: "published",
+      image: imageId,
+      sha256: (await prisma.productImage.findUniqueOrThrow({ where: { id: imageId } })).sha256,
+    });
   });
 
   it("fichiers refusés : pas une image, déguisée, trop petite, trop lourde, mauvais type annoncé", async () => {
@@ -358,7 +363,15 @@ describe("Photos des produits des vendeurs (PostgreSQL, HTTP)", () => {
     const trace = await prisma.auditEvent.findFirst({
       where: { targetId: product.id, action: "product.image_removed" },
     });
-    expect(trace?.details).toMatchObject({ image: a });
+    expect(trace?.details).toMatchObject({
+      image: a,
+      sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
+    expect(
+      await prisma.auditEvent.count({
+        where: { targetId: product.id, action: "product.images_reordered" },
+      }),
+    ).toBe(1);
   });
 
   it("une boutique ne voit ni ne touche les photos d'une autre ; boutique suspendue : photos cachées", async () => {

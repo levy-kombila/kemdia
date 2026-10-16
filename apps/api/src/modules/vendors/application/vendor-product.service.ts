@@ -35,6 +35,7 @@ export type VendorCatalogPort = Pick<
   | "removeImage"
   | "reorderImages"
   | "ownImage"
+  | "checkImageRoom"
 >;
 
 const inactive = () =>
@@ -191,9 +192,9 @@ export class VendorProductService {
   // --- Photos (S6-T04, ADR-0035) ---
 
   /**
-   * Ajoute une photo : le produit repasse en modération (BR-003). Le fichier est réencodé AVANT la transaction (aucun
-   * verrou pendant le calcul), après une première vérification rapide de la boutique ; la boutique est revérifiée sous
-   * verrou au moment d'écrire.
+   * Ajoute une photo : le produit repasse en modération (BR-003). Le fichier est réencodé ENTRE deux transactions
+   * courtes (aucun verrou pendant le calcul) : d'abord une vérification rapide (boutique active, produit à elle, pas
+   * archivé, moins de 10 photos : pas de réencodage pour rien), puis tout est revérifié sous verrou au moment d'écrire.
    */
   async addImage(
     accountId: string,
@@ -201,17 +202,22 @@ export class VendorProductService {
     bytes: Uint8Array,
     context: AuditContext,
   ): Promise<VendorProductRecord> {
-    const shop = await this.shops.findByOwner(accountId);
-    if (!shop || shop.status !== "active") throw inactive();
+    await this.inShop(accountId, (shop) =>
+      this.catalog.checkImageRoom(shop.id, productId, this.clock()),
+    );
     const image = await this.catalog.prepareImage(bytes);
     return this.inShop(accountId, async (current) => {
-      const { before, after } = await this.catalog.addImage(
+      const { before, after, imageId } = await this.catalog.addImage(
         current.id,
         productId,
         image,
         this.clock(),
       );
-      await this.submitted(accountId, after, "photo", context, before.status);
+      // Identifiant et empreinte de la photo au journal : on sait toujours quelle image a été envoyée
+      await this.submitted(accountId, after, "photo", context, before.status, {
+        image: imageId,
+        sha256: image.sha256,
+      });
       return after;
     });
   }
@@ -224,27 +230,45 @@ export class VendorProductService {
     context: AuditContext,
   ): Promise<VendorProductRecord> {
     return this.inShop(accountId, async (shop) => {
-      const after = await this.catalog.removeImage(shop.id, productId, imageId, this.clock());
+      const { after, sha256 } = await this.catalog.removeImage(
+        shop.id,
+        productId,
+        imageId,
+        this.clock(),
+      );
       await this.audit.record({
         action: "product.image_removed",
         actor: { type: "account", id: accountId },
         target: { type: "product", id: after.id },
-        details: { title: shortText(after.title), image: imageId.toLowerCase() },
+        details: {
+          title: shortText(after.title),
+          image: imageId.toLowerCase(),
+          ...(sha256 ? { sha256 } : {}),
+        },
         context,
       });
       return after;
     });
   }
 
-  /** Nouvel ordre des photos (sans modération : elles ont toutes été validées ou attendent de l'être). */
+  /** Nouvel ordre des photos (sans modération : elles ont toutes été validées ou attendent de l'être). Tracé. */
   reorderImages(
     accountId: string,
     productId: string,
     imageIds: readonly string[],
+    context: AuditContext,
   ): Promise<VendorProductRecord> {
-    return this.inShop(accountId, (shop) =>
-      this.catalog.reorderImages(shop.id, productId, imageIds, this.clock()),
-    );
+    return this.inShop(accountId, async (shop) => {
+      const after = await this.catalog.reorderImages(shop.id, productId, imageIds, this.clock());
+      await this.audit.record({
+        action: "product.images_reordered",
+        actor: { type: "account", id: accountId },
+        target: { type: "product", id: after.id },
+        details: { title: shortText(after.title) },
+        context,
+      });
+      return after;
+    });
   }
 
   /** Une photo d'un produit de la boutique, quel que soit son statut (aperçu du vendeur). */
@@ -274,6 +298,7 @@ export class VendorProductService {
     reason: "creation" | "modification" | "remise_en_vente" | "photo",
     context: AuditContext,
     from?: VendorProductStatus,
+    extra: Record<string, string> = {},
   ): Promise<void> {
     return this.audit.record({
       action: "product.submitted",
@@ -283,6 +308,7 @@ export class VendorProductService {
         title: shortText(product.title),
         reason,
         ...(from ? { from: from.toLowerCase() } : {}),
+        ...extra,
       },
       context,
     });

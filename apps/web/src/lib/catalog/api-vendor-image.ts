@@ -1,5 +1,5 @@
 import "server-only";
-import { INTERNAL_KEY_HEADER, PRODUCT_IMAGE_LIMITS } from "@kemdia/contracts";
+import { CLIENT_IP_HEADER, INTERNAL_KEY_HEADER, PRODUCT_IMAGE_LIMITS } from "@kemdia/contracts";
 import { readAtMost } from "@/lib/orders/api-orders";
 
 export interface VendorImageApiOptions {
@@ -7,6 +7,11 @@ export interface VendorImageApiOptions {
   key: string;
   timeoutMs: number;
   fetch?: typeof fetch;
+  /**
+   * Adresse du visiteur (S4-T07) : transmise avec la clé interne, pour que la limite de l'API s'applique à CHAQUE
+   * visiteur, et non au site tout entier (relecture S6-T04).
+   */
+  visitorIp?: string | null;
 }
 
 export type VendorImageResult =
@@ -39,6 +44,7 @@ export async function fetchVendorImage(
     [INTERNAL_KEY_HEADER]: options.key,
   };
   if (ifNoneMatch && ETAG.test(ifNoneMatch)) headers["if-none-match"] = ifNoneMatch;
+  if (options.visitorIp) headers[CLIENT_IP_HEADER] = options.visitorIp;
   let response: Response;
   try {
     response = await doFetch(`${options.url}/api/v1/product-images/${imageId}/${size}`, {

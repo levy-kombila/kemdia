@@ -164,6 +164,7 @@ export const AUDIT_ACTIONS = [
   "product.variant_updated",
   // Photos (S6-T04)
   "product.image_removed",
+  "product.images_reordered",
   // Double authentification de l'équipe (S6-T03)
   "mfa.enabled",
   "mfa.recovery_used",

@@ -83,10 +83,16 @@ export class VendorProductImageController {
     @CurrentSession() session: AuthenticatedSession,
     @Param({ schema: VendorProductIdParamsSchema }) params: ProductParams,
     @Body({ schema: ProductImageOrderRequestSchema }) body: ProductImageOrderRequest,
+    @Req() req: Request,
   ): Promise<VendorProduct> {
     return presentVendorProduct(
       await withVendorsErrors(() =>
-        this.products.reorderImages(session.account.id, params.productId, body.images),
+        this.products.reorderImages(
+          session.account.id,
+          params.productId,
+          body.images,
+          auditContextOf(req),
+        ),
       ),
     );
   }

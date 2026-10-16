@@ -6485,7 +6485,7 @@
             }
           },
           "413": {
-            "description": "Fichier de plus de 5 Mo (`IMAGE_TROP_GRANDE`), ou image de plus de 40 mégapixels",
+            "description": "Fichier de plus de 5 Mo, image de plus de 40 mégapixels ou trop longue à traiter (`IMAGE_TROP_GRANDE`)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -6516,6 +6516,16 @@
           },
           "429": {
             "description": "Trop de requêtes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Trop d'envois de photos en même temps sur toute l'API : réessayer après `Retry-After` secondes",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7268,6 +7278,7 @@
               "product.archived",
               "product.variant_updated",
               "product.image_removed",
+              "product.images_reordered",
               "mfa.enabled",
               "mfa.recovery_used",
               "mfa.recovery_regenerated",

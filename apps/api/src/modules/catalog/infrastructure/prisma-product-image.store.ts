@@ -27,6 +27,13 @@ export class PrismaProductImageStore implements ProductImageStore {
     });
   }
 
+  async describe(imageId: string): Promise<{ productId: string; sha256: string } | null> {
+    return this.tx.db.productImage.findUnique({
+      where: { id: imageId },
+      select: { productId: true, sha256: true },
+    });
+  }
+
   async read(imageId: string, size: ImageSize): Promise<StoredImage | null> {
     // Une seule taille lue : la vignette d'une liste ne charge pas la grande image
     const row = await this.tx.db.productImage.findUnique({
@@ -50,7 +57,7 @@ export class PrismaProductImageStore implements ProductImageStore {
     };
   }
 
-  async delete(imageId: string): Promise<void> {
-    await this.tx.db.productImage.deleteMany({ where: { id: imageId } });
+  async delete(imageId: string, productId: string): Promise<void> {
+    await this.tx.db.productImage.deleteMany({ where: { id: imageId, productId } });
   }
 }

@@ -85,10 +85,6 @@ function setup(shop: Shop | null) {
       return Promise.resolve(shop && shop.ownerAccountId === owner ? shop : null);
     },
     findById: (id: string) => Promise.resolve(shop?.id === id ? shop : null),
-    findByOwner: (owner: string) => {
-      calls.push(`lecture ${owner}`);
-      return Promise.resolve(shop && shop.ownerAccountId === owner ? shop : null);
-    },
   } as unknown as ShopRepository;
   const tx: VendorsTransaction = { run: (work) => work() };
   const record = { record: (entry: AuditEntry) => Promise.resolve(void audit.push(entry)) };
@@ -120,7 +116,11 @@ function setup(shop: Shop | null) {
         imageId: IMAGE,
       });
     },
-    removeImage: () => Promise.resolve(product("PUBLISHED")),
+    checkImageRoom: () => {
+      calls.push("vérifier la place");
+      return Promise.resolve();
+    },
+    removeImage: () => Promise.resolve({ after: product("PUBLISHED"), sha256: "b".repeat(64) }),
     reorderImages: () => Promise.resolve(product("PUBLISHED")),
     ownImage: () => Promise.resolve(STORED),
   };
@@ -203,12 +203,13 @@ describe("VendorProductService (S6-T02)", () => {
 });
 
 describe("VendorProductService — photos (S6-T04)", () => {
-  it("ajout : boutique vérifiée, réencodage HORS transaction, puis rangement sous verrou et envoi en modération tracé", async () => {
+  it("ajout : vérification rapide, réencodage HORS transaction, puis rangement sous verrou ; photo tracée (id, empreinte)", async () => {
     const { vendor, audit, calls } = setup(shopOf("active"));
     const after = await vendor.addImage(AWA, PRODUCT, new Uint8Array([1, 2, 3]), CTX);
     expect(after.status).toBe("PENDING");
     expect(calls).toEqual([
-      `lecture ${AWA}`,
+      `verrou partagé ${AWA}`,
+      "vérifier la place",
       "réencodage",
       `verrou partagé ${AWA}`,
       "ranger la photo",
@@ -218,7 +219,13 @@ describe("VendorProductService — photos (S6-T04)", () => {
         action: "product.submitted",
         actor: { type: "account", id: AWA },
         target: { type: "product", id: PRODUCT },
-        details: { title: "Pagne wax 6 yards", reason: "photo", from: "published" },
+        details: {
+          title: "Pagne wax 6 yards",
+          reason: "photo",
+          from: "published",
+          image: IMAGE,
+          sha256: "a".repeat(64),
+        },
         context: CTX,
       },
     ]);
@@ -235,7 +242,7 @@ describe("VendorProductService — photos (S6-T04)", () => {
     }
   });
 
-  it("retrait : tracé au journal avec l'identifiant de la photo (en minuscules)", async () => {
+  it("retrait : tracé au journal avec l'identifiant de la photo (en minuscules) et son empreinte", async () => {
     const { vendor, audit } = setup(shopOf("active"));
     await vendor.removeImage(AWA, PRODUCT, IMAGE.toUpperCase(), CTX);
     expect(audit).toEqual([
@@ -243,17 +250,19 @@ describe("VendorProductService — photos (S6-T04)", () => {
         action: "product.image_removed",
         actor: { type: "account", id: AWA },
         target: { type: "product", id: PRODUCT },
-        details: { title: "Pagne wax 6 yards", image: IMAGE },
+        details: { title: "Pagne wax 6 yards", image: IMAGE, sha256: "b".repeat(64) },
         context: CTX,
       },
     ]);
   });
 
-  it("nouvel ordre et aperçu : sans journal, mais toujours réservés à une boutique active", async () => {
+  it("nouvel ordre tracé ; aperçu sans journal ; toujours réservés à une boutique active", async () => {
     const { vendor, audit } = setup(shopOf("active"));
-    await vendor.reorderImages(AWA, PRODUCT, [IMAGE]);
+    await vendor.reorderImages(AWA, PRODUCT, [IMAGE], CTX);
     expect((await vendor.image(AWA, PRODUCT, IMAGE, "large")).id).toBe(IMAGE);
-    expect(audit).toEqual([]);
+    expect(audit.map((e) => [e.action, e.details])).toEqual([
+      ["product.images_reordered", { title: "Pagne wax 6 yards" }],
+    ]);
     const { vendor: suspended } = setup(shopOf("suspended"));
     expect(await codeOf(suspended.image(AWA, PRODUCT, IMAGE, "large"))).toBe("BOUTIQUE_INACTIVE");
   });

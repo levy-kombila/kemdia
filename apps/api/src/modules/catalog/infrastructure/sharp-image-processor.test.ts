@@ -35,6 +35,24 @@ describe("SharpImageProcessor : réencodage des photos (S6-T04)", () => {
     expect(image.sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it("la vignette est tirée de la grande image (celle que voit la modération)", async () => {
+    const photo = await solid(3200, 3200).png().toBuffer();
+    const image = await processor.process(new Uint8Array(photo));
+    const fromLarge = await sharp(Buffer.from(image.large))
+      .resize({ width: 480, height: 480, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 75, effort: 4 })
+      .toBuffer();
+    expect(Buffer.from(image.small).equals(fromLarge)).toBe(true);
+  });
+
+  it("deux réencodages à la fois au plus : les envois suivants attendent leur tour, sans échouer", async () => {
+    const photo = await solid(1200, 900).jpeg().toBuffer();
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () => processor.process(new Uint8Array(photo))),
+    );
+    expect(results.map((r) => r.width)).toEqual([1200, 1200, 1200, 1200, 1200, 1200]);
+  });
+
   it("jamais agrandie : une petite photo garde sa taille", async () => {
     const png = await solid(400, 300).png().toBuffer();
     const image = await processor.process(new Uint8Array(png));
