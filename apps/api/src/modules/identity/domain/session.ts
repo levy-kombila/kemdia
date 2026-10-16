@@ -19,6 +19,8 @@ export interface Session {
   userAgent: string | null;
   /** Version du mot de passe à l'ouverture (ADR-0018) */
   passwordVersion: number;
+  /** Dernière confirmation par la double authentification (S6-T03) ; vide : jamais confirmée */
+  secondFactorAt: Date | null;
   createdAt: Date;
 }
 

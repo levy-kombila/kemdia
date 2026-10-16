@@ -21,7 +21,19 @@ export type IdentityErrorCode =
   | "COMPTE_INTROUVABLE"
   | "COMPTE_INACTIF"
   // Limites par compte (S4-T07, ADR-0021)
-  | "TROP_DE_REQUETES";
+  | "TROP_DE_REQUETES"
+  // Double authentification de l'équipe (S6-T03, ADR-0034, MED-15)
+  /** Mot de passe redemandé (QR code) incorrect. */
+  | "MOT_DE_PASSE_INCORRECT"
+  /** Clé TOTP_ENCRYPTION_KEY absente sur ce serveur : la double authentification n'y fonctionne pas. */
+  | "DEUX_FACTEURS_INDISPONIBLE"
+  /** Premier code envoyé avant d'avoir affiché le QR code. */
+  | "DEUX_FACTEURS_A_CONFIGURER"
+  | "DEUX_FACTEURS_DEJA_ACTIVE"
+  /** Route d'équipe : la double authentification n'est pas encore activée sur ce compte. */
+  | "DEUX_FACTEURS_A_ACTIVER"
+  /** Route d'équipe : session pas (ou plus) confirmée par un code depuis 15 minutes. */
+  | "DEUX_FACTEURS_REQUIS";
 
 /** Une règle de l'identité n'est pas respectée. Le message est lisible par un humain, en français. */
 export class IdentityError extends Error {

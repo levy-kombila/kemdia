@@ -21,6 +21,13 @@ const STATUS: Record<IdentityErrorCode, number> = {
   ACCES_REFUSE: HttpStatus.FORBIDDEN,
   // 403 et non 401 : la session est valable, mais trop ancienne pour une action d'administration
   RECONNEXION_REQUISE: HttpStatus.FORBIDDEN,
+  // Double authentification de l'équipe (S6-T03)
+  MOT_DE_PASSE_INCORRECT: HttpStatus.UNPROCESSABLE_ENTITY,
+  DEUX_FACTEURS_INDISPONIBLE: HttpStatus.SERVICE_UNAVAILABLE,
+  DEUX_FACTEURS_A_CONFIGURER: HttpStatus.CONFLICT,
+  DEUX_FACTEURS_DEJA_ACTIVE: HttpStatus.CONFLICT,
+  DEUX_FACTEURS_A_ACTIVER: HttpStatus.FORBIDDEN,
+  DEUX_FACTEURS_REQUIS: HttpStatus.FORBIDDEN,
   ROLE_NON_ATTRIBUABLE: HttpStatus.FORBIDDEN,
   ROLE_SUR_SOI_INTERDIT: HttpStatus.FORBIDDEN,
   COMPTE_INTROUVABLE: HttpStatus.NOT_FOUND,

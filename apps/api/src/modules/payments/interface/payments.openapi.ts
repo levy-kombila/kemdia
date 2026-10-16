@@ -25,7 +25,7 @@ const session = {
 const admin = {
   "401": problem("`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé"),
   "403": problem(
-    "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+    "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
   ),
   "429": problem("Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)"),
 };
@@ -39,9 +39,9 @@ const SANDBOX_RULES =
 const INVOICE_RULES =
   "Facture établie quand le paiement est reçu (Mobile Money confirmé, ou espèces encaissées) ; **avoir** du même montant si la commande facturée est annulée. Numéros par année, sans trou. Seul le client de la commande y a accès. Aussi envoyée par e-mail (PDF joint) à l'adresse vérifiée du compte.";
 const BILLING_RULES =
-  "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes** ; chaque changement au journal d'audit. Raison sociale, adresse, NIF, RCCM, mention de TVA : copiés et **figés** dans chaque nouvelle facture (une facture émise ne change jamais).";
+  "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes ; chaque changement au journal d'audit. Raison sociale, adresse, NIF, RCCM, mention de TVA : copiés et **figés** dans chaque nouvelle facture (une facture émise ne change jamais).";
 const ADMIN_RULES =
-  "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque action est inscrite au journal d'audit.";
+  "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque action est inscrite au journal d'audit.";
 
 export const paymentPaths = {
   "/api/v1/orders/{reference}/payments": {

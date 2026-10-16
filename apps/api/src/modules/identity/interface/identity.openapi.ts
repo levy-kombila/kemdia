@@ -40,6 +40,12 @@ const userAgent = {
 const bearer = [{ session: [] }];
 const sessionRefused = problem("`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé");
 
+const SECOND_FACTOR_RULES =
+  "Application d'authentification (TOTP, 6 chiffres, 30 s). Obligatoire pour les **modérateurs et administrateurs** : leurs routes d'équipe exigent une session confirmée par un code il y a moins de 15 minutes. **3 mots de passe ou codes faux** : la session est fermée et les codes bloqués 15 minutes ; le titulaire reçoit un avis de sécurité.";
+const secondFactorTooMany = problem(
+  "`TROP_D_ESSAIS` (3 échecs : session fermée, 15 minutes) ou `TROP_DE_REQUETES` (limite par compte)",
+);
+
 export const identityPaths = {
   "/api/v1/auth/signup": {
     post: {
@@ -205,6 +211,106 @@ export const identityPaths = {
           "`MOT_DE_PASSE_FAIBLE` (le code n'est alors pas consommé) ou `CODE_INVALIDE`",
         ),
         "429": tooMany,
+      },
+    },
+  },
+
+  // --- Double authentification de l'équipe (S6-T03, ADR-0034, MED-15) ---
+  "/api/v1/auth/2fa": {
+    get: {
+      tags: ["Double authentification"],
+      summary: "État de la double authentification du compte connecté",
+      operationId: "secondFactorStatus",
+      security: bearer,
+      responses: {
+        "200": json(
+          "SecondFactorStatus",
+          "Activée ? obligatoire ? session confirmée jusqu'à quand ?",
+        ),
+        "401": sessionRefused,
+      },
+    },
+  },
+  "/api/v1/auth/2fa/setup": {
+    post: {
+      tags: ["Double authentification"],
+      summary: "Afficher le QR code (contre le mot de passe du compte)",
+      description: `${SECOND_FACTOR_RULES}\n\nModérateurs et administrateurs seulement. Refait autant de fois que voulu tant que la double authentification n'est pas activée.`,
+      operationId: "secondFactorSetup",
+      security: bearer,
+      requestBody: body("SecondFactorSetupRequest"),
+      responses: {
+        "200": json("SecondFactorSetup", "Secret à ajouter à l'application (QR code ou saisie)"),
+        "400": invalidBody,
+        "401": sessionRefused,
+        "403": problem("`ACCES_REFUSE` : réservé à l'équipe (modérateurs et administrateurs)"),
+        "409": problem("`DEUX_FACTEURS_DEJA_ACTIVE`"),
+        "422": problem("`MOT_DE_PASSE_INCORRECT`"),
+        "429": secondFactorTooMany,
+        "503": problem(
+          "`DEUX_FACTEURS_INDISPONIBLE` : clé `TOTP_ENCRYPTION_KEY` absente sur ce serveur",
+        ),
+      },
+    },
+  },
+  "/api/v1/auth/2fa/enable": {
+    post: {
+      tags: ["Double authentification"],
+      summary:
+        "Premier code : active la double authentification (10 codes de secours, donnés une fois)",
+      description: SECOND_FACTOR_RULES,
+      operationId: "secondFactorEnable",
+      security: bearer,
+      requestBody: body("SecondFactorCodeRequest"),
+      responses: {
+        "200": json("SecondFactorEnabled", "Activée ; session confirmée pour 15 minutes"),
+        "400": invalidBody,
+        "401": sessionRefused,
+        "403": problem("`ACCES_REFUSE` : réservé à l'équipe"),
+        "409": problem(
+          "`DEUX_FACTEURS_A_CONFIGURER` (afficher d'abord le QR code) ou `DEUX_FACTEURS_DEJA_ACTIVE`",
+        ),
+        "422": problem("`CODE_INVALIDE`"),
+        "429": secondFactorTooMany,
+        "503": problem("`DEUX_FACTEURS_INDISPONIBLE`"),
+      },
+    },
+  },
+  "/api/v1/auth/2fa/verify": {
+    post: {
+      tags: ["Double authentification"],
+      summary: "Confirmer la session pour 15 minutes (code de l'application ou code de secours)",
+      description: `${SECOND_FACTOR_RULES}\n\nUn code de l'application ne sert qu'une fois ; un code de secours aussi.`,
+      operationId: "secondFactorVerify",
+      security: bearer,
+      requestBody: body("SecondFactorCodeRequest"),
+      responses: {
+        "200": json("SecondFactorVerified", "Session confirmée pour 15 minutes"),
+        "400": invalidBody,
+        "401": sessionRefused,
+        "403": problem("`DEUX_FACTEURS_A_ACTIVER`"),
+        "422": problem("`CODE_INVALIDE`"),
+        "429": secondFactorTooMany,
+        "503": problem("`DEUX_FACTEURS_INDISPONIBLE`"),
+      },
+    },
+  },
+  "/api/v1/auth/2fa/recovery-codes": {
+    post: {
+      tags: ["Double authentification"],
+      summary: "Nouveaux codes de secours (contre un code frais de l'application)",
+      description: `${SECOND_FACTOR_RULES}\n\nLes anciens codes de secours ne servent plus. Un code de secours n'est pas accepté ici.`,
+      operationId: "secondFactorRecoveryCodes",
+      security: bearer,
+      requestBody: body("SecondFactorCodeRequest"),
+      responses: {
+        "200": json("RecoveryCodes", "Les 10 nouveaux codes, donnés une fois"),
+        "400": invalidBody,
+        "401": sessionRefused,
+        "403": problem("`DEUX_FACTEURS_A_ACTIVER`"),
+        "422": problem("`CODE_INVALIDE`"),
+        "429": secondFactorTooMany,
+        "503": problem("`DEUX_FACTEURS_INDISPONIBLE`"),
       },
     },
   },

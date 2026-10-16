@@ -44,11 +44,11 @@ type ProductParams = { productId: string };
 
 /**
  * Modération des produits des vendeurs (`/api/v1/moderation/products`, S6-T02, ADR-0033 ; BR-003). Modérateurs et
- * administrateurs, connexion de moins de 15 minutes, 30 requêtes par minute par adresse et par compte, jamais mis en
+ * administrateurs, double authentification confirmée depuis moins de 15 minutes (S6-T03), 30 requêtes par minute par adresse et par compte, jamais mis en
  * cache ; chaque décision au journal d'audit. Écrans plus tard au S6.
  */
 @Controller("moderation/products")
-@Authorize("moderator", { recentLogin: true })
+@Authorize("moderator", { secondFactor: true })
 @Throttle({ default: { limit: 30, ttl: 60_000 } })
 @AccountRateLimit(30)
 export class ModerationController {

@@ -27,6 +27,7 @@ import {
   type OtpMessage,
   type OtpRandom,
   type OtpSender,
+  type SecondFactorEvent,
 } from "./ports.js";
 
 export interface IssuedOtp {
@@ -160,6 +161,13 @@ export class OtpService {
     const channel = channelOf(identifier);
     if (!this.availableChannels().includes(channel)) return;
     this.deliver({ kind: "password-changed", channel, to: identifier.value }, identifier);
+  }
+
+  /** Avis de sécurité de la double authentification (S6-T03) : activation, nouveaux codes, blocage, remise à zéro. */
+  notifySecondFactor(identifier: Identifier, event: SecondFactorEvent): void {
+    const channel = channelOf(identifier);
+    if (!this.availableChannels().includes(channel)) return;
+    this.deliver({ kind: "second-factor", event, channel, to: identifier.value }, identifier);
   }
 
   /** Envoi en arrière-plan ; un échec est journalisé (sans clé ni contenu), jamais renvoyé à l'appelant. */

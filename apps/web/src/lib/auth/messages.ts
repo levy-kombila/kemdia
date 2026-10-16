@@ -33,6 +33,14 @@ const MESSAGES: Record<AuthErrorCode, string> = {
   COMPTE_INTROUVABLE: "Aucun compte ne correspond.",
   COMPTE_INACTIF: "Ce compte n'est pas actif.",
   TROP_DE_REQUETES: "Trop de demandes. Patientez un instant avant de réessayer.",
+  // Double authentification de l'équipe (S6-T03) : écrans plus tard au S6, messages prêts
+  MOT_DE_PASSE_INCORRECT: "Mot de passe incorrect.",
+  DEUX_FACTEURS_INDISPONIBLE:
+    "La double authentification n'est pas disponible pour le moment. Contactez l'administrateur.",
+  DEUX_FACTEURS_A_CONFIGURER: "Commencez par afficher le QR code de la double authentification.",
+  DEUX_FACTEURS_DEJA_ACTIVE: "La double authentification est déjà activée sur ce compte.",
+  DEUX_FACTEURS_A_ACTIVER: "Activez la double authentification de votre compte pour continuer.",
+  DEUX_FACTEURS_REQUIS: "Par sécurité, saisissez le code de votre application d'authentification.",
   INDISPONIBLE: "Service momentanément indisponible. Réessayez dans quelques instants.",
 };
 

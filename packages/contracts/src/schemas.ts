@@ -41,6 +41,8 @@ import {
   SHOP_PAGE_DEFAULT,
   SHOP_PAGE_MAX,
   SHOP_STATUSES,
+  RECOVERY_CODE_COUNT,
+  RECOVERY_CODE_PATTERN,
   VENDOR_PRODUCT_LIMITS,
   VENDOR_PRODUCT_PAGE_DEFAULT,
   VENDOR_PRODUCT_PAGE_MAX,
@@ -1444,6 +1446,82 @@ export const ProductModerationReasonSchema = z
     description: "Refus de la version lue par le modérateur, avec un motif",
   });
 export type ProductModerationReason = z.infer<typeof ProductModerationReasonSchema>;
+
+// --- Double authentification de l'équipe (S6-T03, ADR-0034, MED-15) ---
+
+export const SecondFactorStatusSchema = z
+  .object({
+    enabled: z.boolean().describe("Activée sur ce compte"),
+    required: z.boolean().describe("Obligatoire pour ce compte (modérateur ou administrateur)"),
+    verifiedUntil: z.iso
+      .datetime()
+      .nullable()
+      .describe("Session confirmée jusqu'à cette heure ; vide : routes d'équipe fermées"),
+    recoveryCodesLeft: z.int().nonnegative().describe("Codes de secours encore utilisables"),
+  })
+  .meta({ id: "SecondFactorStatus", description: "Double authentification du compte connecté" });
+export type SecondFactorStatus = z.infer<typeof SecondFactorStatusSchema>;
+
+export const SecondFactorSetupRequestSchema = z
+  .strictObject({
+    password: z
+      .string()
+      .max(200)
+      .describe("Mot de passe du compte (une session volée ne suffit pas)"),
+  })
+  .meta({
+    id: "SecondFactorSetupRequest",
+    description: "Afficher le QR code de la double authentification",
+  });
+export type SecondFactorSetupRequest = z.infer<typeof SecondFactorSetupRequestSchema>;
+
+export const SecondFactorSetupSchema = z
+  .object({
+    secret: z
+      .string()
+      .regex(/^[A-Z2-7]{32}$/)
+      .describe("Secret en base32, à taper si le QR code ne passe pas"),
+    otpauthUri: z.string().startsWith("otpauth://totp/").describe("Contenu du QR code"),
+  })
+  .meta({
+    id: "SecondFactorSetup",
+    description: "Secret à ajouter à l'application d'authentification",
+  });
+export type SecondFactorSetup = z.infer<typeof SecondFactorSetupSchema>;
+
+export const SecondFactorCodeRequestSchema = z
+  .strictObject({
+    code: z
+      .string()
+      .max(30)
+      .describe("Code à 6 chiffres de l'application, ou code de secours « abcd-efgh-jkmn »"),
+  })
+  .meta({ id: "SecondFactorCodeRequest", description: "Un code de double authentification" });
+export type SecondFactorCodeRequest = z.infer<typeof SecondFactorCodeRequestSchema>;
+
+const recoveryCodes = z
+  .array(z.string().regex(RECOVERY_CODE_PATTERN))
+  .length(RECOVERY_CODE_COUNT)
+  .describe("Codes de secours, donnés UNE seule fois : à noter et ranger hors du téléphone");
+
+export const SecondFactorEnabledSchema = z
+  .object({ recoveryCodes, verifiedUntil: z.iso.datetime() })
+  .meta({
+    id: "SecondFactorEnabled",
+    description: "Double authentification activée, session confirmée",
+  });
+export type SecondFactorEnabled = z.infer<typeof SecondFactorEnabledSchema>;
+
+export const SecondFactorVerifiedSchema = z
+  .object({ verifiedUntil: z.iso.datetime(), recoveryCodesLeft: z.int().nonnegative() })
+  .meta({ id: "SecondFactorVerified", description: "Session confirmée pour 15 minutes" });
+export type SecondFactorVerified = z.infer<typeof SecondFactorVerifiedSchema>;
+
+export const RecoveryCodesSchema = z.object({ recoveryCodes }).meta({
+  id: "RecoveryCodes",
+  description: "Nouveaux codes de secours (les anciens ne servent plus)",
+});
+export type RecoveryCodes = z.infer<typeof RecoveryCodesSchema>;
 
 type JsonSchema = Record<string, unknown>;
 

@@ -56,11 +56,11 @@ function present(coupon: Coupon): CouponView {
 
 /**
  * Administration des coupons (`/api/v1/admin/coupons`, S5-T03, ADR-0025). Mêmes protections que les autres routes
- * d'administration (ADR-0020) : administrateur, connexion de moins de 15 minutes, 30 requêtes par minute par adresse
+ * d'administration (ADR-0020) : administrateur, double authentification confirmée depuis moins de 15 minutes (S6-T03), 30 requêtes par minute par adresse
  * et par compte, jamais mis en cache, chaque changement au journal d'audit. Écrans au S6.
  */
 @Controller("admin/coupons")
-@Authorize("admin", { recentLogin: true })
+@Authorize("admin", { secondFactor: true })
 @Throttle({ default: { limit: 30, ttl: 60_000 } })
 @AccountRateLimit(30)
 export class CouponController {

@@ -44,6 +44,7 @@ import { InvoiceService } from "../src/modules/payments/application/invoice.serv
 import type { InvoiceRecord } from "../src/modules/payments/domain/invoice.js";
 import { InvoiceEmailScheduler } from "../src/modules/payments/infrastructure/invoice-emails.js";
 import { testDatabaseUrl } from "./integration-db.js";
+import { confirmSecondFactor } from "./second-factor-helper.js";
 
 /**
  * Factures et avoirs sur une VRAIE base (S5-T06, ADR-0028), par HTTP : facture au paiement reçu (Mobile Money,
@@ -166,6 +167,8 @@ describe("Factures (PostgreSQL, HTTP)", () => {
     await new PrismaAccountRepository(prisma).save(account);
     if (role) await prisma.accountRole.create({ data: { accountId: account.id, role } });
     const opened = await app.get(SessionService).open(account);
+    // Compte d'équipe : session confirmée par la double authentification (S6-T03)
+    if (role) await confirmSecondFactor(prisma, account.id);
     return { token: opened.token, accountId: account.id, email };
   }
 

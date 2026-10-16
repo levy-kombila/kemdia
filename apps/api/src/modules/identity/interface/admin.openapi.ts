@@ -14,12 +14,12 @@ const bearer = [{ session: [] }];
 const common = {
   "401": problem("`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé"),
   "403": problem(
-    "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+    "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
   ),
   "429": problem("Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)"),
 };
 const RULES = [
-  "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes** (sinon `RECONNEXION_REQUISE` : se reconnecter).",
+  "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes (sinon `DEUX_FACTEURS_REQUIS` : redonner un code).",
   "Les rôles sont relus à chaque requête : un rôle retiré ne sert plus, tout de suite.",
 ].join("\n\n");
 

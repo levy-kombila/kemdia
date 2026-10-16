@@ -46,21 +46,23 @@ enum Role {
 /// Compte client (FR-001). Mot de passe : hachage Argon2id uniquement.
 model Account {
   /// BR-042 : identifiant public UUID
-  id              String        @id @db.Uuid
-  firstName       String        @map("first_name") @db.VarChar(60)
-  lastName        String        @map("last_name") @db.VarChar(60)
-  email           String?       @unique @db.VarChar(254)
-  phone           String?       @unique @db.VarChar(13)
-  passwordHash    String        @map("password_hash") @db.VarChar(255)
-  passwordVersion Int           @default(0) @map("password_version")
-  status          AccountStatus @default(PENDING)
-  emailVerifiedAt DateTime?     @map("email_verified_at") @db.Timestamptz(3)
-  phoneVerifiedAt DateTime?     @map("phone_verified_at") @db.Timestamptz(3)
+  id              String         @id @db.Uuid
+  firstName       String         @map("first_name") @db.VarChar(60)
+  lastName        String         @map("last_name") @db.VarChar(60)
+  email           String?        @unique @db.VarChar(254)
+  phone           String?        @unique @db.VarChar(13)
+  passwordHash    String         @map("password_hash") @db.VarChar(255)
+  passwordVersion Int            @default(0) @map("password_version")
+  status          AccountStatus  @default(PENDING)
+  emailVerifiedAt DateTime?      @map("email_verified_at") @db.Timestamptz(3)
+  phoneVerifiedAt DateTime?      @map("phone_verified_at") @db.Timestamptz(3)
   sessions        Session[]
   resetTickets    ResetTicket[]
   roles           AccountRole[]
-  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  secondFactor    SecondFactor?
+  recoveryCodes   RecoveryCode[]
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@map("accounts")
   @@schema("identity")
@@ -144,6 +146,8 @@ model Session {
   expiresAt       DateTime  @map("expires_at") @db.Timestamptz(3)
   lastSeenAt      DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(3)
   revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(3)
+  /// Dernière confirmation par la double authentification (S6-T03, MED-15) : routes d'équipe pendant 15 minutes
+  secondFactorAt  DateTime? @map("second_factor_at") @db.Timestamptz(3)
   /// Navigateur résumé (« Chrome sur Android »), pour la liste des appareils connectés
   userAgent       String?   @map("user_agent") @db.VarChar(200)
   passwordVersion Int       @default(0) @map("password_version")
@@ -167,5 +171,40 @@ model AccountRole {
   @@id([accountId, role])
   @@index([role])
   @@map("account_roles")
+  @@schema("identity")
+}
+
+/// Double authentification d'un membre de l'équipe (S6-T03, ADR-0034, MED-15) : secret TOTP chiffré (AES-256-GCM).
+/// Règles posées en SQL : taille et version de la boîte, période utilisée qui ne recule jamais.
+model SecondFactor {
+  accountId    String    @id @map("account_id") @db.Uuid
+  account      Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// Version de clé (1) ‖ vecteur d'initialisation (12) ‖ étiquette (16) ‖ secret chiffré (20)
+  secretBox    Bytes     @map("secret_box")
+  /// Vide tant que le premier code n'a pas été donné
+  enabledAt    DateTime? @map("enabled_at") @db.Timestamptz(3)
+  /// Dernière période de 30 s utilisée : un code ne sert qu'une fois
+  lastUsedStep BigInt?   @map("last_used_step")
+  /// Échecs (mot de passe ou code faux) depuis `failedSince`, sur 24 heures : jamais remis à zéro par une réussite
+  failedCount  Int       @default(0) @map("failed_count")
+  failedSince  DateTime? @map("failed_since") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("second_factors")
+  @@schema("identity")
+}
+
+/// Code de secours à usage unique (S6-T03) : seule son empreinte SHA-256 (liée au compte) est gardée.
+model RecoveryCode {
+  id        String    @id @db.Uuid
+  accountId String    @map("account_id") @db.Uuid
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  codeHash  String    @unique @map("code_hash") @db.Char(64)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([accountId])
+  @@map("recovery_codes")
   @@schema("identity")
 }

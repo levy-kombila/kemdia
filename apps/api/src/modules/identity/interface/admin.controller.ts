@@ -74,13 +74,13 @@ export function decodeCursor(raw: string): AuditCursor {
 /**
  * Administration (S4-T06, ADR-0020) : rôles des comptes et lecture du journal d'audit.
  *
- * - Réservé aux administrateurs, avec une connexion de moins de 15 minutes (`@Authorize`).
+ * - Réservé aux administrateurs, avec une double authentification confirmée depuis moins de 15 minutes (S6-T03) (`@Authorize`).
  * - Le rôle `admin` ne s'accorde jamais ici (commande serveur `admin:grant`) ; personne ne change ses propres rôles.
  * - Jamais mis en cache ; limite de 30 requêtes par minute, par adresse ET par compte.
  * - Les écrans d'administration du site arrivent au S6 avec la double authentification (MED-15).
  */
 @Controller("admin")
-@Authorize("admin", { recentLogin: true })
+@Authorize("admin", { secondFactor: true })
 @Throttle({ default: { limit: 30, ttl: 60_000 } })
 // Aussi par compte (S4-T07) : la limite par adresse ne s'applique pas aux appels du site sans visiteur
 @AccountRateLimit(30)

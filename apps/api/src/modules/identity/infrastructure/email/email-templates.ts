@@ -29,6 +29,34 @@ function layout(title: string, paragraphs: string[], code?: string): string {
   ].join("");
 }
 
+/** Avis de sécurité de la double authentification (S6-T03). */
+const SECOND_FACTOR_NOTICES = {
+  setup: {
+    subject: "QR code de double authentification affiché",
+    body: "Un QR code de double authentification vient d'être affiché pour votre compte Kemdia, après saisie de votre mot de passe.",
+  },
+  "recovery-used": {
+    subject: "Code de secours utilisé sur votre compte Kemdia",
+    body: "Un de vos codes de secours vient d'être utilisé pour confirmer une session de votre compte Kemdia. Il ne servira plus.",
+  },
+  enabled: {
+    subject: "Double authentification activée sur votre compte Kemdia",
+    body: "La double authentification vient d'être activée sur votre compte Kemdia. Gardez vos codes de secours en lieu sûr, hors de votre téléphone.",
+  },
+  "recovery-regenerated": {
+    subject: "Nouveaux codes de secours Kemdia",
+    body: "De nouveaux codes de secours viennent d'être créés pour votre compte Kemdia. Les anciens ne fonctionnent plus.",
+  },
+  locked: {
+    subject: "Codes de double authentification refusés",
+    body: "Plusieurs codes de double authentification faux ont été saisis sur votre compte Kemdia. Par sécurité, des sessions ont été fermées et les codes sont bloqués 15 minutes.",
+  },
+  reset: {
+    subject: "Double authentification remise à zéro",
+    body: "La double authentification de votre compte Kemdia a été remise à zéro par l'exploitant, toutes vos sessions ont été fermées et votre mot de passe ne fonctionne plus. Choisissez-en un nouveau avec « Mot de passe oublié », puis réactivez la double authentification.",
+  },
+} as const;
+
 /** Contenu des e-mails, en français. Seules des valeurs produites par le serveur y figurent (aucune saisie de l'utilisateur). */
 export function renderEmail(message: OtpMessage): Email {
   if (message.kind === "signup-alert") {
@@ -42,6 +70,21 @@ export function renderEmail(message: OtpMessage): Email {
       subject: "Tentative d'inscription avec votre adresse",
       text: ["Kemdia", "", ...lines].join("\n"),
       html: layout("Tentative d'inscription avec votre adresse", lines),
+    };
+  }
+
+  if (message.kind === "second-factor") {
+    const notice = SECOND_FACTOR_NOTICES[message.event];
+    const lines = [
+      notice.body,
+      "Si c'est vous : vous n'avez rien à faire.",
+      "Si ce n'est pas vous : changez tout de suite votre mot de passe (« Mot de passe oublié » sur le site), puis prévenez l'administrateur de Kemdia.",
+    ];
+    return {
+      to: message.to,
+      subject: notice.subject,
+      text: ["Kemdia", "", ...lines].join("\n"),
+      html: layout(notice.subject, lines),
     };
   }
 

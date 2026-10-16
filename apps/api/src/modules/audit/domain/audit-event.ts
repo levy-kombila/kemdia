@@ -47,6 +47,18 @@ export const AUDIT_ACTIONS = [
   "product.archived",
   /** Prix, prix barré, stock ou activation d'une variante changés par le vendeur (détails : sku, avant / après) — S6-T02 */
   "product.variant_updated",
+  /** Double authentification activée par son titulaire (aucun détail) — S6-T03 */
+  "mfa.enabled",
+  /** Code de secours utilisé (détails : remaining) — S6-T03 */
+  "mfa.recovery_used",
+  /** Nouveaux codes de secours (aucun détail) — S6-T03 */
+  "mfa.recovery_regenerated",
+  /** Mot de passe ou code de double authentification faux (détails : attempts, today) — S6-T03 */
+  "mfa.failed",
+  /** 3 échecs en 15 min (session fermée) ou 10 en 24 h (toutes les sessions fermées) (détails : attempts, scope) — S6-T03 */
+  "mfa.locked",
+  /** Double authentification remise à zéro par la commande serveur (détails : source, sessionsClosed) — S6-T03 */
+  "mfa.reset",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

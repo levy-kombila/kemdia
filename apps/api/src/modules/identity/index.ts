@@ -14,6 +14,7 @@ export {
 } from "./interface/session.guard.js";
 export { Authorize, RoleGuard } from "./interface/role.guard.js";
 export { RoleService } from "./application/role.service.js";
+export { SecondFactorService } from "./application/second-factor.service.js";
 export { AccountDirectory, type AccountContact } from "./application/account-directory.service.js";
 export { ROLES, hasRole, type Role } from "./domain/role.js";
 export type { AccountView } from "./domain/account.js";

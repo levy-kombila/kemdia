@@ -7,7 +7,7 @@ import type { AuthenticatedSession } from "../application/session.service.js";
 import type { Role } from "../domain/role.js";
 import { Authorize, RoleGuard } from "./role.guard.js";
 
-@Authorize("admin", { recentLogin: true })
+@Authorize("admin", { secondFactor: true })
 class AdminOnly {
   list() {}
   /** Une règle plus faible sur la méthode ne doit PAS ouvrir la route */
@@ -25,20 +25,41 @@ class Mixed {
 }
 
 const clock = new FakeClock(new Date("2026-10-08T10:00:00Z"));
-const guard = new RoleGuard(new Reflector(), clock);
+/** Comptes dont la double authentification est activée (« a » : oui) */
+const enabled = new Set(["a"]);
+const guard = new RoleGuard(new Reflector(), clock, {
+  find: (accountId: string) =>
+    Promise.resolve(
+      enabled.has(accountId)
+        ? { accountId, secretBox: new Uint8Array(), enabledAt: new Date(), lastUsedStep: 1 }
+        : null,
+    ),
+});
 
 function contextFor(
   target: new () => object,
   method: string,
   roles: Role[] | null,
-  openedMinutesAgo = 1,
+  confirmedMinutesAgo: number | null = 1,
+  accountId = "a",
 ): ExecutionContext {
   const session: AuthenticatedSession | undefined = roles
     ? {
         sessionId: "s",
-        openedAt: new Date(clock.now().getTime() - openedMinutesAgo * 60_000),
+        openedAt: new Date(clock.now().getTime() - 60 * 60_000),
+        secondFactorAt:
+          confirmedMinutesAgo === null
+            ? null
+            : new Date(clock.now().getTime() - confirmedMinutesAgo * 60_000),
         expiresAt: new Date("2026-11-08T10:00:00Z"),
-        account: { id: "a", firstName: "Awa", lastName: "N", email: null, phone: null, roles },
+        account: {
+          id: accountId,
+          firstName: "Awa",
+          lastName: "N",
+          email: null,
+          phone: null,
+          roles,
+        },
       }
     : undefined;
   const handler = (target.prototype as Record<string, () => void>)[method]!;
@@ -54,11 +75,11 @@ const code = (status: number, value: string) =>
   expect.objectContaining({ code: value, status }) as unknown;
 
 describe("RoleGuard (S4-T06)", () => {
-  it("administrateur récemment connecté : accepté", async () => {
+  it("administrateur confirmé par la double authentification il y a moins de 15 minutes : accepté (S6-T03)", async () => {
     await expect(check(contextFor(AdminOnly, "list", ["client", "admin"]))).resolves.toBe(true);
   });
 
-  it("client ou modérateur : 403 ACCES_REFUSE ; connexion trop ancienne : 403 RECONNEXION_REQUISE", async () => {
+  it("client ou modérateur : 403 ACCES_REFUSE ; confirmation trop ancienne ou absente : 403 DEUX_FACTEURS_REQUIS ; pas activée : DEUX_FACTEURS_A_ACTIVER", async () => {
     await expect(check(contextFor(AdminOnly, "list", ["client"]))).rejects.toEqual(
       code(403, "ACCES_REFUSE"),
     );
@@ -66,7 +87,17 @@ describe("RoleGuard (S4-T06)", () => {
       code(403, "ACCES_REFUSE"),
     );
     await expect(check(contextFor(AdminOnly, "list", ["client", "admin"], 16))).rejects.toEqual(
-      code(403, "RECONNEXION_REQUISE"),
+      code(403, "DEUX_FACTEURS_REQUIS"),
+    );
+    await expect(check(contextFor(AdminOnly, "list", ["client", "admin"], null))).rejects.toEqual(
+      code(403, "DEUX_FACTEURS_REQUIS"),
+    );
+    await expect(
+      check(contextFor(AdminOnly, "list", ["client", "admin"], null, "sans-2fa")),
+    ).rejects.toEqual(code(403, "DEUX_FACTEURS_A_ACTIVER"));
+    // Date de confirmation dans le futur (horloge faussée) : refusée
+    await expect(check(contextFor(AdminOnly, "list", ["client", "admin"], -5))).rejects.toEqual(
+      code(403, "DEUX_FACTEURS_REQUIS"),
     );
   });
 
@@ -75,7 +106,7 @@ describe("RoleGuard (S4-T06)", () => {
       code(403, "ACCES_REFUSE"),
     );
     await expect(check(contextFor(AdminOnly, "weaker", ["client", "admin"], 16))).rejects.toEqual(
-      code(403, "RECONNEXION_REQUISE"),
+      code(403, "DEUX_FACTEURS_REQUIS"),
     );
   });
 

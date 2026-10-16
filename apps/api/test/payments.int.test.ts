@@ -38,6 +38,7 @@ import {
 } from "../src/modules/payments/index.js";
 import { StalePaymentsScheduler } from "../src/modules/payments/infrastructure/stale-payments.js";
 import { testDatabaseUrl } from "./integration-db.js";
+import { confirmSecondFactor } from "./second-factor-helper.js";
 
 /**
  * Paiements sur une VRAIE base (S5-T04, ADR-0026), par HTTP : essais Mobile Money (3 au plus, résultat de l'opérateur),
@@ -155,6 +156,8 @@ describe("Paiements (PostgreSQL, HTTP)", () => {
     await new PrismaAccountRepository(prisma).save(account);
     if (role) await prisma.accountRole.create({ data: { accountId: account.id, role } });
     const opened = await app.get(SessionService).open(account);
+    // Compte d'équipe : session confirmée par la double authentification (S6-T03)
+    if (role) await confirmSecondFactor(prisma, account.id);
     return { token: opened.token, accountId: account.id };
   }
 

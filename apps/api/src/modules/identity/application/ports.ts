@@ -122,6 +122,8 @@ export interface SessionRepository {
   revoke(id: string, now: Date): Promise<void>;
   /** Révoque toutes les sessions encore actives du compte ; renvoie leur nombre. */
   revokeAllForAccount(accountId: string, now: Date): Promise<number>;
+  /** La session vient d'être confirmée par la double authentification (S6-T03) ; sans effet si elle est fermée. */
+  confirmSecondFactor(id: string, now: Date): Promise<void>;
 }
 
 /** Ménage périodique : sessions, codes, tickets et compteurs périmés (rien d'utile n'est supprimé). */
@@ -144,7 +146,8 @@ export interface PasswordHasher {
  * Message envoyé à un identifiant :
  * - `code` : le code à usage unique ;
  * - `signup-alert` : « quelqu'un a essayé de créer un compte avec votre adresse » (elle a déjà un compte, ADR-0016) ;
- * - `password-changed` : « votre mot de passe vient d'être modifié » (S4-T04, ADR-0018).
+ * - `password-changed` : « votre mot de passe vient d'être modifié » (S4-T04, ADR-0018) ;
+ * - `second-factor` : avis de sécurité de la double authentification (S6-T03).
  */
 export type OtpMessage = {
   channel: OtpChannel;
@@ -154,6 +157,7 @@ export type OtpMessage = {
   | { kind: "code"; code: string; purpose: OtpPurpose }
   | { kind: "signup-alert" }
   | { kind: "password-changed" }
+  | { kind: "second-factor"; event: SecondFactorEvent }
 );
 
 /** Envoi des messages : console (développement), e-mail (S4-T02), SMS (quand le client aura choisi un fournisseur). */
@@ -197,4 +201,57 @@ export interface Clock {
 export interface IdentityOptions {
   /** `SMS_ENABLED` : le SMS n'est proposé qu'une fois un fournisseur branché (ADR-0015). */
   smsEnabled: boolean;
+}
+
+// --- Double authentification de l'équipe (S6-T03, ADR-0034, MED-15) ---
+
+export const SECOND_FACTOR_REPOSITORY = Symbol("SECOND_FACTOR_REPOSITORY");
+export const SECRET_BOX = Symbol("SECRET_BOX");
+
+/** Avis de sécurité envoyé au titulaire. */
+export type SecondFactorEvent =
+  "setup" | "enabled" | "recovery-used" | "recovery-regenerated" | "locked" | "reset";
+
+export interface SecondFactorRecord {
+  accountId: string;
+  /** Secret TOTP chiffré (`SecretBox`) */
+  secretBox: Uint8Array;
+  /** Vide tant que le premier code n'a pas été donné */
+  enabledAt: Date | null;
+  /** Dernière période de 30 s utilisée (un code ne sert qu'une fois) */
+  lastUsedStep: number | null;
+}
+
+/**
+ * Double authentification et codes de secours. Les écritures rejoignent la transaction en cours (activation, codes
+ * de secours, confirmation de la session et journal d'audit ensemble).
+ */
+export interface SecondFactorRepository {
+  find(accountId: string): Promise<SecondFactorRecord | null>;
+  /** Lit et verrouille jusqu'à la fin de la transaction (codes envoyés en même temps). */
+  lock(accountId: string): Promise<SecondFactorRecord | null>;
+  /** Nouveau secret en attente ; `false` si la double authentification est déjà activée (jamais remplacée). */
+  savePending(accountId: string, secretBox: Uint8Array, now: Date): Promise<boolean>;
+  enable(accountId: string, step: number, now: Date): Promise<boolean>;
+  /** Enregistre la période utilisée si elle est plus récente que la dernière ; `false` sinon (rejeu). */
+  useStep(accountId: string, step: number, now: Date): Promise<boolean>;
+  replaceRecoveryCodes(accountId: string, hashes: readonly string[], now: Date): Promise<void>;
+  /** Marque le code utilisé ; `false` s'il est inconnu ou déjà utilisé. */
+  useRecoveryCode(accountId: string, hash: string, now: Date): Promise<boolean>;
+  countUnusedRecoveryCodes(accountId: string): Promise<number>;
+  /**
+   * Compte un échec sur la fenêtre de 24 heures (repart de 1 si la fenêtre est passée) et renvoie le total. 0 si le
+   * compte n'a pas encore de double authentification (aucune ligne). Jamais remis à zéro par une réussite.
+   */
+  recordFailure(accountId: string, now: Date, windowMs: number): Promise<number>;
+  /** Supprime la double authentification et ses codes ; `false` s'il n'y en avait pas. */
+  remove(accountId: string): Promise<boolean>;
+}
+
+/** Chiffrement des secrets TOTP, lié au compte (le secret d'un compte ne s'ouvre pas pour un autre). */
+export interface SecretBox {
+  /** Clé configurée (sinon la double authentification est indisponible sur ce serveur) */
+  readonly available: boolean;
+  seal(plain: Uint8Array, accountId: string): Uint8Array;
+  open(box: Uint8Array, accountId: string): Uint8Array;
 }

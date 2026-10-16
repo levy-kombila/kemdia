@@ -8,6 +8,8 @@ import {
   type OtpSender,
   type PasswordResetChange,
   type ResetTicketRepository,
+  type SecondFactorRecord,
+  type SecondFactorRepository,
   type SessionRepository,
   type SignupTicketRepository,
   type GrantOutcome,
@@ -193,6 +195,77 @@ export class InMemorySessions implements SessionRepository {
     );
     rows.forEach((s) => (s.revokedAt = now));
     return Promise.resolve(rows.length);
+  }
+  confirmSecondFactor(id: string, now: Date): Promise<void> {
+    const row = this.rows.find((s) => s.id === id && s.revokedAt === null);
+    if (row) row.secondFactorAt = now;
+    return Promise.resolve();
+  }
+}
+
+/** Double authentification en mémoire (S6-T03) : mêmes règles que la base (période qui n'avance que, code utilisé une fois). */
+export class InMemorySecondFactors implements SecondFactorRepository {
+  rows = new Map<string, SecondFactorRecord>();
+  codes: { accountId: string; hash: string; usedAt: Date | null }[] = [];
+  find(accountId: string): Promise<SecondFactorRecord | null> {
+    const row = this.rows.get(accountId);
+    return Promise.resolve(row ? { ...row } : null);
+  }
+  lock(accountId: string): Promise<SecondFactorRecord | null> {
+    return this.find(accountId);
+  }
+  savePending(accountId: string, secretBox: Uint8Array): Promise<boolean> {
+    if (this.rows.get(accountId)?.enabledAt) return Promise.resolve(false);
+    this.rows.set(accountId, { accountId, secretBox, enabledAt: null, lastUsedStep: null });
+    return Promise.resolve(true);
+  }
+  enable(accountId: string, step: number, now: Date): Promise<boolean> {
+    const row = this.rows.get(accountId);
+    if (!row || row.enabledAt) return Promise.resolve(false);
+    Object.assign(row, { enabledAt: now, lastUsedStep: step });
+    return Promise.resolve(true);
+  }
+  useStep(accountId: string, step: number): Promise<boolean> {
+    const row = this.rows.get(accountId);
+    if (!row?.enabledAt || (row.lastUsedStep !== null && row.lastUsedStep >= step)) {
+      return Promise.resolve(false);
+    }
+    row.lastUsedStep = step;
+    return Promise.resolve(true);
+  }
+  replaceRecoveryCodes(accountId: string, hashes: readonly string[]): Promise<void> {
+    this.codes = this.codes
+      .filter((c) => c.accountId !== accountId)
+      .concat(hashes.map((hash) => ({ accountId, hash, usedAt: null })));
+    return Promise.resolve();
+  }
+  useRecoveryCode(accountId: string, hash: string, now: Date): Promise<boolean> {
+    const code = this.codes.find(
+      (c) => c.accountId === accountId && c.hash === hash && c.usedAt === null,
+    );
+    if (code) code.usedAt = now;
+    return Promise.resolve(Boolean(code));
+  }
+  countUnusedRecoveryCodes(accountId: string): Promise<number> {
+    return Promise.resolve(
+      this.codes.filter((c) => c.accountId === accountId && c.usedAt === null).length,
+    );
+  }
+  failures = new Map<string, { count: number; since: Date }>();
+  recordFailure(accountId: string, now: Date, windowMs: number): Promise<number> {
+    if (!this.rows.has(accountId)) return Promise.resolve(0);
+    const current = this.failures.get(accountId);
+    const next =
+      !current || current.since.getTime() <= now.getTime() - windowMs
+        ? { count: 1, since: now }
+        : { count: current.count + 1, since: current.since };
+    this.failures.set(accountId, next);
+    return Promise.resolve(next.count);
+  }
+  remove(accountId: string): Promise<boolean> {
+    this.codes = this.codes.filter((c) => c.accountId !== accountId);
+    this.failures.delete(accountId);
+    return Promise.resolve(this.rows.delete(accountId));
   }
 }
 
