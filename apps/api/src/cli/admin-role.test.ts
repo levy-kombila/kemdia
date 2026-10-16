@@ -65,4 +65,18 @@ describe("Commande admin-role (premier administrateur, S4-T06)", () => {
     await expect(h.run(["grant", "a@b.ga"], { DATABASE_URL: "mysql://x" })).resolves.toBe(1);
     expect(h.close).not.toHaveBeenCalled();
   });
+
+  it("échec au démarrage (base, module) : message clair, code 1, jamais de sortie silencieuse", async () => {
+    const err: string[] = [];
+    const code = await runAdminRole({
+      argv: ["grant", "awa@exemple.ga"],
+      env: { LOG_LEVEL: "silent" },
+      log: () => {},
+      error: (m) => err.push(m),
+      openService: () => Promise.reject(new Error("postgresql://u:secret@hote/base")),
+    });
+    expect(code).toBe(1);
+    expect(err.join()).toMatch(/Échec au démarrage : Error \(<adresse masquée>\)/);
+    expect(err.join()).not.toContain("secret");
+  });
 });

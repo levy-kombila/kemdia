@@ -1,12 +1,9 @@
 import "reflect-metadata";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { Module } from "@nestjs/common";
-import { NestFactory } from "@nestjs/core";
-import { ConfigModule } from "../config/config.module.js";
 import { ConfigError, loadConfig, type AppConfig } from "../config/env.js";
-import { DatabaseModule } from "../database/database.module.js";
-import { IdentityError, IdentityModule, SecondFactorService } from "../modules/identity/index.js";
+import { openIdentityCli, startupFailure } from "./cli-context.js";
+import { IdentityError, SecondFactorService } from "../modules/identity/index.js";
 
 /**
  * Commande serveur : remettre à zéro la double authentification d'un compte (S6-T03, ADR-0034) — téléphone ET codes
@@ -37,12 +34,9 @@ export type MfaResetService = Pick<SecondFactorService, "resetFromServer">;
 
 const USAGE = "Usage : mfa-reset <adresse e-mail ou mobile gabonais>";
 
-async function openNestService(config: AppConfig) {
-  @Module({ imports: [ConfigModule.forRoot(config), DatabaseModule, IdentityModule] })
-  class MfaCliModule {}
-
-  const app = await NestFactory.createApplicationContext(MfaCliModule, { logger: false });
-  return { service: app.get(SecondFactorService, { strict: false }), close: () => app.close() };
+/** Contexte Nest commun aux commandes serveur (`cli-context.ts`). */
+function openNestService(config: AppConfig) {
+  return openIdentityCli(config, SecondFactorService);
 }
 
 /** Exécute la commande et renvoie le code de sortie (0 = réussite). */
@@ -68,7 +62,14 @@ export async function runMfaReset({
     }
     throw problem;
   }
-  const opened = await openService(config);
+  let opened: Awaited<ReturnType<typeof openService>>;
+  try {
+    opened = await openService(config);
+  } catch (problem) {
+    // Avant : Nest arrêtait le processus sans aucun message (2026-10-16)
+    error(startupFailure(problem));
+    return 1;
+  }
   try {
     const result = await opened.service.resetFromServer(identifier);
     log(

@@ -175,18 +175,39 @@ Le résumé du job affiche l'adresse et la source du catalogue.
 Aucun compte administrateur n'existe au départ, et aucun mot de passe par défaut : on **promeut un compte déjà inscrit**.
 
 1. Inscris-toi normalement sur le site de démo (code reçu par e-mail).
-2. Sur **ton poste**, dans un terminal, avec l'adresse de connexion Neon (tableau de bord Neon → _Connection string_) :
+2. Sur **ton poste**, dans un terminal, avec l'adresse de connexion Neon **complète** (tableau de bord Neon → _Connect_ →
+   _Connection string_ ; elle commence par `postgresql://neondb_owner:` et contient le mot de passe). L'adresse est **collée
+   quand le terminal la demande**, jamais tapée dans la commande : sinon elle resterait dans l'historique du terminal.
 
-   ```bash
-   DATABASE_URL="postgresql://…neon.tech/neondb?sslmode=require" pnpm --filter @kemdia/api admin:grant ton-adresse@exemple.ga
+   ```powershell
+   # Windows (PowerShell) : coller l'adresse puis Entrée (Read-Host ne l'écrit pas dans l'historique)
+   $env:DATABASE_URL = Read-Host "Adresse Neon"
+   pnpm --filter @kemdia/api admin:grant ton-adresse@exemple.ga
+   Remove-Item Env:DATABASE_URL
    ```
 
-   La commande affiche seulement l'UUID du compte. Elle n'écrit rien dans Git ni dans Render ; l'adresse Neon reste dans ton terminal
-   (ne la colle pas dans un fichier suivi par Git).
+   ```bash
+   # Linux / macOS / Git Bash : coller l'adresse (invisible) puis Entrée
+   read -rs DATABASE_URL && export DATABASE_URL
+   pnpm --filter @kemdia/api admin:grant ton-adresse@exemple.ga
+   unset DATABASE_URL
+   ```
+
+   La commande affiche seulement l'UUID du compte. Elle n'écrit rien dans Git ni dans Render. Ne colle jamais l'adresse dans un
+   fichier suivi par Git, ni dans une conversation.
 
 3. Pour retirer le rôle : `admin:revoke` avec la même adresse. Chaque changement est inscrit au journal d'audit.
 
-Les routes d'administration (`/api/v1/admin/…`) demandent une connexion de **moins de 15 minutes** ; il n'y a pas encore d'écran (S6).
+4. Sur la démo, **déconnecte-toi puis reconnecte-toi** : « Mon compte » affiche « Ouvrir l'espace de l'équipe » (`/equipe`,
+   S6-T05). La première visite ouvre la page « Sécurité » : active la double authentification (application TOTP) et range les
+   10 codes de secours. Sans rôle d'équipe, `/equipe` répond 404 (voulu : l'espace ne se signale pas).
+
+Messages possibles de la commande : « Rôle administrateur accordé… » (réussi), « Refusé : … COMPTE_INTROUVABLE » (compte pas
+inscrit **sur la démo**, ou pas vérifié), « Échec… Base joignable ? » (adresse Neon incomplète ou fausse). Jusqu'au 2026-10-16,
+la commande pouvait s'arrêter **sans aucun message** (correctif `fix/admin-grant-cli`).
+
+Pour tester tout le parcours vendeur, utilise **deux comptes** : un administrateur (`/equipe`) et un vendeur (`/vendeur`) ;
+personne ne valide sa propre boutique ni ses propres produits.
 
 ### 9. Adresse des visiteurs (S4-T07) — ✅ activée le 2026-10-09
 
