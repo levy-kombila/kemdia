@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { ProductImage } from "@/components/ui/ProductImage";
 import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 import { getCategoryTiles } from "@/lib/catalog";
-import { VendorInterestForm } from "./VendorInterestForm";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Vendre sur Kemdia",
@@ -38,7 +38,7 @@ const BENEFITS = [
 const STEPS = [
   {
     title: "Faites votre demande",
-    text: "Remplissez le formulaire ci-dessous : l'équipe Kemdia vous rappelle pour présenter l'offre.",
+    text: "Créez votre compte Kemdia, puis présentez votre boutique en quelques lignes : l'équipe l'examine.",
   },
   {
     title: "Faites vérifier votre boutique",
@@ -57,7 +57,8 @@ const STEPS = [
 const FAQ = [
   {
     q: "Combien coûte la vente sur Kemdia ?",
-    a: "Kemdia prend une commission sur chaque vente, de 8 % à 14 % selon la catégorie du produit. Le barème définitif sera communiqué à l'ouverture de l'espace vendeur.",
+    // Commission : question ouverte n° 3 au client, aucun chiffre annoncé avant sa réponse (S6-T06)
+    a: "Kemdia prend une commission sur chaque vente. Son barème vous sera communiqué avant l'ouverture de votre boutique : rien n'est prélevé sans votre accord.",
   },
   {
     q: "Quand suis-je payé ?",
@@ -99,12 +100,12 @@ export default async function SellPage() {
             recherchons nos premiers vendeurs partenaires pour le lancement.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <a
-              href="#demande"
+            <Link
+              href="/vendeur"
               className="bg-accent-400 hover:bg-accent-300 text-ink-900 inline-flex h-12 items-center rounded-full px-6 font-bold"
             >
               Devenir vendeur
-            </a>
+            </Link>
             <a
               href="#questions"
               className="inline-flex h-12 items-center rounded-full border border-white/50 px-6 font-semibold hover:bg-white/10"
@@ -223,12 +224,18 @@ export default async function SellPage() {
           <h2 id="demande-titre" className="text-xl font-extrabold">
             Demande d&apos;ouverture de boutique
           </h2>
-          <p className="text-ink-500 mt-1 text-sm">
-            L&apos;équipe Kemdia vous rappelle pour vous présenter l&apos;offre.
+          <p className="text-ink-700 mt-2 text-sm leading-6">
+            Connectez-vous (ou créez votre compte Kemdia), puis présentez votre boutique : nom,
+            ville, mobile et ce que vous vendez. Un administrateur Kemdia examine chaque demande et
+            vous prévient par e-mail. Une fois la boutique validée, vous ajoutez vos produits et
+            leurs photos depuis votre téléphone.
           </p>
-          <div className="mt-5">
-            <VendorInterestForm />
-          </div>
+          <Link
+            href="/vendeur"
+            className="bg-brand-600 hover:bg-brand-700 mt-5 inline-flex h-12 items-center rounded-full px-6 font-bold text-white"
+          >
+            Ouvrir ma boutique
+          </Link>
         </section>
       </div>
     </div>

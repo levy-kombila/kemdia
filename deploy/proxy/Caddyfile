@@ -9,6 +9,11 @@ www.{$PROD_DOMAIN} {
 }
 
 {$PROD_DOMAIN} {
+	# Corps de requête : 6 Mo au plus (une photo de vendeur fait 5 Mo au plus ; tout le reste est bien plus petit). Borne
+	# la mémoire avant même le site (relecture de sécurité S6-T06)
+	request_body {
+		max_size 6MB
+	}
 	encode zstd gzip
 	reverse_proxy kemdia-production-web:3000
 	log {
@@ -23,6 +28,11 @@ www.{$PROD_DOMAIN} {
 		{$STAGING_USER} {$STAGING_PASSWORD_HASH}
 	}
 	header X-Robots-Tag "noindex, nofollow"
+	# Corps de requête : 6 Mo au plus (une photo de vendeur fait 5 Mo au plus ; tout le reste est bien plus petit). Borne
+	# la mémoire avant même le site (relecture de sécurité S6-T06)
+	request_body {
+		max_size 6MB
+	}
 	encode zstd gzip
 	reverse_proxy kemdia-staging-web:3000
 }

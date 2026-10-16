@@ -23,18 +23,16 @@ test("fiche produit : aperçu WhatsApp complet et bouton de partage", async ({ p
   await expect(wa).toHaveAttribute("rel", /noopener/);
 });
 
-test("page Devenir vendeur : présentation et demande (démo)", async ({ page }) => {
+test("page Devenir vendeur : présentation, puis l'espace vendeur (connexion demandée)", async ({
+  page,
+}) => {
   await page.goto("/");
   await page.goto("/vendre");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "Vendez partout au Gabon avec Kemdia",
   );
+  // Aucun taux de commission annoncé tant que le client n'a pas tranché (question ouverte n° 3)
+  await expect(page.getByText(/\d+ ?% à \d+ ?%/)).toHaveCount(0);
   await page.getByRole("link", { name: "Devenir vendeur" }).first().click();
-  await page.getByLabel("Prénom et nom").fill("Paul Ondo");
-  await page.getByLabel("Nom de la boutique").fill("Ondo Électronique");
-  await page.getByLabel("Téléphone", { exact: true }).fill("066 12 34 56");
-  await page.getByRole("combobox", { name: "Ville" }).selectOption("port-gentil");
-  await page.getByRole("combobox", { name: "Ce que vous vendez" }).selectOption("High-Tech");
-  await page.getByRole("button", { name: "Envoyer ma demande" }).click();
-  await expect(page.getByText(/Merci Paul, votre demande est prête/)).toBeVisible();
+  await expect(page).toHaveURL(/\/connexion\?retour=%2Fvendeur$/);
 });

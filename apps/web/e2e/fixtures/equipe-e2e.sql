@@ -9,6 +9,11 @@
 -- de s'exécuter sans le réglage de session « kemdia.e2e = on », que seule la CI passe :
 --   PGOPTIONS='-c kemdia.e2e=on' psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f apps/web/e2e/fixtures/equipe-e2e.sql
 -- Lancé par erreur sur la démo ou la production, il s'arrête ici sans rien écrire.
+-- Arrêt à la première erreur MÊME sans « -v ON_ERROR_STOP=1 », et tout le fichier dans une seule transaction : refusé,
+-- il n'écrit rien du tout (relecture de sécurité S6-T06).
+\set ON_ERROR_STOP on
+BEGIN;
+
 DO $$
 BEGIN
   IF current_setting('kemdia.e2e', true) IS DISTINCT FROM 'on' THEN
@@ -99,3 +104,5 @@ SELECT '0e2e0000-0000-4000-8000-0000000000c3', '0e2e0000-0000-4000-8000-00000000
 FROM "catalog"."product_images" i
 WHERE i."id" = '0e2e0000-0000-4000-8000-0000000000c1'
 ON CONFLICT ("id") DO NOTHING;
+
+COMMIT;
