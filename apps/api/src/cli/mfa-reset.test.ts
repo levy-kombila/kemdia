@@ -54,4 +54,18 @@ describe("Commande mfa-reset (S6-T03)", () => {
     await expect(h.run(["awa@exemple.ga"])).resolves.toBe(1);
     expect(h.err.join()).not.toContain("secret");
   });
+
+  it("échec au démarrage (base, module) : message clair, code 1, jamais de sortie silencieuse", async () => {
+    const err: string[] = [];
+    const code = await runMfaReset({
+      argv: ["awa@exemple.ga"],
+      env: { LOG_LEVEL: "silent" },
+      log: () => {},
+      error: (m) => err.push(m),
+      openService: () => Promise.reject(new Error("postgresql://u:secret@hote/base")),
+    });
+    expect(code).toBe(1);
+    expect(err.join()).toMatch(/Échec au démarrage : Error \(<adresse masquée>\)/);
+    expect(err.join()).not.toContain("secret");
+  });
 });
