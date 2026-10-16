@@ -51,7 +51,15 @@ export class MailInvoiceMailer implements InvoiceMailer {
       "",
       "L'équipe Kemdia",
     ].join("\n");
-    const html = `<p>${escape(name)},</p><p>${escape(intro)}</p><p>Le document est en pièce jointe (PDF). Vous pouvez aussi le télécharger depuis votre commande.</p><p>L'équipe Kemdia</p>`;
+    // Paragraphes échappés un par un (aucun texte du client n'entre tel quel dans le HTML)
+    const html = [
+      `${escape(name)},`,
+      escape(intro),
+      "Le document est en pièce jointe (PDF). Vous pouvez aussi le télécharger depuis votre commande.",
+      "L'équipe Kemdia",
+    ]
+      .map((paragraph) => "<p>" + paragraph + "</p>")
+      .join("");
     await this.transport.send({
       to,
       subject,

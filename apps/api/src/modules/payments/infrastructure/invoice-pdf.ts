@@ -16,9 +16,12 @@ const METHOD_LABEL = {
   cod: "Paiement à la livraison (espèces)",
 };
 
+/** Position d'un séparateur de milliers (avant chaque groupe de 3 chiffres). */
+const THOUSANDS = /\B(?=(\d{3})+(?!\d))/g;
+
 /** 12500 → « 12 500 FCFA » (espaces simples : la police standard du PDF n'a pas l'espace fine). */
 export function amount(n: number): string {
-  return `${String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} FCFA`;
+  return String(n).replace(THOUSANDS, " ") + " FCFA";
 }
 
 /**

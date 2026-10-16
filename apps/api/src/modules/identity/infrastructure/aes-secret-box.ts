@@ -43,7 +43,7 @@ export class AesSecretBox implements SecretBox {
   seal(plain: Uint8Array, accountId: string): Uint8Array {
     const key = this.requireKey();
     const iv = randomBytes(IV_BYTES);
-    const cipher = createCipheriv("aes-256-gcm", key, iv);
+    const cipher = createCipheriv("aes-256-gcm", key, iv, { authTagLength: TAG_BYTES });
     cipher.setAAD(Buffer.from(accountId.toLowerCase()));
     const body = Buffer.concat([cipher.update(plain), cipher.final()]);
     return new Uint8Array(Buffer.concat([Buffer.from([VERSION]), iv, cipher.getAuthTag(), body]));
@@ -57,7 +57,8 @@ export class AesSecretBox implements SecretBox {
     }
     const iv = data.subarray(1, 1 + IV_BYTES);
     const tag = data.subarray(1 + IV_BYTES, 1 + IV_BYTES + TAG_BYTES);
-    const decipher = createDecipheriv("aes-256-gcm", key, iv);
+    // Longueur de l'étiquette imposée : une étiquette tronquée (plus facile à deviner) est refusée
+    const decipher = createDecipheriv("aes-256-gcm", key, iv, { authTagLength: TAG_BYTES });
     decipher.setAAD(Buffer.from(accountId.toLowerCase()));
     decipher.setAuthTag(tag);
     // Clé changée ou boîte modifiée : l'étiquette ne correspond pas, `final` lève une erreur
