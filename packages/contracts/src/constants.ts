@@ -162,6 +162,8 @@ export const AUDIT_ACTIONS = [
   "product.rejected",
   "product.archived",
   "product.variant_updated",
+  // Photos (S6-T04)
+  "product.image_removed",
   // Double authentification de l'équipe (S6-T03)
   "mfa.enabled",
   "mfa.recovery_used",
@@ -415,6 +417,28 @@ export const VENDOR_PRODUCT_LIMITS = {
   reasonMin: 5,
   reasonMax: 300,
 } as const;
+/**
+ * Photos des produits des vendeurs (S6-T04, ADR-0035) : JPEG, PNG ou WebP reçus (vérifiés par leur contenu),
+ * réencodés en WebP sans métadonnées, en deux tailles (grande et vignette). Mêmes valeurs dans l'API et la base.
+ */
+export const PRODUCT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+export const PRODUCT_IMAGE_LIMITS = {
+  /** Fichier reçu, en octets (5 Mo) */
+  maxUploadBytes: 5 * 1024 * 1024,
+  /** Photos au plus par produit (MAX_IMAGES du catalogue) */
+  maxPerProduct: 10,
+  /** Plus petit côté accepté, en pixels */
+  minSide: 200,
+  /** Plus grand côté de la grande image et de la vignette, en pixels */
+  largeSide: 1600,
+  smallSide: 480,
+  /** Taille maximale d'une image réencodée gardée en base, en octets (2 Mo) */
+  maxStoredBytes: 2 * 1024 * 1024,
+} as const;
+/** Adresse publique d'une photo de vendeur sur le site : « /images/v/<uuid>.webp » (vignette : « …-480.webp »). */
+export const VENDOR_IMAGE_PATH_PATTERN =
+  /^\/images\/v\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp$/;
+
 /** Produits d'une boutique en attente de modération au plus (la file ne s'inonde pas). */
 export const MAX_PENDING_PRODUCTS_PER_SHOP = 50;
 export const VENDOR_PRODUCT_PAGE_DEFAULT = 50;
@@ -444,6 +468,12 @@ export const VENDOR_ERROR_CODES = [
   // Le produit a changé depuis que le modérateur l'a lu : relire avant de décider
   "PRODUIT_MODIFIE",
   "TROP_DE_PRODUITS_EN_ATTENTE",
+  // Photos des produits (S6-T04)
+  "FORMAT_IMAGE_INVALIDE",
+  "IMAGE_TROP_GRANDE",
+  "IMAGE_TROP_PETITE",
+  "TROP_DE_PHOTOS",
+  "PHOTO_INTROUVABLE",
 ] as const;
 export type VendorErrorCode = (typeof VENDOR_ERROR_CODES)[number];
 

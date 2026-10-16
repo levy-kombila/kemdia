@@ -67,6 +67,8 @@ model Product {
   /// Titre, marque, catégorie et caractéristiques en minuscules sans accents (recherche)
   searchText       String           @default("") @map("search_text")
   variants         ProductVariant[]
+  /// Photos envoyées par le vendeur (S6-T04) ; leur ordre et leurs adresses sont dans `images`
+  vendorImages     ProductImage[]
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -97,5 +99,28 @@ model ProductVariant {
 
   @@index([productId])
   @@map("product_variants")
+  @@schema("catalog")
+}
+
+/// Photo d'un produit de vendeur (S6-T04, ADR-0035) : réencodée en WebP sans métadonnées, en deux tailles.
+/// Adresse sur le site : « /images/v/<id>.webp » (grande) et « /images/v/<id>-480.webp » (vignette), dans `Product.images`.
+/// Règles posées en SQL : tailles cohérentes et bornées, en-tête WebP, dimensions bornées.
+model ProductImage {
+  id        String   @id @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// Grande image (1 600 px au plus sur le plus grand côté)
+  large     Bytes
+  /// Vignette (480 px au plus)
+  small     Bytes
+  /// Dimensions de la grande image
+  width     Int
+  height    Int
+  /// Empreinte SHA-256 de la grande image (ETag)
+  sha256    String   @db.Char(64)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([productId])
+  @@map("product_images")
   @@schema("catalog")
 }

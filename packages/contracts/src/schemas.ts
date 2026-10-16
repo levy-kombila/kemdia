@@ -44,6 +44,7 @@ import {
   RECOVERY_CODE_COUNT,
   RECOVERY_CODE_PATTERN,
   VENDOR_PRODUCT_LIMITS,
+  PRODUCT_IMAGE_LIMITS,
   VENDOR_PRODUCT_PAGE_DEFAULT,
   VENDOR_PRODUCT_PAGE_MAX,
   VENDOR_PRODUCT_STATUSES,
@@ -1379,6 +1380,34 @@ export const VendorProductPageSchema = z
 export type VendorProductPage = z.infer<typeof VendorProductPageSchema>;
 
 export const VendorProductIdParamsSchema = z.strictObject({ productId: uuidInput });
+
+// --- Photos des produits (S6-T04, ADR-0035) ---
+
+export const ProductImageParamsSchema = z.strictObject({
+  productId: uuidInput,
+  imageId: uuidInput,
+});
+/** Photo publique : `large` (1 600 px au plus) ou `small` (vignette, 480 px). */
+export const PublicProductImageParamsSchema = z.strictObject({
+  imageId: uuidInput,
+  size: z.enum(["large", "small"]),
+});
+
+export const ProductImageOrderRequestSchema = z
+  .strictObject({
+    images: z
+      .array(uuid)
+      .min(1)
+      .max(PRODUCT_IMAGE_LIMITS.maxPerProduct)
+      .describe(
+        "Identifiants de TOUTES les photos du produit, dans le nouvel ordre (la première est la principale)",
+      ),
+  })
+  .meta({
+    id: "ProductImageOrderRequest",
+    description: "Nouvel ordre des photos d'un produit (sans nouvelle modération)",
+  });
+export type ProductImageOrderRequest = z.infer<typeof ProductImageOrderRequestSchema>;
 export const VendorVariantParamsSchema = z.strictObject({
   productId: uuidInput,
   variantId: uuidInput,

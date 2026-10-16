@@ -1,5 +1,6 @@
 import { PRICE_RANGES, type Badge, type SortKey } from "@kemdia/contracts/constants";
 import type { Category } from "../domain/category.js";
+import type { ImageSize, ProcessedImage } from "../domain/product-image.js";
 import type { Product, ProductStatus } from "../domain/product.js";
 
 /**
@@ -220,4 +221,35 @@ export interface DerivedFields {
   price: number;
   compareAtPrice: number | null;
   searchText: string;
+}
+
+// --- Photos des produits (S6-T04, ADR-0035) ---
+
+export const IMAGE_PROCESSOR = Symbol("ImageProcessor");
+export const PRODUCT_IMAGE_STORE = Symbol("ProductImageStore");
+
+/**
+ * Réencode un fichier reçu (déjà reconnu par `checkUpload`) : WebP sans métadonnées, en deux tailles. Lève une
+ * `CatalogError` (`FORMAT_IMAGE_INVALIDE`, `IMAGE_TROP_GRANDE`, `IMAGE_TROP_PETITE`) si l'image est illisible ou hors
+ * limites.
+ */
+export interface ImageProcessor {
+  process(bytes: Uint8Array): Promise<ProcessedImage>;
+}
+
+export interface StoredImage {
+  id: string;
+  productId: string;
+  bytes: Uint8Array;
+  sha256: string;
+}
+
+/**
+ * Rangement des photos (port remplaçable : PostgreSQL aujourd'hui, stockage objet plus tard). Les écritures
+ * rejoignent la transaction en cours.
+ */
+export interface ProductImageStore {
+  save(imageId: string, productId: string, image: ProcessedImage, now: Date): Promise<void>;
+  read(imageId: string, size: ImageSize): Promise<StoredImage | null>;
+  delete(imageId: string): Promise<void>;
 }

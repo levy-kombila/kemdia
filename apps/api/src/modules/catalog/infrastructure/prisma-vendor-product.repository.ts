@@ -70,6 +70,8 @@ function mutable(record: VendorProductRecord, derived: DerivedFields) {
     description: record.description,
     brand: record.brand,
     categoryId: record.categoryId,
+    // Photos du vendeur (S6-T04) : leur ordre et leurs adresses
+    images: [...record.images],
     status: record.status,
     moderationReason: record.moderationReason,
     submittedAt: record.submittedAt,
@@ -127,7 +129,6 @@ export class PrismaVendorProductRepository implements VendorProductRepository {
           id: record.id,
           shopId: record.shopId,
           slug: record.slug,
-          images: [...record.images],
           createdAt: record.createdAt,
           ...mutable(record, derived),
           variants: {

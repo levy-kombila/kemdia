@@ -45,6 +45,15 @@ const CATALOG: Record<CatalogErrorCode, { code: string; status: number }> = {
     code: "TROP_DE_PRODUITS_EN_ATTENTE",
     status: HttpStatus.CONFLICT,
   },
+  // Photos (S6-T04)
+  FORMAT_IMAGE_INVALIDE: {
+    code: "FORMAT_IMAGE_INVALIDE",
+    status: HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+  },
+  IMAGE_TROP_GRANDE: { code: "IMAGE_TROP_GRANDE", status: HttpStatus.PAYLOAD_TOO_LARGE },
+  IMAGE_TROP_PETITE: { code: "IMAGE_TROP_PETITE", status: HttpStatus.UNPROCESSABLE_ENTITY },
+  TROP_DE_PHOTOS: { code: "TROP_DE_PHOTOS", status: HttpStatus.CONFLICT },
+  PHOTO_INTROUVABLE: { code: "PHOTO_INTROUVABLE", status: HttpStatus.NOT_FOUND },
 };
 
 const capitalize = (message: string) => message.charAt(0).toUpperCase() + message.slice(1);

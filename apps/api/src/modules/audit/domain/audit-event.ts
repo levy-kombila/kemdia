@@ -47,6 +47,8 @@ export const AUDIT_ACTIONS = [
   "product.archived",
   /** Prix, prix barré, stock ou activation d'une variante changés par le vendeur (détails : sku, avant / après) — S6-T02 */
   "product.variant_updated",
+  /** Photo retirée par le vendeur, et effacée (détails : title, image) — S6-T04 */
+  "product.image_removed",
   /** Double authentification activée par son titulaire (aucun détail) — S6-T03 */
   "mfa.enabled",
   /** Code de secours utilisé (détails : remaining) — S6-T03 */
