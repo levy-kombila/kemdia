@@ -37,7 +37,7 @@ function present(settings: CodSettingsRecord): CodSettings {
  * les autres routes d'administration (ADR-0020). Le devis et la commande appliquent le nouveau réglage aussitôt.
  */
 @Controller("admin/settings/cod")
-@Authorize("admin", { recentLogin: true })
+@Authorize("admin", { secondFactor: true })
 @Throttle({ default: { limit: 30, ttl: 60_000 } })
 @AccountRateLimit(30)
 export class CodSettingsController {

@@ -19,6 +19,7 @@ import {
   ACCOUNT_REPOSITORY,
   IDENTITY_CLOCK,
   ROLE_REPOSITORY,
+  SECOND_FACTOR_REPOSITORY,
   SESSION_REPOSITORY,
   TRANSACTION_RUNNER,
 } from "../src/modules/identity/application/ports.js";
@@ -31,6 +32,7 @@ import {
   FakeClock,
   InMemoryAccounts,
   InMemoryRoles,
+  InMemorySecondFactors,
   InMemorySessions,
   directTransactions,
 } from "./identity/in-memory.js";
@@ -47,6 +49,18 @@ const ADMIN_ID = "11111111-1111-4111-8111-111111111111";
 const AWA_ID = "22222222-2222-4222-8222-222222222222";
 const MODO_ID = "33333333-3333-4333-8333-333333333333";
 
+/** L'administrateur a activé sa double authentification (S6-T03). */
+function secondFactors(): InMemorySecondFactors {
+  const factors = new InMemorySecondFactors();
+  factors.rows.set(ADMIN_ID, {
+    accountId: ADMIN_ID,
+    secretBox: new Uint8Array(),
+    enabledAt: new Date("2026-10-01T00:00:00Z"),
+    lastUsedStep: 1,
+  });
+  return factors;
+}
+
 describe("API administration — rôles et journal d'audit (HTTP)", () => {
   let app: NestExpressApplication;
   let accounts: InMemoryAccounts;
@@ -54,6 +68,7 @@ describe("API administration — rôles et journal d'audit (HTTP)", () => {
   let events: InMemoryAuditEvents;
   let clock: FakeClock;
   let sessions: SessionService;
+  let sessionRows: InMemorySessions;
   let ip = 0;
 
   const http = () => request(app.getHttpServer());
@@ -69,9 +84,19 @@ describe("API administration — rôles et journal d'audit (HTTP)", () => {
       delete: (url: string) => auth(http().delete(url)),
     };
   };
-  const tokenFor = async (id: string) => {
+  /**
+   * Session ouverte ; confirmée par la double authentification sauf `confirmed: false` (S6-T03). Le vrai parcours
+   * (QR code, codes) est testé dans second-factor.int.test.ts.
+   */
+  const tokenFor = async (id: string, { confirmed = true } = {}) => {
     const account = await accounts.findById(id);
-    return (await sessions.open(account!)).token;
+    const opened = await sessions.open(account!);
+    if (confirmed) {
+      for (const row of sessionRows.rows.filter((r) => r.accountId === id)) {
+        row.secondFactorAt = clock.now();
+      }
+    }
+    return opened.token;
   };
 
   const addAccount = async (id: string, email: string, stored: StoredRole[]) => {
@@ -99,7 +124,9 @@ describe("API administration — rôles et journal d'audit (HTTP)", () => {
       .overrideProvider(ACCOUNT_REPOSITORY)
       .useValue(accounts)
       .overrideProvider(SESSION_REPOSITORY)
-      .useValue(new InMemorySessions())
+      .useValue((sessionRows = new InMemorySessions()))
+      .overrideProvider(SECOND_FACTOR_REPOSITORY)
+      .useValue(secondFactors())
       .overrideProvider(IDENTITY_CLOCK)
       .useValue(clock)
       .overrideProvider(ROLE_REPOSITORY)
@@ -147,11 +174,15 @@ describe("API administration — rôles et journal d'audit (HTTP)", () => {
     expect(events.rows).toEqual([]);
   });
 
-  it("administrateur connecté depuis plus de 15 minutes : 403 RECONNEXION_REQUISE", async () => {
+  it("double authentification confirmée il y a 15 minutes ou plus, ou jamais : 403 DEUX_FACTEURS_REQUIS (S6-T03)", async () => {
+    const unconfirmed = await tokenFor(ADMIN_ID, { confirmed: false });
     const admin = await tokenFor(ADMIN_ID);
     clock.advance(15 * 60_000);
     for (const route of ROUTES) {
-      expect(codeOf((await call(admin, route).expect(403)).body)).toBe("RECONNEXION_REQUISE");
+      expect(codeOf((await call(admin, route).expect(403)).body)).toBe("DEUX_FACTEURS_REQUIS");
+      expect(codeOf((await call(unconfirmed, route).expect(403)).body)).toBe(
+        "DEUX_FACTEURS_REQUIS",
+      );
     }
   });
 

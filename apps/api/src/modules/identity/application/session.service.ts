@@ -30,8 +30,10 @@ export interface OpenedSession {
 
 export interface AuthenticatedSession {
   sessionId: string;
-  /** Ouverture de la session (connexion) : les routes d'administration exigent moins de 15 minutes (ADR-0020) */
+  /** Ouverture de la session (connexion) */
   openedAt: Date;
+  /** Dernière confirmation par la double authentification (S6-T03) : routes d'équipe pendant 15 minutes */
+  secondFactorAt: Date | null;
   expiresAt: Date;
   account: AccountView;
 }
@@ -65,6 +67,8 @@ export class SessionService {
       // Version du mot de passe LUE avec le hachage vérifié : une connexion commencée avant
       // un changement de mot de passe donne une session aussitôt refusée (ADR-0018)
       passwordVersion: account.passwordVersion,
+      // Une nouvelle session n'est jamais confirmée : la double authentification se redemande à chaque connexion
+      secondFactorAt: null,
       createdAt: now,
     });
     return { token, expiresAt, account: account.view() };
@@ -88,6 +92,7 @@ export class SessionService {
     return {
       sessionId: session.id,
       openedAt: session.createdAt,
+      secondFactorAt: session.secondFactorAt,
       expiresAt,
       account: account.view(),
     };

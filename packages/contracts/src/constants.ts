@@ -90,11 +90,27 @@ export const IDENTITY_ERROR_CODES = [
   "COMPTE_INACTIF",
   // Limites par compte (S4-T07)
   "TROP_DE_REQUETES",
+  // Double authentification de l'équipe (S6-T03, MED-15)
+  "MOT_DE_PASSE_INCORRECT",
+  "DEUX_FACTEURS_INDISPONIBLE",
+  "DEUX_FACTEURS_A_CONFIGURER",
+  "DEUX_FACTEURS_DEJA_ACTIVE",
+  "DEUX_FACTEURS_A_ACTIVER",
+  "DEUX_FACTEURS_REQUIS",
 ] as const;
 export type IdentityErrorCode = (typeof IDENTITY_ERROR_CODES)[number];
 
 /** Code à usage unique : 6 chiffres. */
 export const OTP_CODE_PATTERN = /^\d{6}$/;
+/**
+ * Code de secours de la double authentification (S6-T03) : « abcd-efgh-jkmn », sans 0, 1, i, l, o (illisibles).
+ * Saisie tolérée par l'API : majuscules, espaces, tirets oubliés.
+ */
+export const RECOVERY_CODE_PATTERN = /^[a-z2-9]{4}-[a-z2-9]{4}-[a-z2-9]{4}$/;
+/** Codes de secours donnés à l'activation (et à chaque renouvellement). */
+export const RECOVERY_CODE_COUNT = 10;
+/** Durée d'une confirmation par la double authentification : les routes d'équipe la redemandent après 15 minutes. */
+export const SECOND_FACTOR_MINUTES = 15;
 /** Ticket d'inscription : 32 octets en base64url (43 caractères). */
 export const SIGNUP_TICKET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 /** Jeton de session (cookie du site, en-tête `Authorization: Bearer …` vers l'API) : 32 octets en base64url. */
@@ -146,6 +162,13 @@ export const AUDIT_ACTIONS = [
   "product.rejected",
   "product.archived",
   "product.variant_updated",
+  // Double authentification de l'équipe (S6-T03)
+  "mfa.enabled",
+  "mfa.recovery_used",
+  "mfa.recovery_regenerated",
+  "mfa.failed",
+  "mfa.locked",
+  "mfa.reset",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** Lignes par page du journal d'audit. */

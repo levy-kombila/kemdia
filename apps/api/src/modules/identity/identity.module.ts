@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Logger, Module } from "@nestjs/common";
 import { APP_CONFIG } from "../../config/config.module.js";
 import { AuditModule } from "../audit/index.js";
 import type { AppConfig } from "../../config/env.js";
@@ -6,6 +6,7 @@ import { LoginService } from "./application/login.service.js";
 import { OtpService } from "./application/otp.service.js";
 import { PasswordResetService } from "./application/password-reset.service.js";
 import { RoleService } from "./application/role.service.js";
+import { SecondFactorService } from "./application/second-factor.service.js";
 import { SessionService } from "./application/session.service.js";
 import { SignupService } from "./application/signup.service.js";
 import {
@@ -19,12 +20,16 @@ import {
   PASSWORD_HASHER,
   RESET_TICKET_REPOSITORY,
   ROLE_REPOSITORY,
+  SECOND_FACTOR_REPOSITORY,
+  SECRET_BOX,
   SESSION_REPOSITORY,
   TRANSACTION_RUNNER,
   SIGNUP_TICKET_REPOSITORY,
   type IdentityOptions,
 } from "./application/ports.js";
+import { AesSecretBox } from "./infrastructure/aes-secret-box.js";
 import { Argon2PasswordHasher } from "./infrastructure/argon2-password-hasher.js";
+import { PrismaSecondFactorRepository } from "./infrastructure/prisma-second-factor.repository.js";
 import {
   IdentityCleanupScheduler,
   PrismaIdentityMaintenance,
@@ -42,17 +47,19 @@ import { PrismaSignupTicketRepository } from "./infrastructure/prisma-signup-tic
 import { AdminController } from "./interface/admin.controller.js";
 import { IdentityController } from "./interface/identity.controller.js";
 import { RoleGuard } from "./interface/role.guard.js";
+import { SecondFactorController } from "./interface/second-factor.controller.js";
 import { SessionGuard } from "./interface/session.guard.js";
 
 /**
  * Module identity (S4, ADR-0015) : comptes, codes à usage unique, sessions.
  * Routes : interface/identity.controller.ts (`/api/v1/auth/…`) — inscription (S4-T02), connexion et sessions (S4-T03) ;
- * interface/admin.controller.ts (`/api/v1/admin/…`) — rôles et journal d'audit (S4-T06).
+ * interface/admin.controller.ts (`/api/v1/admin/…`) — rôles et journal d'audit (S4-T06) ;
+ * interface/second-factor.controller.ts (`/api/v1/auth/2fa/…`) — double authentification de l'équipe (S6-T03).
  */
 @Module({
   // Journal d'audit : mot de passe réinitialisé, « tous mes appareils », rôles (S4-T06)
   imports: [AuditModule],
-  controllers: [IdentityController, AdminController],
+  controllers: [IdentityController, AdminController, SecondFactorController],
   providers: [
     RoleService,
     RoleGuard,
@@ -77,6 +84,27 @@ import { SessionGuard } from "./interface/session.guard.js";
     { provide: PASSWORD_HASHER, useClass: Argon2PasswordHasher },
     { provide: OTP_SENDER, inject: [APP_CONFIG], useFactory: (c: AppConfig) => createOtpSender(c) },
     { provide: IDENTITY_CLOCK, useValue: { now: () => new Date() } },
+    // Double authentification de l'équipe (S6-T03, ADR-0034, MED-15)
+    SecondFactorService,
+    { provide: SECOND_FACTOR_REPOSITORY, useClass: PrismaSecondFactorRepository },
+    {
+      provide: SECRET_BOX,
+      inject: [APP_CONFIG],
+      useFactory: (c: AppConfig) => {
+        const box = new AesSecretBox(c);
+        const logger = new Logger("Double authentification");
+        if (box.usesDevelopmentKey && c.NODE_ENV !== "test") {
+          logger.warn(
+            "clé de développement (publique) : TOTP_ENCRYPTION_KEY absente — local ou démo seulement",
+          );
+        } else if (!box.available) {
+          logger.warn(
+            "TOTP_ENCRYPTION_KEY absente : double authentification indisponible, routes d'équipe fermées",
+          );
+        }
+        return box;
+      },
+    },
     {
       provide: IDENTITY_OPTIONS,
       inject: [APP_CONFIG],
@@ -93,6 +121,9 @@ import { SessionGuard } from "./interface/session.guard.js";
     AccountDirectory,
     // Le module vendors accorde et retire le rôle vendeur à la décision sur une boutique (S6-T01)
     RoleService,
+    // RoleGuard vérifie la double authentification des routes d'équipe (S6-T03) ; la commande mfa:reset l'utilise
+    SECOND_FACTOR_REPOSITORY,
+    SecondFactorService,
   ],
 })
 export class IdentityModule {}

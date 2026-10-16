@@ -115,6 +115,7 @@ pnpm --filter @kemdia/api test:int
 
 ```bash
 pnpm --filter @kemdia/api admin:grant  awa@exemple.ga   # compte déjà inscrit et vérifié
+pnpm --filter @kemdia/api mfa:reset    awa@exemple.ga   # double authentification perdue (S6-T03) : vérifier l'identité d'abord
 pnpm --filter @kemdia/api admin:revoke awa@exemple.ga
 ```
 

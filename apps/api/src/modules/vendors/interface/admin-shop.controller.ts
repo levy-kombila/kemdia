@@ -35,11 +35,11 @@ import { withVendorsErrors } from "./vendors-http-errors.js";
 
 /**
  * Examen des boutiques par l'administration (`/api/v1/admin/shops`, S6-T01, ADR-0032). Mêmes protections que les
- * autres routes d'administration (ADR-0020) : administrateur, connexion de moins de 15 minutes, 30 requêtes par minute
+ * autres routes d'administration (ADR-0020) : administrateur, double authentification confirmée depuis moins de 15 minutes (S6-T03), 30 requêtes par minute
  * par adresse et par compte, jamais mis en cache ; chaque décision au journal d'audit. Écrans plus tard au S6.
  */
 @Controller("admin/shops")
-@Authorize("admin", { recentLogin: true })
+@Authorize("admin", { secondFactor: true })
 @Throttle({ default: { limit: 30, ttl: 60_000 } })
 @AccountRateLimit(30)
 export class AdminShopController {

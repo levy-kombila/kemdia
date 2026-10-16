@@ -66,6 +66,16 @@ const envSchema = z
     /** Documentation interactive (/api/docs) et description OpenAPI. Par défaut : activée sauf en production. */
     API_DOCS: z.enum(["true", "false"]).optional(),
     /**
+     * Clé de chiffrement des secrets de la double authentification (S6-T03, ADR-0034) : 32 octets en base64url
+     * (`node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`). Secrète, jamais affichée.
+     * Absente : clé de développement en local et en démo ; double authentification indisponible ailleurs (les routes
+     * d'équipe restent alors fermées).
+     */
+    TOTP_ENCRYPTION_KEY: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{43}$/, "32 octets en base64url attendus (43 caractères)")
+      .optional(),
+    /**
      * Vérification par SMS (S4, ADR-0015). `false` tant que le client n'a pas choisi de fournisseur :
      * le site affiche l'option téléphone comme « bientôt disponible » et l'API refuse d'envoyer un SMS.
      */

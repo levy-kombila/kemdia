@@ -30,6 +30,7 @@ import { requireIdentifier } from "../src/modules/identity/domain/identifier.js"
 import { PrismaAccountRepository } from "../src/modules/identity/infrastructure/prisma-account.repository.js";
 import { OverdueOrdersScheduler } from "../src/modules/orders/infrastructure/overdue-orders.js";
 import { testDatabaseUrl } from "./integration-db.js";
+import { confirmSecondFactor } from "./second-factor-helper.js";
 
 /**
  * Coupons sur une VRAIE base (S5-T03, ADR-0025), par HTTP : création par un administrateur (journal d'audit), devis,
@@ -116,6 +117,8 @@ describe("Coupons (PostgreSQL, HTTP)", () => {
     await new PrismaAccountRepository(prisma).save(account);
     if (role) await prisma.accountRole.create({ data: { accountId: account.id, role } });
     const opened = await app.get(SessionService).open(account);
+    // Compte d'équipe : session confirmée par la double authentification (S6-T03)
+    if (role) await confirmSecondFactor(prisma, account.id);
     return { token: opened.token, accountId: account.id };
   }
 

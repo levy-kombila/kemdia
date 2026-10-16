@@ -31,6 +31,14 @@ export class PrismaSessionRepository implements SessionRepository {
     });
   }
 
+  async confirmSecondFactor(id: string, now: Date): Promise<void> {
+    // Jamais sur une session fermée entre-temps
+    await this.tx.db.session.updateMany({
+      where: { id, revokedAt: null },
+      data: { secondFactorAt: now },
+    });
+  }
+
   async revokeAllForAccount(accountId: string, now: Date): Promise<number> {
     const { count } = await this.tx.db.session.updateMany({
       where: { accountId, revokedAt: null, expiresAt: { gt: now } },

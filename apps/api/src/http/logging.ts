@@ -63,6 +63,14 @@ export function loggerParams(config: AppConfig): Params {
           "*.ticket",
           "passwordHash",
           "*.passwordHash",
+          // Double authentification (S6-T03) : secret TOTP et codes de secours. (« code » n'est pas masqué : ce nom
+          // sert aussi aux codes d'erreur ; un code TOTP ne vaut que 30 s et une seule fois.)
+          "secret",
+          "*.secret",
+          "recoveryCodes",
+          "*.recoveryCodes",
+          "secretBox",
+          "*.secretBox",
           '["api-key"]',
           '*["api-key"]',
           "authorization",

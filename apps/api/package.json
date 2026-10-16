@@ -15,6 +15,7 @@
     "openapi": "node --import @swc-node/register/esm-register scripts/openapi.ts",
     "admin:grant": "node --import @swc-node/register/esm-register src/cli/admin-role.ts grant",
     "admin:revoke": "node --import @swc-node/register/esm-register src/cli/admin-role.ts revoke",
+    "mfa:reset": "node --import @swc-node/register/esm-register src/cli/mfa-reset.ts",
     "generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",

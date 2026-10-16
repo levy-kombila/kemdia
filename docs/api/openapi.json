@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "1.15.0",
-    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.\n- Factures (S5-T06) : établies au paiement reçu, avoir à l'annulation, numéros par année sans trou, PDF et e-mail.\n- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo.\n- Boutiques (S6-T01) : un client demande à ouvrir sa boutique ; un administrateur la valide (rôle vendeur accordé), la refuse ou la suspend.\n- Produits des vendeurs (S6-T02) : invisibles jusqu'à leur validation par la modération (BR-003) ; cachés si la boutique est suspendue."
+    "version": "1.16.0",
+    "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.\n- Factures (S5-T06) : établies au paiement reçu, avoir à l'annulation, numéros par année sans trou, PDF et e-mail.\n- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo.\n- Boutiques (S6-T01) : un client demande à ouvrir sa boutique ; un administrateur la valide (rôle vendeur accordé), la refuse ou la suspend.\n- Double authentification (S6-T03) : obligatoire pour les modérateurs et administrateurs sur les routes d'équipe (`DEUX_FACTEURS_A_ACTIVER`, `DEUX_FACTEURS_REQUIS`).\n- Produits des vendeurs (S6-T02) : invisibles jusqu'à leur validation par la modération (BR-003) ; cachés si la boutique est suspendue."
   },
   "servers": [
     {
@@ -22,7 +22,11 @@
     },
     {
       "name": "Administration",
-      "description": "Rôles des comptes et journal d'audit (S4-T06) : administrateurs connectés depuis moins de 15 minutes"
+      "description": "Rôles des comptes et journal d'audit (S4-T06) : administrateurs à double authentification confirmée depuis moins de 15 minutes (S6-T03)"
+    },
+    {
+      "name": "Double authentification",
+      "description": "Second facteur de l'équipe (S6-T03, MED-15) : application d'authentification, codes de secours"
     },
     {
       "name": "Panier",
@@ -1288,11 +1292,445 @@
         }
       }
     },
+    "/api/v1/auth/2fa": {
+      "get": {
+        "tags": ["Double authentification"],
+        "summary": "État de la double authentification du compte connecté",
+        "operationId": "secondFactorStatus",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Activée ? obligatoire ? session confirmée jusqu'à quand ?",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecondFactorStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/2fa/setup": {
+      "post": {
+        "tags": ["Double authentification"],
+        "summary": "Afficher le QR code (contre le mot de passe du compte)",
+        "description": "Application d'authentification (TOTP, 6 chiffres, 30 s). Obligatoire pour les **modérateurs et administrateurs** : leurs routes d'équipe exigent une session confirmée par un code il y a moins de 15 minutes. **3 mots de passe ou codes faux** : la session est fermée et les codes bloqués 15 minutes ; le titulaire reçoit un avis de sécurité.\n\nModérateurs et administrateurs seulement. Refait autant de fois que voulu tant que la double authentification n'est pas activée.",
+        "operationId": "secondFactorSetup",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecondFactorSetupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Secret à ajouter à l'application (QR code ou saisie)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecondFactorSetup"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps de requête invalide (champ manquant, inconnu ou mal formé)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` : réservé à l'équipe (modérateurs et administrateurs)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`DEUX_FACTEURS_DEJA_ACTIVE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`MOT_DE_PASSE_INCORRECT`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`TROP_D_ESSAIS` (3 échecs : session fermée, 15 minutes) ou `TROP_DE_REQUETES` (limite par compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`DEUX_FACTEURS_INDISPONIBLE` : clé `TOTP_ENCRYPTION_KEY` absente sur ce serveur",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/2fa/enable": {
+      "post": {
+        "tags": ["Double authentification"],
+        "summary": "Premier code : active la double authentification (10 codes de secours, donnés une fois)",
+        "description": "Application d'authentification (TOTP, 6 chiffres, 30 s). Obligatoire pour les **modérateurs et administrateurs** : leurs routes d'équipe exigent une session confirmée par un code il y a moins de 15 minutes. **3 mots de passe ou codes faux** : la session est fermée et les codes bloqués 15 minutes ; le titulaire reçoit un avis de sécurité.",
+        "operationId": "secondFactorEnable",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecondFactorCodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Activée ; session confirmée pour 15 minutes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecondFactorEnabled"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps de requête invalide (champ manquant, inconnu ou mal formé)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` : réservé à l'équipe",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`DEUX_FACTEURS_A_CONFIGURER` (afficher d'abord le QR code) ou `DEUX_FACTEURS_DEJA_ACTIVE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`CODE_INVALIDE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`TROP_D_ESSAIS` (3 échecs : session fermée, 15 minutes) ou `TROP_DE_REQUETES` (limite par compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`DEUX_FACTEURS_INDISPONIBLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/2fa/verify": {
+      "post": {
+        "tags": ["Double authentification"],
+        "summary": "Confirmer la session pour 15 minutes (code de l'application ou code de secours)",
+        "description": "Application d'authentification (TOTP, 6 chiffres, 30 s). Obligatoire pour les **modérateurs et administrateurs** : leurs routes d'équipe exigent une session confirmée par un code il y a moins de 15 minutes. **3 mots de passe ou codes faux** : la session est fermée et les codes bloqués 15 minutes ; le titulaire reçoit un avis de sécurité.\n\nUn code de l'application ne sert qu'une fois ; un code de secours aussi.",
+        "operationId": "secondFactorVerify",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecondFactorCodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session confirmée pour 15 minutes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecondFactorVerified"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps de requête invalide (champ manquant, inconnu ou mal formé)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`DEUX_FACTEURS_A_ACTIVER`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`CODE_INVALIDE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`TROP_D_ESSAIS` (3 échecs : session fermée, 15 minutes) ou `TROP_DE_REQUETES` (limite par compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`DEUX_FACTEURS_INDISPONIBLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/2fa/recovery-codes": {
+      "post": {
+        "tags": ["Double authentification"],
+        "summary": "Nouveaux codes de secours (contre un code frais de l'application)",
+        "description": "Application d'authentification (TOTP, 6 chiffres, 30 s). Obligatoire pour les **modérateurs et administrateurs** : leurs routes d'équipe exigent une session confirmée par un code il y a moins de 15 minutes. **3 mots de passe ou codes faux** : la session est fermée et les codes bloqués 15 minutes ; le titulaire reçoit un avis de sécurité.\n\nLes anciens codes de secours ne servent plus. Un code de secours n'est pas accepté ici.",
+        "operationId": "secondFactorRecoveryCodes",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecondFactorCodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Les 10 nouveaux codes, donnés une fois",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryCodes"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps de requête invalide (champ manquant, inconnu ou mal formé)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`DEUX_FACTEURS_A_ACTIVER`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`CODE_INVALIDE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`TROP_D_ESSAIS` (3 échecs : session fermée, 15 minutes) ou `TROP_DE_REQUETES` (limite par compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`DEUX_FACTEURS_INDISPONIBLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/accounts/lookup": {
       "post": {
         "tags": ["Administration"],
         "summary": "Retrouver un compte par e-mail ou téléphone",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes** (sinon `RECONNEXION_REQUISE` : se reconnecter).\n\nLes rôles sont relus à chaque requête : un rôle retiré ne sert plus, tout de suite.\n\nL'identifiant est dans le corps : jamais dans l'adresse ni dans les journaux techniques.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes (sinon `DEUX_FACTEURS_REQUIS` : redonner un code).\n\nLes rôles sont relus à chaque requête : un rôle retiré ne sert plus, tout de suite.\n\nL'identifiant est dans le corps : jamais dans l'adresse ni dans les journaux techniques.",
         "operationId": "lookupAccount",
         "security": [
           {
@@ -1341,7 +1779,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1387,7 +1825,7 @@
       "put": {
         "tags": ["Administration"],
         "summary": "Accorder le rôle vendeur ou modérateur à un compte",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes** (sinon `RECONNEXION_REQUISE` : se reconnecter).\n\nLes rôles sont relus à chaque requête : un rôle retiré ne sert plus, tout de suite.\n\nJamais sur son propre compte (`ROLE_SUR_SOI_INTERDIT`). Sans effet si le compte a déjà (ou n'a déjà plus) ce rôle ; sinon, une ligne est inscrite au journal d'audit dans la même transaction.\n\nLe compte doit être actif (`COMPTE_INACTIF`).",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes (sinon `DEUX_FACTEURS_REQUIS` : redonner un code).\n\nLes rôles sont relus à chaque requête : un rôle retiré ne sert plus, tout de suite.\n\nJamais sur son propre compte (`ROLE_SUR_SOI_INTERDIT`). Sans effet si le compte a déjà (ou n'a déjà plus) ce rôle ; sinon, une ligne est inscrite au journal d'audit dans la même transaction.\n\nLe compte doit être actif (`COMPTE_INACTIF`).",
         "operationId": "grantRole",
         "security": [
           {
@@ -1448,7 +1886,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1492,7 +1930,7 @@
       "delete": {
         "tags": ["Administration"],
         "summary": "Retirer le rôle vendeur ou modérateur d'un compte",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes** (sinon `RECONNEXION_REQUISE` : se reconnecter).\n\nLes rôles sont relus à chaque requête : un rôle retiré ne sert plus, tout de suite.\n\nJamais sur son propre compte (`ROLE_SUR_SOI_INTERDIT`). Sans effet si le compte a déjà (ou n'a déjà plus) ce rôle ; sinon, une ligne est inscrite au journal d'audit dans la même transaction.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes (sinon `DEUX_FACTEURS_REQUIS` : redonner un code).\n\nLes rôles sont relus à chaque requête : un rôle retiré ne sert plus, tout de suite.\n\nJamais sur son propre compte (`ROLE_SUR_SOI_INTERDIT`). Sans effet si le compte a déjà (ou n'a déjà plus) ce rôle ; sinon, une ligne est inscrite au journal d'audit dans la même transaction.",
         "operationId": "revokeRole",
         "security": [
           {
@@ -1553,7 +1991,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1589,7 +2027,7 @@
       "get": {
         "tags": ["Administration"],
         "summary": "Journal d'audit des actions sensibles, du plus récent au plus ancien",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes** (sinon `RECONNEXION_REQUISE` : se reconnecter).\n\nLes rôles sont relus à chaque requête : un rôle retiré ne sert plus, tout de suite.\n\nActions : `role.granted`, `role.revoked`, `password.reset`, `sessions.revoked_all`. Conservé 365 jours ; la base refuse toute modification.\n\nPage suivante : repasser `nextCursor` dans `before`.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes (sinon `DEUX_FACTEURS_REQUIS` : redonner un code).\n\nLes rôles sont relus à chaque requête : un rôle retiré ne sert plus, tout de suite.\n\nActions : `role.granted`, `role.revoked`, `password.reset`, `sessions.revoked_all`. Conservé 365 jours ; la base refuse toute modification.\n\nPage suivante : repasser `nextCursor` dans `before`.",
         "operationId": "listAuditEvents",
         "security": [
           {
@@ -1667,7 +2105,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2541,7 +2979,7 @@
       "post": {
         "tags": ["Administration"],
         "summary": "Créer un coupon",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque changement est inscrit au journal d'audit.\n\nUn coupon : pourcentage (1 à 90 %, plafond possible) ou montant fixe, **sur les articles seulement** ; par défaut une fois par compte et pas sur les articles déjà en promotion (BR-031). Ses règles ne changent plus une fois créé.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque changement est inscrit au journal d'audit.\n\nUn coupon : pourcentage (1 à 90 %, plafond possible) ou montant fixe, **sur les articles seulement** ; par défaut une fois par compte et pas sur les articles déjà en promotion (BR-031). Ses règles ne changent plus une fois créé.",
         "operationId": "createCoupon",
         "security": [
           {
@@ -2590,7 +3028,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2634,7 +3072,7 @@
       "get": {
         "tags": ["Administration"],
         "summary": "Coupons, du plus récent au plus ancien",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque changement est inscrit au journal d'audit.\n\nUn coupon : pourcentage (1 à 90 %, plafond possible) ou montant fixe, **sur les articles seulement** ; par défaut une fois par compte et pas sur les articles déjà en promotion (BR-031). Ses règles ne changent plus une fois créé.\n\nPage suivante : repasser `nextCursor` dans `before`.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque changement est inscrit au journal d'audit.\n\nUn coupon : pourcentage (1 à 90 %, plafond possible) ou montant fixe, **sur les articles seulement** ; par défaut une fois par compte et pas sur les articles déjà en promotion (BR-031). Ses règles ne changent plus une fois créé.\n\nPage suivante : repasser `nextCursor` dans `before`.",
         "operationId": "listCoupons",
         "security": [
           {
@@ -2694,7 +3132,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2720,7 +3158,7 @@
       "patch": {
         "tags": ["Administration"],
         "summary": "Activer ou désactiver un coupon",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque changement est inscrit au journal d'audit.\n\nUn coupon : pourcentage (1 à 90 %, plafond possible) ou montant fixe, **sur les articles seulement** ; par défaut une fois par compte et pas sur les articles déjà en promotion (BR-031). Ses règles ne changent plus une fois créé.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque changement est inscrit au journal d'audit.\n\nUn coupon : pourcentage (1 à 90 %, plafond possible) ou montant fixe, **sur les articles seulement** ; par défaut une fois par compte et pas sur les articles déjà en promotion (BR-031). Ses règles ne changent plus une fois créé.",
         "operationId": "updateCoupon",
         "security": [
           {
@@ -2781,7 +3219,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2817,7 +3255,7 @@
       "get": {
         "tags": ["Administration"],
         "summary": "Réglage du paiement à la livraison",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque changement est inscrit au journal d'audit.\n\nPaiement à la livraison (BR-011) : proposé dans les **zones** choisies et jusqu'au **total maximum** (livraison comprise). Le devis et la commande appliquent le nouveau réglage aussitôt.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque changement est inscrit au journal d'audit.\n\nPaiement à la livraison (BR-011) : proposé dans les **zones** choisies et jusqu'au **total maximum** (livraison comprise). Le devis et la commande appliquent le nouveau réglage aussitôt.",
         "operationId": "getCodSettings",
         "security": [
           {
@@ -2846,7 +3284,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2870,7 +3308,7 @@
       "put": {
         "tags": ["Administration"],
         "summary": "Changer le réglage du paiement à la livraison",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque changement est inscrit au journal d'audit.\n\nPaiement à la livraison (BR-011) : proposé dans les **zones** choisies et jusqu'au **total maximum** (livraison comprise). Le devis et la commande appliquent le nouveau réglage aussitôt.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque changement est inscrit au journal d'audit.\n\nPaiement à la livraison (BR-011) : proposé dans les **zones** choisies et jusqu'au **total maximum** (livraison comprise). Le devis et la commande appliquent le nouveau réglage aussitôt.",
         "operationId": "updateCodSettings",
         "security": [
           {
@@ -2919,7 +3357,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3137,7 +3575,7 @@
       "post": {
         "tags": ["Administration"],
         "summary": "Annuler une commande (service client)",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque action est inscrite au journal d'audit.\n\nToute commande **pas encore expédiée**, même payée : stock remis en vente, coupon rendu, et un remboursement **à faire** pour chaque paiement Mobile Money reçu. Une commande déjà annulée est renvoyée telle quelle.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque action est inscrite au journal d'audit.\n\nToute commande **pas encore expédiée**, même payée : stock remis en vente, coupon rendu, et un remboursement **à faire** pour chaque paiement Mobile Money reçu. Une commande déjà annulée est renvoyée telle quelle.",
         "operationId": "adminCancelOrder",
         "security": [
           {
@@ -3198,7 +3636,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3244,7 +3682,7 @@
       "post": {
         "tags": ["Administration"],
         "summary": "Noter l'encaissement d'un paiement à la livraison",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque action est inscrite au journal d'audit.\n\nEn attendant le livreur (S7). Le montant doit être **exactement** le total de la commande. Déjà noté : l'encaissement existant est renvoyé (200).",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque action est inscrite au journal d'audit.\n\nEn attendant le livreur (S7). Le montant doit être **exactement** le total de la commande. Déjà noté : l'encaissement existant est renvoyé (200).",
         "operationId": "codCollected",
         "security": [
           {
@@ -3315,7 +3753,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3361,7 +3799,7 @@
       "get": {
         "tags": ["Administration"],
         "summary": "Remboursements à faire (ou faits)",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque action est inscrite au journal d'audit.\n\nSuivi **manuel** en attendant l'API de l'opérateur : 200 au plus, les plus anciens d'abord.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque action est inscrite au journal d'audit.\n\nSuivi **manuel** en attendant l'API de l'opérateur : 200 au plus, les plus anciens d'abord.",
         "operationId": "listRefunds",
         "security": [
           {
@@ -3412,7 +3850,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3438,7 +3876,7 @@
       "post": {
         "tags": ["Administration"],
         "summary": "Noter un remboursement fait",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque action est inscrite au journal d'audit.\n\nAvec la référence de l'opération chez l'opérateur. La même référence renvoyée ne change rien.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque action est inscrite au journal d'audit.\n\nAvec la référence de l'opération chez l'opérateur. La même référence renvoyée ne change rien.",
         "operationId": "refundDone",
         "security": [
           {
@@ -3499,7 +3937,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3973,7 +4411,7 @@
       "get": {
         "tags": ["Administration"],
         "summary": "Informations de l'entreprise sur les factures",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes** ; chaque changement au journal d'audit. Raison sociale, adresse, NIF, RCCM, mention de TVA : copiés et **figés** dans chaque nouvelle facture (une facture émise ne change jamais).",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes ; chaque changement au journal d'audit. Raison sociale, adresse, NIF, RCCM, mention de TVA : copiés et **figés** dans chaque nouvelle facture (une facture émise ne change jamais).",
         "operationId": "getBillingSettings",
         "security": [
           {
@@ -4002,7 +4440,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4026,7 +4464,7 @@
       "put": {
         "tags": ["Administration"],
         "summary": "Changer les informations de l'entreprise sur les factures",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes** ; chaque changement au journal d'audit. Raison sociale, adresse, NIF, RCCM, mention de TVA : copiés et **figés** dans chaque nouvelle facture (une facture émise ne change jamais).",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes ; chaque changement au journal d'audit. Raison sociale, adresse, NIF, RCCM, mention de TVA : copiés et **figés** dans chaque nouvelle facture (une facture émise ne change jamais).",
         "operationId": "updateBillingSettings",
         "security": [
           {
@@ -4075,7 +4513,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `RECONNEXION_REQUISE` (connexion de plus de 15 minutes)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4229,7 +4667,7 @@
       "get": {
         "tags": ["Boutiques"],
         "summary": "Boutiques, de la demande la plus ancienne à la plus récente",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque décision est inscrite au journal d'audit.\n\nValider (en attente ou suspendue → active) accorde le rôle **vendeur** ; suspendre (active → suspendue) le retire ; refuser (en attente → refusée) ne change aucun rôle. Boutique, rôle et journal changent ensemble ou pas du tout. Personne ne décide pour sa propre boutique ; la boutique Kemdia n'est jamais concernée.\n\nPage suivante : repasser `nextCursor` dans `after`.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.\n\nValider (en attente ou suspendue → active) accorde le rôle **vendeur** ; suspendre (active → suspendue) le retire ; refuser (en attente → refusée) ne change aucun rôle. Boutique, rôle et journal changent ensemble ou pas du tout. Personne ne décide pour sa propre boutique ; la boutique Kemdia n'est jamais concernée.\n\nPage suivante : repasser `nextCursor` dans `after`.",
         "operationId": "listShops",
         "security": [
           {
@@ -4298,7 +4736,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis), `RECONNEXION_REQUISE` (connexion de plus de 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4324,7 +4762,7 @@
       "get": {
         "tags": ["Boutiques"],
         "summary": "Une boutique",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque décision est inscrite au journal d'audit.\n\nValider (en attente ou suspendue → active) accorde le rôle **vendeur** ; suspendre (active → suspendue) le retire ; refuser (en attente → refusée) ne change aucun rôle. Boutique, rôle et journal changent ensemble ou pas du tout. Personne ne décide pour sa propre boutique ; la boutique Kemdia n'est jamais concernée.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.\n\nValider (en attente ou suspendue → active) accorde le rôle **vendeur** ; suspendre (active → suspendue) le retire ; refuser (en attente → refusée) ne change aucun rôle. Boutique, rôle et journal changent ensemble ou pas du tout. Personne ne décide pour sa propre boutique ; la boutique Kemdia n'est jamais concernée.",
         "operationId": "getShop",
         "security": [
           {
@@ -4375,7 +4813,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis), `RECONNEXION_REQUISE` (connexion de plus de 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4411,7 +4849,7 @@
       "post": {
         "tags": ["Boutiques"],
         "summary": "Valider ou réactiver une boutique (rôle vendeur accordé)",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque décision est inscrite au journal d'audit.\n\nValider (en attente ou suspendue → active) accorde le rôle **vendeur** ; suspendre (active → suspendue) le retire ; refuser (en attente → refusée) ne change aucun rôle. Boutique, rôle et journal changent ensemble ou pas du tout. Personne ne décide pour sa propre boutique ; la boutique Kemdia n'est jamais concernée.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.\n\nValider (en attente ou suspendue → active) accorde le rôle **vendeur** ; suspendre (active → suspendue) le retire ; refuser (en attente → refusée) ne change aucun rôle. Boutique, rôle et journal changent ensemble ou pas du tout. Personne ne décide pour sa propre boutique ; la boutique Kemdia n'est jamais concernée.",
         "operationId": "approveShop",
         "security": [
           {
@@ -4462,7 +4900,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis), `RECONNEXION_REQUISE` (connexion de plus de 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4508,7 +4946,7 @@
       "post": {
         "tags": ["Boutiques"],
         "summary": "Refuser une demande de boutique (motif montré au demandeur)",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque décision est inscrite au journal d'audit.\n\nValider (en attente ou suspendue → active) accorde le rôle **vendeur** ; suspendre (active → suspendue) le retire ; refuser (en attente → refusée) ne change aucun rôle. Boutique, rôle et journal changent ensemble ou pas du tout. Personne ne décide pour sa propre boutique ; la boutique Kemdia n'est jamais concernée.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.\n\nValider (en attente ou suspendue → active) accorde le rôle **vendeur** ; suspendre (active → suspendue) le retire ; refuser (en attente → refusée) ne change aucun rôle. Boutique, rôle et journal changent ensemble ou pas du tout. Personne ne décide pour sa propre boutique ; la boutique Kemdia n'est jamais concernée.",
         "operationId": "rejectShop",
         "security": [
           {
@@ -4569,7 +5007,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis), `RECONNEXION_REQUISE` (connexion de plus de 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4625,7 +5063,7 @@
       "post": {
         "tags": ["Boutiques"],
         "summary": "Suspendre une boutique (rôle vendeur retiré)",
-        "description": "Réservé aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque décision est inscrite au journal d'audit.\n\nValider (en attente ou suspendue → active) accorde le rôle **vendeur** ; suspendre (active → suspendue) le retire ; refuser (en attente → refusée) ne change aucun rôle. Boutique, rôle et journal changent ensemble ou pas du tout. Personne ne décide pour sa propre boutique ; la boutique Kemdia n'est jamais concernée.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.\n\nValider (en attente ou suspendue → active) accorde le rôle **vendeur** ; suspendre (active → suspendue) le retire ; refuser (en attente → refusée) ne change aucun rôle. Boutique, rôle et journal changent ensemble ou pas du tout. Personne ne décide pour sa propre boutique ; la boutique Kemdia n'est jamais concernée.",
         "operationId": "suspendShop",
         "security": [
           {
@@ -4686,7 +5124,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle administrateur requis), `RECONNEXION_REQUISE` (connexion de plus de 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
+            "description": "`ACCES_REFUSE` (rôle administrateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5453,7 +5891,7 @@
       "get": {
         "tags": ["Modération"],
         "summary": "Produits à modérer, de la demande la plus ancienne à la plus récente",
-        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque décision est inscrite au journal d'audit.\n\nSeulement un produit **en attente**, et seulement **la version lue** : la décision porte le `submittedAt` lu ; si le vendeur a renvoyé le produit depuis, elle est refusée (`PRODUIT_MODIFIE`). Personne ne modère un produit de sa propre boutique. Un produit validé n'est visible que si sa boutique n'est pas suspendue.\n\nPage suivante : repasser `nextCursor` dans `after`.",
+        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.\n\nSeulement un produit **en attente**, et seulement **la version lue** : la décision porte le `submittedAt` lu ; si le vendeur a renvoyé le produit depuis, elle est refusée (`PRODUIT_MODIFIE`). Personne ne modère un produit de sa propre boutique. Un produit validé n'est visible que si sa boutique n'est pas suspendue.\n\nPage suivante : repasser `nextCursor` dans `after`.",
         "operationId": "listProductsToModerate",
         "security": [
           {
@@ -5522,7 +5960,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle modérateur requis), `RECONNEXION_REQUISE` (connexion de plus de 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
+            "description": "`ACCES_REFUSE` (rôle modérateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5548,7 +5986,7 @@
       "get": {
         "tags": ["Modération"],
         "summary": "Un produit de vendeur",
-        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque décision est inscrite au journal d'audit.\n\nSeulement un produit **en attente**, et seulement **la version lue** : la décision porte le `submittedAt` lu ; si le vendeur a renvoyé le produit depuis, elle est refusée (`PRODUIT_MODIFIE`). Personne ne modère un produit de sa propre boutique. Un produit validé n'est visible que si sa boutique n'est pas suspendue.",
+        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.\n\nSeulement un produit **en attente**, et seulement **la version lue** : la décision porte le `submittedAt` lu ; si le vendeur a renvoyé le produit depuis, elle est refusée (`PRODUIT_MODIFIE`). Personne ne modère un produit de sa propre boutique. Un produit validé n'est visible que si sa boutique n'est pas suspendue.",
         "operationId": "getProductToModerate",
         "security": [
           {
@@ -5599,7 +6037,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle modérateur requis), `RECONNEXION_REQUISE` (connexion de plus de 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
+            "description": "`ACCES_REFUSE` (rôle modérateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5635,7 +6073,7 @@
       "post": {
         "tags": ["Modération"],
         "summary": "Valider un produit (visible des clients)",
-        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque décision est inscrite au journal d'audit.\n\nSeulement un produit **en attente**, et seulement **la version lue** : la décision porte le `submittedAt` lu ; si le vendeur a renvoyé le produit depuis, elle est refusée (`PRODUIT_MODIFIE`). Personne ne modère un produit de sa propre boutique. Un produit validé n'est visible que si sa boutique n'est pas suspendue.",
+        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.\n\nSeulement un produit **en attente**, et seulement **la version lue** : la décision porte le `submittedAt` lu ; si le vendeur a renvoyé le produit depuis, elle est refusée (`PRODUIT_MODIFIE`). Personne ne modère un produit de sa propre boutique. Un produit validé n'est visible que si sa boutique n'est pas suspendue.",
         "operationId": "approveProduct",
         "security": [
           {
@@ -5696,7 +6134,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle modérateur requis), `RECONNEXION_REQUISE` (connexion de plus de 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
+            "description": "`ACCES_REFUSE` (rôle modérateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5742,7 +6180,7 @@
       "post": {
         "tags": ["Modération"],
         "summary": "Refuser un produit (motif montré au vendeur)",
-        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session ouverte il y a **moins de 15 minutes**. Chaque décision est inscrite au journal d'audit.\n\nSeulement un produit **en attente**, et seulement **la version lue** : la décision porte le `submittedAt` lu ; si le vendeur a renvoyé le produit depuis, elle est refusée (`PRODUIT_MODIFIE`). Personne ne modère un produit de sa propre boutique. Un produit validé n'est visible que si sa boutique n'est pas suspendue.",
+        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.\n\nSeulement un produit **en attente**, et seulement **la version lue** : la décision porte le `submittedAt` lu ; si le vendeur a renvoyé le produit depuis, elle est refusée (`PRODUIT_MODIFIE`). Personne ne modère un produit de sa propre boutique. Un produit validé n'est visible que si sa boutique n'est pas suspendue.",
         "operationId": "rejectProduct",
         "security": [
           {
@@ -5803,7 +6241,7 @@
             }
           },
           "403": {
-            "description": "`ACCES_REFUSE` (rôle modérateur requis), `RECONNEXION_REQUISE` (connexion de plus de 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
+            "description": "`ACCES_REFUSE` (rôle modérateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -6144,7 +6582,13 @@
               "product.approved",
               "product.rejected",
               "product.archived",
-              "product.variant_updated"
+              "product.variant_updated",
+              "mfa.enabled",
+              "mfa.recovery_used",
+              "mfa.recovery_regenerated",
+              "mfa.failed",
+              "mfa.locked",
+              "mfa.reset"
             ]
           },
           "actor": {
@@ -8323,6 +8767,12 @@
               "COMPTE_INTROUVABLE",
               "COMPTE_INACTIF",
               "TROP_DE_REQUETES",
+              "MOT_DE_PASSE_INCORRECT",
+              "DEUX_FACTEURS_INDISPONIBLE",
+              "DEUX_FACTEURS_A_CONFIGURER",
+              "DEUX_FACTEURS_DEJA_ACTIVE",
+              "DEUX_FACTEURS_A_ACTIVER",
+              "DEUX_FACTEURS_REQUIS",
               "PANIER_PLEIN",
               "PRODUIT_INDISPONIBLE",
               "VARIANTE_INCONNUE",
@@ -8699,6 +9149,24 @@
         "additionalProperties": false,
         "description": "Produit dans une liste (carte produit)"
       },
+      "RecoveryCodes": {
+        "type": "object",
+        "properties": {
+          "recoveryCodes": {
+            "minItems": 10,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z2-9]{4}-[a-z2-9]{4}-[a-z2-9]{4}$"
+            },
+            "description": "Codes de secours, donnés UNE seule fois : à noter et ranger hors du téléphone"
+          }
+        },
+        "required": ["recoveryCodes"],
+        "additionalProperties": false,
+        "description": "Nouveaux codes de secours (les anciens ne servent plus)"
+      },
       "Refund": {
         "type": "object",
         "properties": {
@@ -8935,6 +9403,127 @@
         },
         "required": ["items"],
         "additionalProperties": false
+      },
+      "SecondFactorCodeRequest": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 30,
+            "description": "Code à 6 chiffres de l'application, ou code de secours « abcd-efgh-jkmn »"
+          }
+        },
+        "required": ["code"],
+        "additionalProperties": false,
+        "description": "Un code de double authentification"
+      },
+      "SecondFactorEnabled": {
+        "type": "object",
+        "properties": {
+          "recoveryCodes": {
+            "minItems": 10,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z2-9]{4}-[a-z2-9]{4}-[a-z2-9]{4}$"
+            },
+            "description": "Codes de secours, donnés UNE seule fois : à noter et ranger hors du téléphone"
+          },
+          "verifiedUntil": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": ["recoveryCodes", "verifiedUntil"],
+        "additionalProperties": false,
+        "description": "Double authentification activée, session confirmée"
+      },
+      "SecondFactorSetup": {
+        "type": "object",
+        "properties": {
+          "secret": {
+            "type": "string",
+            "pattern": "^[A-Z2-7]{32}$",
+            "description": "Secret en base32, à taper si le QR code ne passe pas"
+          },
+          "otpauthUri": {
+            "type": "string",
+            "format": "starts_with",
+            "pattern": "^otpauth:\\/\\/totp\\/.*",
+            "description": "Contenu du QR code"
+          }
+        },
+        "required": ["secret", "otpauthUri"],
+        "additionalProperties": false,
+        "description": "Secret à ajouter à l'application d'authentification"
+      },
+      "SecondFactorSetupRequest": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Mot de passe du compte (une session volée ne suffit pas)"
+          }
+        },
+        "required": ["password"],
+        "additionalProperties": false,
+        "description": "Afficher le QR code de la double authentification"
+      },
+      "SecondFactorStatus": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Activée sur ce compte"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Obligatoire pour ce compte (modérateur ou administrateur)"
+          },
+          "verifiedUntil": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Session confirmée jusqu'à cette heure ; vide : routes d'équipe fermées"
+          },
+          "recoveryCodesLeft": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Codes de secours encore utilisables"
+          }
+        },
+        "required": ["enabled", "required", "verifiedUntil", "recoveryCodesLeft"],
+        "additionalProperties": false,
+        "description": "Double authentification du compte connecté"
+      },
+      "SecondFactorVerified": {
+        "type": "object",
+        "properties": {
+          "verifiedUntil": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "recoveryCodesLeft": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["verifiedUntil", "recoveryCodesLeft"],
+        "additionalProperties": false,
+        "description": "Session confirmée pour 15 minutes"
       },
       "Shop": {
         "type": "object",
