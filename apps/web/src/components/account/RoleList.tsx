@@ -1,7 +1,8 @@
 import { ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { ROLE_LABELS, type Role } from "@kemdia/contracts/constants";
 
-/** Rôles du compte (S4-T06). Les écrans d'administration arrivent au S6, avec la double authentification. */
+/** Rôles du compte (S4-T06). Équipe : lien vers son espace (S6-T05), protégé par la double authentification. */
 export function RoleList({ roles }: { roles: readonly Role[] }) {
   const team = roles.includes("admin") || roles.includes("moderator");
   return (
@@ -19,9 +20,12 @@ export function RoleList({ roles }: { roles: readonly Role[] }) {
         ))}
       </ul>
       {team && (
-        <p className="text-ink-500 mt-2 text-sm">
-          Les outils d&apos;administration et de modération arriveront bientôt sur le site.
-        </p>
+        <Link
+          href="/equipe"
+          className="bg-ink-900 hover:bg-ink-800 mt-3 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white"
+        >
+          <ShieldCheck className="size-4" aria-hidden /> Ouvrir l&apos;espace de l&apos;équipe
+        </Link>
       )}
     </div>
   );
