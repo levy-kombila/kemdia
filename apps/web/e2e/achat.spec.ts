@@ -135,7 +135,8 @@ test.describe("premier achat avec un compte neuf", () => {
 
     // « Mes commandes » la montre ; le panier est vide
     await page.goto("/compte/commandes");
-    await expect(page.getByRole("link", { name: new RegExp(reference) })).toBeVisible();
+    // Nom partiel : le lien contient la référence (texte simple, pas d'expression régulière)
+    await expect(page.getByRole("link", { name: reference })).toBeVisible();
     await page.goto("/panier");
     await expect(page.getByRole("heading", { name: "Votre panier est vide" })).toBeVisible();
   });
