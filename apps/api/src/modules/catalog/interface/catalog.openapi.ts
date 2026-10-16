@@ -81,6 +81,44 @@ export const catalogPaths = {
       },
     },
   },
+  "/api/v1/product-images/{imageId}/{size}": {
+    get: {
+      tags: ["Catalogue"],
+      summary: "Photo d'un produit de vendeur (relayée par le site sous /images/v/…)",
+      description:
+        "S6-T04, ADR-0035 : servie seulement si son produit est **validé** et sa boutique **active** ; sinon 404, sans dire si elle existe. WebP sans métadonnées. Cache 60 s (+ 5 min pendant la mise à jour) : une photo retirée ou un produit caché cesse d'être servi en 6 minutes au plus. 300 requêtes par minute et par adresse.",
+      operationId: "getProductImage",
+      parameters: [
+        {
+          name: "imageId",
+          in: "path",
+          required: true,
+          description: "Identifiant de la photo",
+          schema: { type: "string", format: "uuid" },
+        },
+        {
+          name: "size",
+          in: "path",
+          required: true,
+          description: "`large` (1 600 px au plus) ou `small` (vignette, 480 px au plus)",
+          schema: { type: "string", enum: ["large", "small"] },
+        },
+      ],
+      responses: {
+        "200": {
+          description: "La photo (WebP)",
+          headers: {
+            ETag: { description: "Empreinte de la photo et taille", schema: { type: "string" } },
+          },
+          content: { "image/webp": { schema: { type: "string", format: "binary" } } },
+        },
+        "304": { description: "Inchangée (`If-None-Match`)" },
+        "400": problem("Paramètre invalide"),
+        "404": problem("`PHOTO_INTROUVABLE`"),
+        "429": tooMany,
+      },
+    },
+  },
   "/api/v1/availability": {
     post: {
       tags: ["Catalogue"],

@@ -3,6 +3,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { CatalogService } from "./application/catalog.service.js";
 import {
   CATALOG_RANDOM,
+  IMAGE_PROCESSOR,
+  PRODUCT_IMAGE_STORE,
   CATEGORY_REPOSITORY,
   PRODUCT_REPOSITORY,
   STOCK_REPOSITORY,
@@ -10,11 +12,14 @@ import {
 } from "./application/ports.js";
 import { VendorCatalog } from "./application/vendor-catalog.service.js";
 import { PrismaVendorProductRepository } from "./infrastructure/prisma-vendor-product.repository.js";
+import { PrismaProductImageStore } from "./infrastructure/prisma-product-image.store.js";
+import { SharpImageProcessor } from "./infrastructure/sharp-image-processor.js";
 import { StockService } from "./application/stock.service.js";
 import { PrismaStockRepository } from "./infrastructure/prisma-stock.repository.js";
 import { PrismaCategoryRepository } from "./infrastructure/prisma-category.repository.js";
 import { PrismaProductRepository } from "./infrastructure/prisma-product.repository.js";
 import { CatalogController } from "./interface/catalog.controller.js";
+import { ProductImageController } from "./interface/product-image.controller.js";
 
 /** `size` caractères tirés au hasard (cryptographiquement) dans `alphabet`. */
 function pick(alphabet: string, size: number): string {
@@ -27,7 +32,7 @@ function pick(alphabet: string, size: number): string {
  * Routes HTTP : interface/catalog.controller.ts (`/api/v1/…`).
  */
 @Module({
-  controllers: [CatalogController],
+  controllers: [CatalogController, ProductImageController],
   providers: [
     CatalogService,
     StockService,
@@ -36,6 +41,9 @@ function pick(alphabet: string, size: number): string {
     { provide: PRODUCT_REPOSITORY, useClass: PrismaProductRepository },
     // Produits des vendeurs et modération (S6-T02) : utilisé par le module vendors, qui décide des droits
     VendorCatalog,
+    // Photos des produits (S6-T04) : réencodage sharp, rangement PostgreSQL (port remplaçable)
+    { provide: IMAGE_PROCESSOR, useClass: SharpImageProcessor },
+    { provide: PRODUCT_IMAGE_STORE, useClass: PrismaProductImageStore },
     { provide: VENDOR_PRODUCT_REPOSITORY, useClass: PrismaVendorProductRepository },
     {
       provide: CATALOG_RANDOM,

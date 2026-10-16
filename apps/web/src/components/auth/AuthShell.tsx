@@ -1,5 +1,5 @@
 import { BadgeCheck, ShieldCheck, Smartphone, Truck } from "lucide-react";
-import Image from "next/image";
+import { ProductImage } from "@/components/ui/ProductImage";
 import type { ReactNode } from "react";
 import { getBestsellers, getFeaturedProducts } from "@/lib/catalog";
 
@@ -34,7 +34,13 @@ export async function AuthShell({
             {products.map((p) => (
               <li key={p.id} className="relative aspect-square overflow-hidden rounded-xl bg-white">
                 {p.image && (
-                  <Image src={p.image} alt="" fill sizes="160px" className="object-contain p-3" />
+                  <ProductImage
+                    src={p.image}
+                    alt=""
+                    fill
+                    sizes="160px"
+                    className="object-contain p-3"
+                  />
                 )}
               </li>
             ))}

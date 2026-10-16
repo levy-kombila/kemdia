@@ -9,6 +9,7 @@
 | **0.5** | 2026-10-05 | S2     | §5.4 parcours d'identité (connexion, inscription, code OTP) et port `AuthClient` ; §6.2 mesures de sécurité des formulaires ; §9 tests                                                                                |
 | **1.0** | 2026-10-06 | S2     | §2.2 et §9 budget de performance mesuré à chaque PR ; §7 étape performance ; fin du Sprint 2 (v0.2.0)                                                                                                                 |
 | **4.0** | 2026-10-16 | S6     | Double authentification de l'équipe (ADR-0034, MED-15) : §3.4 `TOTP_ENCRYPTION_KEY`, §3.7 routes `/auth/2fa` et contrat 1.16.0, §3.10 actions `mfa.*`, §3.18 (nouvelle), §6.4                                         |
+| **4.1** | 2026-10-16 | S6     | Photos des produits des vendeurs (ADR-0035) : §3.5 table `catalog.product_images`, §3.7 routes et contrat 1.17.0, §3.10 actions, §3.19 (nouvelle), §5.14 (nouvelle), §6.4                                             |
 | **3.9** | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                  |
 | **3.8** | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                        |
 | **3.7** | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                           |
@@ -300,7 +301,7 @@ flowchart LR
     end
     ps -->|≤ 10 connexions<br/>requête ≤ 10 s| pg
     subgraph pg[(PostgreSQL 18 — base « kemdia »)]
-      catalog[schéma catalog]
+      catalog[schéma catalog<br/>photos des vendeurs — S6-T04]
       identity[schéma identity — S4]
       auditdb[schéma audit — S4-T06<br/>ajout seul]
       ordersdb[schéma orders — S5<br/>paniers, commandes]
@@ -435,6 +436,9 @@ Décision : [ADR-0010](adr/0010-api-rest-openapi.md). Description complète : [`
 | `POST\|GET /api/v1/vendors/products`, `GET\|PUT …/{id}`                         | Produits de ma boutique : créer (en modération), lister, lire, modifier le contenu (repasse en modération) — vendeur à boutique active (S6-T02) | aucun | 60/min/compte (écritures 20) |
 | `PATCH /api/v1/vendors/products/{id}/variants/{vid}`, `POST …/archive\|restore` | Prix, stock (avec le stock lu), activation sans modération ; archiver ; remettre en vente — vendeur (S6-T02)                                    | aucun | 60/min/compte                |
 | `GET /api/v1/moderation/products[/{id}]`, `POST …/approve\|reject`              | File de modération ; valider ou refuser la version lue (`submittedAt`), motif — modérateur ou admin, < 15 min, journal (S6-T02)                 | aucun | 30/min/IP                    |
+| `POST\|PUT /api/v1/vendors/products/{id}/images`, `GET\|DELETE …/{imageId}`     | Photos de ma boutique : envoyer le fichier (JPEG, PNG, WebP, 5 Mo ; repasse en modération), ordre, aperçu, retrait — vendeur (S6-T04)           | aucun | 60/min/compte (envois 20)    |
+| `GET /api/v1/moderation/products/{id}/images/{imageId}`                         | Photo d'un produit à modérer, quel que soit son statut — modérateur ou admin, 2FA (S6-T04)                                                      | aucun | 120/min                      |
+| `GET /api/v1/product-images/{imageId}/{large\|small}`                           | Photo publique, seulement si le produit est visible ; relayée par le site sous `/images/v/…` (S6-T04)                                           | 60 s  | 300/min/IP                   |
 | `POST /api/v1/admin/shops/{id}/approve\|reject\|suspend`                        | Valider (rôle vendeur accordé), refuser ou suspendre (rôle retiré), motif montré — admin, < 15 min, journal (S6-T01)                            | aucun | 30/min/IP                    |
 | `GET /api/health`                                                               | État de l'API et de la base                                                                                                                     | aucun | aucune                       |
 | `GET /api/v1/openapi.json`, `/api/docs`                                         | Documentation (si `API_DOCS`, désactivée par défaut en production)                                                                              | 5 min | aucune                       |
@@ -495,6 +499,11 @@ Contrat 1.14.0.
 `VENDOR_PRODUCT_LIMITS`, `MAX_PENDING_PRODUCTS_PER_SHOP` ; codes `BOUTIQUE_INACTIVE`, `PRODUIT_INVALIDE`, `CATEGORIE_INCONNUE`,
 `PRODUIT_INTROUVABLE`, `VARIANTE_INTROUVABLE`, `STATUT_PRODUIT_INCOMPATIBLE`, `PRODUIT_SUR_SOI_INTERDIT`, `STOCK_MODIFIE`,
 `PRODUIT_MODIFIE`, `TROP_DE_PRODUITS_EN_ATTENTE` ; cible `product` au journal. Contrat 1.15.0.
+
+**Photos des produits des vendeurs (S6-T04, [ADR-0035](adr/0035-photos-produits-vendeurs.md))** : schémas
+`ProductImageOrderRequest`, `ProductImageParams`, `PublicProductImageParams` ; `PRODUCT_IMAGE_TYPES`, `PRODUCT_IMAGE_LIMITS`,
+`VENDOR_IMAGE_PATH_PATTERN` ; codes `FORMAT_IMAGE_INVALIDE` (415), `IMAGE_TROP_GRANDE` (413), `IMAGE_TROP_PETITE` (422),
+`TROP_DE_PHOTOS` (409), `PHOTO_INTROUVABLE` (404). Contrat 1.17.0 (1.16.0 : double authentification).
 
 ### 3.8 Image Docker de l'API (S3-T06)
 
@@ -626,11 +635,13 @@ src/modules/audit/
 | `shop.requested`                          | Demandeur (S6-T01)                 | `name`, `previousName` (nouvelle demande)            |
 | `shop.approved`                           | Administrateur (S6-T01)            | `name`, `from`, `to` (+ `role.granted`)              |
 | `shop.rejected`                           | Administrateur (S6-T01)            | `name`, `from`, `to`, `reason` (100 caractères)      |
-| `product.submitted`                       | Vendeur (S6-T02)                   | `title`, `reason`, `from`                            |
+| `product.submitted`                       | Vendeur (S6-T02)                   | `title`, `reason`, `from` (+ `image`, `sha256`)      |
 | `product.approved`                        | Modérateur (S6-T02)                | `title`, `from`, `to`                                |
 | `product.rejected`                        | Modérateur (S6-T02)                | `title`, `from`, `to`, `reason`                      |
 | `product.archived`                        | Vendeur (S6-T02)                   | `title`, `from`                                      |
 | `product.variant_updated`                 | Vendeur (S6-T02)                   | `sku`, prix / prix barré / stock avant et après      |
+| `product.image_removed`                   | Vendeur (S6-T04)                   | `title`, `image`, `sha256`                           |
+| `product.images_reordered`                | Vendeur (S6-T04)                   | `title`                                              |
 | `shop.suspended`                          | Administrateur (S6-T01)            | `name`, `from`, `to`, `reason` (+ `role.revoked`)    |
 
 Table `audit.events` : identifiant, date (**posée par la base**), action, type et UUID de l'acteur, type et UUID de la cible, détails (JSON ≤ 2 Ko),
@@ -872,6 +883,37 @@ sequenceDiagram
 
 Essais : 3 échecs en 15 minutes → session fermée et 15 minutes de blocage ; 10 échecs en 24 heures → toutes les sessions du compte
 fermées. `mfa:reset` (commande serveur) supprime la 2FA, ferme les sessions et rend le mot de passe inutilisable.
+
+### 3.19 Photos des produits des vendeurs (S6-T04)
+
+Décision : [ADR-0035](adr/0035-photos-produits-vendeurs.md). Module `catalog` : `domain/product-image.ts` (règles pures),
+`infrastructure/sharp-image-processor.ts` (réencodage), `infrastructure/prisma-product-image.store.ts` (port `ProductImageStore`,
+remplaçable par un stockage objet), `interface/product-image.controller.ts` (route publique). Module `vendors` : droits, journal,
+routes du vendeur et de la modération.
+
+```mermaid
+sequenceDiagram
+    participant V as Vendeur
+    participant API
+    participant DB as PostgreSQL
+    participant S as Site (relais /images/v)
+    V->>API: POST …/images (fichier brut, Bearer)
+    API->>API: vérification rapide (boutique, produit, place)
+    API->>API: réencodage WebP 1600 + 480 px, sans métadonnées (2 à la fois, 15 s)
+    API->>DB: photo + produit renvoyé en modération (une transaction, sous verrou)
+    Note over API,DB: la modération voit la photo ; elle valide la version lue
+    S->>API: GET /product-images/{id}/small (clé interne, adresse du visiteur)
+    API->>DB: produit visible ? puis octets
+    API-->>S: WebP (cache 60 s) ou 404
+```
+
+| Table                    | Contenu                                                                        | Règles SQL ajoutées à la main                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `catalog.product_images` | Produit, grande image (1 600 px) et vignette (480 px) en WebP, taille, SHA-256 | 16 o à 2 Mo, en-tête WebP sur les deux, 1 à 1 600 px, empreinte hexadécimale ; **jamais modifiée** (déclencheur) |
+
+Adresse rangée dans `products.images` : `/images/v/<id>.webp` (vignette : `…-480.webp`), comme une photo du catalogue Kemdia : cartes,
+panier et commandes n'ont rien à changer. Ajouter une photo renvoie le produit en modération ; la retirer (effacée aussitôt) ou changer
+l'ordre ne le fait pas. Envoi : corps lu seulement avec un jeton de session bien formé, 6 envois en cours au plus (503 sinon).
 
 ## 4. Choix technologiques
 
@@ -1183,6 +1225,15 @@ le layout affiche un bandeau (`components/layout/DemoBanner.tsx` : « aucun vrai
 `app/demo/page.tsx` explique le parcours en 4 étapes (compte, achat et `DEMO10`, téléphone simulé, facture). Ailleurs : ni bandeau,
 ni page (404). Non indexée.
 
+### 5.14 Photos des vendeurs (S6-T04)
+
+Décision : [ADR-0035](adr/0035-photos-produits-vendeurs.md). `app/images/v/[file]/route.ts` relaie la photo demandée à l'API
+(`lib/catalog/api-vendor-image.ts`, clé interne et adresse du visiteur) et ne renvoie qu'un WebP vérifié (type, en-tête, 2 Mo),
+en cache 60 s (+ 5 min pendant la mise à jour). `components/ui/ProductImage.tsx` remplace `next/image` partout : photos du catalogue
+Kemdia par l'optimiseur comme avant ; photos des vendeurs **sans** optimiseur (il les garderait 24 h, même retirées), vignette de
+480 px dans les listes, grande image sur la fiche. `images.localPatterns` est limité aux dossiers fixes (`/images/products`,
+`/images/categories`, `placeholder.svg`). Les aperçus de partage (OpenGraph) n'affichent pas encore les photos des vendeurs.
+
 ## 6. Sécurité
 
 ### 6.1 Principes
@@ -1268,7 +1319,7 @@ Le suivi détaillé des 45 failles est dans [`docs/securite/heritage-audit-djang
 
 - Démo : régler `CLIENT_IP_HEADER` une fois l'en-tête fiable de Render vérifié ; collecte des violations de CSP (`report-to`).
 - S5 : signature des webhooks Mobile Money, idempotence des paiements. Fait au S5-T01 : panier modifié sous verrou en une transaction, prix jamais reçus du navigateur, UUID normalisés. Fait au S5-T02 : stock réservé dans la transaction de la commande (BR-012), commandes idempotentes, montants figés par la base, 3 commandes ouvertes au plus par compte. Fait au S5-T03 : coupons comptés de façon atomique (BR-030), jamais de commande à 0 FCFA, limite d'essais de codes. Fait au S5-T06 : factures figées et numérotées sans trou par la base, PDF jamais en erreur sur un texte du client, e-mail réservé avant l'envoi (pas de doublon), aucune facture « à compléter » en production. Fait au S5-T05 : notifications signées (HMAC-SHA256 sur le corps brut, 5 minutes), rejeu ignoré dans la même transaction (CRIT-01 traité), opérateur simulé jamais actif en production. Fait au S5-T07 : aucun article ni prix envoyé par le site, montants du devis seulement, Mobile Money refusé sans fournisseur, demandes de paiement expirées à l'annulation par le client, factures relayées par le serveur du site (session, numéros revérifiés, jamais en cache, 2 Mo au plus), actions serveur revérifiant chaque argument. Fait au S5-T04 : résultat d'un paiement vérifié (référence, montant), argent non attendu → remboursement à faire, commande payée non annulable en ligne, 5 demandes par heure au plus vers un même numéro, paiements et remboursements jamais effacés.
-- S6 : écrans d'administration ; double authentification (MED-15) faite au S6-T03 : TOTP obligatoire pour l'équipe, confirmation par session (15 min), secrets chiffrés, codes de secours, essais limités sur 15 min et 24 h, avis au titulaire, remise à zéro qui invalide le mot de passe ; nouvelles actions au journal (KYC, modération). Fait au S6-T02 : produits des vendeurs invisibles jusqu'à la validation, validation de la seule version lue (`PRODUIT_MODIFIE`), jamais sur sa propre boutique, boutique suspendue = produits cachés partout (y compris la réservation du stock), stock jamais écrasé (`previousStock`), textes invisibles refusés, panier sans titre non modéré, file bornée, prix et stock tracés. Fait au S6-T01 : une boutique par compte (verrou par compte), nom unique sans casse ni accents et signes ressemblants confondus, lettres ASCII et accentuées du français seulement, « Kemdia » interdit même déguisé (pas d'usurpation), nom libéré au refus, motifs et demandes au journal, caractères invisibles retirés, personne ne décide pour sa propre boutique, boutique + rôle + journal dans une transaction, mêmes règles en contraintes SQL.
+- S6 : écrans d'administration ; photos des vendeurs faites au S6-T04 : format reconnu par le contenu, réencodage WebP sans métadonnées (GPS), 40 mégapixels et 15 s au plus, 2 réencodages et 6 envois à la fois, photo publique seulement pour un produit visible, vignette tirée de l'image vue par la modération, empreintes au journal, jamais par l'optimiseur de Next.js ; double authentification (MED-15) faite au S6-T03 : TOTP obligatoire pour l'équipe, confirmation par session (15 min), secrets chiffrés, codes de secours, essais limités sur 15 min et 24 h, avis au titulaire, remise à zéro qui invalide le mot de passe ; nouvelles actions au journal (KYC, modération). Fait au S6-T02 : produits des vendeurs invisibles jusqu'à la validation, validation de la seule version lue (`PRODUIT_MODIFIE`), jamais sur sa propre boutique, boutique suspendue = produits cachés partout (y compris la réservation du stock), stock jamais écrasé (`previousStock`), textes invisibles refusés, panier sans titre non modéré, file bornée, prix et stock tracés. Fait au S6-T01 : une boutique par compte (verrou par compte), nom unique sans casse ni accents et signes ressemblants confondus, lettres ASCII et accentuées du français seulement, « Kemdia » interdit même déguisé (pas d'usurpation), nom libéré au refus, motifs et demandes au journal, caractères invisibles retirés, personne ne décide pour sa propre boutique, boutique + rôle + journal dans une transaction, mêmes règles en contraintes SQL.
 - S7 : deux rôles PostgreSQL (migrations / application sans droit de modifier les tables **ni de désactiver les déclencheurs du journal d'audit**), connexion chiffrée selon l'hébergement, sauvegardes chiffrées testées.
 
 ## 7. DevOps — CI/CD

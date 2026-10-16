@@ -36,6 +36,14 @@ export type {
 } from "./application/ports.js";
 export { CatalogError, type CatalogErrorCode } from "./domain/catalog-error.js";
 export { VENDOR_PRODUCT_RULES, type ModerationDecision } from "./domain/vendor-product.js";
+// Photos (S6-T04)
+export {
+  PRODUCT_IMAGE_RULES,
+  type ImageSize,
+  type ProcessedImage,
+} from "./domain/product-image.js";
+export type { StoredImage } from "./application/ports.js";
+export { imageNotFound, sendImage } from "./interface/product-image.controller.js";
 export { SORT_KEYS } from "./application/ports.js";
 export type { ProductSearchInput } from "./application/product-search.js";
 export type { Category, CategoryNode } from "./domain/category.js";

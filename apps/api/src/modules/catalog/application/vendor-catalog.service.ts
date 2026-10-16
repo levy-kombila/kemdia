@@ -5,6 +5,17 @@ import { CatalogError } from "../domain/catalog-error.js";
 import { CategoryTree } from "../domain/category.js";
 import { Product, type ProductStatus } from "../domain/product.js";
 import {
+  assertRoomForImage,
+  checkUpload,
+  photoNotFound,
+  reordered,
+  vendorImageId,
+  withAddedImage,
+  withoutImage,
+  type ImageSize,
+  type ProcessedImage,
+} from "../domain/product-image.js";
+import {
   VENDOR_PRODUCT_RULES,
   moderate,
   onArchive,
@@ -23,9 +34,14 @@ import { searchable } from "../domain/values.js";
 import {
   CATALOG_RANDOM,
   CATEGORY_REPOSITORY,
+  IMAGE_PROCESSOR,
+  PRODUCT_IMAGE_STORE,
   VENDOR_PRODUCT_REPOSITORY,
   type CatalogRandom,
   type CategoryRepository,
+  type ImageProcessor,
+  type ProductImageStore,
+  type StoredImage,
   type DerivedFields,
   type VendorProductCursor,
   type VendorProductRecord,
@@ -76,6 +92,8 @@ export class VendorCatalog {
     @Inject(VENDOR_PRODUCT_REPOSITORY) private readonly products: VendorProductRepository,
     @Inject(CATEGORY_REPOSITORY) private readonly categories: CategoryRepository,
     @Inject(CATALOG_RANDOM) private readonly random: CatalogRandom,
+    @Inject(IMAGE_PROCESSOR) private readonly processor: ImageProcessor,
+    @Inject(PRODUCT_IMAGE_STORE) private readonly images: ProductImageStore,
   ) {}
 
   async create(shopId: string, input: VendorProductInput, now: Date): Promise<VendorProductRecord> {
@@ -219,6 +237,109 @@ export class VendorCatalog {
     return this.write({ ...before, ...next, updatedAt: now });
   }
 
+  // --- Photos (S6-T04, ADR-0035) ---
+
+  /**
+   * Réencode un fichier reçu, HORS transaction (calcul de quelques centaines de millisecondes : aucun verrou n'est
+   * gardé pendant ce temps). Le résultat est ensuite rangé par `addImage`.
+   */
+  prepareImage(bytes: Uint8Array): Promise<ProcessedImage> {
+    checkUpload(bytes);
+    return this.processor.process(bytes);
+  }
+
+  /**
+   * Vérification rapide, SANS verrou, avant le réencodage (relecture S6-T04) : produit de la boutique, pas archivé,
+   * place pour une photo. Évite de réencoder pour rien ; `addImage` revérifie tout sous verrou.
+   */
+  async checkImageRoom(shopId: string, productId: string, now: Date): Promise<void> {
+    const product = await this.get(shopId, productId);
+    onContentChange(state(product), now);
+    assertRoomForImage(product.images);
+  }
+
+  /** Ajoute une photo (10 au plus) : le produit repasse en modération (choix du 2026-10-16, BR-003). */
+  async addImage(
+    shopId: string,
+    productId: string,
+    image: ProcessedImage,
+    now: Date,
+  ): Promise<{ before: VendorProductRecord; after: VendorProductRecord; imageId: string }> {
+    const before = await this.lockOwned(shopId, productId);
+    const imageId = this.random.uuid();
+    const images = withAddedImage(before.images, imageId);
+    const next = onContentChange(state(before), now);
+    if (before.status !== "PENDING") await this.assertQueueRoom(shopId);
+    await this.images.save(imageId, before.id, image, now);
+    const after = await this.write({ ...before, images, ...next, updatedAt: now });
+    return { before, after, imageId };
+  }
+
+  /** Retire une photo : tout de suite, sans nouvelle modération ; elle est effacée (plus jamais servie). */
+  async removeImage(
+    shopId: string,
+    productId: string,
+    imageId: string,
+    now: Date,
+  ): Promise<{ after: VendorProductRecord; sha256: string | null }> {
+    const before = await this.lockOwned(shopId, productId);
+    const images = withoutImage(before.images, imageId);
+    const id = imageId.toLowerCase();
+    // Empreinte gardée au journal : une photo illicite retirée laisse une trace (relecture S6-T04)
+    const sha256 = (await this.images.describe(id))?.sha256 ?? null;
+    const after = await this.write({ ...before, images, updatedAt: now });
+    await this.images.delete(id, before.id);
+    return { after, sha256 };
+  }
+
+  /** Nouvel ordre des photos (la première est la principale) : sans nouvelle modération. */
+  async reorderImages(
+    shopId: string,
+    productId: string,
+    imageIds: readonly string[],
+    now: Date,
+  ): Promise<VendorProductRecord> {
+    const before = await this.lockOwned(shopId, productId);
+    const images = reordered(before.images, imageIds);
+    return this.write({ ...before, images, updatedAt: now });
+  }
+
+  /** Photo d'un produit de la boutique (le vendeur la voit quel que soit le statut du produit). */
+  async ownImage(
+    shopId: string,
+    productId: string,
+    imageId: string,
+    size: ImageSize,
+  ): Promise<StoredImage> {
+    const product = await this.get(shopId, productId);
+    return this.imageOf(product, imageId, size);
+  }
+
+  /**
+   * Photo servie à TOUS (site) : seulement si son produit est visible des clients (validé, boutique non suspendue) et
+   * qu'elle est encore dans sa liste. Une photo en attente de modération n'est jamais publique : on ne peut pas se
+   * servir de Kemdia pour héberger une image non modérée.
+   */
+  async publicImage(imageId: string, size: ImageSize): Promise<StoredImage> {
+    const id = imageId.toLowerCase();
+    // Produit vérifié AVANT de lire les octets : une photo non publique ne coûte qu'une petite lecture
+    const owner = await this.images.describe(id);
+    if (!owner) throw photoNotFound();
+    const product = await this.products.findById(owner.productId);
+    if (!product || product.status !== "PUBLISHED" || product.shopSuspended) throw photoNotFound();
+    // Retirée de la liste (en cours d'effacement) : plus servie
+    if (!product.images.some((path) => vendorImageId(path) === id)) throw photoNotFound();
+    const stored = await this.images.read(id, size);
+    if (!stored || stored.productId !== product.id) throw photoNotFound();
+    return stored;
+  }
+
+  /** Photo d'un produit de vendeur, pour la modération (quel que soit son statut). */
+  async moderationImage(productId: string, imageId: string, size: ImageSize): Promise<StoredImage> {
+    const product = await this.moderationGet(productId);
+    return this.imageOf(product, imageId, size);
+  }
+
   // --- Modération ---
 
   moderationQueue(query: {
@@ -267,6 +388,19 @@ export class VendorCatalog {
         `${MAX_PENDING_PRODUCTS_PER_SHOP} produits attendent déjà la modération : patientez avant d'en envoyer d'autres`,
       );
     }
+  }
+
+  /** La photo doit être rangée ET encore dans la liste du produit (une photo retirée n'est plus servie). */
+  private async imageOf(
+    product: VendorProductRecord,
+    imageId: string,
+    size: ImageSize,
+  ): Promise<StoredImage> {
+    const id = imageId.toLowerCase();
+    if (!product.images.some((path) => vendorImageId(path) === id)) throw photoNotFound();
+    const stored = await this.images.read(id, size);
+    if (!stored || stored.productId !== product.id) throw photoNotFound();
+    return stored;
   }
 
   private async lockOwned(shopId: string, productId: string): Promise<VendorProductRecord> {

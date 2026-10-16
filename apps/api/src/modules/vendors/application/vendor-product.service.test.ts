@@ -10,7 +10,21 @@ const AWA = "11111111-1111-4111-8111-111111111111";
 const MODO = "22222222-2222-4222-8222-222222222222";
 const SHOP = "33333333-3333-4333-8333-333333333333";
 const PRODUCT = "44444444-4444-4444-8444-444444444444";
+const IMAGE = "77777777-7777-4777-8777-777777777777";
 const CTX = { ip: null, requestId: "req-1" };
+const PROCESSED = {
+  large: new Uint8Array(),
+  small: new Uint8Array(),
+  width: 800,
+  height: 600,
+  sha256: "a".repeat(64),
+};
+const STORED = {
+  id: IMAGE,
+  productId: PRODUCT,
+  bytes: new Uint8Array([1]),
+  sha256: "a".repeat(64),
+};
 const NOW = new Date("2026-10-16T08:00:00.000Z");
 
 const shopOf = (status: ShopStatus, owner = AWA): Shop => ({
@@ -90,6 +104,25 @@ function setup(shop: Shop | null) {
       }),
     archive: () => Promise.resolve({ before: product("PUBLISHED"), after: product("ARCHIVED") }),
     restore: () => Promise.resolve(product("PENDING")),
+    prepareImage: () => {
+      calls.push("réencodage");
+      return Promise.resolve(PROCESSED);
+    },
+    addImage: () => {
+      calls.push("ranger la photo");
+      return Promise.resolve({
+        before: product("PUBLISHED"),
+        after: { ...product("PENDING"), images: [`/images/v/${IMAGE}.webp`] },
+        imageId: IMAGE,
+      });
+    },
+    checkImageRoom: () => {
+      calls.push("vérifier la place");
+      return Promise.resolve();
+    },
+    removeImage: () => Promise.resolve({ after: product("PUBLISHED"), sha256: "b".repeat(64) }),
+    reorderImages: () => Promise.resolve(product("PUBLISHED")),
+    ownImage: () => Promise.resolve(STORED),
   };
   const vendor = new VendorProductService(shops, tx, record, catalog);
   vendor.clock = () => NOW;
@@ -105,6 +138,7 @@ function setup(shop: Shop | null) {
         reviewedBy: by.moderatorId,
         reviewedAt: by.now,
       }),
+    moderationImage: () => Promise.resolve(STORED),
   });
   moderation.clock = () => NOW;
   return { vendor, moderation, audit, calls };
@@ -165,6 +199,72 @@ describe("VendorProductService (S6-T02)", () => {
       ["product.variant_updated", { sku: "VAB12CD34-1", stockFrom: 3, stockTo: 7 }],
       ["product.archived", { title: "Pagne wax 6 yards", from: "published" }],
     ]);
+  });
+});
+
+describe("VendorProductService — photos (S6-T04)", () => {
+  it("ajout : vérification rapide, réencodage HORS transaction, puis rangement sous verrou ; photo tracée (id, empreinte)", async () => {
+    const { vendor, audit, calls } = setup(shopOf("active"));
+    const after = await vendor.addImage(AWA, PRODUCT, new Uint8Array([1, 2, 3]), CTX);
+    expect(after.status).toBe("PENDING");
+    expect(calls).toEqual([
+      `verrou partagé ${AWA}`,
+      "vérifier la place",
+      "réencodage",
+      `verrou partagé ${AWA}`,
+      "ranger la photo",
+    ]);
+    expect(audit).toEqual([
+      {
+        action: "product.submitted",
+        actor: { type: "account", id: AWA },
+        target: { type: "product", id: PRODUCT },
+        details: {
+          title: "Pagne wax 6 yards",
+          reason: "photo",
+          from: "published",
+          image: IMAGE,
+          sha256: "a".repeat(64),
+        },
+        context: CTX,
+      },
+    ]);
+  });
+
+  it("ajout sans boutique active : refus AVANT le réencodage (pas de calcul pour rien)", async () => {
+    for (const shop of [null, shopOf("pending"), shopOf("suspended")]) {
+      const { vendor, calls, audit } = setup(shop);
+      expect(await codeOf(vendor.addImage(AWA, PRODUCT, new Uint8Array([1]), CTX))).toBe(
+        "BOUTIQUE_INACTIVE",
+      );
+      expect(calls).not.toContain("réencodage");
+      expect(audit).toEqual([]);
+    }
+  });
+
+  it("retrait : tracé au journal avec l'identifiant de la photo (en minuscules) et son empreinte", async () => {
+    const { vendor, audit } = setup(shopOf("active"));
+    await vendor.removeImage(AWA, PRODUCT, IMAGE.toUpperCase(), CTX);
+    expect(audit).toEqual([
+      {
+        action: "product.image_removed",
+        actor: { type: "account", id: AWA },
+        target: { type: "product", id: PRODUCT },
+        details: { title: "Pagne wax 6 yards", image: IMAGE, sha256: "b".repeat(64) },
+        context: CTX,
+      },
+    ]);
+  });
+
+  it("nouvel ordre tracé ; aperçu sans journal ; toujours réservés à une boutique active", async () => {
+    const { vendor, audit } = setup(shopOf("active"));
+    await vendor.reorderImages(AWA, PRODUCT, [IMAGE], CTX);
+    expect((await vendor.image(AWA, PRODUCT, IMAGE, "large")).id).toBe(IMAGE);
+    expect(audit.map((e) => [e.action, e.details])).toEqual([
+      ["product.images_reordered", { title: "Pagne wax 6 yards" }],
+    ]);
+    const { vendor: suspended } = setup(shopOf("suspended"));
+    expect(await codeOf(suspended.image(AWA, PRODUCT, IMAGE, "large"))).toBe("BOUTIQUE_INACTIVE");
   });
 });
 
@@ -231,9 +331,12 @@ describe("ProductModerationService (S6-T02)", () => {
         moderationGet: () => Promise.reject(new CatalogError("PRODUIT_INTROUVABLE", "x")),
         lockForModeration: () => Promise.reject(new CatalogError("PRODUIT_INTROUVABLE", "x")),
         moderate: () => Promise.reject(new Error("jamais appelé")),
+        moderationImage: () => Promise.reject(new CatalogError("PHOTO_INTROUVABLE", "x")),
       },
     );
     expect(await codeOf(failing.get(PRODUCT))).toBe("PRODUIT_INTROUVABLE");
+    expect(await codeOf(failing.image(PRODUCT, IMAGE, "large"))).toBe("PHOTO_INTROUVABLE");
+    expect((await moderation.image(PRODUCT, IMAGE, "large")).id).toBe(IMAGE);
     expect(await codeOf(failing.decide(moderator, PRODUCT, "approve", null, NOW, CTX))).toBe(
       "PRODUIT_INTROUVABLE",
     );

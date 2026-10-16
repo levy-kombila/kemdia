@@ -37,7 +37,7 @@ export const AUDIT_ACTIONS = [
   "shop.rejected",
   /** Boutique suspendue ; le rôle vendeur est retiré à part (détails : name, from, to, reason) — S6-T01 */
   "shop.suspended",
-  /** Produit d'un vendeur envoyé en modération : création, contenu modifié, remise en vente (détails : title, reason, from) — S6-T02 */
+  /** Produit d'un vendeur envoyé en modération : création, contenu modifié, remise en vente, photo ajoutée (détails : title, reason, from ; image et sha256 pour une photo, S6-T04) — S6-T02 */
   "product.submitted",
   /** Produit validé par la modération (détails : title, from, to) — S6-T02 */
   "product.approved",
@@ -47,6 +47,10 @@ export const AUDIT_ACTIONS = [
   "product.archived",
   /** Prix, prix barré, stock ou activation d'une variante changés par le vendeur (détails : sku, avant / après) — S6-T02 */
   "product.variant_updated",
+  /** Photo retirée par le vendeur, et effacée (détails : title, image, sha256) — S6-T04 */
+  "product.image_removed",
+  /** Nouvel ordre des photos, sans modération (détails : title) — S6-T04 */
+  "product.images_reordered",
   /** Double authentification activée par son titulaire (aucun détail) — S6-T03 */
   "mfa.enabled",
   /** Code de secours utilisé (détails : remaining) — S6-T03 */

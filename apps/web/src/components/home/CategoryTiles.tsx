@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { ProductImage } from "@/components/ui/ProductImage";
 import Link from "next/link";
 import { formatFCFA } from "@/lib/format";
 import type { CategoryTile } from "@/lib/catalog";
@@ -19,7 +19,7 @@ export function CategoryTiles({ tiles }: { tiles: CategoryTile[] }) {
                 <Link href={`/produit/${p.slug}`} className="group block">
                   <span className="bg-ink-50 relative block aspect-square overflow-hidden rounded-lg">
                     {p.image && (
-                      <Image
+                      <ProductImage
                         src={p.image}
                         alt=""
                         fill

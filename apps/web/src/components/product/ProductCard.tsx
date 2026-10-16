@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { ProductImage } from "@/components/ui/ProductImage";
 import Link from "next/link";
 import { SlidersHorizontal, Truck } from "lucide-react";
 import { DiscountSticker, Price } from "@/components/ui/Price";
@@ -86,7 +86,7 @@ export function ProductCard({
             couvre déjà toute la carte (after:inset-0). Un lien de moins par carte = moins de travail au chargement
             (S3-T08 : ~60 composants Link de moins sur l'accueil). */}
         <span className="absolute inset-0">
-          <Image
+          <ProductImage
             src={image}
             alt=""
             fill

@@ -31,6 +31,10 @@ import {
   VENDOR_ERROR_CODES,
   VendorProductCreateRequestSchema,
   VendorVariantUpdateRequestSchema,
+  PRODUCT_IMAGE_LIMITS,
+  ProductImageOrderRequestSchema,
+  PublicProductImageParamsSchema,
+  VENDOR_IMAGE_PATH_PATTERN,
 } from "./index.js";
 import { demoCatalog, demoIds, uuidV5 } from "./demo/index.js";
 import {
@@ -156,6 +160,7 @@ describe("schémas", () => {
       "ProblemDetails",
       "ProductApproval",
       "ProductDetail",
+      "ProductImageOrderRequest",
       "ProductModerationReason",
       "ProductPage",
       "ProductSummary",
@@ -519,5 +524,28 @@ describe("Produits des vendeurs (S6-T02)", () => {
     expect(VendorVariantUpdateRequestSchema.safeParse({ price: 10.5 }).success).toBe(false);
     expect(VendorVariantUpdateRequestSchema.safeParse({ price: 0 }).success).toBe(false);
     expect(VendorVariantUpdateRequestSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe("photos des produits des vendeurs (S6-T04)", () => {
+  const id = "0f0e0d0c-0b0a-4908-8706-050403020100";
+
+  it("nouvel ordre : 1 à 10 identifiants", () => {
+    expect(ProductImageOrderRequestSchema.safeParse({ images: [id] }).success).toBe(true);
+    expect(ProductImageOrderRequestSchema.safeParse({ images: [] }).success).toBe(false);
+    const eleven = Array.from({ length: PRODUCT_IMAGE_LIMITS.maxPerProduct + 1 }, () => id);
+    expect(ProductImageOrderRequestSchema.safeParse({ images: eleven }).success).toBe(false);
+    expect(ProductImageOrderRequestSchema.safeParse({ images: ["x"] }).success).toBe(false);
+  });
+
+  it("photo publique : grande ou vignette seulement ; adresse « /images/v/<uuid>.webp »", () => {
+    expect(PublicProductImageParamsSchema.safeParse({ imageId: id, size: "small" }).success).toBe(
+      true,
+    );
+    expect(PublicProductImageParamsSchema.safeParse({ imageId: id, size: "huge" }).success).toBe(
+      false,
+    );
+    expect(VENDOR_IMAGE_PATH_PATTERN.test(`/images/v/${id}.webp`)).toBe(true);
+    expect(VENDOR_IMAGE_PATH_PATTERN.test(`/images/v/${id}-480.webp`)).toBe(false);
   });
 });

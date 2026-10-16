@@ -2,6 +2,8 @@ import { Inject, Injectable } from "@nestjs/common";
 import { AuditLog, type AuditContext } from "../../audit/index.js";
 import {
   VendorCatalog,
+  type ImageSize,
+  type StoredImage,
   type VendorProductCursor,
   type VendorProductInput,
   type VendorProductRecord,
@@ -21,7 +23,19 @@ export type VendorProductStatus = VendorProductRecord["status"];
 /** Le catalogue, vu par les produits des vendeurs (remplaçable dans les tests). */
 export type VendorCatalogPort = Pick<
   VendorCatalog,
-  "create" | "get" | "list" | "updateContent" | "updateVariant" | "archive" | "restore"
+  | "create"
+  | "get"
+  | "list"
+  | "updateContent"
+  | "updateVariant"
+  | "archive"
+  | "restore"
+  | "prepareImage"
+  | "addImage"
+  | "removeImage"
+  | "reorderImages"
+  | "ownImage"
+  | "checkImageRoom"
 >;
 
 const inactive = () =>
@@ -175,6 +189,100 @@ export class VendorProductService {
     });
   }
 
+  // --- Photos (S6-T04, ADR-0035) ---
+
+  /**
+   * Ajoute une photo : le produit repasse en modération (BR-003). Le fichier est réencodé ENTRE deux transactions
+   * courtes (aucun verrou pendant le calcul) : d'abord une vérification rapide (boutique active, produit à elle, pas
+   * archivé, moins de 10 photos : pas de réencodage pour rien), puis tout est revérifié sous verrou au moment d'écrire.
+   */
+  async addImage(
+    accountId: string,
+    productId: string,
+    bytes: Uint8Array,
+    context: AuditContext,
+  ): Promise<VendorProductRecord> {
+    await this.inShop(accountId, (shop) =>
+      this.catalog.checkImageRoom(shop.id, productId, this.clock()),
+    );
+    const image = await this.catalog.prepareImage(bytes);
+    return this.inShop(accountId, async (current) => {
+      const { before, after, imageId } = await this.catalog.addImage(
+        current.id,
+        productId,
+        image,
+        this.clock(),
+      );
+      // Identifiant et empreinte de la photo au journal : on sait toujours quelle image a été envoyée
+      await this.submitted(accountId, after, "photo", context, before.status, {
+        image: imageId,
+        sha256: image.sha256,
+      });
+      return after;
+    });
+  }
+
+  /** Retire une photo (tout de suite, sans modération) : elle est effacée et n'est plus jamais servie. */
+  removeImage(
+    accountId: string,
+    productId: string,
+    imageId: string,
+    context: AuditContext,
+  ): Promise<VendorProductRecord> {
+    return this.inShop(accountId, async (shop) => {
+      const { after, sha256 } = await this.catalog.removeImage(
+        shop.id,
+        productId,
+        imageId,
+        this.clock(),
+      );
+      await this.audit.record({
+        action: "product.image_removed",
+        actor: { type: "account", id: accountId },
+        target: { type: "product", id: after.id },
+        details: {
+          title: shortText(after.title),
+          image: imageId.toLowerCase(),
+          ...(sha256 ? { sha256 } : {}),
+        },
+        context,
+      });
+      return after;
+    });
+  }
+
+  /** Nouvel ordre des photos (sans modération : elles ont toutes été validées ou attendent de l'être). Tracé. */
+  reorderImages(
+    accountId: string,
+    productId: string,
+    imageIds: readonly string[],
+    context: AuditContext,
+  ): Promise<VendorProductRecord> {
+    return this.inShop(accountId, async (shop) => {
+      const after = await this.catalog.reorderImages(shop.id, productId, imageIds, this.clock());
+      await this.audit.record({
+        action: "product.images_reordered",
+        actor: { type: "account", id: accountId },
+        target: { type: "product", id: after.id },
+        details: { title: shortText(after.title) },
+        context,
+      });
+      return after;
+    });
+  }
+
+  /** Une photo d'un produit de la boutique, quel que soit son statut (aperçu du vendeur). */
+  image(
+    accountId: string,
+    productId: string,
+    imageId: string,
+    size: ImageSize,
+  ): Promise<StoredImage> {
+    return this.inShop(accountId, (shop) =>
+      this.catalog.ownImage(shop.id, productId, imageId, size),
+    );
+  }
+
   /** Exécute `work` dans une transaction, pour la boutique ACTIVE du compte (verrou partagé). */
   private inShop<T>(accountId: string, work: (shop: Shop) => Promise<T>): Promise<T> {
     return this.tx.run(async () => {
@@ -187,9 +295,10 @@ export class VendorProductService {
   private submitted(
     accountId: string,
     product: VendorProductRecord,
-    reason: "creation" | "modification" | "remise_en_vente",
+    reason: "creation" | "modification" | "remise_en_vente" | "photo",
     context: AuditContext,
     from?: VendorProductStatus,
+    extra: Record<string, string> = {},
   ): Promise<void> {
     return this.audit.record({
       action: "product.submitted",
@@ -199,6 +308,7 @@ export class VendorProductService {
         title: shortText(product.title),
         reason,
         ...(from ? { from: from.toLowerCase() } : {}),
+        ...extra,
       },
       context,
     });

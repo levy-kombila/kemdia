@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { ProductImage } from "@/components/ui/ProductImage";
 import Link from "next/link";
 import type { CategoryHighlight } from "@/lib/catalog";
 
@@ -29,7 +29,7 @@ export function CategoryBubbles({
               className="group flex w-[4.75rem] flex-col items-center gap-2 text-center"
             >
               <span className="bg-ink-50 group-hover:ring-brand-600 relative size-[4.75rem] overflow-hidden rounded-full ring-2 ring-transparent transition">
-                <Image
+                <ProductImage
                   src={image}
                   alt=""
                   fill

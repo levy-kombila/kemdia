@@ -7,7 +7,14 @@ import {
   SHOP_LIMITS,
   SHOP_STATUSES,
   VENDOR_ERROR_CODES,
+  PRODUCT_IMAGE_LIMITS,
+  VENDOR_IMAGE_PATH_PATTERN,
 } from "@kemdia/contracts/constants";
+import {
+  PRODUCT_IMAGE_RULES,
+  vendorImageId,
+  vendorImagePath,
+} from "../src/modules/catalog/domain/product-image.js";
 import { VENDOR_PRODUCT_RULES } from "../src/modules/catalog/domain/vendor-product.js";
 import { PRODUCT_STATUSES } from "../src/modules/catalog/domain/product.js";
 import { SHOP_RULES } from "../src/modules/vendors/domain/shop.js";
@@ -26,6 +33,10 @@ const migration = readFileSync(
 );
 const productMigration = readFileSync(
   new URL("../prisma/migrations/20261016091000_produits_vendeurs/migration.sql", import.meta.url),
+  "utf8",
+);
+const imageMigration = readFileSync(
+  new URL("../prisma/migrations/20261016130000_photos_produits/migration.sql", import.meta.url),
   "utf8",
 );
 const catalogSchema = readFileSync(
@@ -57,7 +68,8 @@ describe("Boutiques : mêmes règles partout (S6-T01)", () => {
   it("la boutique Kemdia a le même identifiant dans le contrat, la migration et Prisma", () => {
     // Valeur par défaut de shop_id, contrainte « une seule boutique Kemdia », ligne insérée
     expect(migration.split(KEMDIA_SHOP_ID).length - 1).toBe(3);
-    expect(catalogSchema).toContain(`@default("${KEMDIA_SHOP_ID}")`);
+    // dbgenerated : forme gardée par PostgreSQL, sinon db:check voit une différence (correctif du 2026-10-16)
+    expect(catalogSchema).toContain(`@default(dbgenerated("'${KEMDIA_SHOP_ID}'::uuid"))`);
   });
 
   it("chaque code d'erreur des boutiques et des produits des vendeurs a son statut HTTP", () => {
@@ -75,5 +87,23 @@ describe("Boutiques : mêmes règles partout (S6-T01)", () => {
       `char_length("moderation_reason") BETWEEN ${VENDOR_PRODUCT_LIMITS.reasonMin} AND ${VENDOR_PRODUCT_LIMITS.reasonMax}`,
     );
     expect(productMigration).toContain(`"shop_id" <> '${KEMDIA_SHOP_ID}'`);
+  });
+
+  it("photos (S6-T04) : limites identiques dans le domaine, le contrat et le SQL ; même forme d'adresse", () => {
+    expect(PRODUCT_IMAGE_RULES).toEqual(PRODUCT_IMAGE_LIMITS);
+    const stored = PRODUCT_IMAGE_LIMITS.maxStoredBytes;
+    expect(imageMigration).toContain(`octet_length("large") BETWEEN 16 AND ${stored}`);
+    expect(imageMigration).toContain(`octet_length("small") BETWEEN 16 AND ${stored}`);
+    const side = PRODUCT_IMAGE_LIMITS.largeSide;
+    expect(imageMigration).toContain(
+      `"width" BETWEEN 1 AND ${side} AND "height" BETWEEN 1 AND ${side}`,
+    );
+    const id = "0f0e0d0c-0b0a-4908-8706-050403020100";
+    expect(vendorImagePath(id)).toMatch(VENDOR_IMAGE_PATH_PATTERN);
+    expect(vendorImageId(vendorImagePath(id))).toBe(id);
+    for (const path of ["/images/v/x.webp", `/images/v/${id}.png`, `/images/products/${id}.webp`]) {
+      expect(VENDOR_IMAGE_PATH_PATTERN.test(path)).toBe(false);
+      expect(vendorImageId(path)).toBeNull();
+    }
   });
 });

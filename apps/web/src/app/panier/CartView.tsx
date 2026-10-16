@@ -10,7 +10,7 @@ import {
   Trash2,
   Truck,
 } from "lucide-react";
-import Image from "next/image";
+import { ProductImage } from "@/components/ui/ProductImage";
 import Link from "next/link";
 import { useCart } from "@/components/providers/CartProvider";
 import { useDeliveryLocation } from "@/components/providers/LocationProvider";
@@ -164,7 +164,7 @@ export function CartView() {
                     aria-hidden
                   >
                     {l.image && (
-                      <Image
+                      <ProductImage
                         src={l.image}
                         alt=""
                         fill

@@ -18,7 +18,15 @@ export type CatalogErrorCode =
   /** Le vendeur a modifié le produit depuis que le modérateur l'a lu : relire avant de décider (relecture S6-T02). */
   | "PRODUIT_MODIFIE"
   /** Trop de produits de la boutique attendent déjà la modération. */
-  | "TROP_DE_PRODUITS_EN_ATTENTE";
+  | "TROP_DE_PRODUITS_EN_ATTENTE"
+  // Photos des produits (S6-T04)
+  /** Fichier qui n'est ni un JPEG, ni un PNG, ni un WebP (d'après son contenu), ou image illisible. */
+  | "FORMAT_IMAGE_INVALIDE"
+  /** Fichier de plus de 5 Mo, ou image démesurée (pixels). */
+  | "IMAGE_TROP_GRANDE"
+  | "IMAGE_TROP_PETITE"
+  | "TROP_DE_PHOTOS"
+  | "PHOTO_INTROUVABLE";
 
 /** Une règle du catalogue n'est pas respectée. Le message est lisible par un humain, en français. */
 export class CatalogError extends Error {

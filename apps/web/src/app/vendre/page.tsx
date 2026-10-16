@@ -1,6 +1,6 @@
 import { BadgeCheck, ChevronDown, Package, Smartphone, Store, Truck, Users } from "lucide-react";
 import type { Metadata } from "next";
-import Image from "next/image";
+import { ProductImage } from "@/components/ui/ProductImage";
 import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 import { getCategoryTiles } from "@/lib/catalog";
 import { VendorInterestForm } from "./VendorInterestForm";
@@ -119,7 +119,13 @@ export default async function SellPage() {
         >
           {photos.map((p) => (
             <li key={p.id} className="relative aspect-square overflow-hidden rounded-xl bg-white">
-              <Image src={p.image} alt="" fill sizes="140px" className="object-contain p-2" />
+              <ProductImage
+                src={p.image}
+                alt=""
+                fill
+                sizes="140px"
+                className="object-contain p-2"
+              />
             </li>
           ))}
         </ul>

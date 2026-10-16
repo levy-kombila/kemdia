@@ -16,6 +16,8 @@ import { PrismaShopRepository } from "./infrastructure/prisma-shop.repository.js
 import { VendorsTransactionRunner } from "./infrastructure/vendors-transaction.js";
 import { AdminShopController } from "./interface/admin-shop.controller.js";
 import { ModerationController } from "./interface/moderation.controller.js";
+import { ModerationImageController } from "./interface/moderation-image.controller.js";
+import { VendorProductImageController } from "./interface/vendor-product-image.controller.js";
 import { VendorProductController } from "./interface/vendor-product.controller.js";
 import { ShopController } from "./interface/shop.controller.js";
 
@@ -28,7 +30,14 @@ const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
  */
 @Module({
   imports: [IdentityModule, AuditModule, CatalogModule],
-  controllers: [ShopController, AdminShopController, VendorProductController, ModerationController],
+  controllers: [
+    ShopController,
+    AdminShopController,
+    VendorProductController,
+    ModerationController,
+    VendorProductImageController,
+    ModerationImageController,
+  ],
   providers: [
     ShopService,
     VendorProductService,

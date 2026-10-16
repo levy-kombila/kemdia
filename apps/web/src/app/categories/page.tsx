@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Image from "next/image";
+import { ProductImage } from "@/components/ui/ProductImage";
 import Link from "next/link";
 import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
@@ -28,7 +28,7 @@ export default async function CategoriesPage() {
               className="bg-ink-900 group relative flex h-32 items-end p-5"
             >
               {root.image && (
-                <Image
+                <ProductImage
                   src={root.image}
                   alt=""
                   fill

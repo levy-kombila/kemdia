@@ -1,5 +1,5 @@
 import { ChevronRight, Store, Truck, UserRound } from "lucide-react";
-import Image from "next/image";
+import { ProductImage } from "@/components/ui/ProductImage";
 import Link from "next/link";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { formatFCFA } from "@/lib/format";
@@ -19,7 +19,7 @@ function ProductDisc({
   return (
     <div className={`absolute overflow-hidden rounded-full bg-white shadow-xl ${className ?? ""}`}>
       {product.image && (
-        <Image
+        <ProductImage
           src={product.image}
           alt=""
           fill

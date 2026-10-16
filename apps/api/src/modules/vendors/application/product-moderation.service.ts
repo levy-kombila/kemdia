@@ -2,7 +2,9 @@ import { Inject, Injectable } from "@nestjs/common";
 import { AuditLog, type AuditContext } from "../../audit/index.js";
 import {
   VendorCatalog,
+  type ImageSize,
   type ModerationDecision,
+  type StoredImage,
   type VendorProductCursor,
   type VendorProductRecord,
 } from "../../catalog/index.js";
@@ -31,7 +33,7 @@ export interface ModeratedProduct {
 
 export type ModerationCatalogPort = Pick<
   VendorCatalog,
-  "moderationQueue" | "moderationGet" | "lockForModeration" | "moderate"
+  "moderationQueue" | "moderationGet" | "lockForModeration" | "moderate" | "moderationImage"
 >;
 
 /**
@@ -70,6 +72,11 @@ export class ProductModerationService {
       })),
       next: page.next,
     };
+  }
+
+  /** Une photo d'un produit de vendeur, quel que soit son statut (la modération voit ce qu'elle valide). */
+  image(productId: string, imageId: string, size: ImageSize): Promise<StoredImage> {
+    return this.catalog.moderationImage(productId, imageId, size);
   }
 
   async get(productId: string): Promise<ModeratedProduct> {
