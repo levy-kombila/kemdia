@@ -29,7 +29,13 @@ const nextConfig: NextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
     qualities: [75],
-    localPatterns: [{ pathname: "/images/**", search: "" }],
+    // Dossiers fixes seulement : les photos des vendeurs (/images/v/…) ne passent jamais par l'optimiseur, qui les
+    // garderait 24 h même retirées (S6-T04, ADR-0035 ; elles sont rendues par ProductImage, sans optimisation)
+    localPatterns: [
+      { pathname: "/images/products/**", search: "" },
+      { pathname: "/images/categories/**", search: "" },
+      { pathname: "/images/placeholder.svg", search: "" },
+    ],
     minimumCacheTTL: 86400,
   },
   async headers() {

@@ -1,5 +1,5 @@
 import { ChevronRight, Zap } from "lucide-react";
-import Image from "next/image";
+import { ProductImage } from "@/components/ui/ProductImage";
 import Link from "next/link";
 import { ProductRail, RailItem } from "@/components/product/ProductRail";
 import { DiscountSticker, Price } from "@/components/ui/Price";
@@ -20,7 +20,7 @@ function DealCard({ product }: { product: ProductSummary }) {
     >
       <span className="relative block aspect-square overflow-hidden rounded-md bg-white">
         {product.image && (
-          <Image
+          <ProductImage
             src={product.image}
             alt=""
             fill

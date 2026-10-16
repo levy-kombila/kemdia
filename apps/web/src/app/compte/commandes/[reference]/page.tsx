@@ -1,7 +1,7 @@
 import type { InvoiceSummary, Order, Payment } from "@kemdia/contracts";
 import { CircleCheck, FileDown, Truck, Wallet } from "lucide-react";
 import type { Metadata } from "next";
-import Image from "next/image";
+import { ProductImage } from "@/components/ui/ProductImage";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
@@ -183,7 +183,13 @@ function Lines({ order }: { order: Order }) {
           <li key={l.variantId} className="flex items-center gap-3 py-2.5">
             <span className="border-ink-100 relative size-14 shrink-0 overflow-hidden rounded-lg border bg-white">
               {l.image && (
-                <Image src={l.image} alt="" fill sizes="56px" className="object-contain p-1" />
+                <ProductImage
+                  src={l.image}
+                  alt=""
+                  fill
+                  sizes="56px"
+                  className="object-contain p-1"
+                />
               )}
             </span>
             <span className="min-w-0 flex-1 text-sm">

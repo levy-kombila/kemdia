@@ -1,7 +1,7 @@
 "use client";
 
 import { Heart, Trash2 } from "lucide-react";
-import Image from "next/image";
+import { ProductImage } from "@/components/ui/ProductImage";
 import Link from "next/link";
 import { AddToCartButton } from "@/components/product/AddToCartButton";
 import { useFavorites } from "@/components/providers/FavoritesProvider";
@@ -61,7 +61,7 @@ export function FavoritesView() {
                   className="relative block aspect-square overflow-hidden rounded-lg bg-white"
                 >
                   {f.image && (
-                    <Image
+                    <ProductImage
                       src={f.image}
                       alt=""
                       fill

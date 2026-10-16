@@ -1,7 +1,7 @@
 "use client";
 
 import { ShoppingCart, Trash2 } from "lucide-react";
-import Image from "next/image";
+import { ProductImage } from "@/components/ui/ProductImage";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useCart } from "@/components/providers/CartProvider";
@@ -88,7 +88,13 @@ export function MiniCart() {
                     <li key={l.variantId} className="flex items-center gap-3 px-4 py-3">
                       <div className="bg-ink-100 relative size-14 shrink-0 overflow-hidden rounded-lg">
                         {l.image && (
-                          <Image src={l.image} alt="" fill sizes="56px" className="object-cover" />
+                          <ProductImage
+                            src={l.image}
+                            alt=""
+                            fill
+                            sizes="56px"
+                            className="object-cover"
+                          />
                         )}
                       </div>
                       <div className="min-w-0 flex-1">

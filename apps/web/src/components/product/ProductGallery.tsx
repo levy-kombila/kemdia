@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { ProductImage } from "@/components/ui/ProductImage";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 
@@ -26,14 +26,15 @@ export function ProductGallery({ images, title }: { images: string[]; title: str
                 i === index ? "border-brand-600" : "border-ink-100 hover:border-ink-400",
               )}
             >
-              <Image src={src} alt="" fill sizes="64px" className="object-contain p-1" />
+              <ProductImage src={src} alt="" fill sizes="64px" className="object-contain p-1" />
             </button>
           ))}
         </div>
       )}
       <div className="relative aspect-square flex-1 overflow-hidden rounded-xl bg-white">
-        <Image
-          src={list[index]}
+        <ProductImage
+          src={list[index]!}
+          size="large"
           alt={title}
           fill
           preload

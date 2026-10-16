@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import Image from "next/image";
+import { ProductImage } from "@/components/ui/ProductImage";
 import { Price } from "@/components/ui/Price";
 import type { CartLine } from "@/lib/cart";
 import { formatFCFA } from "@/lib/format";
@@ -22,7 +22,7 @@ function Lines({ lines }: { lines: CartLine[] }) {
         <li key={l.variantId} className="flex items-center gap-3 py-2.5">
           <span className="border-ink-100 relative size-14 shrink-0 overflow-hidden rounded-lg border bg-white">
             {l.image && (
-              <Image src={l.image} alt="" fill sizes="56px" className="object-contain p-1" />
+              <ProductImage src={l.image} alt="" fill sizes="56px" className="object-contain p-1" />
             )}
             <span className="bg-ink-700 absolute -right-0.5 -top-0.5 grid min-w-5 place-items-center rounded-full px-1 text-[0.65rem] font-bold text-white">
               {l.quantity}

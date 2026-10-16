@@ -1,6 +1,6 @@
 import { ChevronRight, Package } from "lucide-react";
 import type { Metadata } from "next";
-import Image from "next/image";
+import { ProductImage } from "@/components/ui/ProductImage";
 import Link from "next/link";
 import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
@@ -57,7 +57,7 @@ export default async function OrdersPage({
                   >
                     <span className="border-ink-100 relative size-14 shrink-0 overflow-hidden rounded-lg border bg-white">
                       {order.image && (
-                        <Image
+                        <ProductImage
                           src={order.image}
                           alt=""
                           fill

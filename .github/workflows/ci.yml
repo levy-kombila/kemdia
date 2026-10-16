@@ -216,8 +216,10 @@ jobs:
         run: |
           pnpm --filter @kemdia/api migrate
           pnpm --filter @kemdia/api db:seed
-      - name: Compte de test des parcours (base éphémère du job uniquement)
-        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f apps/web/e2e/fixtures/compte-e2e.sql
+      - name: Compte et boutique de test des parcours (base éphémère du job uniquement)
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f apps/web/e2e/fixtures/compte-e2e.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f apps/web/e2e/fixtures/photos-vendeur-e2e.sql
       - name: Démarrer l'API
         env:
           NODE_ENV: production

@@ -235,7 +235,7 @@ export function createOrdersApi(options: OrdersApiOptions) {
 }
 
 /** Corps de la réponse, ou `null` s'il dépasse `max` octets (lecture interrompue aussitôt). */
-async function readAtMost(
+export async function readAtMost(
   response: Response,
   max: number,
 ): Promise<Uint8Array<ArrayBuffer> | null> {
