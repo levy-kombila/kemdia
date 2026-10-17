@@ -47,6 +47,7 @@ const REASON_TO_DB: Record<CancelReason, $Enums.CancelReason> = {
   admin: "ADMIN",
   vendeur_refus: "VENDOR_REFUSED",
   vendeur_delai: "VENDOR_TIMEOUT",
+  livraison_echec: "DELIVERY_FAILED",
 };
 const REASON_FROM_DB = Object.fromEntries(
   Object.entries(REASON_TO_DB).map(([k, v]) => [v, k]),
@@ -402,6 +403,23 @@ export class PrismaOrderRepository implements OrderRepository {
       data: { openedAt: now, dueAt: due, emailNextAt: now },
     });
     return count;
+  }
+
+  /**
+   * Commandes prêtes à remettre au transporteur (S7-T01) : confirmées ou en préparation, sans part de vendeur en
+   * attente, les plus anciennes d'abord. Une commande confirmée est déjà payée (Mobile Money) ou à la livraison.
+   */
+  async listReadyToShip(limit: number): Promise<OrderRecord[]> {
+    const rows = await this.tx.db.order.findMany({
+      where: {
+        status: { in: ["CONFIRMED", "PREPARING"] },
+        shopParts: { none: { status: "PENDING" } },
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: limit,
+      include: withDetails,
+    });
+    return rows.map(toRecord);
   }
 
   countPendingShopParts(orderId: string): Promise<number> {

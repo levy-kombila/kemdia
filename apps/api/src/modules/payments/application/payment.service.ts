@@ -98,24 +98,49 @@ export class PaymentService implements OnModuleInit {
     // Commande refusée par un vendeur, ou sans réponse d'un vendeur à temps (S6-T07, ADR-0038) : comme l'annulation par
     // un administrateur — essais en attente expirés, remboursement « à faire » de chaque paiement Mobile Money reçu,
     // avoir si la commande était facturée. Déjà encaissée en espèces : refus (l'argent est chez le livreur ou le client).
-    this.cancelHooks.onVendorCancel(async (order, now) => {
-      const attempts = await this.payments.listForOrder(order.id);
-      if (attempts.some((a) => a.method === "cod" && a.status === "succeeded")) {
-        throw new OrdersError(
-          "ANNULATION_IMPOSSIBLE",
-          // Texte neutre : il peut être renvoyé au vendeur, qui n'a pas à savoir comment le client a payé
-          "cette commande ne peut plus être annulée : contactez le service client Kemdia",
-        );
-      }
-      for (const attempt of attempts.filter((a) => a.status === "pending")) {
-        await this.payments.complete(attempt.id, "expired", now, "commande_annulee");
-        this.provider.cancel?.(attempt.id);
-      }
-      for (const paid of attempts.filter((a) => a.status === "succeeded" && a.method !== "cod")) {
-        await this.refunds.createFor(paid, order.reference, "annulation_vendeur", now);
-      }
-      await this.invoices.issueCreditNote(order, now);
-    });
+    this.cancelHooks.onVendorCancel((order, now) =>
+      this.settleCancelled(
+        order,
+        now,
+        "annulation_vendeur",
+        // Texte neutre : il peut être renvoyé au vendeur, qui n'a pas à savoir comment le client a payé
+        "cette commande ne peut plus être annulée : contactez le service client Kemdia",
+      ),
+    );
+    // Livraison impossible, commande annulée par un administrateur (S7-T01, ADR-0040) : même règlement. Déjà encaissée
+    // en espèces : refus (le livreur a l'argent, la commande n'a donc pas échoué).
+    this.cancelHooks.onDeliveryCancel((order, now) =>
+      this.settleCancelled(
+        order,
+        now,
+        "annulation_livraison",
+        "cette commande est déjà encaissée en espèces : elle ne peut pas être annulée ici",
+      ),
+    );
+  }
+
+  /**
+   * Règlement d'une commande annulée sans que le client l'ait demandé : essais en attente expirés, remboursement « à
+   * faire » de chaque paiement Mobile Money reçu, avoir si elle était facturée. Espèces déjà encaissées : refus.
+   */
+  private async settleCancelled(
+    order: OrderRecord,
+    now: Date,
+    reason: "annulation_vendeur" | "annulation_livraison",
+    cashCollectedMessage: string,
+  ): Promise<void> {
+    const attempts = await this.payments.listForOrder(order.id);
+    if (attempts.some((a) => a.method === "cod" && a.status === "succeeded")) {
+      throw new OrdersError("ANNULATION_IMPOSSIBLE", cashCollectedMessage);
+    }
+    for (const attempt of attempts.filter((a) => a.status === "pending")) {
+      await this.payments.complete(attempt.id, "expired", now, "commande_annulee");
+      this.provider.cancel?.(attempt.id);
+    }
+    for (const paid of attempts.filter((a) => a.status === "succeeded" && a.method !== "cod")) {
+      await this.refunds.createFor(paid, order.reference, reason, now);
+    }
+    await this.invoices.issueCreditNote(order, now);
   }
 
   /** Demande (ou redemande) la validation du paiement sur le téléphone. */

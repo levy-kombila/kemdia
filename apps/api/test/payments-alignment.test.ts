@@ -52,6 +52,7 @@ describe("Paiements : mêmes règles dans le contrat, le domaine et la base (S5-
     expect(CANCEL_REASONS).toContain("admin");
     expect([...REFUND_REASONS].sort()).toEqual([
       "annulation_admin",
+      "annulation_livraison",
       "annulation_vendeur",
       "paiement_non_attendu",
     ]);

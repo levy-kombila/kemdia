@@ -21,17 +21,20 @@ export const PAYMENT_METHODS = ["airtel", "moov", "cod"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export type CancelReason =
-  "client" | "paiement_expire" | "admin" | "vendeur_refus" | "vendeur_delai";
+  "client" | "paiement_expire" | "admin" | "vendeur_refus" | "vendeur_delai" | "livraison_echec";
 
 /** Délai pour payer par Mobile Money (choix du 2026-10-10) ; ensuite annulée, stock remis en vente. */
 export const PAYMENT_WINDOW_MS = 30 * 60_000;
 
-/** Changements de statut permis. BR-010 : une commande livrée n'est plus annulable. */
+/**
+ * Changements de statut permis. BR-010 : une commande livrée n'est plus annulable. S7-T01 : une commande expédiée dont
+ * la livraison a échoué peut être annulée par un administrateur (module shipping) — jamais par le client.
+ */
 const NEXT: Readonly<Record<OrderStatus, readonly OrderStatus[]>> = {
   pending_payment: ["confirmed", "cancelled"],
   confirmed: ["preparing", "cancelled"],
   preparing: ["shipped", "cancelled"],
-  shipped: ["delivered"],
+  shipped: ["delivered", "cancelled"],
   delivered: [],
   cancelled: [],
 };

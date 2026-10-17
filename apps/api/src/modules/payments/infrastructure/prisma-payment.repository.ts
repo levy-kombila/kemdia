@@ -42,6 +42,7 @@ const REASON_TO_DB: Record<RefundReasonCode, $Enums.RefundReason> = {
   annulation_admin: "ADMIN_CANCEL",
   paiement_non_attendu: "UNEXPECTED_PAYMENT",
   annulation_vendeur: "VENDOR_CANCEL",
+  annulation_livraison: "DELIVERY_CANCEL",
 };
 const REASON_FROM_DB = Object.fromEntries(
   Object.entries(REASON_TO_DB).map(([k, v]) => [v, k]),

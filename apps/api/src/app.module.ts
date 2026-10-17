@@ -13,6 +13,7 @@ import { CatalogModule } from "./modules/catalog/index.js";
 import { IdentityModule } from "./modules/identity/index.js";
 import { OrdersModule } from "./modules/orders/index.js";
 import { PaymentsModule } from "./modules/payments/index.js";
+import { ShippingModule } from "./modules/shipping/index.js";
 import { VendorsModule } from "./modules/vendors/index.js";
 
 /**
@@ -35,6 +36,7 @@ export class AppModule {
         OrdersModule,
         PaymentsModule,
         VendorsModule,
+        ShippingModule,
         // Documentation (/api/docs, /api/v1/openapi.json) : désactivée par défaut en production
         ...(config.API_DOCS ? [DocsModule] : []),
       ],

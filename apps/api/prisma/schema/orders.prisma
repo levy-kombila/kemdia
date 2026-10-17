@@ -60,13 +60,15 @@ enum PaymentMethod {
 }
 
 /// Annulée par le client (avant l'expédition), paiement non reçu à temps, par un administrateur (S5-T04), refusée par un
-/// vendeur ou sans réponse d'un vendeur à temps (S6-T07).
+/// vendeur ou sans réponse d'un vendeur à temps (S6-T07), livraison impossible (S7-T01).
 enum CancelReason {
   CLIENT
   PAYMENT_EXPIRED
   ADMIN
   VENDOR_REFUSED
   VENDOR_TIMEOUT
+  /// Livraison impossible, annulée par un administrateur (S7-T01)
+  DELIVERY_FAILED
 
   @@map("cancel_reason")
   @@schema("orders")

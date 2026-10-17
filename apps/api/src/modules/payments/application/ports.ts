@@ -32,7 +32,8 @@ export interface PaymentRepository {
 }
 export const PAYMENT_REPOSITORY = Symbol("PAYMENT_REPOSITORY");
 
-export type RefundReasonCode = "annulation_admin" | "paiement_non_attendu" | "annulation_vendeur";
+export type RefundReasonCode =
+  "annulation_admin" | "paiement_non_attendu" | "annulation_vendeur" | "annulation_livraison";
 
 export interface RefundRecord {
   id: string;

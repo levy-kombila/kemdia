@@ -8,6 +8,8 @@ export type ClientCancelHook = (order: OrderRecord, now: Date) => Promise<void>;
  * la transaction de l'annulation. Une erreur annule tout (la commande reste ouverte).
  */
 export type VendorCancelHook = (order: OrderRecord, now: Date) => Promise<void>;
+/** Action d'un autre module quand une commande expédiée est annulée faute de livraison (S7-T01), DANS sa transaction. */
+export type DeliveryCancelHook = (order: OrderRecord, now: Date) => Promise<void>;
 
 /**
  * Ce qui doit suivre l'annulation d'une commande par son client (S5-T07, relecture de sécurité) : le module payments
@@ -19,6 +21,7 @@ export type VendorCancelHook = (order: OrderRecord, now: Date) => Promise<void>;
 export class OrderCancelHooks {
   private readonly hooks: ClientCancelHook[] = [];
   private readonly vendorHooks: VendorCancelHook[] = [];
+  private readonly deliveryHooks: DeliveryCancelHook[] = [];
 
   onClientCancel(hook: ClientCancelHook): void {
     this.hooks.push(hook);
@@ -32,6 +35,14 @@ export class OrderCancelHooks {
     this.vendorHooks.push(hook);
   }
 
+  /**
+   * S7-T01 : le module payments s'inscrit ici pour qu'une commande payée dont la livraison a échoué, puis annulée, soit
+   * remboursée (« à faire »), ses essais en attente expirés et sa facture annulée par un avoir.
+   */
+  onDeliveryCancel(hook: DeliveryCancelHook): void {
+    this.deliveryHooks.push(hook);
+  }
+
   /** À appeler dans la transaction de l'annulation, commande verrouillée : une erreur annule tout. */
   async run(order: OrderRecord, now: Date): Promise<void> {
     for (const hook of this.hooks) await hook(order, now);
@@ -40,5 +51,10 @@ export class OrderCancelHooks {
   /** Annulation à cause d'un vendeur : dans sa transaction, commande verrouillée ; une erreur annule tout. */
   async runVendor(order: OrderRecord, now: Date): Promise<void> {
     for (const hook of this.vendorHooks) await hook(order, now);
+  }
+
+  /** Annulation faute de livraison : dans sa transaction, commande verrouillée ; une erreur annule tout. */
+  async runDelivery(order: OrderRecord, now: Date): Promise<void> {
+    for (const hook of this.deliveryHooks) await hook(order, now);
   }
 }

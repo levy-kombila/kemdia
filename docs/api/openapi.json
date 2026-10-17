@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "1.19.0",
+    "version": "1.20.0",
     "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.\n- Factures (S5-T06) : établies au paiement reçu, avoir à l'annulation, numéros par année sans trou, PDF et e-mail.\n- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo.\n- Boutiques (S6-T01) : un client demande à ouvrir sa boutique ; un administrateur la valide (rôle vendeur accordé), la refuse ou la suspend.\n- Double authentification (S6-T03) : obligatoire pour les modérateurs et administrateurs sur les routes d'équipe (`DEUX_FACTEURS_A_ACTIVER`, `DEUX_FACTEURS_REQUIS`).\n- Produits des vendeurs (S6-T02) : invisibles jusqu'à leur validation par la modération (BR-003) ; cachés si la boutique est suspendue.\n- Photos des vendeurs (S6-T04) : fichier envoyé tel quel (JPEG, PNG, WebP, 5 Mo), réencodé en WebP sans métadonnées ; publiques seulement pour un produit visible.\n- Commandes des vendeurs (S6-T07) : chaque boutique accepte ou refuse sa part dans les 24 h (BR-013) ; un refus ou l'absence de réponse annule la commande entière."
   },
   "servers": [
@@ -43,6 +43,10 @@
     {
       "name": "Bac à sable",
       "description": "Téléphone simulé de l'opérateur Mobile Money (S5-T05) : poste de développement et démo seulement"
+    },
+    {
+      "name": "Livraisons",
+      "description": "Barème de livraison et suivi des expéditions par l'équipe (module shipping, S7-T01) ; part de Kemdia sur les frais (BR-021)"
     },
     {
       "name": "Boutiques",
@@ -8319,6 +8323,867 @@
           }
         }
       }
+    },
+    "/api/v1/shipping/tariffs": {
+      "get": {
+        "tags": ["Livraisons"],
+        "summary": "Barème de livraison en vigueur",
+        "description": "Frais de base, seuil de livraison offerte et délais des 4 zones. Les suppléments par ville sont dans le contrat (`@kemdia/contracts/delivery`).",
+        "operationId": "getDeliveryTariffs",
+        "responses": {
+          "200": {
+            "description": "Le barème",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryTariffs"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/shipping/tariffs": {
+      "get": {
+        "tags": ["Livraisons"],
+        "summary": "Barème de livraison (administration)",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque étape est inscrite au journal d'audit.\n\nTransporteur **« manuel »** tant qu'aucun n'est choisi : l'équipe note chaque étape. Répéter une action déjà faite ne change rien.",
+        "operationId": "getAdminDeliveryTariffs",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le barème",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryTariffs"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Livraisons"],
+        "summary": "Changer le barème de livraison",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque étape est inscrite au journal d'audit.\n\nTransporteur **« manuel »** tant qu'aucun n'est choisi : l'équipe note chaque étape. Répéter une action déjà faite ne change rien.\n\nLes 4 zones, une fois chacune. Le devis et la commande appliquent le nouveau barème aussitôt.",
+        "operationId": "updateDeliveryTariffs",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliveryTariffsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Le nouveau barème",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryTariffs"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`TARIFS_INVALIDES` : zone en double, montant ou délai hors bornes",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/shipping/ready": {
+      "get": {
+        "tags": ["Livraisons"],
+        "summary": "Commandes prêtes à remettre au transporteur",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque étape est inscrite au journal d'audit.\n\nTransporteur **« manuel »** tant qu'aucun n'est choisi : l'équipe note chaque étape. Répéter une action déjà faite ne change rien.\n\nConfirmées ou en préparation, tous les vendeurs d'accord (BR-013), les plus anciennes d'abord (100 au plus).",
+        "operationId": "listReadyOrders",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Les commandes prêtes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyOrderList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/shipping/shipments": {
+      "get": {
+        "tags": ["Livraisons"],
+        "summary": "Expéditions par statut",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque étape est inscrite au journal d'audit.\n\nTransporteur **« manuel »** tant qu'aucun n'est choisi : l'équipe note chaque étape. Répéter une action déjà faite ne change rien.\n\nLes plus récemment changées d'abord (100 au plus).",
+        "operationId": "listShipments",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["in_transit", "delivered", "failed", "cancelled"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Les expéditions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipmentList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Statut inconnu",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/shipping/shipments/{reference}": {
+      "get": {
+        "tags": ["Livraisons"],
+        "summary": "Expédition d'une commande",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque étape est inscrite au journal d'audit.\n\nTransporteur **« manuel »** tant qu'aucun n'est choisi : l'équipe note chaque étape. Répéter une action déjà faite ne change rien.",
+        "operationId": "getShipment",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "path",
+            "required": true,
+            "description": "Numéro de la commande (ex. KMD-7F3K9Q)",
+            "schema": {
+              "type": "string",
+              "pattern": "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "L'expédition et son historique",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shipment"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`EXPEDITION_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/shipping/shipments/{reference}/hand-over": {
+      "post": {
+        "tags": ["Livraisons"],
+        "summary": "Remettre la commande au transporteur",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque étape est inscrite au journal d'audit.\n\nTransporteur **« manuel »** tant qu'aucun n'est choisi : l'équipe note chaque étape. Répéter une action déjà faite ne change rien.\n\nLa commande passe **expédiée** ; l'expédition naît **en route** avec la part de Kemdia (15 % des frais, entier inférieur — BR-021) et celle du transporteur.",
+        "operationId": "handOverShipment",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "path",
+            "required": true,
+            "description": "Numéro de la commande (ex. KMD-7F3K9Q)",
+            "schema": {
+              "type": "string",
+              "pattern": "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "L'expédition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shipment"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`COMMANDE_INTROUVABLE` ou `EXPEDITION_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STATUT_EXPEDITION_INCOMPATIBLE`, `EXPEDITION_IMPOSSIBLE` ou `PANIER_OCCUPE` (commande occupée : réessayer)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/shipping/shipments/{reference}/delivered": {
+      "post": {
+        "tags": ["Livraisons"],
+        "summary": "Noter la commande livrée",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque étape est inscrite au journal d'audit.\n\nTransporteur **« manuel »** tant qu'aucun n'est choisi : l'équipe note chaque étape. Répéter une action déjà faite ne change rien.\n\nDepuis **en route** seulement. Une commande livrée n'est plus annulable (BR-010).",
+        "operationId": "markShipmentDelivered",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "path",
+            "required": true,
+            "description": "Numéro de la commande (ex. KMD-7F3K9Q)",
+            "schema": {
+              "type": "string",
+              "pattern": "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "L'expédition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shipment"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`COMMANDE_INTROUVABLE` ou `EXPEDITION_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STATUT_EXPEDITION_INCOMPATIBLE`, `EXPEDITION_IMPOSSIBLE` ou `PANIER_OCCUPE` (commande occupée : réessayer)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/shipping/shipments/{reference}/failed": {
+      "post": {
+        "tags": ["Livraisons"],
+        "summary": "Noter un échec de livraison",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque étape est inscrite au journal d'audit.\n\nTransporteur **« manuel »** tant qu'aucun n'est choisi : l'équipe note chaque étape. Répéter une action déjà faite ne change rien.\n\nDepuis **en route** ; motif obligatoire. Ensuite : nouvelle tentative ou annulation.",
+        "operationId": "markShipmentFailed",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "path",
+            "required": true,
+            "description": "Numéro de la commande (ex. KMD-7F3K9Q)",
+            "schema": {
+              "type": "string",
+              "pattern": "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShipmentFailedRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "L'expédition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shipment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`COMMANDE_INTROUVABLE` ou `EXPEDITION_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STATUT_EXPEDITION_INCOMPATIBLE`, `EXPEDITION_IMPOSSIBLE` ou `PANIER_OCCUPE` (commande occupée : réessayer)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`EXPEDITION_INVALIDE` : motif trop court ou trop long",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/shipping/shipments/{reference}/retry": {
+      "post": {
+        "tags": ["Livraisons"],
+        "summary": "Nouvelle tentative de livraison",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque étape est inscrite au journal d'audit.\n\nTransporteur **« manuel »** tant qu'aucun n'est choisi : l'équipe note chaque étape. Répéter une action déjà faite ne change rien.\n\nDepuis **échec** ; l'expédition repart **en route** (20 tentatives au plus).",
+        "operationId": "retryShipment",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "path",
+            "required": true,
+            "description": "Numéro de la commande (ex. KMD-7F3K9Q)",
+            "schema": {
+              "type": "string",
+              "pattern": "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "L'expédition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shipment"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`COMMANDE_INTROUVABLE` ou `EXPEDITION_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STATUT_EXPEDITION_INCOMPATIBLE`, `EXPEDITION_IMPOSSIBLE` ou `PANIER_OCCUPE` (commande occupée : réessayer)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/shipping/shipments/{reference}/cancel": {
+      "post": {
+        "tags": ["Livraisons"],
+        "summary": "Annuler la commande après un échec de livraison",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque étape est inscrite au journal d'audit.\n\nTransporteur **« manuel »** tant qu'aucun n'est choisi : l'équipe note chaque étape. Répéter une action déjà faite ne change rien.\n\nDepuis **échec** ; note obligatoire. La commande est annulée : stock et coupon rendus, remboursement « à faire » d'un paiement Mobile Money, avoir si elle était facturée. Refusé si les espèces ont été encaissées.",
+        "operationId": "cancelShipment",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "path",
+            "required": true,
+            "description": "Numéro de la commande (ex. KMD-7F3K9Q)",
+            "schema": {
+              "type": "string",
+              "pattern": "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShipmentCancelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "L'expédition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shipment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`COMMANDE_INTROUVABLE` ou `EXPEDITION_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STATUT_EXPEDITION_INCOMPATIBLE`, `EXPEDITION_IMPOSSIBLE` ou `PANIER_OCCUPE` (commande occupée : réessayer)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`EXPEDITION_INVALIDE` : note trop courte ou trop longue",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8839,7 +9704,13 @@
               "kyc.viewed",
               "kyc.document_viewed",
               "kyc.approved",
-              "kyc.rejected"
+              "kyc.rejected",
+              "settings.delivery_updated",
+              "shipment.handed_over",
+              "shipment.delivered",
+              "shipment.failed",
+              "shipment.retried",
+              "shipment.cancelled"
             ]
           },
           "actor": {
@@ -9981,6 +10852,116 @@
         "additionalProperties": false,
         "description": "Adresse de livraison, copiée dans la commande"
       },
+      "DeliveryTariffs": {
+        "type": "object",
+        "properties": {
+          "zones": {
+            "minItems": 4,
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeliveryTariffZone"
+            }
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["zones", "updatedAt"],
+        "additionalProperties": false,
+        "description": "Barème de livraison des 4 zones"
+      },
+      "DeliveryTariffsRequest": {
+        "type": "object",
+        "properties": {
+          "zones": {
+            "minItems": 4,
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "enum": ["zone_1", "zone_2", "zone_3", "zone_4"]
+                },
+                "baseFee": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000,
+                  "description": "Frais de base de la zone en FCFA (le supplément de la ville s'y ajoute)"
+                },
+                "freeThreshold": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000000,
+                  "description": "Livraison offerte dès ce montant d'articles (réduction déduite)"
+                },
+                "daysMin": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 30
+                },
+                "daysMax": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 30
+                }
+              },
+              "required": ["id", "baseFee", "freeThreshold", "daysMin", "daysMax"],
+              "additionalProperties": false
+            },
+            "description": "Les 4 zones, chacune une fois ; délai minimum ≤ délai maximum"
+          }
+        },
+        "required": ["zones"],
+        "additionalProperties": false
+      },
+      "DeliveryTariffZone": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": ["zone_1", "zone_2", "zone_3", "zone_4"]
+          },
+          "label": {
+            "type": "string"
+          },
+          "baseFee": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000,
+            "description": "Frais de base de la zone en FCFA (le supplément de la ville s'y ajoute)"
+          },
+          "freeThreshold": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000000,
+            "description": "Livraison offerte dès ce montant d'articles (réduction déduite)"
+          },
+          "daysMin": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30
+          },
+          "daysMax": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30
+          }
+        },
+        "required": ["id", "label", "baseFee", "freeThreshold", "daysMin", "daysMax"],
+        "additionalProperties": false
+      },
       "Facets": {
         "type": "object",
         "properties": {
@@ -10580,7 +11561,14 @@
             "anyOf": [
               {
                 "type": "string",
-                "enum": ["client", "paiement_expire", "admin", "vendeur_refus", "vendeur_delai"]
+                "enum": [
+                  "client",
+                  "paiement_expire",
+                  "admin",
+                  "vendeur_refus",
+                  "vendeur_delai",
+                  "livraison_echec"
+                ]
               },
               {
                 "type": "null"
@@ -11170,7 +12158,12 @@
               "KYC_INCOMPLET",
               "STATUT_KYC_INCOMPATIBLE",
               "KYC_INDISPONIBLE",
-              "DOCUMENT_INTROUVABLE"
+              "DOCUMENT_INTROUVABLE",
+              "EXPEDITION_INTROUVABLE",
+              "EXPEDITION_IMPOSSIBLE",
+              "STATUT_EXPEDITION_INCOMPATIBLE",
+              "EXPEDITION_INVALIDE",
+              "TARIFS_INVALIDES"
             ]
           },
           "requestId": {
@@ -11512,6 +12505,86 @@
         "additionalProperties": false,
         "description": "Produit dans une liste (carte produit)"
       },
+      "ReadyOrder": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "pattern": "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$",
+            "description": "Numéro de commande montré au client (« KMD-7F3K9Q »), jamais des numéros qui se suivent"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending_payment",
+              "confirmed",
+              "preparing",
+              "shipped",
+              "delivered",
+              "cancelled"
+            ]
+          },
+          "paymentMethod": {
+            "type": "string",
+            "enum": ["airtel", "moov", "cod"],
+            "description": "airtel, moov ou cod (à la livraison)"
+          },
+          "paid": {
+            "type": "boolean"
+          },
+          "total": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Montant en FCFA, entier (BR-004)"
+          },
+          "deliveryFee": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "cityName": {
+            "type": "string"
+          },
+          "itemCount": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "reference",
+          "status",
+          "paymentMethod",
+          "paid",
+          "total",
+          "deliveryFee",
+          "cityName",
+          "itemCount",
+          "createdAt"
+        ],
+        "additionalProperties": false,
+        "description": "Commande prête à remettre au transporteur (payée ou à la livraison, vendeurs d'accord)"
+      },
+      "ReadyOrderList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadyOrder"
+            }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false
+      },
       "RecoveryCodes": {
         "type": "object",
         "properties": {
@@ -11557,7 +12630,12 @@
           },
           "reason": {
             "type": "string",
-            "enum": ["annulation_admin", "paiement_non_attendu", "annulation_vendeur"]
+            "enum": [
+              "annulation_admin",
+              "paiement_non_attendu",
+              "annulation_vendeur",
+              "annulation_livraison"
+            ]
           },
           "status": {
             "type": "string",
@@ -11887,6 +12965,145 @@
         "required": ["verifiedUntil", "recoveryCodesLeft"],
         "additionalProperties": false,
         "description": "Session confirmée pour 15 minutes"
+      },
+      "Shipment": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "pattern": "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$",
+            "description": "Numéro de commande montré au client (« KMD-7F3K9Q »), jamais des numéros qui se suivent"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["in_transit", "delivered", "failed", "cancelled"]
+          },
+          "carrier": {
+            "type": "string",
+            "description": "Transporteur (« manuel » : suivi à la main par l'équipe)"
+          },
+          "attempt": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Tentative de livraison en cours (1 = première)"
+          },
+          "cityName": {
+            "type": "string"
+          },
+          "deliveryFee": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Frais de livraison facturés au client"
+          },
+          "kemdiaShare": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Part de Kemdia : 15 % des frais, entier inférieur (BR-021)"
+          },
+          "carrierShare": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Part du transporteur : le reste des frais"
+          },
+          "failureReason": {
+            "type": ["string", "null"]
+          },
+          "handedOverAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShipmentEvent"
+            }
+          }
+        },
+        "required": [
+          "reference",
+          "status",
+          "carrier",
+          "attempt",
+          "cityName",
+          "deliveryFee",
+          "kemdiaShare",
+          "carrierShare",
+          "failureReason",
+          "handedOverAt",
+          "updatedAt",
+          "events"
+        ],
+        "additionalProperties": false,
+        "description": "Expédition d'une commande (une par commande)"
+      },
+      "ShipmentCancelRequest": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200,
+            "description": "Note du service client (journal d'audit)"
+          }
+        },
+        "required": ["note"],
+        "additionalProperties": false
+      },
+      "ShipmentEvent": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["in_transit", "delivered", "failed", "cancelled"]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "note": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["status", "at", "note"],
+        "additionalProperties": false
+      },
+      "ShipmentFailedRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200,
+            "description": "Pourquoi la livraison n'a pas pu se faire (client absent…)"
+          }
+        },
+        "required": ["reason"],
+        "additionalProperties": false
+      },
+      "ShipmentList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shipment"
+            }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false
       },
       "Shop": {
         "type": "object",

@@ -38,6 +38,8 @@ import {
   SLUG_PATTERN,
   SHOP_KINDS,
   SHOP_LIMITS,
+  SHIPMENT_STATUSES,
+  SHIPPING_LIMITS,
   SHOP_PAGE_DEFAULT,
   SHOP_PAGE_MAX,
   SHOP_STATUSES,
@@ -1789,6 +1791,135 @@ export const AdminKycDocumentParamsSchema = z.strictObject({
   shopId: uuidInput,
   kind: z.enum(KYC_DOCUMENT_KINDS),
 });
+
+// --- Livraisons (S7-T01, ADR-0040 ; BR-021) ---
+
+const zoneId = z.enum(["zone_1", "zone_2", "zone_3", "zone_4"]);
+const days = z.int().min(0).max(SHIPPING_LIMITS.daysMax);
+
+export const DeliveryTariffZoneSchema = z
+  .object({
+    id: zoneId,
+    label: z.string(),
+    baseFee: z
+      .int()
+      .nonnegative()
+      .max(SHIPPING_LIMITS.baseFeeMax)
+      .describe("Frais de base de la zone en FCFA (le supplément de la ville s'y ajoute)"),
+    freeThreshold: z
+      .int()
+      .nonnegative()
+      .max(SHIPPING_LIMITS.freeThresholdMax)
+      .describe("Livraison offerte dès ce montant d'articles (réduction déduite)"),
+    daysMin: days,
+    daysMax: days,
+  })
+  .meta({ id: "DeliveryTariffZone" });
+export type DeliveryTariffZone = z.infer<typeof DeliveryTariffZoneSchema>;
+
+export const DeliveryTariffsSchema = z
+  .object({
+    zones: z.array(DeliveryTariffZoneSchema).length(4),
+    updatedAt: z.iso.datetime().nullable(),
+  })
+  .meta({ id: "DeliveryTariffs", description: "Barème de livraison des 4 zones" });
+export type DeliveryTariffs = z.infer<typeof DeliveryTariffsSchema>;
+
+export const DeliveryTariffsRequestSchema = z
+  .strictObject({
+    zones: z
+      .array(
+        z.strictObject({
+          id: zoneId,
+          baseFee: DeliveryTariffZoneSchema.shape.baseFee,
+          freeThreshold: DeliveryTariffZoneSchema.shape.freeThreshold,
+          daysMin: days,
+          daysMax: days,
+        }),
+      )
+      .length(4)
+      .describe("Les 4 zones, chacune une fois ; délai minimum ≤ délai maximum"),
+  })
+  .meta({ id: "DeliveryTariffsRequest" });
+export type DeliveryTariffsRequest = z.infer<typeof DeliveryTariffsRequestSchema>;
+
+export const ShipmentEventSchema = z
+  .object({
+    status: z.enum(SHIPMENT_STATUSES),
+    at: z.iso.datetime(),
+    note: z.string().nullable(),
+  })
+  .meta({ id: "ShipmentEvent" });
+
+export const ShipmentSchema = z
+  .object({
+    reference: orderReference,
+    status: z.enum(SHIPMENT_STATUSES),
+    carrier: z.string().describe("Transporteur (« manuel » : suivi à la main par l'équipe)"),
+    attempt: z.int().positive().describe("Tentative de livraison en cours (1 = première)"),
+    cityName: z.string(),
+    deliveryFee: z.int().nonnegative().describe("Frais de livraison facturés au client"),
+    kemdiaShare: z
+      .int()
+      .nonnegative()
+      .describe("Part de Kemdia : 15 % des frais, entier inférieur (BR-021)"),
+    carrierShare: z.int().nonnegative().describe("Part du transporteur : le reste des frais"),
+    failureReason: z.string().nullable(),
+    handedOverAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+    events: z.array(ShipmentEventSchema),
+  })
+  .meta({ id: "Shipment", description: "Expédition d'une commande (une par commande)" });
+export type Shipment = z.infer<typeof ShipmentSchema>;
+
+export const ShipmentListSchema = z
+  .object({ items: z.array(ShipmentSchema).max(SHIPPING_LIMITS.listMax) })
+  .meta({ id: "ShipmentList" });
+export type ShipmentList = z.infer<typeof ShipmentListSchema>;
+
+export const ShipmentListQuerySchema = z.strictObject({ status: z.enum(SHIPMENT_STATUSES) });
+
+export const ReadyOrderSchema = z
+  .object({
+    reference: orderReference,
+    status: z.enum(ORDER_STATUSES),
+    paymentMethod,
+    paid: z.boolean(),
+    total: fcfa,
+    deliveryFee: z.int().nonnegative(),
+    cityName: z.string(),
+    itemCount: z.int().positive(),
+    createdAt: z.iso.datetime(),
+  })
+  .meta({
+    id: "ReadyOrder",
+    description:
+      "Commande prête à remettre au transporteur (payée ou à la livraison, vendeurs d'accord)",
+  });
+export type ReadyOrder = z.infer<typeof ReadyOrderSchema>;
+
+export const ReadyOrderListSchema = z
+  .object({ items: z.array(ReadyOrderSchema).max(SHIPPING_LIMITS.listMax) })
+  .meta({ id: "ReadyOrderList" });
+export type ReadyOrderList = z.infer<typeof ReadyOrderListSchema>;
+
+const shippingReason = z
+  .string()
+  .trim()
+  .min(SHIPPING_LIMITS.reasonMin)
+  .max(SHIPPING_LIMITS.reasonMax);
+
+export const ShipmentFailedRequestSchema = z
+  .strictObject({
+    reason: shippingReason.describe("Pourquoi la livraison n'a pas pu se faire (client absent…)"),
+  })
+  .meta({ id: "ShipmentFailedRequest" });
+export type ShipmentFailedRequest = z.infer<typeof ShipmentFailedRequestSchema>;
+
+export const ShipmentCancelRequestSchema = z
+  .strictObject({ note: shippingReason.describe("Note du service client (journal d'audit)") })
+  .meta({ id: "ShipmentCancelRequest" });
+export type ShipmentCancelRequest = z.infer<typeof ShipmentCancelRequestSchema>;
 
 type JsonSchema = Record<string, unknown>;
 

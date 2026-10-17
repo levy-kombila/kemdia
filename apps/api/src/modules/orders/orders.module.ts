@@ -11,6 +11,8 @@ import { CodSettingsService } from "./application/cod-settings.service.js";
 import { CouponService } from "./application/coupon.service.js";
 import { OrderCancelHooks } from "./application/order-cancel-hooks.js";
 import { OrderPayments } from "./application/order-payments.service.js";
+import { DeliveryTariffs } from "./application/delivery-tariffs.js";
+import { OrderShipping } from "./application/order-shipping.service.js";
 import { OrderService } from "./application/order.service.js";
 import { VendorOrders } from "./application/vendor-orders.service.js";
 import {
@@ -55,6 +57,9 @@ import { CartController } from "./interface/cart.controller.js";
     CouponService,
     CodSettingsService,
     OrderPayments,
+    // Livraisons (S7-T01) : barème réglable et port du module shipping
+    DeliveryTariffs,
+    OrderShipping,
     VendorOrders,
     { provide: COD_SETTINGS_REPOSITORY, useClass: PrismaCodSettingsRepository },
     { provide: COUPON_REPOSITORY, useClass: PrismaCouponRepository },
@@ -70,6 +75,14 @@ import { CartController } from "./interface/cart.controller.js";
       useFactory: (config: AppConfig) => ({ available: mobileMoneyAvailable(config) }),
     },
   ],
-  exports: [CartService, OrderService, OrderPayments, OrderCancelHooks, VendorOrders],
+  exports: [
+    CartService,
+    OrderService,
+    OrderPayments,
+    OrderCancelHooks,
+    VendorOrders,
+    DeliveryTariffs,
+    OrderShipping,
+  ],
 })
 export class OrdersModule {}

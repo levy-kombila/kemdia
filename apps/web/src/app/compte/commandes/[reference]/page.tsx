@@ -38,6 +38,7 @@ const CANCEL_REASON: Record<NonNullable<Order["cancelReason"]>, string> = {
   admin: "annulée par le service client",
   vendeur_refus: "un vendeur n'a pas pu la préparer ; un paiement déjà fait vous sera remboursé",
   vendeur_delai: "un vendeur n'a pas répondu à temps ; un paiement déjà fait vous sera remboursé",
+  livraison_echec: "la livraison n'a pas pu se faire ; un paiement déjà fait vous sera remboursé",
 };
 
 /**

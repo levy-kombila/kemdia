@@ -7,6 +7,7 @@ import { couponPaths } from "../modules/orders/interface/coupon.openapi.js";
 import { paymentPaths } from "../modules/payments/interface/payments.openapi.js";
 import { orderPaths } from "../modules/orders/interface/order.openapi.js";
 import { identityPaths } from "../modules/identity/interface/identity.openapi.js";
+import { shippingPaths } from "../modules/shipping/interface/shipping.openapi.js";
 import {
   productImagePaths,
   vendorOrderPaths,
@@ -15,7 +16,7 @@ import {
 } from "../modules/vendors/interface/vendors.openapi.js";
 
 /** Version du contrat HTTP (indépendante de la version de l'image) : à augmenter à chaque changement de l'API. */
-export const API_CONTRACT_VERSION = "1.19.0";
+export const API_CONTRACT_VERSION = "1.20.0";
 
 /** Document OpenAPI complet de l'API, généré à partir des schémas réellement utilisés. */
 export function buildOpenApiDocument(): Record<string, unknown> {
@@ -89,6 +90,11 @@ export function buildOpenApiDocument(): Record<string, unknown> {
           "Téléphone simulé de l'opérateur Mobile Money (S5-T05) : poste de développement et démo seulement",
       },
       {
+        name: "Livraisons",
+        description:
+          "Barème de livraison et suivi des expéditions par l'équipe (module shipping, S7-T01) ; part de Kemdia sur les frais (BR-021)",
+      },
+      {
         name: "Boutiques",
         description:
           "Boutiques des vendeurs (module vendors, S6-T01) : demande du compte connecté, examen par l'administration",
@@ -140,6 +146,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       ...vendorProductPaths,
       ...vendorOrderPaths,
       ...productImagePaths,
+      ...shippingPaths,
     },
     // Schémas du contrat partagé avec le site (@kemdia/contracts)
     components: {
