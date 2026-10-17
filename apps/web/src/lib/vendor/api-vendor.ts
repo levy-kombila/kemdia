@@ -3,17 +3,25 @@ import {
   CLIENT_IP_HEADER,
   IDENTITY_ERROR_CODES,
   INTERNAL_KEY_HEADER,
+  ORDER_ERROR_CODES,
+  ORDER_REFERENCE_PATTERN,
   PRODUCT_IMAGE_LIMITS,
   ProblemDetailsSchema,
   SESSION_TOKEN_PATTERN,
   ShopSchema,
   VENDOR_ERROR_CODES,
+  VendorOrderPageSchema,
+  VendorOrderSchema,
   VendorProductPageSchema,
   VendorProductSchema,
   type IdentityErrorCode,
+  type OrderErrorCode,
   type Shop,
   type ShopApplicationRequest,
   type VendorErrorCode,
+  type VendorOrder,
+  type VendorOrderPage,
+  type VendorOrderStatus,
   type VendorProduct,
   type VendorProductContentRequest,
   type VendorProductCreateRequest,
@@ -27,7 +35,7 @@ import { isUuid, type UploadType } from "./images";
 
 /**
  * Adaptateur « API » de l'espace vendeur (S6-T06, ADR-0037) : boutique (`/vendors/shop`), produits
- * (`/vendors/products`) et photos (`/vendors/products/{id}/images`). Appelé par le SERVEUR du site seulement (clé
+ * (`/vendors/products`), photos (`/vendors/products/{id}/images`) et commandes (`/vendors/orders`, S6-T07, ADR-0038). Appelé par le SERVEUR du site seulement (clé
  * interne + jeton de session du cookie, `server-only`). Comme les autres adaptateurs :
  *
  * - chaque réponse est vérifiée par le schéma du contrat partagé ;
@@ -35,7 +43,8 @@ import { isUuid, type UploadType } from "./images";
  * - les journaux ne contiennent ni jeton ni identifiant ni contenu : seulement la route et le statut.
  */
 
-export type VendorFailureCode = IdentityErrorCode | VendorErrorCode | "INDISPONIBLE";
+export type VendorFailureCode =
+  IdentityErrorCode | VendorErrorCode | OrderErrorCode | "INDISPONIBLE";
 export type VendorFailure = {
   ok: false;
   code: VendorFailureCode;
@@ -55,11 +64,17 @@ export interface VendorApiOptions {
   visitorIp?: () => Promise<string | null>;
 }
 
-const KNOWN_CODES: readonly VendorFailureCode[] = [...IDENTITY_ERROR_CODES, ...VENDOR_ERROR_CODES];
+const KNOWN_CODES: readonly VendorFailureCode[] = [
+  ...IDENTITY_ERROR_CODES,
+  ...VENDOR_ERROR_CODES,
+  ...ORDER_ERROR_CODES,
+];
 /** Codes dont l'explication de l'API aide le vendeur à corriger son formulaire. */
 const DETAILED: readonly VendorFailureCode[] = ["PRODUIT_INVALIDE", "BOUTIQUE_INVALIDE"];
 const UUID_IN_PATH = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
-const routeOf = (path: string) => path.replace(UUID_IN_PATH, "{id}").split("?")[0];
+const REFERENCE_IN_PATH = /KMD-[A-Z0-9]{6}/g;
+const routeOf = (path: string) =>
+  path.replace(UUID_IN_PATH, "{id}").replace(REFERENCE_IN_PATH, "{reference}").split("?")[0];
 
 const isWebp = (bytes: Uint8Array) =>
   bytes.length >= 12 &&
@@ -160,6 +175,12 @@ export function createVendorApi(options: VendorApiOptions) {
   const productPath = (productId: string) =>
     isUuid(productId) ? `/vendors/products/${productId.toLowerCase()}` : null;
 
+  /** Référence vérifiée (KMD-XXXXXX) avant d'entrer dans une adresse. */
+  const orderPath = (reference: string) =>
+    ORDER_REFERENCE_PATTERN.test(reference) ? `/vendors/orders/${reference}` : null;
+  const noOrder = <T>(): Promise<VendorResult<T>> =>
+    Promise.resolve({ ok: false, code: "COMMANDE_INTROUVABLE" });
+
   return {
     // --- Boutique (S6-T01) ---
     shop: (token: string): Promise<VendorResult<Shop>> =>
@@ -258,6 +279,36 @@ export function createVendorApi(options: VendorApiOptions) {
       return call("DELETE", `${path}/images/${imageId.toLowerCase()}`, token, VendorProductSchema);
     },
 
+    // --- Commandes de SA boutique (S6-T07, BR-013) ---
+    orders: (
+      token: string,
+      params: { status?: VendorOrderStatus; before?: string; limit?: number },
+    ): Promise<VendorResult<VendorOrderPage>> => {
+      const query = new URLSearchParams();
+      if (params.status) query.set("status", params.status);
+      if (params.before) query.set("before", params.before);
+      if (params.limit) query.set("limit", String(params.limit));
+      const text = query.toString();
+      return call("GET", `/vendors/orders${text ? `?${text}` : ""}`, token, VendorOrderPageSchema);
+    },
+    order: (token: string, reference: string): Promise<VendorResult<VendorOrder>> => {
+      const path = orderPath(reference);
+      return path ? call("GET", path, token, VendorOrderSchema) : noOrder();
+    },
+    acceptOrder: (token: string, reference: string): Promise<VendorResult<VendorOrder>> => {
+      const path = orderPath(reference);
+      return path ? call("POST", `${path}/accept`, token, VendorOrderSchema) : noOrder();
+    },
+    refuseOrder: (
+      token: string,
+      reference: string,
+      reason: string,
+    ): Promise<VendorResult<VendorOrder>> => {
+      const path = orderPath(reference);
+      return path
+        ? call("POST", `${path}/refuse`, token, VendorOrderSchema, { json: { reason } })
+        : noOrder();
+    },
     /** Aperçu d'une photo de SON produit (quel que soit le statut) : seulement un WebP vérifié de 2 Mo au plus. */
     async image(token: string, productId: string, imageId: string): Promise<VendorImageResult> {
       const path = productPath(productId);

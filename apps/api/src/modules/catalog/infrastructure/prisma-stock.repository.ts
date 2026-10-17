@@ -5,6 +5,7 @@ import type { ReservedVariant, StockLine, StockRepository } from "../application
 type Row = {
   id: string;
   product_id: string;
+  shop_id: string;
   name: string;
   price: number;
   compare_at_price: number | null;
@@ -48,7 +49,7 @@ export class PrismaStockRepository implements StockRepository {
           AND NOT p."shop_suspended"
           AND v."is_active"
           AND v."stock" >= ${quantity}
-        RETURNING v."id", v."product_id", v."name", v."price", v."compare_at_price", p."title", p."images"[1] AS "image",
+        RETURNING v."id", v."product_id", p."shop_id", v."name", v."price", v."compare_at_price", p."title", p."images"[1] AS "image",
           (SELECT count(*) FROM "catalog"."product_variants" AS w
             WHERE w."product_id" = v."product_id" AND w."is_active")::int AS "active_count"`;
       const row = rows[0];
@@ -56,6 +57,7 @@ export class PrismaStockRepository implements StockRepository {
       reserved.push({
         variantId: row.id,
         productId: row.product_id,
+        shopId: row.shop_id,
         title: row.title,
         variantName: row.active_count > 1 ? row.name : "",
         image: row.image,

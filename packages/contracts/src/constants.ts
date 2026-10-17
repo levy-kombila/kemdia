@@ -172,6 +172,10 @@ export const AUDIT_ACTIONS = [
   "mfa.failed",
   "mfa.locked",
   "mfa.reset",
+  // Commandes des vendeurs (S6-T07)
+  "order.vendor_accepted",
+  "order.vendor_refused",
+  "order.vendor_timeout",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** Lignes par page du journal d'audit. */
@@ -224,9 +228,17 @@ export const ORDER_STATUS_LABELS: Readonly<Record<OrderStatus, string>> = {
   delivered: "Livrée",
   cancelled: "Annulée",
 };
-/** Raisons d'une annulation. */
-/** Annulée par le client, faute de paiement à temps, ou par un administrateur (S5-T04, service client). */
-export const CANCEL_REASONS = ["client", "paiement_expire", "admin"] as const;
+/**
+ * Raisons d'une annulation : par le client, faute de paiement à temps, par un administrateur (S5-T04, service client),
+ * refusée par un vendeur ou sans réponse d'un vendeur dans le délai (S6-T07, BR-013).
+ */
+export const CANCEL_REASONS = [
+  "client",
+  "paiement_expire",
+  "admin",
+  "vendeur_refus",
+  "vendeur_delai",
+] as const;
 export type CancelReason = (typeof CANCEL_REASONS)[number];
 
 /**
@@ -262,6 +274,11 @@ export const ORDER_ERROR_CODES = [
   "TROP_DE_COMMANDES_OUVERTES",
   // Aucun fournisseur Mobile Money sur cet environnement (S5-T07) : seul le paiement à la livraison est possible
   "MOBILE_MONEY_INDISPONIBLE",
+  // Commandes des vendeurs (S6-T07) : la commande n'attend plus la décision de cette boutique (déjà décidée, annulée,
+  // délai passé)
+  "DECISION_IMPOSSIBLE",
+  // Motif de refus d'un vendeur trop court ou trop long
+  "MOTIF_REFUS_INVALIDE",
 ] as const;
 export type OrderErrorCode = (typeof ORDER_ERROR_CODES)[number];
 
@@ -343,7 +360,12 @@ export type RefundStatus = (typeof REFUND_STATUSES)[number];
  * Raisons d'un remboursement : commande payée puis annulée par l'administrateur, ou argent reçu alors que la commande
  * n'attendait plus de paiement (annulée entre-temps, ou déjà payée par un autre essai).
  */
-export const REFUND_REASONS = ["annulation_admin", "paiement_non_attendu"] as const;
+export const REFUND_REASONS = [
+  "annulation_admin",
+  "paiement_non_attendu",
+  // Commande payée puis refusée par un vendeur, ou sans réponse d'un vendeur à temps (S6-T07)
+  "annulation_vendeur",
+] as const;
 export type RefundReason = (typeof REFUND_REASONS)[number];
 
 /** Codes d'erreur métier des paiements. */
@@ -444,6 +466,30 @@ export const VENDOR_IMAGE_PATH_PATTERN =
 export const MAX_PENDING_PRODUCTS_PER_SHOP = 50;
 export const VENDOR_PRODUCT_PAGE_DEFAULT = 50;
 export const VENDOR_PRODUCT_PAGE_MAX = 100;
+
+// --- Commandes des vendeurs (S6-T07, ADR-0038) ---
+
+/**
+ * Délai du vendeur pour accepter ou refuser sa part d'une commande, à partir de la confirmation de la commande (payée,
+ * ou paiement à la livraison) — BR-013, choix du 2026-10-17. Sans réponse : la commande entière est annulée.
+ */
+export const VENDOR_ORDER_RESPONSE_HOURS = 24;
+/**
+ * Une commande vue par un vendeur : `pending` (à accepter ou refuser), `accepted`, `refused` (par lui), `expired` (pas
+ * de réponse à temps), `cancelled` (annulée autrement : par le client, l'équipe, un autre vendeur, faute de paiement).
+ */
+export const VENDOR_ORDER_STATUSES = [
+  "pending",
+  "accepted",
+  "refused",
+  "expired",
+  "cancelled",
+] as const;
+export type VendorOrderStatus = (typeof VENDOR_ORDER_STATUSES)[number];
+/** Motif d'un refus (mêmes valeurs dans la migration SQL). Il reste chez Kemdia : jamais montré au client. */
+export const VENDOR_ORDER_REFUSAL_LIMITS = { min: 5, max: 300 } as const;
+export const VENDOR_ORDER_PAGE_DEFAULT = 20;
+export const VENDOR_ORDER_PAGE_MAX = 50;
 
 /** Codes d'erreur métier des boutiques. */
 export const VENDOR_ERROR_CODES = [

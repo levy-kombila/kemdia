@@ -18,6 +18,10 @@ export type OrdersErrorCode =
   | "TROP_DE_COMMANDES_OUVERTES"
   /** Aucun fournisseur Mobile Money sur cet environnement (S5-T07) : payer à la livraison. */
   | "MOBILE_MONEY_INDISPONIBLE"
+  // Commandes des vendeurs (S6-T07, ADR-0038)
+  /** La commande n'attend plus la décision de cette boutique (déjà décidée, annulée, délai passé). */
+  | "DECISION_IMPOSSIBLE"
+  | "MOTIF_REFUS_INVALIDE"
   // Coupons (S5-T03, ADR-0025)
   | "COUPON_INVALIDE"
   | "COUPON_EXPIRE"

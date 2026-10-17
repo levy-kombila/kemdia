@@ -20,7 +20,8 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const PAYMENT_METHODS = ["airtel", "moov", "cod"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
-export type CancelReason = "client" | "paiement_expire" | "admin";
+export type CancelReason =
+  "client" | "paiement_expire" | "admin" | "vendeur_refus" | "vendeur_delai";
 
 /** Délai pour payer par Mobile Money (choix du 2026-10-10) ; ensuite annulée, stock remis en vente. */
 export const PAYMENT_WINDOW_MS = 30 * 60_000;
@@ -124,6 +125,8 @@ export function validatePayment(method: PaymentMethod, phone: string | undefined
 export interface ReservedLine {
   variantId: string;
   productId: string;
+  /** Boutique qui vend le produit, figée au moment de la commande (S6-T07) */
+  shopId: string;
   title: string;
   variantName: string;
   image: string | null;

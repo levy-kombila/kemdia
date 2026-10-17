@@ -50,7 +50,11 @@ describe("Paiements : mêmes règles dans le contrat, le domaine et la base (S5-
 
   it("raisons d'annulation et de remboursement", () => {
     expect(CANCEL_REASONS).toContain("admin");
-    expect([...REFUND_REASONS].sort()).toEqual(["annulation_admin", "paiement_non_attendu"]);
+    expect([...REFUND_REASONS].sort()).toEqual([
+      "annulation_admin",
+      "annulation_vendeur",
+      "paiement_non_attendu",
+    ]);
   });
 
   it("réglage du paiement à la livraison : valeurs de départ et borne = contrat", () => {

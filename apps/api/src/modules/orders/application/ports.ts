@@ -4,6 +4,7 @@ import type { Cart, CartLine } from "../domain/cart.js";
 import type { DeliveryAddress } from "../domain/delivery-address.js";
 import type { Coupon, CouponRules } from "../domain/coupon.js";
 import type { CancelReason, OrderStatus, PaymentMethod, PricedLine } from "../domain/order.js";
+import type { NewShopPart, ShopPart, ShopPartStatus, VendorView } from "../domain/shop-part.js";
 
 /** Panier enregistré (schéma PostgreSQL `orders`). */
 export interface CartRepository {
@@ -78,13 +79,24 @@ export interface OrderRecord {
   history: { status: OrderStatus; at: Date }[];
   /** Empreinte de la demande (adresse, paiement, total) : une même clé ne sert qu'à une même commande */
   requestHash: string;
+  /** Une part par boutique (S6-T07, BR-013) */
+  shopParts: ShopPart[];
 }
 
 export type NewOrder = Omit<
   OrderRecord,
-  "id" | "reference" | "createdAt" | "cancelledAt" | "cancelReason" | "history" | "paidAt"
+  | "id"
+  | "reference"
+  | "createdAt"
+  | "cancelledAt"
+  | "cancelReason"
+  | "history"
+  | "paidAt"
+  | "shopParts"
 > & {
   idempotencyKey: string;
+  /** Parts par boutique ; ouvertes tout de suite si la commande naît confirmée (paiement à la livraison) */
+  shopParts: (NewShopPart & { openedAt: Date | null; dueAt: Date | null })[];
 };
 
 export interface OrderSummaryRecord {
@@ -135,8 +147,74 @@ export interface OrderRepository {
    * tâche. `wait` : attend le verrou (borné par lock_timeout).
    */
   lockById(orderId: string, wait?: boolean): Promise<OrderRecord | null>;
+
+  // --- Commandes des vendeurs (S6-T07, ADR-0038) ---
+
+  /** Commande confirmée : ouvre ses parts de vendeurs encore fermées (délai de 24 h, e-mail à envoyer). */
+  openShopParts(orderId: string, now: Date): Promise<number>;
+  /** Parts de vendeurs encore sans réponse (à accepter ou refuser). */
+  countPendingShopParts(orderId: string): Promise<number>;
+  /** Décision d'une part EN ATTENTE (commande verrouillée par l'appelant) ; `false` si elle n'attendait plus. */
+  decideShopPart(
+    orderId: string,
+    shopId: string,
+    decision:
+      | { status: "accepted"; by: string }
+      | { status: "refused"; by: string; reason: string }
+      | { status: "expired" },
+    now: Date,
+  ): Promise<boolean>;
+  /** Commandes confirmées dont une part de vendeur a dépassé son échéance sans réponse. */
+  findVendorOverdue(now: Date, limit: number): Promise<string[]>;
+  /** Commandes de la boutique (parts ouvertes), de la plus récente à la plus ancienne. */
+  listForShop(
+    shopId: string,
+    query: { view?: VendorView | undefined; limit: number; before?: VendorOrderCursor | undefined },
+  ): Promise<{ items: VendorOrderSummaryRecord[]; next: VendorOrderCursor | null }>;
+  /** Commande de la boutique (part ouverte), avec SES lignes seulement ; `lock` : commande verrouillée. */
+  findForShop(shopId: string, reference: string, lock?: boolean): Promise<VendorOrderRecord | null>;
+  /** E-mails « nouvelle commande » dont c'est l'heure (parts ouvertes, pas encore envoyés). */
+  findDueVendorEmails(now: Date, limit: number): Promise<VendorEmailRecord[]>;
+  /** Réserve un envoi : un essai de plus, prochain essai repoussé ; `false` si déjà pris ou envoyé. */
+  claimVendorEmail(orderId: string, shopId: string, now: Date, nextAt: Date): Promise<boolean>;
+  markVendorEmailSent(orderId: string, shopId: string, now: Date): Promise<void>;
+  /** Abandonne l'envoi (commande plus à traiter, vendeur sans adresse vérifiée, 5 essais). */
+  giveUpVendorEmail(orderId: string, shopId: string): Promise<void>;
 }
 export const ORDER_REPOSITORY = Symbol("ORDER_REPOSITORY");
+
+/** Position dans les commandes d'une boutique (ouverture puis commande, de la plus récente à la plus ancienne). */
+export interface VendorOrderCursor {
+  openedAt: Date;
+  orderId: string;
+}
+
+/** Une commande vue par une boutique : SES articles, la ville de livraison, rien d'autre du client. */
+export interface VendorOrderSummaryRecord {
+  orderId: string;
+  reference: string;
+  orderStatus: OrderStatus;
+  cityName: string;
+  part: ShopPart & { openedAt: Date; dueAt: Date };
+}
+
+export interface VendorOrderRecord extends VendorOrderSummaryRecord {
+  /** Articles de la boutique seulement */
+  lines: PricedLine[];
+}
+
+/** E-mail « nouvelle commande » à envoyer à une boutique. */
+export interface VendorEmailRecord {
+  orderId: string;
+  shopId: string;
+  reference: string;
+  orderStatus: OrderStatus;
+  partStatus: ShopPartStatus;
+  subtotal: number;
+  itemCount: number;
+  dueAt: Date;
+  emailAttempts: number;
+}
 
 /** Transaction partagée (commande, stock du catalogue, panier) ; attente des verrous bornée. */
 export interface OrdersTransaction {

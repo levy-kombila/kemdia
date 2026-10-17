@@ -159,6 +159,7 @@ describe("montants (BR-004)", () => {
   const line = {
     variantId: "11111111-1111-4111-8111-111111111111",
     productId: "22222222-2222-4222-8222-222222222222",
+    shopId: "6b656d64-6961-4000-8000-000000000001",
     title: "Casque",
     variantName: "",
     image: null,

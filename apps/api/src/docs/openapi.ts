@@ -9,12 +9,13 @@ import { orderPaths } from "../modules/orders/interface/order.openapi.js";
 import { identityPaths } from "../modules/identity/interface/identity.openapi.js";
 import {
   productImagePaths,
+  vendorOrderPaths,
   vendorProductPaths,
   vendorsPaths,
 } from "../modules/vendors/interface/vendors.openapi.js";
 
 /** Version du contrat HTTP (indépendante de la version de l'image) : à augmenter à chaque changement de l'API. */
-export const API_CONTRACT_VERSION = "1.17.0";
+export const API_CONTRACT_VERSION = "1.18.0";
 
 /** Document OpenAPI complet de l'API, généré à partir des schémas réellement utilisés. */
 export function buildOpenApiDocument(): Record<string, unknown> {
@@ -43,6 +44,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         "- Double authentification (S6-T03) : obligatoire pour les modérateurs et administrateurs sur les routes d'équipe (`DEUX_FACTEURS_A_ACTIVER`, `DEUX_FACTEURS_REQUIS`).",
         "- Produits des vendeurs (S6-T02) : invisibles jusqu'à leur validation par la modération (BR-003) ; cachés si la boutique est suspendue.",
         "- Photos des vendeurs (S6-T04) : fichier envoyé tel quel (JPEG, PNG, WebP, 5 Mo), réencodé en WebP sans métadonnées ; publiques seulement pour un produit visible.",
+        "- Commandes des vendeurs (S6-T07) : chaque boutique accepte ou refuse sa part dans les 24 h (BR-013) ; un refus ou l'absence de réponse annule la commande entière.",
       ].join("\n"),
     },
     servers: [{ url: "/", description: "Même adresse que cette documentation" }],
@@ -97,6 +99,11 @@ export function buildOpenApiDocument(): Record<string, unknown> {
           "Produits de la boutique du compte connecté (module vendors, S6-T02) : création, modification, archivage",
       },
       {
+        name: "Commandes des vendeurs",
+        description:
+          "Commandes de la boutique du compte connecté (module vendors, S6-T07) : accepter ou refuser dans les 24 h",
+      },
+      {
         name: "Modération",
         description:
           "Validation ou refus des produits des vendeurs (S6-T02, BR-003) : modérateurs et administrateurs",
@@ -131,6 +138,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       ...paymentPaths,
       ...vendorsPaths,
       ...vendorProductPaths,
+      ...vendorOrderPaths,
       ...productImagePaths,
     },
     // Schémas du contrat partagé avec le site (@kemdia/contracts)

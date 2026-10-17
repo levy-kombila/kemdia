@@ -1,4 +1,8 @@
-import type { ShopStatus, VendorProductStatus } from "@kemdia/contracts/constants";
+import type {
+  ShopStatus,
+  VendorOrderStatus,
+  VendorProductStatus,
+} from "@kemdia/contracts/constants";
 
 /** Libellés vus par le vendeur (S6-T06) : le texte porte le sens, la couleur n'est qu'un repère. */
 export type Tone = "wait" | "ok" | "bad" | "off";
@@ -26,3 +30,15 @@ export const SHOP_STATUS: Record<ShopStatus, { label: string; tone: Tone }> = {
 
 /** Curseur de page renvoyé par l'API : relu dans l'adresse, jamais transmis s'il a une autre forme. */
 export const CURSOR = /^[A-Za-z0-9_-]{20,120}$/;
+
+/** Commandes vues par le vendeur (S6-T07) : où en est SA part de la commande. */
+export const ORDER_STATUS: Record<VendorOrderStatus, { label: string; tab: string; tone: Tone }> = {
+  pending: { label: "À accepter ou refuser", tab: "À traiter", tone: "wait" },
+  accepted: { label: "Acceptée", tab: "Acceptées", tone: "ok" },
+  refused: { label: "Refusée", tab: "Refusées", tone: "bad" },
+  expired: { label: "Sans réponse à temps", tab: "Sans réponse", tone: "bad" },
+  cancelled: { label: "Annulée", tab: "Annulées", tone: "off" },
+};
+
+/** Onglets de « Mes commandes » : ce qui attend une réponse d'abord. */
+export const ORDER_TABS = ["pending", "accepted", "refused", "expired", "cancelled"] as const;

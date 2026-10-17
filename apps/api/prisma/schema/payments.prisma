@@ -36,6 +36,8 @@ enum RefundStatus {
 enum RefundReason {
   ADMIN_CANCEL
   UNEXPECTED_PAYMENT
+  /// Commande payée puis refusée par un vendeur, ou sans réponse d'un vendeur à temps (S6-T07)
+  VENDOR_CANCEL
 
   @@map("refund_reason")
   @@schema("payments")

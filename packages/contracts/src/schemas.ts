@@ -48,6 +48,10 @@ import {
   VENDOR_PRODUCT_PAGE_DEFAULT,
   VENDOR_PRODUCT_PAGE_MAX,
   VENDOR_PRODUCT_STATUSES,
+  VENDOR_ORDER_PAGE_DEFAULT,
+  VENDOR_ORDER_PAGE_MAX,
+  VENDOR_ORDER_REFUSAL_LIMITS,
+  VENDOR_ORDER_STATUSES,
 } from "./constants.js";
 
 /**
@@ -1551,6 +1555,100 @@ export const RecoveryCodesSchema = z.object({ recoveryCodes }).meta({
   description: "Nouveaux codes de secours (les anciens ne servent plus)",
 });
 export type RecoveryCodes = z.infer<typeof RecoveryCodesSchema>;
+
+// --- Commandes des vendeurs (S6-T07, ADR-0038 ; BR-013) ---
+
+export const VendorOrderLineSchema = z
+  .object({
+    variantId: uuid,
+    productId: uuid,
+    title: z.string(),
+    variantName: z.string(),
+    unitPrice: fcfa.describe("Prix unitaire au moment de la commande"),
+    quantity: cartQuantity,
+    lineTotal: fcfa,
+  })
+  .meta({
+    id: "VendorOrderLine",
+    description: "Article de la boutique dans la commande (copie figée au moment de la commande)",
+  });
+export type VendorOrderLine = z.infer<typeof VendorOrderLineSchema>;
+
+const vendorOrderFields = {
+  reference: orderReference,
+  status: z.enum(VENDOR_ORDER_STATUSES).describe("Où en est la commande pour cette boutique"),
+  orderStatus: z.enum(ORDER_STATUSES).describe("Statut de la commande entière"),
+  itemCount: z.int().positive().describe("Nombre d'articles de la boutique (quantités comprises)"),
+  subtotal: fcfa.describe(
+    "Montant des articles de la boutique, aux prix de la commande (hors livraison et réduction)",
+  ),
+  cityName: z.string().describe("Ville de livraison : aucune autre donnée du client"),
+  receivedAt: z.iso.datetime().describe("Confirmation de la commande : début du délai de réponse"),
+  dueAt: z.iso
+    .datetime()
+    .describe("Sans réponse à cette date, la commande entière est annulée (BR-013)"),
+  decidedAt: z.iso.datetime().nullable().describe("Acceptation ou refus par la boutique"),
+};
+
+export const VendorOrderSummarySchema = z
+  .object(vendorOrderFields)
+  .meta({ id: "VendorOrderSummary", description: "Ligne de « Mes commandes » d'un vendeur" });
+export type VendorOrderSummary = z.infer<typeof VendorOrderSummarySchema>;
+
+export const VendorOrderSchema = z
+  .object({
+    ...vendorOrderFields,
+    lines: z.array(VendorOrderLineSchema).min(1).max(CART_MAX_LINES),
+    refusalReason: z
+      .string()
+      .nullable()
+      .describe("Motif du refus donné par la boutique (jamais montré au client)"),
+    canDecide: z.boolean().describe("La boutique peut encore accepter ou refuser"),
+  })
+  .meta({
+    id: "VendorOrder",
+    description:
+      "Commande vue par une boutique : SES articles seulement, et la ville de livraison (ni nom, ni téléphone, ni adresse du client)",
+  });
+export type VendorOrder = z.infer<typeof VendorOrderSchema>;
+
+export const VendorOrderListParamsSchema = z.strictObject({
+  status: z.enum(VENDOR_ORDER_STATUSES).optional(),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(VENDOR_ORDER_PAGE_MAX)
+    .default(VENDOR_ORDER_PAGE_DEFAULT),
+  before: z.string().regex(ORDER_CURSOR_PATTERN).optional(),
+});
+export type VendorOrderListParams = z.infer<typeof VendorOrderListParamsSchema>;
+
+export const VendorOrderPageSchema = z
+  .object({
+    items: z.array(VendorOrderSummarySchema),
+    nextCursor: z.string().regex(ORDER_CURSOR_PATTERN).nullable(),
+  })
+  .meta({
+    id: "VendorOrderPage",
+    description: "Commandes de la boutique, de la plus récente à la plus ancienne",
+  });
+export type VendorOrderPage = z.infer<typeof VendorOrderPageSchema>;
+
+export const VendorOrderRefuseRequestSchema = z
+  .strictObject({
+    reason: z
+      .string()
+      .max(VENDOR_ORDER_REFUSAL_LIMITS.max * 2)
+      .describe(
+        `Motif (${VENDOR_ORDER_REFUSAL_LIMITS.min} à ${VENDOR_ORDER_REFUSAL_LIMITS.max} caractères, espaces retirés) : gardé par Kemdia, jamais montré au client`,
+      ),
+  })
+  .meta({
+    id: "VendorOrderRefuseRequest",
+    description: "Refus d'une commande par la boutique : la commande ENTIÈRE est annulée",
+  });
+export type VendorOrderRefuseRequest = z.infer<typeof VendorOrderRefuseRequestSchema>;
 
 type JsonSchema = Record<string, unknown>;
 

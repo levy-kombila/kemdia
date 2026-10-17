@@ -115,6 +115,8 @@ export interface StockLine {
 export interface ReservedVariant {
   variantId: string;
   productId: string;
+  /** Boutique qui vend le produit (S6-T07) : figée sur la ligne de commande */
+  shopId: string;
   title: string;
   variantName: string;
   image: string | null;

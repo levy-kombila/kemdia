@@ -12,6 +12,7 @@ import { CouponService } from "./application/coupon.service.js";
 import { OrderCancelHooks } from "./application/order-cancel-hooks.js";
 import { OrderPayments } from "./application/order-payments.service.js";
 import { OrderService } from "./application/order.service.js";
+import { VendorOrders } from "./application/vendor-orders.service.js";
 import {
   CART_CATALOG,
   CART_REPOSITORY,
@@ -37,7 +38,8 @@ import { CartController } from "./interface/cart.controller.js";
 
 /**
  * Module orders (ADR-0006) : panier serveur (S5-T01, ADR-0023) ; commandes et réservation du stock (S5-T02, ADR-0024) ;
- * coupons (S5-T03, ADR-0025) ; réglage du paiement à la livraison et `OrderPayments` pour le module payments (S5-T04).
+ * coupons (S5-T03, ADR-0025) ; réglage du paiement à la livraison et `OrderPayments` pour le module payments (S5-T04) ;
+ * parts par boutique et `VendorOrders` pour le module vendors (S6-T07, ADR-0038).
  * Lit le catalogue par son port public (`CatalogService`), protège ses routes avec `SessionGuard` (module identity).
  */
 @Module({
@@ -53,6 +55,7 @@ import { CartController } from "./interface/cart.controller.js";
     CouponService,
     CodSettingsService,
     OrderPayments,
+    VendorOrders,
     { provide: COD_SETTINGS_REPOSITORY, useClass: PrismaCodSettingsRepository },
     { provide: COUPON_REPOSITORY, useClass: PrismaCouponRepository },
     OverdueOrdersScheduler,
@@ -67,6 +70,6 @@ import { CartController } from "./interface/cart.controller.js";
       useFactory: (config: AppConfig) => ({ available: mobileMoneyAvailable(config) }),
     },
   ],
-  exports: [CartService, OrderService, OrderPayments, OrderCancelHooks],
+  exports: [CartService, OrderService, OrderPayments, OrderCancelHooks, VendorOrders],
 })
 export class OrdersModule {}

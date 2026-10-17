@@ -58,3 +58,22 @@ export interface VendorsRandom {
   /** 4 caractères [a-z0-9] pour départager deux adresses de boutique identiques. */
   slugSuffix(): string;
 }
+
+// --- E-mail « nouvelle commande » au vendeur (S6-T07, ADR-0038) ---
+
+/** Ce que l'e-mail dit d'une commande : jamais le nom, le téléphone ni l'adresse du client. */
+export interface NewOrderNotice {
+  firstName: string;
+  shopName: string;
+  reference: string;
+  itemCount: number;
+  subtotal: number;
+  dueAt: Date;
+}
+
+export const VENDOR_ORDER_MAILER = Symbol("VENDOR_ORDER_MAILER");
+export interface VendorOrderMailer {
+  /** `false` : aucun envoi d'e-mail configuré (les e-mails attendent) */
+  readonly available: boolean;
+  send(to: string, notice: NewOrderNotice): Promise<void>;
+}
