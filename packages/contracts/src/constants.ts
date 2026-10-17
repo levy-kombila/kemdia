@@ -176,6 +176,14 @@ export const AUDIT_ACTIONS = [
   "order.vendor_accepted",
   "order.vendor_refused",
   "order.vendor_timeout",
+  // Vérification des vendeurs (S6-T08)
+  "kyc.updated",
+  "kyc.document_added",
+  "kyc.submitted",
+  "kyc.viewed",
+  "kyc.document_viewed",
+  "kyc.approved",
+  "kyc.rejected",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** Lignes par page du journal d'audit. */
@@ -488,6 +496,36 @@ export const VENDOR_ORDER_STATUSES = [
 export type VendorOrderStatus = (typeof VENDOR_ORDER_STATUSES)[number];
 /** Motif d'un refus (mêmes valeurs dans la migration SQL). Il reste chez Kemdia : jamais montré au client. */
 export const VENDOR_ORDER_REFUSAL_LIMITS = { min: 5, max: 300 } as const;
+
+// --- Vérification des vendeurs, KYC (S6-T08, ADR-0039 ; BR-024) ---
+
+/** draft : en préparation ; pending : envoyé, attend l'équipe ; approved : validé ; rejected : refusé (motif). */
+export const KYC_STATUSES = ["draft", "pending", "approved", "rejected"] as const;
+export type KycStatus = (typeof KYC_STATUSES)[number];
+/** Personne seule, ou entreprise (RCCM obligatoire). */
+export const KYC_HOLDER_KINDS = ["individual", "company"] as const;
+export type KycHolderKind = (typeof KYC_HOLDER_KINDS)[number];
+/** Pièce d'identité : carte nationale, passeport, carte de séjour. */
+export const KYC_ID_TYPES = ["cni", "passeport", "carte_sejour"] as const;
+export type KycIdType = (typeof KYC_ID_TYPES)[number];
+/** Compte de versement : Airtel Money, Moov Money ou compte bancaire. */
+export const KYC_PAYOUT_METHODS = ["airtel", "moov", "bank"] as const;
+export type KycPayoutMethod = (typeof KYC_PAYOUT_METHODS)[number];
+/** Photos du dossier : pièce (recto, verso) et extrait RCCM. */
+export const KYC_DOCUMENT_KINDS = ["id_front", "id_back", "rccm"] as const;
+export type KycDocumentKind = (typeof KYC_DOCUMENT_KINDS)[number];
+/** Photos effacées ce nombre de jours après la décision (choix du 2026-10-17, à confirmer avec le client). */
+export const KYC_DOCUMENT_RETENTION_DAYS = 30;
+export const KYC_LIMITS = {
+  nameMin: 2,
+  nameMax: 100,
+  idNumberMin: 4,
+  idNumberMax: 30,
+  rccmMin: 5,
+  rccmMax: 40,
+  bankAccountMin: 10,
+  bankAccountMax: 34,
+} as const;
 export const VENDOR_ORDER_PAGE_DEFAULT = 20;
 export const VENDOR_ORDER_PAGE_MAX = 50;
 
@@ -521,6 +559,13 @@ export const VENDOR_ERROR_CODES = [
   "IMAGE_TROP_PETITE",
   "TROP_DE_PHOTOS",
   "PHOTO_INTROUVABLE",
+  // Vérification des vendeurs, KYC (S6-T08)
+  "KYC_INVALIDE",
+  "KYC_INTROUVABLE",
+  "KYC_INCOMPLET",
+  "STATUT_KYC_INCOMPATIBLE",
+  "KYC_INDISPONIBLE",
+  "DOCUMENT_INTROUVABLE",
 ] as const;
 export type VendorErrorCode = (typeof VENDOR_ERROR_CODES)[number];
 

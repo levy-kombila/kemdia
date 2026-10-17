@@ -1,3 +1,4 @@
+import type { KycDocumentKind, KycFile, KycHolderKind, KycStatus } from "../domain/kyc.js";
 import type { Shop, ShopStatus } from "../domain/shop.js";
 
 /** Ports dont les cas d'utilisation des boutiques ont besoin (implémentés dans `infrastructure/`). */
@@ -76,4 +77,67 @@ export interface VendorOrderMailer {
   /** `false` : aucun envoi d'e-mail configuré (les e-mails attendent) */
   readonly available: boolean;
   send(to: string, notice: NewOrderNotice): Promise<void>;
+}
+
+// --- Vérification des vendeurs, KYC (S6-T08, ADR-0039) ---
+
+export const KYC_REPOSITORY = Symbol("KYC_REPOSITORY");
+export const KYC_BOX = Symbol("KYC_BOX");
+export const KYC_IMAGE_PROCESSOR = Symbol("KYC_IMAGE_PROCESSOR");
+
+/** Numéros sensibles, chiffrés (boîtes AES-256-GCM). */
+export interface KycSecrets {
+  idNumber: Uint8Array;
+  payoutAccount: Uint8Array;
+}
+
+/** Ligne de la file de l'équipe. */
+export interface KycSummary {
+  shopId: string;
+  shopName: string;
+  status: KycStatus;
+  holderKind: KycHolderKind;
+  submittedAt: Date;
+  reviewedAt: Date | null;
+}
+
+/** Position dans la file (envoi le plus ancien d'abord). */
+export interface KycCursor {
+  submittedAt: Date;
+  shopId: string;
+}
+
+export interface KycRepository {
+  find(shopId: string): Promise<KycFile | null>;
+  /** Lit le dossier et le verrouille jusqu'à la fin de la transaction. */
+  lock(shopId: string): Promise<KycFile | null>;
+  /**
+   * Enregistre le dossier. `secrets` : nouveaux numéros chiffrés (création ou modification par le vendeur) ; absent :
+   * seuls statut, dates et motif changent. Les photos qui ne sont plus dans `file.documents` sont effacées.
+   */
+  save(file: KycFile, now: Date, secrets?: KycSecrets): Promise<void>;
+  readSecrets(shopId: string): Promise<KycSecrets | null>;
+  /** Ajoute ou remplace la photo de cette sorte. */
+  putDocument(shopId: string, kind: KycDocumentKind, id: string, box: Uint8Array): Promise<Date>;
+  readDocument(shopId: string, kind: KycDocumentKind): Promise<Uint8Array | null>;
+  /** File de l'équipe : dossiers ENVOYÉS seulement (un brouillon reste chez le vendeur). */
+  list(query: {
+    status?: Exclude<KycStatus, "draft"> | undefined;
+    limit: number;
+    after?: KycCursor | undefined;
+  }): Promise<{ items: KycSummary[]; next: KycCursor | null }>;
+  /** Efface les photos des dossiers décidés depuis 30 jours ; renvoie le nombre de photos effacées. */
+  purgeDocuments(now: Date): Promise<number>;
+}
+
+/** Chiffrement des numéros et des photos (clé KYC_ENCRYPTION_KEY). `context` est lié à la boîte (données associées). */
+export interface KycBox {
+  readonly available: boolean;
+  seal(plain: Uint8Array, context: string): Uint8Array;
+  open(box: Uint8Array, context: string): Uint8Array;
+}
+
+/** Photo de pièce : format vérifié, réencodée en WebP sans métadonnées (ni EXIF ni position GPS). */
+export interface KycImageProcessor {
+  process(bytes: Uint8Array): Promise<Uint8Array>;
 }

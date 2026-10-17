@@ -76,6 +76,16 @@ const envSchema = z
       .regex(/^[A-Za-z0-9_-]{43}$/, "32 octets en base64url attendus (43 caractères)")
       .optional(),
     /**
+     * Clé de chiffrement des dossiers de vérification des vendeurs (S6-T08, ADR-0039) : 32 octets en base64url, comme
+     * `TOTP_ENCRYPTION_KEY` mais DIFFÉRENTE. Chiffre les numéros de pièce, les comptes de versement et les photos.
+     * Absente : clé de développement en local SEULEMENT ; ailleurs (démo comprise : de vraies pièces d'identité
+     * peuvent y être envoyées), la vérification est indisponible (`KYC_INDISPONIBLE`).
+     */
+    KYC_ENCRYPTION_KEY: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{43}$/, "32 octets en base64url attendus (43 caractères)")
+      .optional(),
+    /**
      * Vérification par SMS (S4, ADR-0015). `false` tant que le client n'a pas choisi de fournisseur :
      * le site affiche l'option téléphone comme « bientôt disponible » et l'API refuse d'envoyer un SMS.
      */
