@@ -9,18 +9,18 @@ Mobile Money (Moov, Airtel) et paiement à la livraison, lancement visé **fin 2
 
 ## Vue d'ensemble
 
-| Sprint    | Objectif                                                                                                | Statut     |
-| --------- | ------------------------------------------------------------------------------------------------------- | ---------- |
-| **S0**    | Décision de réécriture, choix de la stack, poste de travail                                             | ✅ Terminé |
-| **S1**    | Fondations frontend + DevOps (CI/CD, sécurité, démo publique)                                           | ✅ Terminé |
-| **S2**    | Intégration du KSAD + finitions frontend (comptes, tunnel de commande, filtres, tests E2E)              | ✅ Terminé |
-| **S3**    | Backend NestJS + PostgreSQL, module `catalog`, site branché sur l'API                                   | ✅ Terminé |
-| **S4**    | Module `identity` : comptes par e-mail ou téléphone (OTP), sécurité de connexion                        | ✅ Terminé |
-| **S5**    | Modules `orders` + `payments` : commande, Mobile Money, paiement à la livraison                         | ✅ Terminé |
-| **S6**    | Module `vendors` + back-office : boutiques, KYC, modération, commissions                                | ✅ Terminé |
-| **S7**    | Module `shipping` (transporteur) + préproduction (serveur, surveillance, sauvegardes, test d'intrusion) | ⏳         |
-| **S8**    | Bêta fermée (vendeurs partenaires + testeurs) puis lancement Gabon 🇬🇦                                   | ⏳         |
-| Après MVP | Affiliation, application mobile, suivi GPS, Kemdia Pay v2                                               | —          |
+| Sprint    | Objectif                                                                                                | Statut      |
+| --------- | ------------------------------------------------------------------------------------------------------- | ----------- |
+| **S0**    | Décision de réécriture, choix de la stack, poste de travail                                             | ✅ Terminé  |
+| **S1**    | Fondations frontend + DevOps (CI/CD, sécurité, démo publique)                                           | ✅ Terminé  |
+| **S2**    | Intégration du KSAD + finitions frontend (comptes, tunnel de commande, filtres, tests E2E)              | ✅ Terminé  |
+| **S3**    | Backend NestJS + PostgreSQL, module `catalog`, site branché sur l'API                                   | ✅ Terminé  |
+| **S4**    | Module `identity` : comptes par e-mail ou téléphone (OTP), sécurité de connexion                        | ✅ Terminé  |
+| **S5**    | Modules `orders` + `payments` : commande, Mobile Money, paiement à la livraison                         | ✅ Terminé  |
+| **S6**    | Module `vendors` + back-office : boutiques, KYC, modération, commissions                                | ✅ Terminé  |
+| **S7**    | Module `shipping` (transporteur) + préproduction (serveur, surveillance, sauvegardes, test d'intrusion) | 🚧 En cours |
+| **S8**    | Bêta fermée (vendeurs partenaires + testeurs) puis lancement Gabon 🇬🇦                                   | ⏳          |
+| Après MVP | Affiliation, application mobile, suivi GPS, Kemdia Pay v2                                               | —           |
 
 ### Jalons
 
@@ -181,6 +181,24 @@ Choix du 2026-10-17 (S6-T08) : photos des pièces **dans PostgreSQL, chiffrées*
 | S6-T08 | Vérification des vendeurs, KYC (BR-024) : dossier (identité, RCCM, compte de versement) et photos chiffrés, examen par un administrateur (consultations au journal), photos effacées 30 jours après ; pages `/vendeur/verification` et `/equipe/verifications` ; menu du compte selon les rôles — ADR-0039 | ✅     |
 
 Clôture (2026-10-17) : [rapport](rapports/2026-10-17_S6_cloture.md), version **v0.7.0**. **Reporté** : commissions et versements (BR-020, question ouverte n° 3), modération des avis (FR-020, quand les avis existeront), écrans d'administration des factures, encaissements et remboursements, rôles et journal d'audit à l'écran.
+
+## S7 — Module `shipping` + préproduction ⏳
+
+Décisions : [ADR-0040](architecture/adr/0040-livraisons-module-shipping.md) (livraisons, module `shipping`).
+Choix du 2026-10-17 (découpage) : transporteur pas encore choisi (question ouverte n° 5) → **port neutre + suivi manuel** ; barème de livraison **en base, réglable** par un administrateur ; préproduction **tout préparée sans louer de serveur** (location à discuter avec le client) ; test d'intrusion **gratuit : OWASP ZAP dans la CI + revue ASVS niveau 1** (pentest externe payant proposé au client avant le lancement).
+Choix du 2026-10-17 (S7-T01) : part de Kemdia (BR-021) **arrondie à l'entier inférieur** ; statuts changés par un **administrateur seul** ; échec de livraison = **nouvelle tentative ou annulation** (stock rendu, remboursement « à faire ») ; **API seule** (écrans au S7-T02, barème à ne pas changer avant).
+
+| ID     | Tâche                                                                                                                                                                                                                                                                                                                     | Statut |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| S7-T01 | Fondations `shipping` (BR-021) : barème des zones en base réglable par un administrateur (journal), lu par le devis et la commande ; expédition par commande (en route, livrée, échec, nouvelle tentative, annulation après échec) ; transporteur « manuel » ; part Kemdia 15 % (entier inférieur) ; API seule — ADR-0040 | ✅     |
+| S7-T02 | Livraisons à l'écran : `/equipe/livraisons` (commandes prêtes, étapes, barème), suivi dans `/compte/commandes`, « prêt à expédier » côté `/vendeur`, e-mails au client ; site branché sur le barème de l'API                                                                                                              | ⏳     |
+| S7-T03 | Accueil : blocage ramené sous 300 ms (dette du S3)                                                                                                                                                                                                                                                                        | ⏳     |
+| S7-T04 | Serveur durci : `setup-server.sh` (pare-feu, SSH par clé, mises à jour automatiques, utilisateur sans droits), en-têtes vérifiés, guide de préproduction (sans louer de serveur)                                                                                                                                          | ⏳     |
+| S7-T05 | Sauvegardes PostgreSQL chiffrées et restauration testée automatiquement dans la CI                                                                                                                                                                                                                                        | ⏳     |
+| S7-T06 | Surveillance : sonde de santé (API, base), journaux structurés, alertes                                                                                                                                                                                                                                                   | ⏳     |
+| S7-T07 | Test d'intrusion : OWASP ZAP dans la CI + revue OWASP ASVS niveau 1, corrections                                                                                                                                                                                                                                          | ⏳     |
+| S7-T08 | Conformité APDPVP : mentions légales, politique de confidentialité, registre des traitements, export et suppression des données d'un compte                                                                                                                                                                               | ⏳     |
+| S7-T09 | (si le temps le permet) Écrans d'administration reportés du S6 : factures, encaissements à la livraison, remboursements, journal d'audit                                                                                                                                                                                  | ⏳     |
 
 ## S5 à S8 — grandes lignes
 

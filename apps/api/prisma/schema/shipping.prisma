@@ -1,0 +1,72 @@
+// Module shipping (S7-T01, ADR-0040) : barème de livraison réglable, expéditions des commandes, part de Kemdia sur les
+// frais de livraison (BR-021). Chaque modèle de ce fichier porte @@schema("shipping").
+
+/// Expédition : en route (remise au transporteur), livrée, échec de livraison, annulée.
+enum ShipmentStatus {
+  IN_TRANSIT
+  DELIVERED
+  FAILED
+  CANCELLED
+
+  @@map("shipment_status")
+  @@schema("shipping")
+}
+
+/// Barème d'une zone (zone_1 … zone_4), changé par un administrateur ; les 4 lignes sont posées par la migration.
+model DeliveryTariff {
+  zoneId        String    @id @map("zone_id") @db.VarChar(10)
+  /// Frais de base en FCFA (le supplément de la ville, écrit dans le contrat, s'y ajoute)
+  baseFee       Int       @map("base_fee")
+  /// Livraison offerte dès ce montant d'articles (réduction déduite)
+  freeThreshold Int       @map("free_threshold")
+  daysMin       Int       @map("days_min") @db.SmallInt
+  daysMax       Int       @map("days_max") @db.SmallInt
+  /// Dernier administrateur qui l'a changé (module identity) : UUID seul
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  updatedAt     DateTime? @map("updated_at") @db.Timestamptz(3)
+
+  @@map("delivery_tariffs")
+  @@schema("shipping")
+}
+
+/// Expédition d'une commande (une par commande). Frais et parts figés à la remise au transporteur (règles SQL).
+model Shipment {
+  id             String          @id @db.Uuid
+  /// Commande (module orders) : UUID et numéro seuls, sans clé étrangère entre modules
+  orderId        String          @unique @map("order_id") @db.Uuid
+  orderReference String          @unique @map("order_reference") @db.VarChar(10)
+  status         ShipmentStatus  @default(IN_TRANSIT)
+  /// Transporteur : « manuel » tant qu'aucun n'est choisi (question ouverte n° 5)
+  carrier        String          @db.VarChar(20)
+  /// Tentative de livraison en cours (1 = première)
+  attempt        Int             @default(1) @db.SmallInt
+  cityName       String          @map("city_name") @db.VarChar(60)
+  /// Frais facturés au client ; part de Kemdia = 15 % arrondis à l'entier inférieur (BR-021) ; le reste au transporteur
+  deliveryFee    Int             @map("delivery_fee")
+  kemdiaShare    Int             @map("kemdia_share")
+  carrierShare   Int             @map("carrier_share")
+  failureReason  String?         @map("failure_reason") @db.VarChar(200)
+  handedOverAt   DateTime        @map("handed_over_at") @db.Timestamptz(3)
+  updatedAt      DateTime        @map("updated_at") @db.Timestamptz(3)
+  events         ShipmentEvent[]
+
+  @@index([status, updatedAt])
+  @@map("shipments")
+  @@schema("shipping")
+}
+
+/// Historique d'une expédition, en ajout seul : qui a fait quoi, quand.
+model ShipmentEvent {
+  id         String         @id @db.Uuid
+  shipmentId String         @map("shipment_id") @db.Uuid
+  shipment   Shipment       @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  status     ShipmentStatus
+  note       String?        @db.VarChar(200)
+  /// Administrateur (module identity) : UUID seul
+  actorId    String         @map("actor_id") @db.Uuid
+  at         DateTime       @db.Timestamptz(3)
+
+  @@index([shipmentId, at])
+  @@map("shipment_events")
+  @@schema("shipping")
+}

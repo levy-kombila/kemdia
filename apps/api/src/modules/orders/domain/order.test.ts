@@ -34,13 +34,14 @@ const ADDRESS = {
 };
 
 describe("statuts (S5-T02)", () => {
-  it("suivent l'ordre attendu ; BR-010 : une commande livrée ne s'annule plus", () => {
+  it("suivent l'ordre attendu ; BR-010 : une commande livrée ne s'annule plus ; S7-T01 : expédiée annulable (échec)", () => {
     expect(canTransition("pending_payment", "confirmed")).toBe(true);
     expect(canTransition("confirmed", "preparing")).toBe(true);
     expect(canTransition("preparing", "shipped")).toBe(true);
     expect(canTransition("shipped", "delivered")).toBe(true);
     expect(canTransition("delivered", "cancelled")).toBe(false);
-    expect(canTransition("shipped", "cancelled")).toBe(false);
+    // Livraison impossible, annulée par un administrateur (module shipping) ; jamais par le client
+    expect(canTransition("shipped", "cancelled")).toBe(true);
     expect(canTransition("cancelled", "confirmed")).toBe(false);
     expect(canTransition("pending_payment", "shipped")).toBe(false);
   });

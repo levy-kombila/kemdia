@@ -154,6 +154,8 @@ export interface OrderRepository {
   openShopParts(orderId: string, now: Date): Promise<number>;
   /** Parts de vendeurs encore sans réponse (à accepter ou refuser). */
   countPendingShopParts(orderId: string): Promise<number>;
+  /** Commandes prêtes à expédier (S7-T01), les plus anciennes d'abord. */
+  listReadyToShip(limit: number): Promise<OrderRecord[]>;
   /** Décision d'une part EN ATTENTE (commande verrouillée par l'appelant) ; `false` si elle n'attendait plus. */
   decideShopPart(
     orderId: string,

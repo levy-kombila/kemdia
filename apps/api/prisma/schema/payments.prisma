@@ -38,6 +38,8 @@ enum RefundReason {
   UNEXPECTED_PAYMENT
   /// Commande payée puis refusée par un vendeur, ou sans réponse d'un vendeur à temps (S6-T07)
   VENDOR_CANCEL
+  /// Commande payée, livraison impossible puis annulée (S7-T01)
+  DELIVERY_CANCEL
 
   @@map("refund_reason")
   @@schema("payments")

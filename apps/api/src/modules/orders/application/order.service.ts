@@ -22,6 +22,7 @@ import {
 import { OrdersError } from "../domain/orders-error.js";
 import { openingOf, splitByShop } from "../domain/shop-part.js";
 import { CartService } from "./cart.service.js";
+import { DeliveryTariffs } from "./delivery-tariffs.js";
 import { OrderCancelHooks } from "./order-cancel-hooks.js";
 import {
   COD_SETTINGS_REPOSITORY,
@@ -152,6 +153,7 @@ export class OrderService {
     @Inject(COD_SETTINGS_REPOSITORY) private readonly codSettings: CodSettingsRepository,
     @Inject(MOBILE_MONEY) private readonly mobileMoney: MobileMoneyAvailability,
     private readonly cancelHooks: OrderCancelHooks,
+    private readonly tariffs: DeliveryTariffs,
   ) {}
 
   /**
@@ -205,8 +207,13 @@ export class OrderService {
       applied = { code: coupon.code, discount };
     }
     const discount = applied?.discount ?? 0;
-    // Livraison offerte et paiement à la livraison : calculés sur ce que le client paie pour ses articles
-    const delivery = estimateDelivery(cityId, cart.subtotal - discount)!;
+    // Livraison offerte et paiement à la livraison : calculés sur ce que le client paie pour ses articles ; barème réglé
+    // par un administrateur (S7-T01)
+    const delivery = estimateDelivery(
+      cityId,
+      cart.subtotal - discount,
+      await this.tariffs.current(),
+    )!;
     const total = cart.subtotal - discount + delivery.fee;
     // Réglage de l'administrateur (S5-T04, BR-011)
     const cod = codAvailability(cityId, total, await this.codSettings.get());
@@ -313,7 +320,12 @@ export class OrderService {
         );
       }
       const discount = applied?.discount ?? 0;
-      const delivery = estimateDelivery(address.cityId, subtotal - discount)!;
+      // Barème lu dans la transaction de la commande (S7-T01) : le total attendu du client le protège d'un changement
+      const delivery = estimateDelivery(
+        address.cityId,
+        subtotal - discount,
+        await this.tariffs.current(),
+      )!;
       const total = subtotal - discount + delivery.fee;
       if (total !== input.expectedTotal) {
         throw new OrdersError(

@@ -1,12 +1,14 @@
 /**
  * Livraison au Gabon (phase 1) : zones, villes, quartiers, frais — S5-T02, ADR-0024.
  * Barèmes repris de l'ancien projet (scripts/insert_location_data.py), déplacés du site vers le contrat :
- * l'API calcule ici le montant FACTURÉ, le site la même estimation d'affichage. Changer un tarif = une PR.
+ * l'API calcule ici le montant FACTURÉ, le site la même estimation d'affichage. S7-T01 : le barème des zones est
+ * réglable par un administrateur (paramètre `zones`) ; changer une ville ou un supplément = une PR.
  *
  * Ce fichier n'importe RIEN (utilisable par le navigateur et par la couche application de l'API).
  */
 
-export type ZoneId = "zone_1" | "zone_2" | "zone_3" | "zone_4";
+export const ZONE_IDS = ["zone_1", "zone_2", "zone_3", "zone_4"] as const;
+export type ZoneId = (typeof ZONE_IDS)[number];
 
 export type DeliveryZone = {
   id: ZoneId;
@@ -208,7 +210,14 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
-export const ZONES: Readonly<Record<ZoneId, Readonly<DeliveryZone>>> = deepFreeze(ZONE_LIST);
+/** Barème des 4 zones (frais, gratuité, délais). */
+export type DeliveryTariffTable = Readonly<Record<ZoneId, Readonly<DeliveryZone>>>;
+
+/**
+ * Barème par défaut. S7-T01 (ADR-0040) : l'API lit le barème réglé par un administrateur (module shipping) ; ces
+ * valeurs servent de point de départ et de secours. Les suppléments par ville, eux, restent dans ce fichier.
+ */
+export const ZONES: DeliveryTariffTable = deepFreeze(ZONE_LIST);
 export const CITIES: readonly Readonly<City>[] = deepFreeze(CITY_LIST);
 
 export function getCity(id: string | null | undefined): City | undefined {
@@ -225,10 +234,14 @@ export type DeliveryEstimate = {
   remainingForFree: number;
 };
 
-export function estimateDelivery(cityId: string, subtotal: number): DeliveryEstimate | null {
+export function estimateDelivery(
+  cityId: string,
+  subtotal: number,
+  zones: DeliveryTariffTable = ZONES,
+): DeliveryEstimate | null {
   const city = getCity(cityId);
   if (!city) return null;
-  const zone = ZONES[city.zone];
+  const zone = zones[city.zone];
   const safeSubtotal = Math.max(0, Math.round(subtotal));
   const reachedFree = safeSubtotal >= zone.freeThreshold;
   const rawFee = zone.baseFee + city.surcharge;

@@ -184,6 +184,13 @@ export const AUDIT_ACTIONS = [
   "kyc.document_viewed",
   "kyc.approved",
   "kyc.rejected",
+  // Livraisons (S7-T01)
+  "settings.delivery_updated",
+  "shipment.handed_over",
+  "shipment.delivered",
+  "shipment.failed",
+  "shipment.retried",
+  "shipment.cancelled",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** Lignes par page du journal d'audit. */
@@ -246,6 +253,8 @@ export const CANCEL_REASONS = [
   "admin",
   "vendeur_refus",
   "vendeur_delai",
+  // Livraison impossible, commande annulée par un administrateur (S7-T01)
+  "livraison_echec",
 ] as const;
 export type CancelReason = (typeof CANCEL_REASONS)[number];
 
@@ -373,6 +382,8 @@ export const REFUND_REASONS = [
   "paiement_non_attendu",
   // Commande payée puis refusée par un vendeur, ou sans réponse d'un vendeur à temps (S6-T07)
   "annulation_vendeur",
+  // Commande payée, livraison impossible puis annulée (S7-T01)
+  "annulation_livraison",
 ] as const;
 export type RefundReason = (typeof REFUND_REASONS)[number];
 
@@ -569,6 +580,41 @@ export const VENDOR_ERROR_CODES = [
 ] as const;
 export type VendorErrorCode = (typeof VENDOR_ERROR_CODES)[number];
 
+// --- Livraisons (S7-T01, ADR-0040) ---
+
+/**
+ * Expédition d'une commande : en route (remise au transporteur), livrée, échec de livraison (nouvelle tentative ou
+ * annulation), annulée. « À préparer » n'est pas un statut : c'est une commande prête sans expédition.
+ */
+export const SHIPMENT_STATUSES = ["in_transit", "delivered", "failed", "cancelled"] as const;
+export type ShipmentStatus = (typeof SHIPMENT_STATUSES)[number];
+
+/** BR-021 : part de Kemdia sur chaque frais de livraison facturé, arrondie à l'entier inférieur (choix du 2026-10-17). */
+export const KEMDIA_DELIVERY_SHARE_PERCENT = 15;
+
+export const SHIPPING_LIMITS = {
+  /** Motif d'un échec de livraison, note d'une annulation */
+  reasonMin: 3,
+  reasonMax: 200,
+  /** Barème : frais de base d'une zone, seuil de gratuité, délais en jours */
+  baseFeeMax: 100_000,
+  freeThresholdMax: 10_000_000,
+  daysMax: 30,
+  /** Lignes au plus dans une liste de l'administration */
+  listMax: 100,
+} as const;
+
+/** Codes d'erreur métier des livraisons. */
+export const SHIPPING_ERROR_CODES = [
+  "EXPEDITION_INTROUVABLE",
+  // La commande n'est pas prête (paiement, vendeur qui n'a pas répondu) ou a déjà une expédition
+  "EXPEDITION_IMPOSSIBLE",
+  "STATUT_EXPEDITION_INCOMPATIBLE",
+  "EXPEDITION_INVALIDE",
+  "TARIFS_INVALIDES",
+] as const;
+export type ShippingErrorCode = (typeof SHIPPING_ERROR_CODES)[number];
+
 /** Tous les codes d'erreur métier que l'API peut renvoyer. */
 export const API_ERROR_CODES = [
   ...IDENTITY_ERROR_CODES,
@@ -577,6 +623,7 @@ export const API_ERROR_CODES = [
   ...COUPON_ERROR_CODES,
   ...PAYMENT_ERROR_CODES,
   ...VENDOR_ERROR_CODES,
+  ...SHIPPING_ERROR_CODES,
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
 
