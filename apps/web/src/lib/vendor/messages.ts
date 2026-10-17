@@ -1,7 +1,9 @@
 import {
   IDENTITY_ERROR_CODES,
   VENDOR_ERROR_CODES,
+  VENDOR_ORDER_REFUSAL_LIMITS,
   type IdentityErrorCode,
+  type OrderErrorCode,
   type VendorErrorCode,
 } from "@kemdia/contracts/constants";
 import { authErrorMessage } from "@/lib/auth/messages";
@@ -10,7 +12,16 @@ import { authErrorMessage } from "@/lib/auth/messages";
  * Messages de l'espace vendeur (S6-T06), écrits pour le vendeur (l'équipe a les siens, S6-T05). Le texte affiché vient
  * toujours d'ici ; l'explication de l'API n'est ajoutée que pour un champ mal rempli.
  */
-export type VendorMessageCode = IdentityErrorCode | VendorErrorCode | "INDISPONIBLE";
+export type VendorMessageCode =
+  IdentityErrorCode | VendorErrorCode | OrderErrorCode | "INDISPONIBLE";
+
+/** Commandes (S6-T07) : seuls ces codes peuvent arriver dans l'espace vendeur ; les autres → message général. */
+const ORDER_MESSAGES: Partial<Record<OrderErrorCode, string>> = {
+  COMMANDE_INTROUVABLE: "Cette commande n'existe pas (ou ne contient aucun de vos produits).",
+  DECISION_IMPOSSIBLE:
+    "Cette commande ne peut plus être acceptée ou refusée (déjà traitée, annulée ou délai dépassé).",
+  MOTIF_REFUS_INVALIDE: `Indiquez le motif du refus : ${VENDOR_ORDER_REFUSAL_LIMITS.min} à ${VENDOR_ORDER_REFUSAL_LIMITS.max} caractères.`,
+};
 
 const MESSAGES: Record<VendorErrorCode, string> = {
   BOUTIQUE_INVALIDE: "Vérifiez les champs de votre demande.",
@@ -51,15 +62,27 @@ export function vendorErrorMessage(code: VendorMessageCode, detail?: string): st
     const base = MESSAGES[code];
     return detail ? `${base} (${detail})` : base;
   }
+  const order = Object.hasOwn(ORDER_MESSAGES, code)
+    ? ORDER_MESSAGES[code as OrderErrorCode]
+    : undefined;
+  if (order) return order;
   // Rôle vendeur retiré (boutique suspendue entre-temps)
   if (code === "ACCES_REFUSE") return MESSAGES.BOUTIQUE_INACTIVE;
+  // Autre code de commande (inattendu ici) : message général
+  if (code === "INDISPONIBLE" || !isIdentityCode(code))
+    return authErrorMessage({ code: "INDISPONIBLE" });
   return authErrorMessage({ code });
 }
 
 /** Code d'erreur lu dans l'adresse (`?erreur=…`) : seulement un code connu ; le texte vient toujours d'ici. */
 export function vendorErrorFromParam(value: unknown): string | null {
   if (typeof value !== "string" || !/^[A-Z_]{3,40}$/.test(value)) return null;
-  if (value === "INDISPONIBLE" || isVendorCode(value) || isIdentityCode(value))
+  if (
+    value === "INDISPONIBLE" ||
+    isVendorCode(value) ||
+    isIdentityCode(value) ||
+    Object.hasOwn(ORDER_MESSAGES, value)
+  )
     return vendorErrorMessage(value as VendorMessageCode);
   return null;
 }
@@ -76,6 +99,10 @@ export const VENDOR_NOTICES = {
   "photo-retiree": "Photo retirée.",
   "produit-archive": "Produit retiré de la vente.",
   "produit-remis": "Produit remis en vente : il repasse en modération.",
+  "commande-acceptee":
+    "Commande acceptée. Préparez les articles : elle passe en préparation quand toutes les boutiques ont accepté.",
+  "commande-refusee":
+    "Commande refusée : elle est annulée et le stock est rendu. Le client la voit annulée (remboursement s'il avait payé).",
 } as const;
 export type VendorNotice = keyof typeof VENDOR_NOTICES;
 

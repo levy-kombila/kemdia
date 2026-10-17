@@ -191,3 +191,76 @@ describe("adaptateur de l'espace vendeur (S6-T06)", () => {
     ).toEqual({ status: 503 });
   });
 });
+
+describe("commandes de la boutique (S6-T07)", () => {
+  const REF = "KMD-ABC234";
+  const VIEW = {
+    reference: REF,
+    status: "pending",
+    orderStatus: "confirmed",
+    itemCount: 2,
+    subtotal: 30000,
+    cityName: "Libreville",
+    receivedAt: NOW,
+    dueAt: NOW,
+    decidedAt: null,
+    lines: [
+      {
+        variantId: VARIANT,
+        productId: PRODUCT,
+        title: "Chemise en pagne",
+        variantName: "M",
+        unitPrice: 15000,
+        quantity: 2,
+        lineTotal: 30000,
+      },
+    ],
+    refusalReason: null,
+    canDecide: true,
+  };
+
+  it("référence vérifiée avant toute adresse : rien n'est appelé sinon", async () => {
+    const { fetch, vendor } = api(json(200, VIEW));
+    for (const bad of ["kmd-abc234", "KMD-ABC23", "../x", "KMD-ABC234/../../admin"]) {
+      expect(await vendor.order(TOKEN, bad)).toEqual({ ok: false, code: "COMMANDE_INTROUVABLE" });
+      expect(await vendor.refuseOrder(TOKEN, bad, "motif")).toMatchObject({ ok: false });
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("fiche, acceptation et refus : bonnes adresses, réponse vérifiée par le contrat", async () => {
+    const { fetch, vendor } = api(json(200, VIEW));
+    expect(await vendor.order(TOKEN, REF)).toMatchObject({ ok: true, data: { reference: REF } });
+    await vendor.acceptOrder(TOKEN, REF);
+    await vendor.refuseOrder(TOKEN, REF, "Rupture de stock");
+    const calls = fetch.mock.calls.map(([url, init]) => [String(url), init?.method, init?.body]);
+    expect(calls).toEqual([
+      [`http://serveur.test:4000/api/v1/vendors/orders/${REF}`, "GET", undefined],
+      [`http://serveur.test:4000/api/v1/vendors/orders/${REF}/accept`, "POST", undefined],
+      [
+        `http://serveur.test:4000/api/v1/vendors/orders/${REF}/refuse`,
+        "POST",
+        JSON.stringify({ reason: "Rupture de stock" }),
+      ],
+    ]);
+  });
+
+  it("codes de commande reconnus ; réponse non conforme → INDISPONIBLE", async () => {
+    expect(await api(problem(409, "DECISION_IMPOSSIBLE")).vendor.acceptOrder(TOKEN, REF)).toEqual({
+      ok: false,
+      code: "DECISION_IMPOSSIBLE",
+    });
+    expect(await api(json(200, { ...VIEW, cityName: 3 })).vendor.order(TOKEN, REF)).toEqual({
+      ok: false,
+      code: "INDISPONIBLE",
+    });
+  });
+
+  it("liste : filtre et curseur transmis", async () => {
+    const { fetch, vendor } = api(json(200, { items: [], nextCursor: null }));
+    await vendor.orders(TOKEN, { status: "pending", before: "c".repeat(24), limit: 20 });
+    expect(String(fetch.mock.calls[0]![0])).toBe(
+      `http://serveur.test:4000/api/v1/vendors/orders?status=pending&before=${"c".repeat(24)}&limit=20`,
+    );
+  });
+});

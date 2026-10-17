@@ -1,7 +1,8 @@
 /** Accueil de l'espace vendeur (S6-T06). */
 export const VENDOR_HOME = "/vendeur";
 
-const SEGMENT = /^[a-z0-9-]{1,64}$/;
+// Majuscules : référence de commande (KMD-XXXXXX, S6-T07)
+const SEGMENT = /^[A-Za-z0-9-]{1,64}$/;
 const QUERY = /^[a-zA-Z0-9=&_-]{0,200}$/;
 
 /**

@@ -41,6 +41,8 @@ const api = vi.hoisted(() => ({
   product: vi.fn(),
   reorderImages: vi.fn(),
   removeImage: vi.fn(),
+  acceptOrder: vi.fn(),
+  refuseOrder: vi.fn(),
 }));
 vi.mock("./api-vendor", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api-vendor")>()),
@@ -251,5 +253,49 @@ describe("photos", () => {
     expect(
       await redirectOf(actions.removePhotoAction(form({ productId: PRODUCT, imageId: IMG_A }))),
     ).toBe(`${PAGE}?ok=photo-retiree`);
+  });
+});
+
+describe("commandes (S6-T07)", () => {
+  const REF = "KMD-ABC234";
+  const ORDER_PAGE = `/vendeur/commandes/${REF}`;
+
+  it("accepter : référence vérifiée avant l'API, retour à la fiche avec un avis", async () => {
+    expect(await redirectOf(actions.acceptOrderAction(form({ reference: "../../admin" })))).toBe(
+      "/vendeur/commandes",
+    );
+    expect(api.acceptOrder).not.toHaveBeenCalled();
+    api.acceptOrder.mockResolvedValue({ ok: true, data: {} });
+    expect(await redirectOf(actions.acceptOrderAction(form({ reference: REF })))).toBe(
+      `${ORDER_PAGE}?ok=commande-acceptee`,
+    );
+    expect(api.acceptOrder).toHaveBeenCalledWith(TOKEN, REF);
+  });
+
+  it("refuser : motif de 5 à 300 caractères (espaces retirés), sinon aucun appel", async () => {
+    for (const reason of ["", "  abc  ", "x".repeat(301)]) {
+      expect(await redirectOf(actions.refuseOrderAction(form({ reference: REF, reason })))).toBe(
+        `${ORDER_PAGE}?erreur=MOTIF_REFUS_INVALIDE`,
+      );
+    }
+    expect(api.refuseOrder).not.toHaveBeenCalled();
+    api.refuseOrder.mockResolvedValue({ ok: true, data: {} });
+    expect(
+      await redirectOf(
+        actions.refuseOrderAction(form({ reference: REF, reason: "  Rupture de stock  " })),
+      ),
+    ).toBe(`${ORDER_PAGE}?ok=commande-refusee`);
+    expect(api.refuseOrder).toHaveBeenCalledWith(TOKEN, REF, "Rupture de stock");
+  });
+
+  it("décision impossible : code dans l'adresse ; sans session : connexion", async () => {
+    api.acceptOrder.mockResolvedValue({ ok: false, code: "DECISION_IMPOSSIBLE" });
+    expect(await redirectOf(actions.acceptOrderAction(form({ reference: REF })))).toBe(
+      `${ORDER_PAGE}?erreur=DECISION_IMPOSSIBLE`,
+    );
+    jar.clear();
+    expect(await redirectOf(actions.acceptOrderAction(form({ reference: REF })))).toBe(
+      `/connexion?retour=${encodeURIComponent(ORDER_PAGE)}`,
+    );
   });
 });

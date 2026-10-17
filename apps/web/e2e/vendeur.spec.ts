@@ -4,7 +4,7 @@ import sharp from "sharp";
 
 /**
  * Espace vendeur (S6-T06, ADR-0037), branché sur la vraie API : demande de boutique, produit avec deux variantes,
- * photo réduite dans le navigateur puis envoyée, prix et stock, retrait et remise en vente.
+ * photo réduite dans le navigateur puis envoyée, prix et stock, retrait et remise en vente ; « Mes commandes » (S6-T07).
  *
  * Données insérées par la CI dans sa base éphémère (e2e/fixtures/vendeur-e2e.sql) ; sans elles, ces tests sont sautés.
  * Les parcours changent l'état de la base : ils ne tournent que sur le profil « mobile » (les vendeurs travaillent
@@ -195,5 +195,25 @@ test.describe("espace vendeur : parcours", () => {
     // Produit d'un autre vendeur : introuvable
     const other = await page.goto(`/vendeur/produits/${OTHER_PRODUCT}`);
     expect(other?.status()).toBe(404);
+  });
+
+  test("mes commandes (S6-T07) : liste par statut, accessible ; commande d'une autre boutique introuvable", async ({
+    page,
+  }) => {
+    await login(page, VENDOR, "/vendeur/commandes");
+    await expect(page.getByRole("heading", { name: "Mes commandes", level: 1 })).toBeVisible();
+    await expect(page.getByText("dans les 24 heures")).toBeVisible();
+    await expectAccessible(page);
+    await page.getByRole("link", { name: "À traiter" }).click();
+    await expect(page).toHaveURL(/\/vendeur\/commandes\?statut=pending$/);
+    await expect(page.getByRole("link", { name: "À traiter" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    // Accès aux commandes vérifié par l'API (boutique du compte) : une référence inconnue donne 404
+    const unknown = await page.goto("/vendeur/commandes/KMD-ZZZZ22");
+    expect(unknown?.status()).toBe(404);
+    const malformed = await page.goto("/vendeur/commandes/..%2F..%2Fadmin");
+    expect(malformed?.status()).toBe(404);
   });
 });

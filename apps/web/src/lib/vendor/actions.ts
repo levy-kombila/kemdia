@@ -1,5 +1,6 @@
 "use server";
 
+import { ORDER_REFERENCE_PATTERN, VENDOR_ORDER_REFUSAL_LIMITS } from "@kemdia/contracts/constants";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE, expiredCookieOptions } from "@/lib/auth/cookies";
@@ -202,4 +203,40 @@ export async function removePhotoAction(form: FormData): Promise<never> {
   const imageId = field(form, "imageId");
   if (!imageId || !isUuid(imageId)) redirect(`${page}?erreur=PHOTO_INTROUVABLE`);
   return after(token, page, await vendorApi().removeImage(token, id, imageId), "photo-retiree");
+}
+
+// --- Commandes (S6-T07, BR-013) : formulaires HTML simples, retour à la fiche de la commande ---
+
+async function orderPage(
+  form: FormData,
+): Promise<{ token: string; reference: string; page: string }> {
+  const reference = field(form, "reference", 20);
+  if (!reference || !ORDER_REFERENCE_PATTERN.test(reference)) redirect("/vendeur/commandes");
+  const page = `/vendeur/commandes/${reference}`;
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(page)}`);
+  return { token, reference, page };
+}
+
+export async function acceptOrderAction(form: FormData): Promise<never> {
+  const { token, reference, page } = await orderPage(form);
+  return after(token, page, await vendorApi().acceptOrder(token, reference), "commande-acceptee");
+}
+
+/** Refus : motif obligatoire (gardé par Kemdia, jamais montré au client) ; la commande ENTIÈRE est annulée. */
+export async function refuseOrderAction(form: FormData): Promise<never> {
+  const { token, reference, page } = await orderPage(form);
+  const raw = field(form, "reason", VENDOR_ORDER_REFUSAL_LIMITS.max * 2);
+  const reason = raw?.trim() ?? "";
+  if (
+    reason.length < VENDOR_ORDER_REFUSAL_LIMITS.min ||
+    reason.length > VENDOR_ORDER_REFUSAL_LIMITS.max
+  )
+    redirect(`${page}?erreur=MOTIF_REFUS_INVALIDE`);
+  return after(
+    token,
+    page,
+    await vendorApi().refuseOrder(token, reference, reason),
+    "commande-refusee",
+  );
 }
