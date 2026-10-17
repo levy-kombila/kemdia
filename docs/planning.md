@@ -9,18 +9,18 @@ Mobile Money (Moov, Airtel) et paiement à la livraison, lancement visé **fin 2
 
 ## Vue d'ensemble
 
-| Sprint    | Objectif                                                                                                | Statut      |
-| --------- | ------------------------------------------------------------------------------------------------------- | ----------- |
-| **S0**    | Décision de réécriture, choix de la stack, poste de travail                                             | ✅ Terminé  |
-| **S1**    | Fondations frontend + DevOps (CI/CD, sécurité, démo publique)                                           | ✅ Terminé  |
-| **S2**    | Intégration du KSAD + finitions frontend (comptes, tunnel de commande, filtres, tests E2E)              | ✅ Terminé  |
-| **S3**    | Backend NestJS + PostgreSQL, module `catalog`, site branché sur l'API                                   | ✅ Terminé  |
-| **S4**    | Module `identity` : comptes par e-mail ou téléphone (OTP), sécurité de connexion                        | ✅ Terminé  |
-| **S5**    | Modules `orders` + `payments` : commande, Mobile Money, paiement à la livraison                         | ✅ Terminé  |
-| **S6**    | Module `vendors` + back-office : boutiques, KYC, modération, commissions                                | 🚧 En cours |
-| **S7**    | Module `shipping` (transporteur) + préproduction (serveur, surveillance, sauvegardes, test d'intrusion) | ⏳          |
-| **S8**    | Bêta fermée (vendeurs partenaires + testeurs) puis lancement Gabon 🇬🇦                                   | ⏳          |
-| Après MVP | Affiliation, application mobile, suivi GPS, Kemdia Pay v2                                               | —           |
+| Sprint    | Objectif                                                                                                | Statut     |
+| --------- | ------------------------------------------------------------------------------------------------------- | ---------- |
+| **S0**    | Décision de réécriture, choix de la stack, poste de travail                                             | ✅ Terminé |
+| **S1**    | Fondations frontend + DevOps (CI/CD, sécurité, démo publique)                                           | ✅ Terminé |
+| **S2**    | Intégration du KSAD + finitions frontend (comptes, tunnel de commande, filtres, tests E2E)              | ✅ Terminé |
+| **S3**    | Backend NestJS + PostgreSQL, module `catalog`, site branché sur l'API                                   | ✅ Terminé |
+| **S4**    | Module `identity` : comptes par e-mail ou téléphone (OTP), sécurité de connexion                        | ✅ Terminé |
+| **S5**    | Modules `orders` + `payments` : commande, Mobile Money, paiement à la livraison                         | ✅ Terminé |
+| **S6**    | Module `vendors` + back-office : boutiques, KYC, modération, commissions                                | ✅ Terminé |
+| **S7**    | Module `shipping` (transporteur) + préproduction (serveur, surveillance, sauvegardes, test d'intrusion) | ⏳         |
+| **S8**    | Bêta fermée (vendeurs partenaires + testeurs) puis lancement Gabon 🇬🇦                                   | ⏳         |
+| Après MVP | Affiliation, application mobile, suivi GPS, Kemdia Pay v2                                               | —          |
 
 ### Jalons
 
@@ -31,7 +31,7 @@ Mobile Money (Moov, Airtel) et paiement à la livraison, lancement visé **fin 2
 | v0.3.0 | Catalogue servi par l'API et PostgreSQL                                                              | ✅ S3                      |
 | v0.4.0 | Comptes clients sécurisés : inscription par code, sessions, rôles, journal d'audit, CSRF/CSP/limites | ✅ S4                      |
 | v0.5.0 | Premier achat de bout en bout en environnement de test (Mobile Money _sandbox_)                      | ✅ S5                      |
-| v0.7.0 | Vendeurs partenaires opérationnels                                                                   | fin S6                     |
+| v0.7.0 | Vendeurs partenaires opérationnels                                                                   | ✅ S6                      |
 | v1.0.0 | Lancement public                                                                                     | S8 (fin 2027 au plus tard) |
 
 ### Actions hors code (équipe Kemdia) — à lancer tôt
@@ -155,7 +155,7 @@ paniers gardés **90 jours** ; numéro **KMD-7F3K9Q** ; **30 min** pour payer pa
 | S5-T07 | Site branché : vrai tunnel de commande (compte obligatoire), devis et code promo, attente du paiement sur la page de la commande, « Mes commandes », factures — ADR-0029 | ✅     |
 | S5-T08 | Démo du premier achat : page /demo et bandeau, code promo DEMO10 (démo seulement), CI allégée pour la documentation, versions 0.5.0, clôture — ADR-0030                  | ✅     |
 
-## S6 — Module `vendors` + back-office 🚧
+## S6 — Module `vendors` + back-office ✅
 
 Décisions : [ADR-0031](architecture/adr/0031-en-ligne-docker-tunnel.md) (en ligne depuis Docker Desktop), [ADR-0032](architecture/adr/0032-boutiques-vendeurs.md) (boutiques des vendeurs), [ADR-0033](architecture/adr/0033-produits-vendeurs-moderation.md) (produits des vendeurs, modération), [ADR-0034](architecture/adr/0034-double-authentification-equipe.md) (double authentification de l'équipe), [ADR-0035](architecture/adr/0035-photos-produits-vendeurs.md) (photos des produits des vendeurs), [ADR-0036](architecture/adr/0036-ecrans-equipe.md) (écrans de l'équipe), [ADR-0037](architecture/adr/0037-espace-vendeur.md) (espace vendeur), [ADR-0038](architecture/adr/0038-commandes-vendeurs.md) (commandes des vendeurs), [ADR-0039](architecture/adr/0039-verification-vendeurs.md) (vérification des vendeurs).
 Choix du 2026-10-15 : **demande de boutique depuis un compte connecté, validée par un administrateur** ; une boutique par compte ; produits existants dans une **boutique « Kemdia » interne** ;
@@ -179,6 +179,8 @@ Choix du 2026-10-17 (S6-T08) : photos des pièces **dans PostgreSQL, chiffrées*
 | S6-T06 | Espace vendeur sur le site (`/vendeur`) : demande de boutique, tableau de bord, produits (création, fiche, prix et stock, retrait de la vente), photos réduites dans le navigateur (envoi, principale, retrait) ; `/vendre` sans faux formulaire ni taux de commission — ADR-0037                          | ✅     |
 | S6-T07 | Commandes des vendeurs (BR-013) : une part par boutique, le vendeur voit SES articles et la ville, accepte ou refuse (motif) sous 24 h ; refus ou silence = commande annulée (stock, coupon, remboursement à faire) ; e-mail au vendeur ; pages `/vendeur/commandes` — ADR-0038                            | ✅     |
 | S6-T08 | Vérification des vendeurs, KYC (BR-024) : dossier (identité, RCCM, compte de versement) et photos chiffrés, examen par un administrateur (consultations au journal), photos effacées 30 jours après ; pages `/vendeur/verification` et `/equipe/verifications` ; menu du compte selon les rôles — ADR-0039 | ✅     |
+
+Clôture (2026-10-17) : [rapport](rapports/2026-10-17_S6_cloture.md), version **v0.7.0**. **Reporté** : commissions et versements (BR-020, question ouverte n° 3), modération des avis (FR-020, quand les avis existeront), écrans d'administration des factures, encaissements et remboursements, rôles et journal d'audit à l'écran.
 
 ## S5 à S8 — grandes lignes
 
