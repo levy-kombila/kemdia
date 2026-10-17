@@ -1,6 +1,6 @@
 {
   "name": "@kemdia/contracts",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "private": true,
   "description": "Contrat HTTP partagé par l'API et le site : schémas Zod, constantes, paramètres de recherche, données de démonstration",
   "type": "module",
