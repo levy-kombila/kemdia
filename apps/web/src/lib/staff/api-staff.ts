@@ -1,5 +1,7 @@
 import "server-only";
 import {
+  AdminKycPageSchema,
+  AdminKycSchema,
   AdminShopPageSchema,
   AdminShopSchema,
   CLIENT_IP_HEADER,
@@ -16,8 +18,12 @@ import {
   SecondFactorStatusSchema,
   SecondFactorVerifiedSchema,
   VENDOR_ERROR_CODES,
+  type AdminKyc,
+  type AdminKycPage,
   type AdminShop,
   type AdminShopPage,
+  type KycDocumentKind,
+  type KycStatus,
   type IdentityErrorCode,
   type ModerationProduct,
   type ModerationProductPage,
@@ -147,6 +153,47 @@ export function createStaffApi(options: StaffApiOptions) {
   }
 
   const id = (value: string) => (UUID.test(value) ? value.toLowerCase() : null);
+
+  /**
+   * Image relayée seulement si c'est bien un WebP d'au plus `maxBytes`. 403 : session sans droit ou double
+   * authentification à confirmer ; 404 : image inconnue ; 503 : tout le reste.
+   */
+  async function fetchImage(
+    token: string,
+    path: string,
+    maxBytes: number,
+    what: string,
+  ): Promise<StaffImageResult> {
+    if (!SESSION_TOKEN_PATTERN.test(token)) return { status: 403 };
+    let response: Response;
+    try {
+      response = await doFetch(`${options.url}/api/v1${path}`, {
+        headers: await headersFor(token, "image/webp"),
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(options.timeoutMs),
+      });
+    } catch {
+      console.error(`[équipe] ${what} : API injoignable`);
+      return { status: 503 };
+    }
+    if (response.status === 404 || response.status === 401 || response.status === 403) {
+      await response.body?.cancel().catch(() => undefined);
+      return { status: response.status === 404 ? 404 : 403 };
+    }
+    const type = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
+    if (response.status !== 200 || type !== "image/webp") {
+      await response.body?.cancel().catch(() => undefined);
+      console.error(`[équipe] ${what} : statut ${response.status}`);
+      return { status: 503 };
+    }
+    const bytes = await readAtMost(response, maxBytes).catch(() => null);
+    if (!bytes || !isWebp(bytes)) {
+      console.error(`[équipe] ${what} : fichier non conforme`);
+      return { status: 503 };
+    }
+    return { status: 200, bytes };
+  }
   const notFound = <T>(code: VendorErrorCode): StaffResult<T> => ({ ok: false, code });
 
   function listQuery(params: { status?: string; after?: string; limit?: number }): string {
@@ -237,48 +284,56 @@ export function createStaffApi(options: StaffApiOptions) {
      * Photo d'un produit à modérer (S6-T04) : relayée seulement si c'est bien un WebP de 2 Mo au plus. 403 : session
      * sans droit ou double authentification à confirmer ; 404 : photo inconnue ; 503 : tout le reste.
      */
-    async moderationImage(
-      token: string,
-      productId: string,
-      imageId: string,
-    ): Promise<StaffImageResult> {
+    moderationImage(token: string, productId: string, imageId: string): Promise<StaffImageResult> {
       const product = id(productId);
       const image = id(imageId);
-      if (!product || !image) return { status: 404 };
-      if (!SESSION_TOKEN_PATTERN.test(token)) return { status: 403 };
-      let response: Response;
-      try {
-        response = await doFetch(
-          `${options.url}/api/v1/moderation/products/${product}/images/${image}`,
-          {
-            headers: await headersFor(token, "image/webp"),
-            cache: "no-store",
-            redirect: "error",
-            signal: AbortSignal.timeout(options.timeoutMs),
-          },
-        );
-      } catch {
-        console.error("[équipe] photo à modérer : API injoignable");
-        return { status: 503 };
-      }
-      if (response.status === 404 || response.status === 401 || response.status === 403) {
-        await response.body?.cancel().catch(() => undefined);
-        return { status: response.status === 404 ? 404 : 403 };
-      }
-      const type = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
-      if (response.status !== 200 || type !== "image/webp") {
-        await response.body?.cancel().catch(() => undefined);
-        console.error(`[équipe] photo à modérer : statut ${response.status}`);
-        return { status: 503 };
-      }
-      const bytes = await readAtMost(response, PRODUCT_IMAGE_LIMITS.maxStoredBytes).catch(
-        () => null,
+      if (!product || !image) return Promise.resolve({ status: 404 });
+      return fetchImage(
+        token,
+        `/moderation/products/${product}/images/${image}`,
+        PRODUCT_IMAGE_LIMITS.maxStoredBytes,
+        "photo à modérer",
       );
-      if (!bytes || !isWebp(bytes)) {
-        console.error("[équipe] photo à modérer : fichier non conforme");
-        return { status: 503 };
-      }
-      return { status: 200, bytes };
+    },
+    // --- Vérification des vendeurs, KYC (S6-T08) : administrateurs seulement ---
+    kycList: (
+      token: string,
+      params: { status?: Exclude<KycStatus, "draft">; after?: string; limit?: number },
+    ): Promise<StaffResult<AdminKycPage>> =>
+      call("GET", `/admin/kyc${listQuery(params)}`, token, AdminKycPageSchema),
+    /** Dossier complet : la consultation est inscrite au journal d'audit par l'API. */
+    kyc: (token: string, shopId: string): Promise<StaffResult<AdminKyc>> => {
+      const shop = id(shopId);
+      return shop
+        ? call("GET", `/admin/kyc/${shop}`, token, AdminKycSchema)
+        : Promise.resolve(notFound("KYC_INTROUVABLE"));
+    },
+    decideKyc: (
+      token: string,
+      shopId: string,
+      decision: "approve" | "reject",
+      reason?: string,
+    ): Promise<StaffResult<undefined>> => {
+      const shop = id(shopId);
+      if (!shop) return Promise.resolve(notFound("KYC_INTROUVABLE"));
+      return call(
+        "POST",
+        `/admin/kyc/${shop}/${decision}`,
+        token,
+        z.undefined(),
+        decision === "approve" ? undefined : { reason: reason ?? "" },
+      );
+    },
+    /** Photo du dossier, déchiffrée par l'API (consultation au journal) : WebP vérifié, 5 Mo au plus. */
+    kycDocument(token: string, shopId: string, kind: KycDocumentKind): Promise<StaffImageResult> {
+      const shop = id(shopId);
+      if (!shop) return Promise.resolve({ status: 404 });
+      return fetchImage(
+        token,
+        `/admin/kyc/${shop}/documents/${kind}`,
+        5_242_880,
+        "pièce du dossier",
+      );
     },
   };
 }

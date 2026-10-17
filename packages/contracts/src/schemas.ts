@@ -51,6 +51,12 @@ import {
   VENDOR_ORDER_PAGE_DEFAULT,
   VENDOR_ORDER_PAGE_MAX,
   VENDOR_ORDER_REFUSAL_LIMITS,
+  KYC_DOCUMENT_KINDS,
+  KYC_HOLDER_KINDS,
+  KYC_ID_TYPES,
+  KYC_LIMITS,
+  KYC_PAYOUT_METHODS,
+  KYC_STATUSES,
   VENDOR_ORDER_STATUSES,
 } from "./constants.js";
 
@@ -1649,6 +1655,140 @@ export const VendorOrderRefuseRequestSchema = z
     description: "Refus d'une commande par la boutique : la commande ENTIÈRE est annulée",
   });
 export type VendorOrderRefuseRequest = z.infer<typeof VendorOrderRefuseRequestSchema>;
+
+// --- Vérification des vendeurs, KYC (S6-T08, ADR-0039 ; BR-024) ---
+
+const K = KYC_LIMITS;
+export const KycRequestSchema = z
+  .strictObject({
+    holderKind: z.enum(KYC_HOLDER_KINDS).describe("Personne seule ou entreprise"),
+    legalName: z
+      .string()
+      .max(K.nameMax * 2)
+      .describe(`Nom tel qu'il est écrit sur la pièce (${K.nameMin} à ${K.nameMax} caractères)`),
+    idType: z.enum(KYC_ID_TYPES),
+    idNumber: z
+      .string()
+      .max(K.idNumberMax * 2)
+      .describe(
+        `Numéro de la pièce (${K.idNumberMin} à ${K.idNumberMax} lettres ou chiffres) : chiffré`,
+      ),
+    rccmNumber: z
+      .string()
+      .max(K.rccmMax * 2)
+      .nullable()
+      .describe("Numéro RCCM : obligatoire pour une entreprise, vide sinon"),
+    payoutMethod: z.enum(KYC_PAYOUT_METHODS),
+    payoutAccount: z
+      .string()
+      .max(K.bankAccountMax * 2)
+      .describe(
+        "Mobile gabonais (Airtel, Moov) ou numéro de compte bancaire (RIB / IBAN) : chiffré",
+      ),
+    payoutHolder: z
+      .string()
+      .max(K.nameMax * 2)
+      .describe("Titulaire du compte de versement"),
+  })
+  .meta({
+    id: "KycRequest",
+    description: "Dossier de vérification du vendeur (modifiable tant qu'il n'est pas envoyé)",
+  });
+export type KycRequest = z.infer<typeof KycRequestSchema>;
+
+const kycDocument = z
+  .object({
+    kind: z.enum(KYC_DOCUMENT_KINDS),
+    uploadedAt: z.iso.datetime(),
+  })
+  .meta({ id: "KycDocument", description: "Photo envoyée (jamais renvoyée au vendeur)" });
+
+const kycFields = {
+  status: z.enum(KYC_STATUSES),
+  holderKind: z.enum(KYC_HOLDER_KINDS),
+  legalName: z.string(),
+  idType: z.enum(KYC_ID_TYPES),
+  rccmNumber: z.string().nullable(),
+  payoutMethod: z.enum(KYC_PAYOUT_METHODS),
+  payoutHolder: z.string(),
+  documents: z.array(kycDocument).max(KYC_DOCUMENT_KINDS.length),
+  missingDocuments: z
+    .array(z.enum(KYC_DOCUMENT_KINDS))
+    .describe("Photos encore attendues avant l'envoi"),
+  submittedAt: z.iso.datetime().nullable(),
+  reviewedAt: z.iso.datetime().nullable(),
+  rejectionReason: z.string().nullable().describe("Motif du refus, montré au vendeur"),
+};
+
+export const VendorKycSchema = z
+  .object({
+    ...kycFields,
+    idNumberEnd: z.string().describe("4 derniers caractères du numéro de la pièce"),
+    payoutAccountEnd: z.string().describe("4 derniers caractères du compte de versement"),
+    canEdit: z.boolean().describe("Le dossier peut être modifié et envoyé"),
+  })
+  .meta({
+    id: "VendorKyc",
+    description: "Le dossier de vérification du vendeur connecté (numéros masqués)",
+  });
+export type VendorKyc = z.infer<typeof VendorKycSchema>;
+
+export const AdminKycSummarySchema = z
+  .object({
+    shopId: uuid,
+    shopName: z.string(),
+    status: z.enum(KYC_STATUSES),
+    holderKind: z.enum(KYC_HOLDER_KINDS),
+    submittedAt: z.iso.datetime().nullable(),
+    reviewedAt: z.iso.datetime().nullable(),
+  })
+  .meta({ id: "AdminKycSummary", description: "Ligne de la file des dossiers de vérification" });
+export type AdminKycSummary = z.infer<typeof AdminKycSummarySchema>;
+
+export const AdminKycSchema = z
+  .object({
+    ...kycFields,
+    shopId: uuid,
+    shopName: z.string(),
+    idNumber: z.string().describe("Numéro complet de la pièce (consultation inscrite au journal)"),
+    payoutAccount: z
+      .string()
+      .describe("Compte de versement complet (consultation inscrite au journal)"),
+    reviewedBy: uuid.nullable(),
+    documentsPurgeAt: z.iso
+      .datetime()
+      .nullable()
+      .describe("Date d'effacement des photos (30 jours après la décision)"),
+  })
+  .meta({
+    id: "AdminKyc",
+    description: "Dossier de vérification vu par un administrateur",
+  });
+export type AdminKyc = z.infer<typeof AdminKycSchema>;
+
+export const KycListParamsSchema = z.strictObject({
+  status: z.enum(KYC_STATUSES).optional(),
+  limit: z.coerce.number().int().min(1).max(SHOP_PAGE_MAX).default(SHOP_PAGE_DEFAULT),
+  after: z.string().regex(SHOP_CURSOR_PATTERN).optional(),
+});
+export type KycListParams = z.infer<typeof KycListParamsSchema>;
+
+export const AdminKycPageSchema = z
+  .object({
+    items: z.array(AdminKycSummarySchema),
+    nextCursor: z.string().regex(SHOP_CURSOR_PATTERN).nullable(),
+  })
+  .meta({
+    id: "AdminKycPage",
+    description: "Dossiers de vérification, du plus ancien envoi au plus récent (file d'attente)",
+  });
+export type AdminKycPage = z.infer<typeof AdminKycPageSchema>;
+
+export const KycDocumentParamsSchema = z.strictObject({ kind: z.enum(KYC_DOCUMENT_KINDS) });
+export const AdminKycDocumentParamsSchema = z.strictObject({
+  shopId: uuidInput,
+  kind: z.enum(KYC_DOCUMENT_KINDS),
+});
 
 type JsonSchema = Record<string, unknown>;
 

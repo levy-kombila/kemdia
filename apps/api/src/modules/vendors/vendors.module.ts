@@ -7,7 +7,17 @@ import { AuditModule } from "../audit/index.js";
 import { CatalogModule, VendorCatalog } from "../catalog/index.js";
 import { IdentityModule } from "../identity/index.js";
 import { OrdersModule } from "../orders/index.js";
+import { Logger } from "@nestjs/common";
+import { KycService } from "./application/kyc.service.js";
+import { AesKycBox } from "./infrastructure/kyc-box.js";
+import { SharpKycImageProcessor } from "./infrastructure/kyc-image-processor.js";
+import { KycPurgeScheduler } from "./infrastructure/kyc-purge.js";
+import { PrismaKycRepository } from "./infrastructure/prisma-kyc.repository.js";
+import { AdminKycController, VendorKycController } from "./interface/kyc.controller.js";
 import {
+  KYC_BOX,
+  KYC_IMAGE_PROCESSOR,
+  KYC_REPOSITORY,
   SHOP_LISTING,
   SHOP_REPOSITORY,
   VENDOR_ORDER_MAILER,
@@ -37,7 +47,8 @@ const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
  * Module vendors (ADR-0006) : boutiques des vendeurs (S6-T01, ADR-0032) — demande d'ouverture, examen par
  * l'administration, rôle vendeur accordé ou retiré par le module identity (`RoleService`) dans la même transaction ;
  * produits des vendeurs et modération (S6-T02, ADR-0033) par le port public `VendorCatalog` du module catalog ;
- * commandes des vendeurs (S6-T07, ADR-0038) par le port public `VendorOrders` du module orders.
+ * commandes des vendeurs (S6-T07, ADR-0038) par le port public `VendorOrders` du module orders ; vérification des
+ * vendeurs, KYC (S6-T08, ADR-0039), chiffrée par la clé KYC_ENCRYPTION_KEY.
  */
 @Module({
   imports: [IdentityModule, AuditModule, CatalogModule, OrdersModule],
@@ -49,6 +60,8 @@ const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
     VendorProductImageController,
     ModerationImageController,
     VendorOrderController,
+    VendorKycController,
+    AdminKycController,
   ],
   providers: [
     ShopService,
@@ -58,6 +71,26 @@ const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
     VendorOrderService,
     VendorOrderNotifier,
     VendorOrderEmailScheduler,
+    KycService,
+    KycPurgeScheduler,
+    { provide: KYC_REPOSITORY, useClass: PrismaKycRepository },
+    { provide: KYC_IMAGE_PROCESSOR, useClass: SharpKycImageProcessor },
+    {
+      provide: KYC_BOX,
+      inject: [APP_CONFIG],
+      useFactory: (c: AppConfig) => {
+        const box = new AesKycBox(c);
+        const logger = new Logger("Vérification des vendeurs");
+        if (box.usesDevelopmentKey && c.NODE_ENV !== "test") {
+          logger.warn(
+            "clé de développement (publique) : KYC_ENCRYPTION_KEY absente — poste local seulement",
+          );
+        } else if (!box.available) {
+          logger.warn("KYC_ENCRYPTION_KEY absente : vérification des vendeurs indisponible");
+        }
+        return box;
+      },
+    },
     {
       provide: VENDOR_ORDER_MAILER,
       inject: [APP_CONFIG],

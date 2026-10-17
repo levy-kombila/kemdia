@@ -43,6 +43,8 @@ const api = vi.hoisted(() => ({
   removeImage: vi.fn(),
   acceptOrder: vi.fn(),
   refuseOrder: vi.fn(),
+  saveKyc: vi.fn(),
+  submitKyc: vi.fn(),
 }));
 vi.mock("./api-vendor", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api-vendor")>()),
@@ -297,5 +299,54 @@ describe("commandes (S6-T07)", () => {
     expect(await redirectOf(actions.acceptOrderAction(form({ reference: REF })))).toBe(
       `/connexion?retour=${encodeURIComponent(ORDER_PAGE)}`,
     );
+  });
+});
+
+describe("vérification (S6-T08)", () => {
+  const KYC = {
+    holderKind: "individual",
+    legalName: "Awa Ndong",
+    idType: "cni",
+    idNumber: "GA123456789",
+    rccmNumber: "à ignorer",
+    payoutMethod: "airtel",
+    payoutAccount: "077987654",
+    payoutHolder: "Awa Ndong",
+  };
+
+  it("enregistrer : choix revérifiés, RCCM ignoré pour une personne seule, avis", async () => {
+    expect(await redirectOf(actions.saveKycAction(form({ ...KYC, idType: "permis" })))).toBe(
+      "/vendeur/verification?erreur=KYC_INVALIDE",
+    );
+    expect(api.saveKyc).not.toHaveBeenCalled();
+    api.saveKyc.mockResolvedValue({ ok: true, data: {} });
+    expect(await redirectOf(actions.saveKycAction(form(KYC)))).toBe(
+      "/vendeur/verification?ok=kyc-enregistre",
+    );
+    expect(api.saveKyc).toHaveBeenCalledWith(TOKEN, { ...KYC, rccmNumber: null });
+  });
+
+  it("champ refusé par l'API : seulement un nom de champ connu dans l'adresse", async () => {
+    api.saveKyc.mockResolvedValue({
+      ok: false,
+      code: "KYC_INVALIDE",
+      detail: "Compte Moov Money : numéro en 06… attendu",
+    });
+    expect(await redirectOf(actions.saveKycAction(form(KYC)))).toBe(
+      "/vendeur/verification?erreur=KYC_INVALIDE&champ=payoutAccount",
+    );
+    api.saveKyc.mockResolvedValue({ ok: false, code: "KYC_INVALIDE", detail: "<script>" });
+    expect(await redirectOf(actions.saveKycAction(form(KYC)))).toBe(
+      "/vendeur/verification?erreur=KYC_INVALIDE",
+    );
+  });
+
+  it("envoyer : avis, ou code d'erreur (photos manquantes)", async () => {
+    api.submitKyc.mockResolvedValue({ ok: false, code: "KYC_INCOMPLET" });
+    expect(await redirectOf(actions.submitKycAction())).toBe(
+      "/vendeur/verification?erreur=KYC_INCOMPLET",
+    );
+    api.submitKyc.mockResolvedValue({ ok: true, data: {} });
+    expect(await redirectOf(actions.submitKycAction())).toBe("/vendeur/verification?ok=kyc-envoye");
   });
 });

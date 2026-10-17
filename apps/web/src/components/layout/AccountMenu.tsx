@@ -1,13 +1,29 @@
 "use client";
 
-import { ChevronDown, CircleUser, LogOut, UserRound } from "lucide-react";
+import {
+  ChevronDown,
+  CircleUser,
+  ClipboardList,
+  LogOut,
+  ShieldCheck,
+  Store,
+  UserRound,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { clearStaleSessionAction, logoutAction } from "@/lib/auth/actions";
 
 /** `"loading"` : l'en-tête attend encore l'API (S4-T08, démo qui se réveille) — emplacement réservé, rien de cliquable. */
-export type HeaderAccount = { firstName: string } | null | "loading";
+export type HeaderAccount =
+  | {
+      firstName: string;
+      /** Espaces ouverts à ce compte (S6-T08) : seulement deux oui/non, jamais la liste des rôles */
+      vendor?: boolean;
+      staff?: boolean;
+    }
+  | null
+  | "loading";
 
 /** Lien « Se connecter » : après la connexion, retour à la page où l'on était. */
 function SignInLink() {
@@ -29,7 +45,15 @@ function SignInLink() {
 }
 
 /** Menu du client connecté : « Bonjour, Awa » → Mon compte, Se déconnecter. */
-function SignedInMenu({ firstName }: { firstName: string }) {
+function SignedInMenu({
+  firstName,
+  vendor = false,
+  staff = false,
+}: {
+  firstName: string;
+  vendor?: boolean;
+  staff?: boolean;
+}) {
   // Page où le menu a été ouvert : sur une autre page, il est fermé (aucun effet à synchroniser)
   const pathname = usePathname();
   const [openedOn, setOpenedOn] = useState<string | null>(null);
@@ -104,6 +128,33 @@ function SignedInMenu({ firstName }: { firstName: string }) {
           >
             <UserRound className="size-4" aria-hidden /> Mon compte
           </Link>
+          {vendor && (
+            <>
+              <Link
+                href="/vendeur"
+                onClick={close}
+                className="hover:bg-ink-50 flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium"
+              >
+                <Store className="size-4" aria-hidden /> Espace vendeur
+              </Link>
+              <Link
+                href="/vendeur/commandes"
+                onClick={close}
+                className="hover:bg-ink-50 flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium"
+              >
+                <ClipboardList className="size-4" aria-hidden /> Commandes à traiter
+              </Link>
+            </>
+          )}
+          {staff && (
+            <Link
+              href="/equipe"
+              onClick={close}
+              className="hover:bg-ink-50 flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium"
+            >
+              <ShieldCheck className="size-4" aria-hidden /> Espace de l&apos;équipe
+            </Link>
+          )}
           <form action={logoutAction}>
             <button
               type="submit"
@@ -144,5 +195,9 @@ function AccountPlaceholder() {
 
 export function AccountMenu({ account }: { account: HeaderAccount }) {
   if (account === "loading") return <AccountPlaceholder />;
-  return account ? <SignedInMenu firstName={account.firstName} /> : <SignInLink />;
+  return account ? (
+    <SignedInMenu firstName={account.firstName} vendor={account.vendor} staff={account.staff} />
+  ) : (
+    <SignInLink />
+  );
 }

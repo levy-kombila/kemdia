@@ -9,7 +9,16 @@ import {
   VENDOR_ERROR_CODES,
   PRODUCT_IMAGE_LIMITS,
   VENDOR_IMAGE_PATH_PATTERN,
+  KYC_DOCUMENT_KINDS,
+  KYC_DOCUMENT_RETENTION_DAYS,
+  KYC_LIMITS,
+  KYC_STATUSES,
 } from "@kemdia/contracts/constants";
+import {
+  KYC_DOCUMENT_KINDS as DOMAIN_KYC_KINDS,
+  KYC_RULES,
+  KYC_STATUSES as DOMAIN_KYC_STATUSES,
+} from "../src/modules/vendors/domain/kyc.js";
 import {
   PRODUCT_IMAGE_RULES,
   vendorImageId,
@@ -33,6 +42,10 @@ const migration = readFileSync(
 );
 const productMigration = readFileSync(
   new URL("../prisma/migrations/20261016091000_produits_vendeurs/migration.sql", import.meta.url),
+  "utf8",
+);
+const kycMigration = readFileSync(
+  new URL("../prisma/migrations/20261017120000_kyc_vendeurs/migration.sql", import.meta.url),
   "utf8",
 );
 const imageMigration = readFileSync(
@@ -74,7 +87,10 @@ describe("Boutiques : mêmes règles partout (S6-T01)", () => {
 
   it("chaque code d'erreur des boutiques et des produits des vendeurs a son statut HTTP", () => {
     expect(
-      [...Object.keys(VENDORS_ERROR_STATUS), ...CATALOG_ERROR_CODES_FOR_VENDORS].sort(),
+      // Photos (S6-T08) : les mêmes codes viennent du catalogue ET de la vérification des vendeurs
+      [
+        ...new Set([...Object.keys(VENDORS_ERROR_STATUS), ...CATALOG_ERROR_CODES_FOR_VENDORS]),
+      ].sort(),
     ).toEqual([...VENDOR_ERROR_CODES].sort());
   });
 
@@ -105,5 +121,20 @@ describe("Boutiques : mêmes règles partout (S6-T01)", () => {
       expect(VENDOR_IMAGE_PATH_PATTERN.test(path)).toBe(false);
       expect(vendorImageId(path)).toBeNull();
     }
+  });
+
+  it("vérification des vendeurs (S6-T08) : limites, statuts et durée de conservation identiques partout", () => {
+    const { reasonMin, reasonMax, retentionDays, ...limits } = KYC_RULES;
+    expect(limits).toEqual(KYC_LIMITS);
+    expect(retentionDays).toBe(KYC_DOCUMENT_RETENTION_DAYS);
+    expect([reasonMin, reasonMax]).toEqual([SHOP_LIMITS.reasonMin, SHOP_LIMITS.reasonMax]);
+    expect([...DOMAIN_KYC_STATUSES]).toEqual([...KYC_STATUSES]);
+    expect([...DOMAIN_KYC_KINDS]).toEqual([...KYC_DOCUMENT_KINDS]);
+    expect(kycMigration).toContain(
+      `char_length("rccm_number") BETWEEN ${KYC_LIMITS.rccmMin} AND ${KYC_LIMITS.rccmMax}`,
+    );
+    expect(kycMigration).toContain(`BETWEEN ${KYC_LIMITS.nameMin} AND ${KYC_LIMITS.nameMax}`);
+    expect(kycMigration).toContain(`BETWEEN ${reasonMin} AND ${reasonMax}`);
+    expect(kycMigration).toContain(`"shop_id" <> '${KEMDIA_SHOP_ID}'`);
   });
 });

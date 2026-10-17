@@ -47,9 +47,17 @@ const MESSAGES: Record<VendorErrorCode, string> = {
     "Trop de produits attendent déjà la modération (50 au plus). Patientez avant d'en ajouter d'autres.",
   FORMAT_IMAGE_INVALIDE: "Format refusé : envoyez une photo JPEG, PNG ou WebP.",
   IMAGE_TROP_GRANDE: "Photo trop lourde (5 Mo au plus).",
-  IMAGE_TROP_PETITE: "Photo trop petite : 200 pixels au moins de chaque côté.",
+  IMAGE_TROP_PETITE:
+    "Photo trop petite : 200 pixels au moins de chaque côté (300 pour une pièce d'identité).",
   TROP_DE_PHOTOS: "10 photos au plus par produit : retirez-en une avant d'en ajouter.",
   PHOTO_INTROUVABLE: "Cette photo n'existe plus.",
+  KYC_INVALIDE: "Vérifiez les champs de votre dossier.",
+  KYC_INTROUVABLE: "Vous n'avez pas encore de dossier de vérification.",
+  KYC_INCOMPLET: "Il manque des photos : ajoutez-les avant d'envoyer le dossier.",
+  STATUT_KYC_INCOMPATIBLE: "Votre dossier ne peut pas être modifié dans son état actuel.",
+  KYC_INDISPONIBLE:
+    "La vérification des vendeurs est momentanément indisponible. Réessayez plus tard.",
+  DOCUMENT_INTROUVABLE: "Cette photo n'existe pas (ou plus).",
 };
 
 const isVendorCode = (code: string): code is VendorErrorCode =>
@@ -99,6 +107,9 @@ export const VENDOR_NOTICES = {
   "photo-retiree": "Photo retirée.",
   "produit-archive": "Produit retiré de la vente.",
   "produit-remis": "Produit remis en vente : il repasse en modération.",
+  "kyc-enregistre": "Dossier enregistré. Ajoutez les photos demandées, puis envoyez-le.",
+  "photo-kyc": "Photo reçue (chiffrée, visible seulement par l'équipe Kemdia).",
+  "kyc-envoye": "Dossier envoyé : l'équipe Kemdia le vérifie. Vous serez prévenu ici.",
   "commande-acceptee":
     "Commande acceptée. Préparez les articles : elle passe en préparation quand toutes les boutiques ont accepté.",
   "commande-refusee":

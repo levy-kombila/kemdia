@@ -28,3 +28,12 @@ export type ModerationTab = (typeof MODERATION_TABS)[number]["status"];
 
 /** Curseur de page renvoyé par l'API (`nextCursor`) : relu dans l'adresse, jamais transmis s'il a une autre forme. */
 export const CURSOR = /^[A-Za-z0-9_-]{20,120}$/;
+
+/** Dossiers de vérification des vendeurs (S6-T08) : l'équipe ne voit que les dossiers envoyés. */
+export const KYC_STATUS = {
+  pending: { label: "À vérifier", tab: "À vérifier", tone: "wait" },
+  approved: { label: "Vérifié", tab: "Vérifiés", tone: "ok" },
+  rejected: { label: "Refusé", tab: "Refusés", tone: "bad" },
+  draft: { label: "En préparation", tab: "En préparation", tone: "off" },
+} as const satisfies Record<string, { label: string; tab: string; tone: Tone }>;
+export const KYC_TABS = ["pending", "approved", "rejected"] as const;

@@ -245,6 +245,24 @@ Sur la démo, un bandeau « Site de démonstration : aucun vrai paiement » mèn
 `DEMO10` est créé automatiquement au démarrage de la démo (import de démonstration). Il n'existe jamais en préproduction ni en
 production. Un administrateur peut le désactiver : un redémarrage ne le réactive pas.
 
+### 11. Vérification des vendeurs (S6-T08) — clé à ajouter
+
+La vérification des vendeurs (pièce d'identité, compte de versement) est **chiffrée** avec une clé à part. Sans elle, la
+démo affiche « vérification momentanément indisponible » : rien d'autre ne change.
+
+1. Sur **ton poste**, génère une clé (elle ne sort pas de ton terminal) :
+
+   ```powershell
+   node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+   ```
+
+2. Render → service **API** → _Environment_ → ajoute `KYC_ENCRYPTION_KEY` = la valeur affichée (**Secret**), puis
+   enregistre (l'API redémarre). Elle doit être **différente** de `TOTP_ENCRYPTION_KEY` : sinon l'API refuse de démarrer.
+3. Garde la clé dans ton gestionnaire de mots de passe : **si elle change ou se perd, les dossiers déjà envoyés ne
+   se lisent plus** (il faut alors les redemander aux vendeurs). Ne la colle jamais dans Git ni dans une conversation.
+4. Test : un vendeur ouvre « Vérification » dans son espace, remplit le dossier, envoie les photos ; un administrateur
+   l'ouvre dans `/equipe/verifications` (double authentification confirmée).
+
 > La démo ne se met à jour qu'après un passage de la CI sur `main`. Tant que GitHub Actions est bloqué, rien ne change sur Render.
 
 ## En cas de problème

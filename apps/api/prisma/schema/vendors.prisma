@@ -50,7 +50,102 @@ model Shop {
   createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  kycFile KycFile?
+
   @@index([status, submittedAt, id])
   @@map("shops")
+  @@schema("vendors")
+}
+
+// --- Vérification des vendeurs, KYC (S6-T08, ADR-0039 ; BR-024) ---
+
+enum KycStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@map("kyc_status")
+  @@schema("vendors")
+}
+
+enum KycHolderKind {
+  INDIVIDUAL
+  COMPANY
+
+  @@map("kyc_holder_kind")
+  @@schema("vendors")
+}
+
+enum KycIdType {
+  CNI
+  PASSEPORT
+  CARTE_SEJOUR
+
+  @@map("kyc_id_type")
+  @@schema("vendors")
+}
+
+enum KycPayoutMethod {
+  AIRTEL
+  MOOV
+  BANK
+
+  @@map("kyc_payout_method")
+  @@schema("vendors")
+}
+
+enum KycDocumentKind {
+  ID_FRONT
+  ID_BACK
+  RCCM
+
+  @@map("kyc_document_kind")
+  @@schema("vendors")
+}
+
+/// Dossier de vérification d'une boutique : numéros sensibles CHIFFRÉS par l'API (boîtes AES-256-GCM)
+model KycFile {
+  shopId           String          @id @map("shop_id") @db.Uuid
+  status           KycStatus       @default(DRAFT)
+  holderKind       KycHolderKind   @map("holder_kind")
+  legalName        String          @map("legal_name") @db.VarChar(100)
+  idType           KycIdType       @map("id_type")
+  idNumberBox      Bytes           @map("id_number_box")
+  idNumberEnd      String          @map("id_number_end") @db.VarChar(4)
+  rccmNumber       String?         @map("rccm_number") @db.VarChar(40)
+  payoutMethod     KycPayoutMethod @map("payout_method")
+  payoutAccountBox Bytes           @map("payout_account_box")
+  payoutAccountEnd String          @map("payout_account_end") @db.VarChar(4)
+  payoutHolder     String          @map("payout_holder") @db.VarChar(100)
+  submittedAt      DateTime?       @map("submitted_at") @db.Timestamptz(3)
+  reviewedBy       String?         @map("reviewed_by") @db.Uuid
+  reviewedAt       DateTime?       @map("reviewed_at") @db.Timestamptz(3)
+  rejectionReason  String?         @map("rejection_reason") @db.VarChar(300)
+  documentsPurgeAt DateTime?       @map("documents_purge_at") @db.Timestamptz(3)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop      Shop          @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  documents KycDocument[]
+
+  @@index([status, submittedAt, shopId])
+  @@index([documentsPurgeAt])
+  @@map("kyc_files")
+  @@schema("vendors")
+}
+
+/// Photo du dossier (une par sorte), chiffrée
+model KycDocument {
+  id        String          @id @db.Uuid
+  shopId    String          @map("shop_id") @db.Uuid
+  kind      KycDocumentKind
+  box       Bytes
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  file KycFile @relation(fields: [shopId], references: [shopId], onDelete: Restrict)
+
+  @@unique([shopId, kind])
+  @@map("kyc_documents")
   @@schema("vendors")
 }

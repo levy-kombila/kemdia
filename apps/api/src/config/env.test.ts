@@ -218,4 +218,16 @@ describe("outil Prisma (prisma.config.ts)", () => {
     expect(config).toContain(`"${LOCAL_DATABASE_URL}"`);
     expect(config).toMatch(/NODE_ENV === "production"\s*\?\s*undefined/);
   });
+
+  it("KYC_ENCRYPTION_KEY : 32 octets, et différente de la clé TOTP (S6-T08)", () => {
+    const key = "A".repeat(43);
+    expect(() => loadConfig({ KYC_ENCRYPTION_KEY: key, TOTP_ENCRYPTION_KEY: key })).toThrow(
+      /différente de TOTP_ENCRYPTION_KEY/,
+    );
+    expect(() => loadConfig({ KYC_ENCRYPTION_KEY: "trop-courte" })).toThrow(ConfigError);
+    expect(
+      loadConfig({ KYC_ENCRYPTION_KEY: key, TOTP_ENCRYPTION_KEY: "B".repeat(43) })
+        .KYC_ENCRYPTION_KEY,
+    ).toBe(key);
+  });
 });

@@ -69,6 +69,20 @@ export const AUDIT_ACTIONS = [
   "order.vendor_refused",
   /** Boutique sans réponse dans les 24 h : commande entière annulée, au nom du serveur (détails : reference, shops) — S6-T07 */
   "order.vendor_timeout",
+  /** Dossier de vérification créé ou modifié par le vendeur (détails : idType, payoutMethod ; jamais un numéro) — S6-T08 */
+  "kyc.updated",
+  /** Photo du dossier envoyée ou remplacée (détails : kind) — S6-T08 */
+  "kyc.document_added",
+  /** Dossier envoyé à l'équipe — S6-T08 */
+  "kyc.submitted",
+  /** Dossier ouvert par un administrateur (numéros complets affichés) — S6-T08 */
+  "kyc.viewed",
+  /** Photo du dossier regardée par un administrateur (détails : kind) — S6-T08 */
+  "kyc.document_viewed",
+  /** Dossier validé : les versements deviennent possibles (BR-024) — S6-T08 */
+  "kyc.approved",
+  /** Dossier refusé (détails : reason) — S6-T08 */
+  "kyc.rejected",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

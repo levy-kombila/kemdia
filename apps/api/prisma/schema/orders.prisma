@@ -6,15 +6,15 @@
 
 /// Panier d'un compte : un seul par compte. Supprimé après 90 jours sans activité (ménage horaire).
 model Cart {
-  id        String     @id @db.Uuid
+  id          String     @id @db.Uuid
   /// Compte propriétaire (module identity) : UUID seul, sans clé étrangère entre modules
-  accountId String     @unique @map("account_id") @db.Uuid
+  accountId   String     @unique @map("account_id") @db.Uuid
   /// Dernière réunion appliquée (identifiant tiré par le navigateur) : une réunion répétée ne double rien
-  lastMergeId String?  @map("last_merge_id") @db.Uuid
-  items     CartItem[]
-  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastMergeId String?    @map("last_merge_id") @db.Uuid
+  items       CartItem[]
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   /// Dernière activité (lecture ou modification) : sert au ménage des paniers abandonnés
-  updatedAt DateTime   @default(now()) @map("updated_at") @db.Timestamptz(3)
+  updatedAt   DateTime   @default(now()) @map("updated_at") @db.Timestamptz(3)
 
   @@index([updatedAt])
   @@map("carts")

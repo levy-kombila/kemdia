@@ -12,6 +12,15 @@ import { authErrorMessage, formatWait } from "@/lib/auth/messages";
 export type StaffMessageCode = IdentityErrorCode | VendorErrorCode | "INDISPONIBLE";
 
 const VENDOR_MESSAGES: Record<VendorErrorCode, string> = {
+  // Vérification des vendeurs (S6-T08)
+  KYC_INVALIDE: "Motif refusé : 5 à 300 caractères.",
+  KYC_INTROUVABLE: "Aucun dossier envoyé pour cette boutique.",
+  KYC_INCOMPLET: "Le dossier est incomplet.",
+  STATUT_KYC_INCOMPATIBLE:
+    "Ce dossier n'attend plus de décision : il a déjà été examiné. La page a été rechargée.",
+  KYC_INDISPONIBLE:
+    "Vérification indisponible : la clé de chiffrement KYC_ENCRYPTION_KEY manque sur le serveur.",
+  DOCUMENT_INTROUVABLE: "Photo absente (jamais envoyée, ou effacée 30 jours après la décision).",
   BOUTIQUE_INVALIDE: "Motif refusé : 5 à 300 caractères.",
   BOUTIQUE_EXISTE: "Ce compte a déjà une boutique.",
   NOM_BOUTIQUE_PRIS: "Ce nom de boutique est déjà pris.",
@@ -62,6 +71,9 @@ export function staffErrorMessage(code: StaffMessageCode, retryAfterSeconds?: nu
 /** Messages courts passés dans l'adresse après une décision (`?ok=…`) : liste fermée, jamais du texte libre. */
 export const STAFF_NOTICES = {
   "boutique-validee": "Boutique validée : le vendeur peut maintenant vendre.",
+  "kyc-valide":
+    "Dossier validé : les versements à ce vendeur deviennent possibles. Photos effacées dans 30 jours.",
+  "kyc-refuse": "Dossier refusé : le vendeur voit le motif et peut le corriger.",
   "boutique-refusee": "Demande refusée : le vendeur voit votre motif et peut redemander.",
   "boutique-suspendue":
     "Boutique suspendue : ses produits sont cachés et le rôle vendeur est retiré.",

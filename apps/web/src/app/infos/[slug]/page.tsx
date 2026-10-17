@@ -95,7 +95,6 @@ const CONTENT: Record<InfoSlug, React.ReactNode> = {
     <ul>
       <li>Airtel Money</li>
       <li>Moov Money</li>
-      <li>Carte bancaire (Visa, Mastercard)</li>
       <li>Paiement à la livraison (selon zones)</li>
     </ul>
   ),

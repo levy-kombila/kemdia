@@ -1,4 +1,8 @@
 import type {
+  KycDocumentKind,
+  KycIdType,
+  KycPayoutMethod,
+  KycStatus,
   ShopStatus,
   VendorOrderStatus,
   VendorProductStatus,
@@ -42,3 +46,34 @@ export const ORDER_STATUS: Record<VendorOrderStatus, { label: string; tab: strin
 
 /** Onglets de « Mes commandes » : ce qui attend une réponse d'abord. */
 export const ORDER_TABS = ["pending", "accepted", "refused", "expired", "cancelled"] as const;
+
+/** Vérification du vendeur, KYC (S6-T08). */
+export const KYC_STATUS: Record<KycStatus, { label: string; tone: Tone }> = {
+  draft: { label: "À compléter", tone: "wait" },
+  pending: { label: "En cours de vérification", tone: "wait" },
+  approved: { label: "Vérifié", tone: "ok" },
+  rejected: { label: "Refusé : à corriger", tone: "bad" },
+};
+export const ID_TYPE_LABEL: Record<KycIdType, string> = {
+  cni: "Carte nationale d'identité",
+  passeport: "Passeport",
+  carte_sejour: "Carte de séjour",
+};
+export const PAYOUT_LABEL: Record<KycPayoutMethod, string> = {
+  airtel: "Airtel Money",
+  moov: "Moov Money",
+  bank: "Compte bancaire",
+};
+export const DOCUMENT_LABEL: Record<KycDocumentKind, string> = {
+  id_front: "Pièce d'identité — recto",
+  id_back: "Pièce d'identité — verso",
+  rccm: "Extrait RCCM",
+};
+/** Champ signalé après un refus de l'API (`?champ=…`, liste fermée). */
+export const KYC_FIELD_LABEL: Record<string, string> = {
+  legalName: "le nom sur la pièce",
+  idNumber: "le numéro de la pièce",
+  rccmNumber: "le numéro RCCM",
+  payoutAccount: "le compte de versement (Airtel : 07…, Moov : 06…, banque : RIB ou IBAN)",
+  payoutHolder: "le titulaire du compte",
+};

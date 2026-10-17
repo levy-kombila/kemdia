@@ -51,5 +51,8 @@ ON CONFLICT ("id") DO UPDATE SET
 DELETE FROM "catalog"."product_images"
 WHERE "product_id" IN (SELECT "id" FROM "catalog"."products" WHERE "shop_id" = '0e2e0000-0000-4000-8000-0000000000a3');
 DELETE FROM "catalog"."products" WHERE "shop_id" = '0e2e0000-0000-4000-8000-0000000000a3';
+-- Dossier de vérification (S6-T08) : repart de zéro à chaque passage
+DELETE FROM "vendors"."kyc_documents" WHERE "shop_id" = '0e2e0000-0000-4000-8000-0000000000a3';
+DELETE FROM "vendors"."kyc_files" WHERE "shop_id" = '0e2e0000-0000-4000-8000-0000000000a3';
 
 COMMIT;

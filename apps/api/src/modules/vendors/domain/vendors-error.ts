@@ -19,7 +19,23 @@ export type VendorsErrorCode =
   /** Le compte n'a pas de boutique active (en attente, refusée, suspendue ou aucune). */
   | "BOUTIQUE_INACTIVE"
   /** Un modérateur ne décide jamais pour un produit de sa propre boutique. */
-  | "PRODUIT_SUR_SOI_INTERDIT";
+  | "PRODUIT_SUR_SOI_INTERDIT"
+  /** Dossier de vérification mal rempli (champ en cause dans le message) — S6-T08 */
+  | "KYC_INVALIDE"
+  /** Pas encore de dossier de vérification */
+  | "KYC_INTROUVABLE"
+  /** Photos manquantes : le dossier ne peut pas être envoyé */
+  | "KYC_INCOMPLET"
+  /** Le dossier ne permet pas cette action dans son état (envoyé, déjà décidé…) */
+  | "STATUT_KYC_INCOMPATIBLE"
+  /** Clé de chiffrement absente : vérification fermée */
+  | "KYC_INDISPONIBLE"
+  /** Photo du dossier absente (jamais envoyée, ou effacée après la décision) */
+  | "DOCUMENT_INTROUVABLE"
+  /** Photo du dossier refusée (S6-T08 ; mêmes codes que les photos de produits) */
+  | "FORMAT_IMAGE_INVALIDE"
+  | "IMAGE_TROP_GRANDE"
+  | "IMAGE_TROP_PETITE";
 
 /** Une règle des boutiques n'est pas respectée. Le message est lisible par un humain, en français. */
 export class VendorsError extends Error {
