@@ -235,9 +235,12 @@ test.describe("espace vendeur : parcours", () => {
     await page
       .getByRole("combobox", { name: "Recevoir l'argent des ventes sur" })
       .selectOption("moov");
+    // Rien de ce qui a été tapé ne revient dans l'adresse (données personnelles) : tout est ressaisi
+    await page.getByLabel("Nom tel qu'il est écrit sur la pièce").fill("Fatou Vendeuse");
+    await page.getByLabel("Titulaire du compte").fill("Fatou Vendeuse");
     await page.getByLabel("Numéro de la pièce").fill("GA 1234 5678");
     await page.getByLabel("Numéro du compte").fill("066 76 54 32");
-    await page.getByRole("button", { name: "Enregistrer les modifications" }).click();
+    await page.getByRole("button", { name: "Enregistrer le dossier" }).click();
     await expect(page).toHaveURL(/\?ok=kyc-enregistre$/);
     await expect(page.getByText("À compléter")).toBeVisible();
     await expect(page.getByRole("button", { name: "Envoyer à l'équipe Kemdia" })).toBeDisabled();
