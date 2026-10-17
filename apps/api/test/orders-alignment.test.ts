@@ -13,11 +13,17 @@ import {
   ORDER_STATUSES,
   PAYMENT_METHODS,
   PAYMENT_WINDOW_MINUTES,
+  CANCEL_REASONS,
+  KEMDIA_SHOP_ID,
+  VENDOR_ORDER_REFUSAL_LIMITS,
+  VENDOR_ORDER_RESPONSE_HOURS,
+  VENDOR_ORDER_STATUSES,
 } from "@kemdia/contracts/constants";
 import * as delivery from "@kemdia/contracts/delivery";
 import * as address from "../src/modules/orders/domain/delivery-address.js";
 import * as coupon from "../src/modules/orders/domain/coupon.js";
 import * as order from "../src/modules/orders/domain/order.js";
+import * as shopPart from "../src/modules/orders/domain/shop-part.js";
 import {
   CART_TTL_DAYS as DOMAIN_TTL,
   MAX_CART_LINES,
@@ -73,5 +79,35 @@ describe("Commandes : mêmes règles dans le domaine et dans le contrat (S5-T02)
     expect(address.LANDMARK_MIN).toBe(delivery.LANDMARK_MIN);
     expect(address.LANDMARK_MAX).toBe(delivery.LANDMARK_MAX);
     expect(address.OTHER_NEIGHBORHOOD).toBe(delivery.OTHER_NEIGHBORHOOD);
+  });
+});
+
+describe("Commandes des vendeurs : mêmes règles dans le domaine, le contrat et la base (S6-T07)", () => {
+  const sql = readFileSync(
+    new URL(
+      "../prisma/migrations/20261017100000_commandes_vendeurs/migration.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  it("délai, motif, boutique Kemdia = contrat", () => {
+    expect(shopPart.VENDOR_RESPONSE_HOURS).toBe(VENDOR_ORDER_RESPONSE_HOURS);
+    expect(shopPart.REFUSAL_REASON_LIMITS).toEqual(VENDOR_ORDER_REFUSAL_LIMITS);
+    expect(shopPart.KEMDIA_SHOP).toBe(KEMDIA_SHOP_ID);
+  });
+
+  it("vues du vendeur et raisons d'annulation = contrat", () => {
+    const views: shopPart.VendorView[] = [...VENDOR_ORDER_STATUSES];
+    expect(views).toHaveLength(5);
+    expect(CANCEL_REASONS).toEqual(expect.arrayContaining(["vendeur_refus", "vendeur_delai"]));
+  });
+
+  it("contraintes SQL = contrat", () => {
+    const { min, max } = VENDOR_ORDER_REFUSAL_LIMITS;
+    expect(sql).toContain(`char_length(btrim("refusal_reason")) BETWEEN ${min} AND ${max}`);
+    expect(sql).toContain(`"refusal_reason" VARCHAR(${max})`);
+    expect(sql).toContain(`interval '${VENDOR_ORDER_RESPONSE_HOURS} hours'`);
+    expect(sql.split(KEMDIA_SHOP_ID).length).toBeGreaterThan(4);
   });
 });

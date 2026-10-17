@@ -59,11 +59,14 @@ enum PaymentMethod {
   @@schema("orders")
 }
 
-/// Annulée par le client (avant l'expédition), paiement non reçu à temps, ou par un administrateur (S5-T04).
+/// Annulée par le client (avant l'expédition), paiement non reçu à temps, par un administrateur (S5-T04), refusée par un
+/// vendeur ou sans réponse d'un vendeur à temps (S6-T07).
 enum CancelReason {
   CLIENT
   PAYMENT_EXPIRED
   ADMIN
+  VENDOR_REFUSED
+  VENDOR_TIMEOUT
 
   @@map("cancel_reason")
   @@schema("orders")
@@ -105,6 +108,8 @@ model Order {
   /// Paiement reçu (Mobile Money confirmé ou espèces encaissées, S5-T04) : posé une fois, ensuite figé
   paidAt               DateTime?           @map("paid_at") @db.Timestamptz(3)
   items                OrderItem[]
+  /// Une part par boutique (S6-T07) : chaque vendeur accepte ou refuse la sienne (BR-013)
+  shopParts            OrderShopPart[]
   history              OrderStatusChange[]
   couponRedemption     CouponRedemption?
   createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -124,6 +129,8 @@ model OrderItem {
   /// Variante et produit du catalogue : UUID seuls
   variantId   String  @map("variant_id") @db.Uuid
   productId   String  @map("product_id") @db.Uuid
+  /// Boutique qui vendait le produit au moment de la commande (module vendors, UUID, S6-T07), figée
+  shopId      String  @map("shop_id") @db.Uuid
   title       String  @db.VarChar(120)
   variantName String  @map("variant_name") @db.VarChar(80)
   image       String? @db.VarChar(300)
@@ -134,6 +141,53 @@ model OrderItem {
 
   @@id([orderId, variantId])
   @@map("order_items")
+  @@schema("orders")
+}
+
+// ─── Commandes des vendeurs (S6-T07, ADR-0038) ───────────────────────────────────────────
+
+/// Part d'une boutique : en attente → acceptée, refusée (motif) ou expirée (pas de réponse à temps). La part de la
+/// boutique Kemdia est acceptée d'office.
+enum ShopPartStatus {
+  PENDING
+  ACCEPTED
+  REFUSED
+  EXPIRED
+
+  @@map("shop_part_status")
+  @@schema("orders")
+}
+
+/// Part d'une commande pour une boutique (BR-013). Règles posées en SQL dans la migration : montants et boutique figés,
+/// statuts dans l'ordre prévu, part Kemdia acceptée et sans délai, motif pour un refus, aucune suppression.
+model OrderShopPart {
+  orderId       String         @map("order_id") @db.Uuid
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// Boutique (module vendors) : UUID seul, sans clé étrangère entre modules
+  shopId        String         @map("shop_id") @db.Uuid
+  status        ShopPartStatus
+  /// Articles de la boutique : montant (prix de la commande) et nombre (quantités comprises)
+  subtotal      Int
+  itemCount     Int            @map("item_count")
+  /// Commande confirmée (payée ou à la livraison) : le vendeur la voit, son délai commence. Vide avant
+  openedAt      DateTime?      @map("opened_at") @db.Timestamptz(3)
+  /// Échéance de la réponse (ouverture + 24 h) ; vide pour la boutique Kemdia
+  dueAt         DateTime?      @map("due_at") @db.Timestamptz(3)
+  decidedAt     DateTime?      @map("decided_at") @db.Timestamptz(3)
+  /// Compte qui a décidé (module identity, UUID) ; vide : Kemdia d'office ou délai passé
+  decidedBy     String?        @map("decided_by") @db.Uuid
+  refusalReason String?        @map("refusal_reason") @db.VarChar(300)
+  /// E-mail « nouvelle commande » au vendeur : essais, prochain essai, envoi réussi
+  emailAttempts Int            @default(0) @map("email_attempts")
+  emailNextAt   DateTime?      @map("email_next_at") @db.Timestamptz(3)
+  emailSentAt   DateTime?      @map("email_sent_at") @db.Timestamptz(3)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@id([orderId, shopId])
+  @@index([shopId, openedAt(sort: Desc), orderId(sort: Desc)])
+  @@index([status, dueAt])
+  @@index([emailNextAt])
+  @@map("order_shop_parts")
   @@schema("orders")
 }
 

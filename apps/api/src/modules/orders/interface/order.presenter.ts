@@ -17,7 +17,17 @@ export function presentOrder(order: OrderRecord): Order {
     deliveryFee: order.deliveryFee,
     total: order.total,
     delivery: order.delivery,
-    lines: order.lines,
+    // Champ par champ : la boutique de chaque ligne (S6-T07) reste interne
+    lines: order.lines.map((l) => ({
+      variantId: l.variantId,
+      productId: l.productId,
+      title: l.title,
+      variantName: l.variantName,
+      image: l.image,
+      unitPrice: l.unitPrice,
+      quantity: l.quantity,
+      lineTotal: l.lineTotal,
+    })),
     createdAt: order.createdAt.toISOString(),
     paymentDueAt:
       order.status === "pending_payment" ? (order.paymentDueAt?.toISOString() ?? null) : null,

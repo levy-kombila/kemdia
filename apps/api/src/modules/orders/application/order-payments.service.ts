@@ -69,6 +69,8 @@ export class OrderPayments {
     if (amount !== order.total || order.paidAt !== null) return false;
     await this.orders.setStatus(order.id, "confirmed", now);
     await this.orders.markPaid(order.id, now);
+    // Commande payée : les vendeurs la voient, leur délai de 24 h commence (S6-T07, BR-013)
+    await this.orders.openShopParts(order.id, now);
     return true;
   }
 

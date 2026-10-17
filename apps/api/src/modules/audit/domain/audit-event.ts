@@ -63,6 +63,12 @@ export const AUDIT_ACTIONS = [
   "mfa.locked",
   /** Double authentification remise à zéro par la commande serveur (détails : source, sessionsClosed) — S6-T03 */
   "mfa.reset",
+  /** Commande acceptée par une boutique (détails : reference, shop, preparing) — S6-T07 */
+  "order.vendor_accepted",
+  /** Commande refusée par une boutique : commande entière annulée (détails : reference, shop, reason, refunds) — S6-T07 */
+  "order.vendor_refused",
+  /** Boutique sans réponse dans les 24 h : commande entière annulée, au nom du serveur (détails : reference, shops) — S6-T07 */
+  "order.vendor_timeout",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import {
   OrderCancelHooks,
   OrderPayments,
+  OrdersError,
   validatePayment,
   type OrderRecord,
 } from "../../orders/index.js";
@@ -93,6 +94,26 @@ export class PaymentService implements OnModuleInit {
         // Simulateur : retirée du téléphone (en mémoire ; si la transaction échoue, l'essai expire en 3 minutes)
         this.provider.cancel?.(attempt.id);
       }
+    });
+    // Commande refusée par un vendeur, ou sans réponse d'un vendeur à temps (S6-T07, ADR-0038) : comme l'annulation par
+    // un administrateur — essais en attente expirés, remboursement « à faire » de chaque paiement Mobile Money reçu,
+    // avoir si la commande était facturée. Déjà encaissée en espèces : refus (l'argent est chez le livreur ou le client).
+    this.cancelHooks.onVendorCancel(async (order, now) => {
+      const attempts = await this.payments.listForOrder(order.id);
+      if (attempts.some((a) => a.method === "cod" && a.status === "succeeded")) {
+        throw new OrdersError(
+          "ANNULATION_IMPOSSIBLE",
+          "cette commande est déjà encaissée en espèces : contactez le service client Kemdia",
+        );
+      }
+      for (const attempt of attempts.filter((a) => a.status === "pending")) {
+        await this.payments.complete(attempt.id, "expired", now, "commande_annulee");
+        this.provider.cancel?.(attempt.id);
+      }
+      for (const paid of attempts.filter((a) => a.status === "succeeded" && a.method !== "cod")) {
+        await this.refunds.createFor(paid, order.reference, "annulation_vendeur", now);
+      }
+      await this.invoices.issueCreditNote(order, now);
     });
   }
 

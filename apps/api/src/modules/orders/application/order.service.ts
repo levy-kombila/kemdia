@@ -20,6 +20,7 @@ import {
   type PaymentMethod,
 } from "../domain/order.js";
 import { OrdersError } from "../domain/orders-error.js";
+import { openingOf, splitByShop } from "../domain/shop-part.js";
 import { CartService } from "./cart.service.js";
 import { OrderCancelHooks } from "./order-cancel-hooks.js";
 import {
@@ -290,6 +291,7 @@ export class OrderService {
         reserved.map((r) => ({
           variantId: r.variantId,
           productId: r.productId,
+          shopId: r.shopId,
           title: r.title,
           variantName: r.variantName,
           image: r.image,
@@ -324,12 +326,22 @@ export class OrderService {
         if (!cod.allowed) throw new OrdersError("PAIEMENT_A_LA_LIVRAISON_INDISPONIBLE", cod.reason);
       }
 
+      const state = initialState(payment.method, now);
+      // Une part par boutique (S6-T07) : celles des vendeurs s'ouvrent dès que la commande est confirmée — tout de suite
+      // pour un paiement à la livraison, au paiement reçu pour Mobile Money (`OrderPayments.confirmPaid`)
+      const shopParts = splitByShop(lines).map((part) => ({
+        ...part,
+        ...(part.status === "pending" && state.status === "confirmed"
+          ? openingOf(now)
+          : { openedAt: null, dueAt: null }),
+      }));
       const order = await this.orders.insert(
         {
           accountId,
           idempotencyKey,
           requestHash,
-          ...initialState(payment.method, now),
+          ...state,
+          shopParts,
           paymentMethod: payment.method,
           paymentPhone: payment.phone,
           subtotal,

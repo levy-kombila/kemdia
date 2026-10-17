@@ -593,3 +593,120 @@ export const productImagePaths = {
     },
   },
 };
+
+// --- Commandes des vendeurs (S6-T07, ADR-0038 ; BR-013) ---
+
+const referenceParam = {
+  name: "reference",
+  in: "path",
+  required: true,
+  description: "Numéro de la commande (« KMD-7F3K9Q »)",
+  schema: { type: "string", pattern: "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$" },
+};
+const VENDOR_ORDER_RULES = [
+  "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction). Seules les commandes **confirmées** (payées, ou paiement à la livraison) qui contiennent un produit de la boutique apparaissent ; une autre commande est introuvable.",
+  "Le vendeur ne voit que **ses** articles et la **ville** de livraison : ni le nom, ni le téléphone, ni l'adresse du client.",
+  "Il a **24 heures** pour accepter ou refuser. Quand toutes les boutiques de la commande ont accepté, elle passe « en préparation ». Un **refus** (motif gardé par Kemdia, jamais montré au client) ou l'**absence de réponse** annule la commande **entière** : stock remis en vente, coupon rendu, remboursement « à faire » si elle était payée. Chaque décision est inscrite au journal d'audit ; un e-mail prévient le vendeur de chaque nouvelle commande.",
+].join("\n\n");
+const vendorOrderErrors = {
+  ...vendorErrors,
+  "404": problem("`COMMANDE_INTROUVABLE`"),
+};
+const vendorDecision = (summary: string, operationId: string, refuse: boolean) => ({
+  post: {
+    tags: ["Commandes des vendeurs"],
+    summary,
+    description: VENDOR_ORDER_RULES,
+    operationId,
+    security: bearer,
+    parameters: [referenceParam],
+    ...(refuse
+      ? {
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: ref("VendorOrderRefuseRequest") } },
+          },
+        }
+      : {}),
+    responses: {
+      "200": json(
+        "VendorOrder",
+        refuse
+          ? "La commande après le refus (annulée) ; déjà refusée : renvoyée telle quelle"
+          : "La commande après l'acceptation ; déjà acceptée : renvoyée telle quelle",
+      ),
+      "400": problem(refuse ? "Corps ou numéro invalide" : "Numéro invalide"),
+      ...vendorOrderErrors,
+      "409": problem(
+        "`DECISION_IMPOSSIBLE` (déjà décidée, commande annulée, délai passé), `ANNULATION_IMPOSSIBLE` (déjà encaissée en espèces) ou `BOUTIQUE_OCCUPEE` (réessayer)",
+      ),
+      ...(refuse ? { "422": problem("`MOTIF_REFUS_INVALIDE` : motif de 5 à 300 caractères") } : {}),
+    },
+  },
+});
+
+export const vendorOrderPaths = {
+  "/api/v1/vendors/orders": {
+    get: {
+      tags: ["Commandes des vendeurs"],
+      summary: "Commandes de ma boutique, de la plus récente à la plus ancienne",
+      description: VENDOR_ORDER_RULES,
+      operationId: "listVendorOrders",
+      security: bearer,
+      parameters: [
+        {
+          name: "status",
+          in: "query",
+          description:
+            "Seulement : `pending` (à traiter), `accepted`, `refused`, `expired` (sans réponse à temps) ou `cancelled` (annulée autrement)",
+          schema: {
+            type: "string",
+            enum: ["pending", "accepted", "refused", "expired", "cancelled"],
+          },
+        },
+        {
+          name: "limit",
+          in: "query",
+          description: "Commandes par page (20 par défaut, 50 au plus)",
+          schema: { type: "integer", minimum: 1, maximum: 50, default: 20 },
+        },
+        {
+          name: "before",
+          in: "query",
+          description: "`nextCursor` de la page précédente",
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": json("VendorOrderPage", "Une page de commandes"),
+        "400": problem("Paramètre invalide"),
+        ...vendorErrors,
+      },
+    },
+  },
+  "/api/v1/vendors/orders/{reference}": {
+    get: {
+      tags: ["Commandes des vendeurs"],
+      summary: "Une commande de ma boutique (mes articles, la ville de livraison)",
+      description: VENDOR_ORDER_RULES,
+      operationId: "getVendorOrder",
+      security: bearer,
+      parameters: [referenceParam],
+      responses: {
+        "200": json("VendorOrder", "La commande, vue par la boutique"),
+        "400": problem("Numéro invalide"),
+        ...vendorOrderErrors,
+      },
+    },
+  },
+  "/api/v1/vendors/orders/{reference}/accept": vendorDecision(
+    "Accepter la commande",
+    "acceptVendorOrder",
+    false,
+  ),
+  "/api/v1/vendors/orders/{reference}/refuse": vendorDecision(
+    "Refuser la commande (elle est annulée entière)",
+    "refuseVendorOrder",
+    true,
+  ),
+};

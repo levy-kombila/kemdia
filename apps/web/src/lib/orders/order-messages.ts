@@ -21,6 +21,8 @@ const MESSAGES: Record<OrderFailureCode, string> = {
   MOBILE_MONEY_INDISPONIBLE:
     "Le paiement Mobile Money n'est pas encore disponible : choisissez le paiement à la livraison.",
   COMMANDE_INTROUVABLE: "Cette commande est introuvable.",
+  DECISION_IMPOSSIBLE: "Cette commande ne peut plus être acceptée ou refusée.",
+  MOTIF_REFUS_INVALIDE: "Indiquez un motif de refus de 5 à 300 caractères.",
   ANNULATION_IMPOSSIBLE: "Cette commande ne peut plus être annulée (déjà expédiée ou livrée).",
   CLE_DEJA_UTILISEE:
     "Une commande a peut-être déjà été enregistrée lors d'un envoi précédent : vérifiez vos commandes avant de recommencer.",

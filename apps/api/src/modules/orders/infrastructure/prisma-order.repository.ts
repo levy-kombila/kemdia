@@ -8,9 +8,19 @@ import type {
   OrderRecord,
   OrderRepository,
   OrderSummaryRecord,
+  VendorEmailRecord,
+  VendorOrderCursor,
+  VendorOrderRecord,
+  VendorOrderSummaryRecord,
 } from "../application/ports.js";
 import type { CartLine } from "../domain/cart.js";
 import type { CancelReason, OrderStatus, PaymentMethod } from "../domain/order.js";
+import {
+  VENDOR_RESPONSE_MS,
+  type ShopPart,
+  type ShopPartStatus,
+  type VendorView,
+} from "../domain/shop-part.js";
 
 const STATUS_TO_DB: Record<OrderStatus, $Enums.OrderStatus> = {
   pending_payment: "PENDING_PAYMENT",
@@ -35,15 +45,81 @@ const REASON_TO_DB: Record<CancelReason, $Enums.CancelReason> = {
   client: "CLIENT",
   paiement_expire: "PAYMENT_EXPIRED",
   admin: "ADMIN",
+  vendeur_refus: "VENDOR_REFUSED",
+  vendeur_delai: "VENDOR_TIMEOUT",
 };
 const REASON_FROM_DB = Object.fromEntries(
   Object.entries(REASON_TO_DB).map(([k, v]) => [v, k]),
 ) as Record<$Enums.CancelReason, CancelReason>;
 
+const PART_TO_DB: Record<ShopPartStatus, $Enums.ShopPartStatus> = {
+  pending: "PENDING",
+  accepted: "ACCEPTED",
+  refused: "REFUSED",
+  expired: "EXPIRED",
+};
+const PART_FROM_DB = Object.fromEntries(
+  Object.entries(PART_TO_DB).map(([k, v]) => [v, k]),
+) as Record<$Enums.ShopPartStatus, ShopPartStatus>;
+
 const withDetails = {
   items: { orderBy: { position: "asc" } },
   history: { orderBy: [{ at: "asc" }, { id: "asc" }] },
+  shopParts: { orderBy: { createdAt: "asc" } },
 } satisfies Prisma.OrderInclude;
+
+type PartRow = Prisma.OrderShopPartGetPayload<object>;
+
+function toPart(row: PartRow): ShopPart {
+  return {
+    shopId: row.shopId,
+    status: PART_FROM_DB[row.status],
+    subtotal: row.subtotal,
+    itemCount: row.itemCount,
+    openedAt: row.openedAt,
+    dueAt: row.dueAt,
+    decidedAt: row.decidedAt,
+    refusalReason: row.refusalReason,
+  };
+}
+
+type ItemRow = Prisma.OrderItemGetPayload<object>;
+
+function toLine(i: ItemRow) {
+  return {
+    variantId: i.variantId,
+    productId: i.productId,
+    shopId: i.shopId,
+    title: i.title,
+    variantName: i.variantName,
+    image: i.image,
+    unitPrice: i.unitPrice,
+    quantity: i.quantity,
+    lineTotal: i.lineTotal,
+  };
+}
+
+/**
+ * Vue du vendeur (S6-T07) → conditions SQL : la part ET la commande. Une part en attente ou acceptée d'une commande
+ * annulée (client, équipe, autre vendeur, paiement) est « annulée » ; une part refusée ou expirée le reste.
+ */
+function viewFilter(view: VendorView | undefined): Prisma.OrderShopPartWhereInput {
+  switch (view) {
+    case undefined:
+      return {};
+    case "pending":
+    case "accepted":
+      return { status: PART_TO_DB[view], order: { status: { not: "CANCELLED" } } };
+    case "refused":
+    case "expired":
+      return { status: PART_TO_DB[view] };
+    case "cancelled":
+      return { status: { in: ["PENDING", "ACCEPTED"] }, order: { status: "CANCELLED" } };
+  }
+}
+
+/** Part ouverte : le vendeur la voit (S6-T07). */
+const OPENED = { openedAt: { not: null } } satisfies Prisma.OrderShopPartWhereInput;
 type OrderRow = Prisma.OrderGetPayload<{ include: typeof withDetails }>;
 
 function toRecord(row: OrderRow): OrderRecord {
@@ -69,16 +145,7 @@ function toRecord(row: OrderRow): OrderRecord {
       daysMin: row.deliveryDaysMin,
       daysMax: row.deliveryDaysMax,
     },
-    lines: row.items.map((i) => ({
-      variantId: i.variantId,
-      productId: i.productId,
-      title: i.title,
-      variantName: i.variantName,
-      image: i.image,
-      unitPrice: i.unitPrice,
-      quantity: i.quantity,
-      lineTotal: i.lineTotal,
-    })),
+    lines: row.items.map(toLine),
     createdAt: row.createdAt,
     paymentDueAt: row.paymentDueAt,
     cancelledAt: row.cancelledAt,
@@ -86,6 +153,7 @@ function toRecord(row: OrderRow): OrderRecord {
     paidAt: row.paidAt,
     history: row.history.map((h) => ({ status: STATUS_FROM_DB[h.status], at: h.at })),
     requestHash: row.requestHash,
+    shopParts: row.shopParts.map(toPart),
   };
 }
 
@@ -168,6 +236,7 @@ export class PrismaOrderRepository implements OrderRepository {
           create: order.lines.map((l, position) => ({
             variantId: l.variantId,
             productId: l.productId,
+            shopId: l.shopId,
             title: l.title.slice(0, 120),
             variantName: l.variantName.slice(0, 80),
             image: l.image && l.image.length <= 300 ? l.image : null,
@@ -178,6 +247,20 @@ export class PrismaOrderRepository implements OrderRepository {
           })),
         },
         history: { create: [{ id: randomUUID(), status: STATUS_TO_DB[order.status], at: now }] },
+        // Une part par boutique (S6-T07) : Kemdia acceptée d'office ; ouverte si la commande naît confirmée
+        shopParts: {
+          create: order.shopParts.map((p) => ({
+            shopId: p.shopId,
+            status: PART_TO_DB[p.status],
+            subtotal: p.subtotal,
+            itemCount: p.itemCount,
+            openedAt: p.openedAt,
+            dueAt: p.dueAt,
+            decidedAt: p.status === "pending" ? null : now,
+            emailNextAt: p.openedAt,
+            createdAt: now,
+          })),
+        },
       },
     });
     const row = await db.order.findUniqueOrThrow({ where: { id }, include: withDetails });
@@ -308,5 +391,202 @@ export class PrismaOrderRepository implements OrderRepository {
     if (!rows[0]) return null;
     const row = await db.order.findUnique({ where: { id: orderId }, include: withDetails });
     return row ? toRecord(row) : null;
+  }
+
+  // --- Commandes des vendeurs (S6-T07, ADR-0038) ---
+
+  async openShopParts(orderId: string, now: Date): Promise<number> {
+    const due = new Date(now.getTime() + VENDOR_RESPONSE_MS);
+    const { count } = await this.tx.db.orderShopPart.updateMany({
+      where: { orderId, status: "PENDING", openedAt: null },
+      data: { openedAt: now, dueAt: due, emailNextAt: now },
+    });
+    return count;
+  }
+
+  async decideShopPart(
+    orderId: string,
+    shopId: string,
+    decision:
+      | { status: "accepted"; by: string }
+      | { status: "refused"; by: string; reason: string }
+      | { status: "expired" },
+    now: Date,
+  ): Promise<boolean> {
+    const { count } = await this.tx.db.orderShopPart.updateMany({
+      where: { orderId, shopId, status: "PENDING", ...OPENED },
+      data: {
+        status: PART_TO_DB[decision.status],
+        decidedAt: now,
+        decidedBy: decision.status === "expired" ? null : decision.by,
+        refusalReason: decision.status === "refused" ? decision.reason : null,
+        // Plus rien à annoncer au vendeur
+        emailNextAt: null,
+      },
+    });
+    return count === 1;
+  }
+
+  async findVendorOverdue(now: Date, limit: number): Promise<string[]> {
+    const rows = await this.tx.db.orderShopPart.findMany({
+      where: { status: "PENDING", dueAt: { lte: now }, order: { status: "CONFIRMED" } },
+      orderBy: { dueAt: "asc" },
+      take: limit,
+      distinct: ["orderId"],
+      select: { orderId: true },
+    });
+    return rows.map((r) => r.orderId);
+  }
+
+  async listForShop(
+    shopId: string,
+    query: { view?: VendorView | undefined; limit: number; before?: VendorOrderCursor | undefined },
+  ): Promise<{ items: VendorOrderSummaryRecord[]; next: VendorOrderCursor | null }> {
+    const { before } = query;
+    const rows = await this.tx.db.orderShopPart.findMany({
+      where: {
+        shopId,
+        ...OPENED,
+        ...viewFilter(query.view),
+        ...(before
+          ? {
+              AND: [
+                {
+                  OR: [
+                    { openedAt: { lt: before.openedAt } },
+                    { openedAt: before.openedAt, orderId: { lt: before.orderId } },
+                  ],
+                },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ openedAt: "desc" }, { orderId: "desc" }],
+      take: query.limit + 1,
+      include: {
+        order: { select: { reference: true, status: true, deliveryCityName: true } },
+      },
+    });
+    const page = rows.slice(0, query.limit);
+    const last = page.at(-1);
+    return {
+      items: page.map((r) => this.vendorSummary(r)),
+      next:
+        rows.length > query.limit && last?.openedAt
+          ? { openedAt: last.openedAt, orderId: last.orderId }
+          : null,
+    };
+  }
+
+  async findForShop(
+    shopId: string,
+    reference: string,
+    lock = false,
+  ): Promise<VendorOrderRecord | null> {
+    const db = this.tx.db;
+    if (lock) {
+      // Commande verrouillée (ordre des verrous : commande → variantes → coupon → paiement)
+      const rows = await db.$queryRaw<{ id: string }[]>`
+        SELECT o."id" FROM "orders"."orders" AS o
+        WHERE o."reference" = ${reference}
+          AND EXISTS (SELECT 1 FROM "orders"."order_shop_parts" AS p
+                      WHERE p."order_id" = o."id" AND p."shop_id" = ${shopId}::uuid AND p."opened_at" IS NOT NULL)
+        FOR UPDATE OF o`;
+      if (!rows[0]) return null;
+    }
+    const row = await db.orderShopPart.findFirst({
+      where: { shopId, ...OPENED, order: { reference } },
+      include: {
+        order: {
+          select: {
+            reference: true,
+            status: true,
+            deliveryCityName: true,
+            items: { where: { shopId }, orderBy: { position: "asc" } },
+          },
+        },
+      },
+    });
+    if (!row) return null;
+    return {
+      ...this.vendorSummary(row),
+      lines: row.order.items.map(toLine),
+    };
+  }
+
+  private vendorSummary(
+    row: PartRow & {
+      order: { reference: string; status: $Enums.OrderStatus; deliveryCityName: string };
+    },
+  ): VendorOrderSummaryRecord {
+    const part = toPart(row);
+    if (!part.openedAt || !part.dueAt) throw new Error("part de boutique non ouverte");
+    return {
+      orderId: row.orderId,
+      reference: row.order.reference,
+      orderStatus: STATUS_FROM_DB[row.order.status],
+      cityName: row.order.deliveryCityName,
+      part: { ...part, openedAt: part.openedAt, dueAt: part.dueAt },
+    };
+  }
+
+  async findDueVendorEmails(now: Date, limit: number): Promise<VendorEmailRecord[]> {
+    const rows = await this.tx.db.orderShopPart.findMany({
+      where: { emailSentAt: null, emailNextAt: { lte: now }, emailAttempts: { lt: 5 }, ...OPENED },
+      orderBy: { emailNextAt: "asc" },
+      take: limit,
+      include: { order: { select: { reference: true, status: true } } },
+    });
+    return rows.flatMap((r) =>
+      r.dueAt
+        ? [
+            {
+              orderId: r.orderId,
+              shopId: r.shopId,
+              reference: r.order.reference,
+              orderStatus: STATUS_FROM_DB[r.order.status],
+              partStatus: PART_FROM_DB[r.status],
+              subtotal: r.subtotal,
+              itemCount: r.itemCount,
+              dueAt: r.dueAt,
+              emailAttempts: r.emailAttempts,
+            },
+          ]
+        : [],
+    );
+  }
+
+  async claimVendorEmail(
+    orderId: string,
+    shopId: string,
+    now: Date,
+    nextAt: Date,
+  ): Promise<boolean> {
+    // Conditionnelle : deux instances ne prennent jamais le même envoi
+    const { count } = await this.tx.db.orderShopPart.updateMany({
+      where: {
+        orderId,
+        shopId,
+        emailSentAt: null,
+        emailNextAt: { lte: now },
+        emailAttempts: { lt: 5 },
+      },
+      data: { emailAttempts: { increment: 1 }, emailNextAt: nextAt },
+    });
+    return count === 1;
+  }
+
+  async markVendorEmailSent(orderId: string, shopId: string, now: Date): Promise<void> {
+    await this.tx.db.orderShopPart.updateMany({
+      where: { orderId, shopId },
+      data: { emailSentAt: now, emailNextAt: null },
+    });
+  }
+
+  async giveUpVendorEmail(orderId: string, shopId: string): Promise<void> {
+    await this.tx.db.orderShopPart.updateMany({
+      where: { orderId, shopId, emailSentAt: null },
+      data: { emailNextAt: null },
+    });
   }
 }
