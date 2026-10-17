@@ -291,14 +291,28 @@ describe("Livraisons (PostgreSQL, HTTP)", () => {
       status: "failed",
       failureReason: "Client absent, téléphone éteint",
     });
+    // Motif long (relecture de sécurité) : gardé en entier sur l'expédition, coupé à 100 caractères au journal
+    await act(order.reference, "retry").expect(200);
+    const long = `Portail fermé, voisins absents, ${"x".repeat(200)}`.slice(0, 200);
+    const longFailed = shipment(
+      (await act(order.reference, "failed", { reason: long }).expect(200)).body,
+    );
+    expect(longFailed.failureReason).toBe(long);
+    const logged = await prisma.auditEvent.findFirstOrThrow({
+      where: { action: "shipment.failed", targetId: (await orderRow(order.reference)).id },
+      orderBy: { occurredAt: "desc" },
+    });
+    expect((logged.details as { note: string }).note).toBe(long.slice(0, 100));
     expect(codeOf((await act(order.reference, "delivered").expect(409)).body)).toBe(
       "STATUT_EXPEDITION_INCOMPATIBLE",
     );
     const retried = shipment((await act(order.reference, "retry").expect(200)).body);
-    expect(retried).toMatchObject({ status: "in_transit", attempt: 2, failureReason: null });
+    expect(retried).toMatchObject({ status: "in_transit", attempt: 3, failureReason: null });
     const delivered = shipment((await act(order.reference, "delivered").expect(200)).body);
     expect(delivered.status).toBe("delivered");
     expect(delivered.events.map((e) => e.status)).toEqual([
+      "in_transit",
+      "failed",
       "in_transit",
       "failed",
       "in_transit",
@@ -328,6 +342,8 @@ describe("Livraisons (PostgreSQL, HTTP)", () => {
     ).map((e) => e.action);
     expect(actions).toEqual([
       "shipment.handed_over",
+      "shipment.failed",
+      "shipment.retried",
       "shipment.failed",
       "shipment.retried",
       "shipment.delivered",

@@ -27,13 +27,13 @@
 
 ### Finances et commissions
 
-| ID     | Règle                                                                                                                                                                                                                                     | Module     | Sprint    |
-| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | --------- |
-| BR-020 | Commission marketplace de **8 % à 14 %** sur chaque vente d'un vendeur tiers (taux par catégorie ou par vendeur).                                                                                                                         | vendors    | S6        |
-| BR-021 | Kemdia perçoit **15 %** de chaque frais de livraison facturé.                                                                                                                                                                             | shipping   | S7        |
-| BR-022 | Vente via un affilié d'un produit tiers : sur 14 % de commission, **10 % à l'affilié, 4 % à Kemdia** ; produit Kemdia : commission fixe à l'affilié.                                                                                      | affiliates | Après MVP |
-| BR-023 | TVA de **18 %** appliquée dès que le chiffre d'affaires annuel dépasse **25 millions de FCFA** (à confirmer par un comptable).                                                                                                            | payments   | S7        |
-| BR-024 | Un vendeur ne reçoit aucun versement tant que son **KYC** (identité + compte Mobile Money / bancaire) n'est pas validé. ✅ S6-T08 : dossier vérifié par un administrateur, chiffré ; versements à brancher avec les commissions (BR-020). | vendors    | S6        |
+| ID     | Règle                                                                                                                                                                                                                                                        | Module     | Sprint    |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- | --------- |
+| BR-020 | Commission marketplace de **8 % à 14 %** sur chaque vente d'un vendeur tiers (taux par catégorie ou par vendeur).                                                                                                                                            | vendors    | S6        |
+| BR-021 | Kemdia perçoit **15 %** de chaque frais de livraison facturé. ✅ S7-T01 : part calculée à la remise au transporteur, **arrondie à l'entier inférieur** (choix du 2026-10-17), le reste au transporteur ; livraison offerte = 0 ; vérifiée par une règle SQL. | shipping   | S7        |
+| BR-022 | Vente via un affilié d'un produit tiers : sur 14 % de commission, **10 % à l'affilié, 4 % à Kemdia** ; produit Kemdia : commission fixe à l'affilié.                                                                                                         | affiliates | Après MVP |
+| BR-023 | TVA de **18 %** appliquée dès que le chiffre d'affaires annuel dépasse **25 millions de FCFA** (à confirmer par un comptable).                                                                                                                               | payments   | S7        |
+| BR-024 | Un vendeur ne reçoit aucun versement tant que son **KYC** (identité + compte Mobile Money / bancaire) n'est pas validé. ✅ S6-T08 : dossier vérifié par un administrateur, chiffré ; versements à brancher avec les commissions (BR-020).                    | vendors    | S6        |
 
 ### Promotions
 
@@ -85,6 +85,7 @@
    _2026-10-15 : pas encore de réponse du client. Le S6-T01 (boutiques) n'en dépend pas ; le réglage des taux arrivera avec la tâche des commissions (BR-020), sans valeur inventée._
 4. **Affiliation** : lancée avec le MVP ou juste après ? commission fixe sur les produits Kemdia : quel montant ?
 5. **Transporteur** : COMAT confirmé ? mode d'échange (API, fichier, WhatsApp) ?
+   _2026-10-17 (S7-T01) : pas encore de réponse. En attendant : transporteur « manuel » (l'équipe note chaque étape dans l'API) ; le vrai transporteur se branchera comme un adaptateur. Le barème des zones est réglable par un administrateur._
 6. **TVA** : seuil et modalités à valider avec un expert-comptable gabonais.
    _S5-T06 : factures « TVA non applicable » (mention réglable par l'administrateur). Une TVA réelle demandera le détail HT / TVA. Les informations légales (raison sociale, NIF, RCCM) sont aussi à fournir : en production, aucune facture n'est émise avant._
 7. **Mobile Money** : agrégateur unique (qui gère Airtel + Moov) ou intégration directe de chaque opérateur ?

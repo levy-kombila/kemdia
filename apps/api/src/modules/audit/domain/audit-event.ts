@@ -89,11 +89,11 @@ export const AUDIT_ACTIONS = [
   "shipment.handed_over",
   /** Commande livrée (détails : reference) — S7-T01 */
   "shipment.delivered",
-  /** Livraison impossible (détails : reference, reason) — S7-T01 */
+  /** Livraison impossible (détails : reference, note = motif, 100 caractères au plus) — S7-T01 */
   "shipment.failed",
   /** Nouvelle tentative de livraison (détails : reference, attempt) — S7-T01 */
   "shipment.retried",
-  /** Livraison impossible : commande annulée (détails : reference, refunds, note) — S7-T01 */
+  /** Livraison impossible : commande annulée (détails : reference, note, 100 caractères au plus) — S7-T01 */
   "shipment.cancelled",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

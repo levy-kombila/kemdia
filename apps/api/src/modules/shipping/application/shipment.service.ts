@@ -167,8 +167,10 @@ export class ShipmentService {
         { id: this.random.uuid(), status: to, at: now, note, actorId: adminId },
       );
       const action = AUDIT_ACTION[to];
+      // Journal : 100 caractères au plus par valeur (le texte entier reste dans l'historique de l'expédition) —
+      // relecture de sécurité du S7-T01 : sinon un motif de 101 à 200 caractères bloquait l'étape (erreur 500)
       const details: Record<string, string | number> =
-        to === "in_transit" ? { attempt } : note ? { note } : {};
+        to === "in_transit" ? { attempt } : note ? { note: note.slice(0, AUDIT_TEXT_MAX) } : {};
       await this.record(action, adminId, order, context, details);
       return { shipment: updated, changed: true };
     });
@@ -195,6 +197,9 @@ export class ShipmentService {
     });
   }
 }
+
+/** Longueur maximale d'une valeur du journal d'audit (`audit/domain/audit-event.ts`). */
+const AUDIT_TEXT_MAX = 100;
 
 const AUDIT_ACTION = {
   in_transit: "shipment.retried",
