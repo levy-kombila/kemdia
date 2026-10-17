@@ -12,6 +12,7 @@
 | **4.1** | 2026-10-16 | S6     | Photos des produits des vendeurs (ADR-0035) : §3.5 table `catalog.product_images`, §3.7 routes et contrat 1.17.0, §3.10 actions, §3.19 (nouvelle), §5.14 (nouvelle), §6.4                                             |
 | **4.2** | 2026-10-16 | S6     | Écrans de l'équipe sur le site (ADR-0036) : §5.1 dossiers `app/equipe`, `components/staff`, `lib/staff`, §5.15 (nouvelle), §6.4, §7 données de test de l'équipe en CI                                                 |
 | **4.3** | 2026-10-16 | S6     | Espace vendeur sur le site (ADR-0037) : §5.1 dossiers `app/vendeur`, `components/vendor`, `lib/vendor`, §5.16 (nouvelle), §6.4, §7 données de test des vendeurs, §8 corps de requête borné à 6 Mo (Caddy)             |
+| **4.4** | 2026-10-17 | S6     | Commandes des vendeurs (ADR-0038, BR-013) : §3.20 (nouvelle) parts de commande par boutique, réponse sous 24 h, annulation entière ; contrat 1.18.0 ; §5.16 pages « Mes commandes »                                   |
 | **3.9** | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                  |
 | **3.8** | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                        |
 | **3.7** | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                           |
@@ -917,6 +918,31 @@ Adresse rangée dans `products.images` : `/images/v/<id>.webp` (vignette : `…-
 panier et commandes n'ont rien à changer. Ajouter une photo renvoie le produit en modération ; la retirer (effacée aussitôt) ou changer
 l'ordre ne le fait pas. Envoi : corps lu seulement avec un jeton de session bien formé, 6 envois en cours au plus (503 sinon).
 
+### 3.20 Commandes des vendeurs (S6-T07)
+
+Décision : [ADR-0038](adr/0038-commandes-vendeurs.md) (règle BR-013). Chaque commande a une **part par boutique**
+(`orders.order_shop_parts`) ; la boutique de chaque article est figée sur sa ligne (`order_items.shop_id`).
+
+```
+Commande confirmée (payée, ou paiement à la livraison)
+   └─► parts de vendeurs ouvertes, échéance = +24 h ; part Kemdia acceptée d'office ; e-mail « nouvelle commande » (tâche)
+Vendeur : accepter ─► toutes les parts acceptées ? ─► commande « en préparation »
+Vendeur : refuser (motif 5 à 300 caractères) ─┐
+Échéance dépassée (tâche, chaque minute) ─────┴─► commande ENTIÈRE annulée : stock et coupon rendus,
+                                                  remboursement « à faire », avoir (crochet onVendorCancel)
+```
+
+| Route (`/api/v1/vendors/orders`) | Rôle                                                 |
+| -------------------------------- | ---------------------------------------------------- |
+| `GET /`                          | Commandes de SA boutique, par statut, par pages      |
+| `GET /{référence}`               | Ses articles, la ville de livraison, l'échéance      |
+| `POST /{référence}/accept`       | Accepter                                             |
+| `POST /{référence}/refuse`       | Refuser avec motif (gardé chez Kemdia) : tout annulé |
+
+Le vendeur ne voit jamais le nom, le téléphone ni l'adresse du client. Boutique vérifiée active dans la transaction ;
+commande sans produit de la boutique = 404. Encaissement en espèces refusé tant qu'une part attend. Journal d'audit :
+`order.vendor_accepted`, `order.vendor_refused`, `order.vendor_timeout`. Contrat de l'API : 1.18.0.
+
 ## 4. Choix technologiques
 
 | Couche    | Choix                                                                  | Version     | Justification                                                                                                                                                     |
@@ -1270,12 +1296,14 @@ administrateur trouve le lien « Ouvrir l'espace de l'équipe » dans « Mon com
 
 Décision : [ADR-0037](adr/0037-espace-vendeur.md). Pages sous `/vendeur` (jamais indexées), pour tout compte connecté :
 
-| Page                           | Contenu                                                                                                      |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `/vendeur`                     | Selon la boutique : demande, demande en cours, refus (motif + nouvelle demande), suspension, tableau de bord |
-| `/vendeur/produits[?statut=…]` | Produits par statut (en ligne, en attente, refusés, retirés), du plus récent au plus ancien                  |
-| `/vendeur/produits/nouveau`    | Fiche et variantes (1 à 20) ; part en modération                                                             |
-| `/vendeur/produits/{id}`       | État de la modération et motif, photos, prix et stock par variante, fiche, retrait / remise en vente         |
+| Page                             | Contenu                                                                                                      |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `/vendeur`                       | Selon la boutique : demande, demande en cours, refus (motif + nouvelle demande), suspension, tableau de bord |
+| `/vendeur/produits[?statut=…]`   | Produits par statut (en ligne, en attente, refusés, retirés), du plus récent au plus ancien                  |
+| `/vendeur/produits/nouveau`      | Fiche et variantes (1 à 20) ; part en modération                                                             |
+| `/vendeur/produits/{id}`         | État de la modération et motif, photos, prix et stock par variante, fiche, retrait / remise en vente         |
+| `/vendeur/commandes[?statut=…]`  | Commandes de la boutique (« À traiter » d'abord) : statut, montant de ses articles, ville, échéance (S6-T07) |
+| `/vendeur/commandes/{référence}` | Ses articles, échéance ; accepter, ou refuser avec motif (la commande entière est annulée) (S6-T07)          |
 
 ```
 Photo choisie ─► navigateur : réduite à 1 600 px (JPEG 85) ─► POST /vendeur/produits/{id}/photos (route du site)

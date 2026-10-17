@@ -47,7 +47,7 @@ export class MailVendorOrderMailer implements VendorOrderMailer {
       `${name},`,
       `Votre boutique « ${shop} » a reçu la commande ${notice.reference} : ${articles}, ${money(notice.subtotal)}.`,
       `Acceptez-la ou refusez-la avant le ${due} (heure de Libreville), dans votre espace vendeur Kemdia : Mon compte, puis Espace vendeur, puis Mes commandes.`,
-      "Sans réponse à temps, la commande sera annulée et le client prévenu.",
+      "Sans réponse à temps, la commande sera annulée pour le client.",
       "L'équipe Kemdia",
     ];
     await this.transport.send({

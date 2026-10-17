@@ -157,7 +157,7 @@ paniers gardés **90 jours** ; numéro **KMD-7F3K9Q** ; **30 min** pour payer pa
 
 ## S6 — Module `vendors` + back-office 🚧
 
-Décisions : [ADR-0031](architecture/adr/0031-en-ligne-docker-tunnel.md) (en ligne depuis Docker Desktop), [ADR-0032](architecture/adr/0032-boutiques-vendeurs.md) (boutiques des vendeurs), [ADR-0033](architecture/adr/0033-produits-vendeurs-moderation.md) (produits des vendeurs, modération), [ADR-0034](architecture/adr/0034-double-authentification-equipe.md) (double authentification de l'équipe), [ADR-0035](architecture/adr/0035-photos-produits-vendeurs.md) (photos des produits des vendeurs), [ADR-0036](architecture/adr/0036-ecrans-equipe.md) (écrans de l'équipe), [ADR-0037](architecture/adr/0037-espace-vendeur.md) (espace vendeur).
+Décisions : [ADR-0031](architecture/adr/0031-en-ligne-docker-tunnel.md) (en ligne depuis Docker Desktop), [ADR-0032](architecture/adr/0032-boutiques-vendeurs.md) (boutiques des vendeurs), [ADR-0033](architecture/adr/0033-produits-vendeurs-moderation.md) (produits des vendeurs, modération), [ADR-0034](architecture/adr/0034-double-authentification-equipe.md) (double authentification de l'équipe), [ADR-0035](architecture/adr/0035-photos-produits-vendeurs.md) (photos des produits des vendeurs), [ADR-0036](architecture/adr/0036-ecrans-equipe.md) (écrans de l'équipe), [ADR-0037](architecture/adr/0037-espace-vendeur.md) (espace vendeur), [ADR-0038](architecture/adr/0038-commandes-vendeurs.md) (commandes des vendeurs).
 Choix du 2026-10-15 : **demande de boutique depuis un compte connecté, validée par un administrateur** ; une boutique par compte ; produits existants dans une **boutique « Kemdia » interne** ;
 S6-T01 en **API seule** ; demande **minimum** (nom, ville, mobile, description) ; commission : **en attente du client** (question ouverte n° 3).
 Choix du 2026-10-16 (S6-T02) : modération par un **modérateur ou un administrateur** ; **prix et stock libres**, le reste revalidé (produit caché en attendant) ; **photos dans une tâche suivante** ; **API seule**.
@@ -165,6 +165,7 @@ Choix du 2026-10-16 (S6-T03) : double authentification **obligatoire pour modér
 Choix du 2026-10-16 (S6-T04) : photos rangées **dans PostgreSQL** (port remplaçable), **toujours réencodées**, photo ajoutée = **nouvelle modération**, affichées **par un relais du site**.
 Choix du 2026-10-16 (S6-T05) : **écrans de l'équipe d'abord** (espace vendeur ensuite, S6-T06) ; **2FA + boutiques + modération** ; adresse **`/equipe`** ; QR code **dessiné côté serveur** ; **téléphone et ordinateur**.
 Choix du 2026-10-16 (S6-T06) : **vraie demande de boutique dans `/vendeur`** (le faux formulaire de `/vendre` disparaît) ; photos **réduites dans le navigateur** ; **chiffres de commission retirés** de `/vendre` ; adresse **`/vendeur`**.
+Choix du 2026-10-17 (S6-T07) : réponse du vendeur **sous 24 h** ; refus ou absence de réponse = **commande entière annulée** ; écrans **dans la même tâche** ; encaissement en espèces refusé tant qu'un vendeur n'a pas répondu (relecture de sécurité).
 
 | ID     | Tâche                                                                                                                                                                                                                                                                             | Statut |
 | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -175,6 +176,7 @@ Choix du 2026-10-16 (S6-T06) : **vraie demande de boutique dans `/vendeur`** (le
 | S6-T04 | Photos des produits des vendeurs : envoi du fichier (JPEG, PNG, WebP), réencodage WebP sans métadonnées, nouvelle modération, photo publique seulement pour un produit visible, relais du site `/images/v` — ADR-0035                                                             | ✅     |
 | S6-T05 | Écrans de l'équipe sur le site (`/equipe`) : double authentification (QR code, codes de secours, confirmation), tableau de bord, boutiques (valider / refuser / suspendre), file de modération avec photos — ADR-0036                                                             | ✅     |
 | S6-T06 | Espace vendeur sur le site (`/vendeur`) : demande de boutique, tableau de bord, produits (création, fiche, prix et stock, retrait de la vente), photos réduites dans le navigateur (envoi, principale, retrait) ; `/vendre` sans faux formulaire ni taux de commission — ADR-0037 | ✅     |
+| S6-T07 | Commandes des vendeurs (BR-013) : une part par boutique, le vendeur voit SES articles et la ville, accepte ou refuse (motif) sous 24 h ; refus ou silence = commande annulée (stock, coupon, remboursement à faire) ; e-mail au vendeur ; pages `/vendeur/commandes` — ADR-0038   | ✅     |
 
 ## S5 à S8 — grandes lignes
 
