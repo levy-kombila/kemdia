@@ -347,6 +347,21 @@ describe("Commandes des vendeurs (PostgreSQL, HTTP)", () => {
     expect(codeOf((await refuse(a, order.reference).expect(409)).body)).toBe("DECISION_IMPOSSIBLE");
   });
 
+  it("encaissement en espèces refusé tant qu'un vendeur n'a pas répondu (relecture de sécurité)", async () => {
+    const vendor = await openVendor();
+    const admin = await openSession("ADMIN");
+    const order = await placeOrder([vendor.variantId]);
+    const collect = () =>
+      call("post", `/api/v1/admin/orders/${order.reference}/cod-collected`, admin.token).send({
+        amount: order.total,
+      });
+    // Sinon l'annulation à l'échéance échouerait à chaque passage et la commande resterait bloquée
+    expect(codeOf((await collect().expect(409)).body)).toBe("ANNULATION_IMPOSSIBLE");
+    expect((await orderRow(order.reference)).paidAt).toBeNull();
+    await accept(vendor, order.reference).expect(200);
+    await collect().expect(201);
+  });
+
   it("refuser : la commande ENTIÈRE est annulée, stock remis, motif gardé chez Kemdia", async () => {
     const [a, b] = [await openVendor(), await openVendor()];
     const order = await placeOrder([kemdiaVariant, a.variantId, b.variantId]);

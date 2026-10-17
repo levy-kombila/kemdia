@@ -27,7 +27,8 @@ import {
   CurrentSession,
   type AuthenticatedSession,
 } from "../../identity/index.js";
-import { withOrdersErrors } from "../../orders/index.js";
+import { OrdersError, withOrdersErrors } from "../../orders/index.js";
+import { VendorsError } from "../domain/vendors-error.js";
 import { VendorOrderService } from "../application/vendor-order.service.js";
 import {
   decodeVendorOrderCursor,
@@ -39,7 +40,19 @@ import { withVendorsErrors } from "./vendors-http-errors.js";
 type ReferenceParams = { reference: string };
 
 /** Erreurs des deux modules : la boutique (vendors), puis la commande (orders). */
-const withErrors = <T>(run: () => Promise<T>) => withVendorsErrors(() => withOrdersErrors(run));
+/** Commande verrouillée ailleurs : même réponse que pour la boutique (« réessayez »), pas « panier occupé ». */
+const busyAsShop = async <T>(run: () => Promise<T>): Promise<T> => {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof OrdersError && error.code === "PANIER_OCCUPE") {
+      throw new VendorsError("BOUTIQUE_OCCUPEE", "commande occupée : réessayez dans un instant");
+    }
+    throw error;
+  }
+};
+const withErrors = <T>(run: () => Promise<T>) =>
+  withVendorsErrors(() => withOrdersErrors(() => busyAsShop(run)));
 
 /**
  * Commandes de la boutique du compte connecté (`/api/v1/vendors/orders`, S6-T07, ADR-0038 ; BR-013). Rôle « vendeur »

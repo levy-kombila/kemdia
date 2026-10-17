@@ -82,6 +82,14 @@ export class OrderPayments {
     if (order.paymentMethod !== "cod" || order.status === "cancelled") {
       throw new OrdersError("ANNULATION_IMPOSSIBLE", "cette commande ne peut pas être encaissée");
     }
+    // Un vendeur doit encore répondre (S6-T07, relecture de sécurité) : encaisser bloquerait l'annulation automatique
+    // à l'échéance (l'argent ne se rend pas en ligne) et la commande resterait « en attente » sans fin.
+    if ((await this.orders.countPendingShopParts(order.id)) > 0) {
+      throw new OrdersError(
+        "ANNULATION_IMPOSSIBLE",
+        "un vendeur n'a pas encore accepté cette commande : encaissement impossible pour l'instant",
+      );
+    }
     if (order.paidAt === null) await this.orders.markPaid(order.id, now);
   }
 

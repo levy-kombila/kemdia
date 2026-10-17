@@ -152,6 +152,8 @@ export interface OrderRepository {
 
   /** Commande confirmée : ouvre ses parts de vendeurs encore fermées (délai de 24 h, e-mail à envoyer). */
   openShopParts(orderId: string, now: Date): Promise<number>;
+  /** Parts de vendeurs encore sans réponse (à accepter ou refuser). */
+  countPendingShopParts(orderId: string): Promise<number>;
   /** Décision d'une part EN ATTENTE (commande verrouillée par l'appelant) ; `false` si elle n'attendait plus. */
   decideShopPart(
     orderId: string,

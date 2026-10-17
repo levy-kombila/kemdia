@@ -228,10 +228,9 @@ export async function refuseOrderAction(form: FormData): Promise<never> {
   const { token, reference, page } = await orderPage(form);
   const raw = field(form, "reason", VENDOR_ORDER_REFUSAL_LIMITS.max * 2);
   const reason = raw?.trim() ?? "";
-  if (
-    reason.length < VENDOR_ORDER_REFUSAL_LIMITS.min ||
-    reason.length > VENDOR_ORDER_REFUSAL_LIMITS.max
-  )
+  // Compté en caractères (comme l'API), pas en unités UTF-16
+  const length = [...reason].length;
+  if (length < VENDOR_ORDER_REFUSAL_LIMITS.min || length > VENDOR_ORDER_REFUSAL_LIMITS.max)
     redirect(`${page}?erreur=MOTIF_REFUS_INVALIDE`);
   return after(
     token,

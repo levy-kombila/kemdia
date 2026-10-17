@@ -404,6 +404,10 @@ export class PrismaOrderRepository implements OrderRepository {
     return count;
   }
 
+  countPendingShopParts(orderId: string): Promise<number> {
+    return this.tx.db.orderShopPart.count({ where: { orderId, status: "PENDING" } });
+  }
+
   async decideShopPart(
     orderId: string,
     shopId: string,

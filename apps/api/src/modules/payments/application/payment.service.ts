@@ -103,7 +103,8 @@ export class PaymentService implements OnModuleInit {
       if (attempts.some((a) => a.method === "cod" && a.status === "succeeded")) {
         throw new OrdersError(
           "ANNULATION_IMPOSSIBLE",
-          "cette commande est déjà encaissée en espèces : contactez le service client Kemdia",
+          // Texte neutre : il peut être renvoyé au vendeur, qui n'a pas à savoir comment le client a payé
+          "cette commande ne peut plus être annulée : contactez le service client Kemdia",
         );
       }
       for (const attempt of attempts.filter((a) => a.status === "pending")) {
