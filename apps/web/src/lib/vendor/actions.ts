@@ -287,8 +287,9 @@ export async function saveKycAction(form: FormData): Promise<never> {
     payoutHolder,
   });
   if (!result.ok && result.code === "KYC_INVALIDE") {
-    const detail = result.detail ?? "";
-    const key = KYC_FIELDS.find(([start]) => detail.startsWith(start))?.[1];
+    // L'API met une majuscule au début de l'explication : comparaison sans tenir compte des majuscules
+    const detail = (result.detail ?? "").toLowerCase();
+    const key = KYC_FIELDS.find(([start]) => detail.startsWith(start.toLowerCase()))?.[1];
     redirect(`${KYC_PAGE}?erreur=KYC_INVALIDE${key ? `&champ=${key}` : ""}`);
   }
   return after(token, KYC_PAGE, result, "kyc-enregistre");

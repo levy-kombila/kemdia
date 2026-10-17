@@ -330,7 +330,7 @@ describe("vérification (S6-T08)", () => {
     api.saveKyc.mockResolvedValue({
       ok: false,
       code: "KYC_INVALIDE",
-      detail: "compte Moov Money : numéro en 06… attendu",
+      detail: "Compte Moov Money : numéro en 06… attendu",
     });
     expect(await redirectOf(actions.saveKycAction(form(KYC)))).toBe(
       "/vendeur/verification?erreur=KYC_INVALIDE&champ=payoutAccount",
