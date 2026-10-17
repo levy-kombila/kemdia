@@ -10,7 +10,7 @@ import { MAX_UPLOAD_BYTES, MIN_SIDE, REDUCED_SIDE } from "@/lib/vendor/images";
 const KEEP_BELOW_BYTES = 1_500_000;
 const JPEG_QUALITY = 0.85;
 
-type Reduced = { blob: Blob } | { error: string };
+export type Reduced = { blob: Blob } | { error: string };
 
 /**
  * Réduit une photo dans le navigateur (S6-T06, ADR-0037) : 1 600 px au plus (la taille de la grande image de l'API),
@@ -19,7 +19,7 @@ type Reduced = { blob: Blob } | { error: string };
  * métadonnées (position GPS) ; une petite photo envoyée telle quelle les garde jusqu'à l'API, qui réencode TOUJOURS
  * sans aucune métadonnée (ADR-0035) : rien n'est jamais publié.
  */
-async function reduce(file: File): Promise<Reduced> {
+export async function reduce(file: File): Promise<Reduced> {
   const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" }).catch(
     () => null,
   );

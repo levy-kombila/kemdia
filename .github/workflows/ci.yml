@@ -237,6 +237,9 @@ jobs:
           EMAIL_TRANSPORT: mailpit
           MAILPIT_URL: http://127.0.0.1:8025
         run: |
+          # Vérification des vendeurs (S6-T08) : clé jetable, tirée à chaque passage (base éphémère, rien de réel)
+          KYC_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))")"
+          export KYC_ENCRYPTION_KEY
           nohup node apps/api/dist/main.js > "$RUNNER_TEMP/api.log" 2>&1 &
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:4000/api/health; then echo; exit 0; fi

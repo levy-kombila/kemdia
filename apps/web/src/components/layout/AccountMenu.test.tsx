@@ -74,4 +74,27 @@ describe("menu du compte : en-tête de réserve (S4-T08)", () => {
     expect(screen.queryByRole("button")).toBeNull();
     expect(container.firstElementChild).toHaveAttribute("aria-hidden", "true");
   });
+
+  it("liens des espaces selon les rôles : vendeur (espace, commandes), équipe ; rien pour un client", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<AccountMenu account={{ firstName: "Awa" }} />);
+    await user.click(screen.getByRole("button", { name: /Awa/ }));
+    expect(screen.queryByRole("link", { name: "Espace vendeur" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /équipe/ })).not.toBeInTheDocument();
+    unmount();
+    render(<AccountMenu account={{ firstName: "Fatou", vendor: true, staff: true }} />);
+    await user.click(screen.getByRole("button", { name: /Fatou/ }));
+    expect(screen.getByRole("link", { name: "Espace vendeur" })).toHaveAttribute(
+      "href",
+      "/vendeur",
+    );
+    expect(screen.getByRole("link", { name: "Commandes à traiter" })).toHaveAttribute(
+      "href",
+      "/vendeur/commandes",
+    );
+    expect(screen.getByRole("link", { name: "Espace de l'équipe" })).toHaveAttribute(
+      "href",
+      "/equipe",
+    );
+  });
 });

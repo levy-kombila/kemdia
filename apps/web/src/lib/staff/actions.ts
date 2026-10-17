@@ -186,3 +186,25 @@ export async function decideProductAction(form: FormData): Promise<never> {
   // Retour à la file : le produit suivant attend
   redirect(`/equipe/moderation?ok=${decision === "approve" ? "produit-valide" : "produit-refuse"}`);
 }
+
+const KYC_DECISIONS = ["approve", "reject"] as const;
+
+/** Valider ou refuser le dossier de vérification d'un vendeur (administrateurs, S6-T08). */
+export async function decideKycAction(form: FormData): Promise<never> {
+  const shopId = field(form, "shopId", 36);
+  const decision = KYC_DECISIONS.find((d) => d === form.get("decision"));
+  if (!shopId || !UUID.test(shopId) || !decision) redirect("/equipe/verifications");
+  const page = `/equipe/verifications/${shopId.toLowerCase()}`;
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(page)}`);
+  let reason: string | undefined;
+  if (decision === "reject") {
+    reason = field(form, "reason", SHOP_LIMITS.reasonMax * 2)?.trim();
+    const length = reason ? [...reason].length : 0;
+    if (!reason || length < SHOP_LIMITS.reasonMin || length > SHOP_LIMITS.reasonMax)
+      redirect(`${page}?erreur=KYC_INVALIDE`);
+  }
+  const result = await staffApi().decideKyc(token, shopId, decision, reason);
+  if (!result.ok) return afterFailure(token, result, page);
+  redirect(`${page}?ok=${decision === "approve" ? "kyc-valide" : "kyc-refuse"}`);
+}

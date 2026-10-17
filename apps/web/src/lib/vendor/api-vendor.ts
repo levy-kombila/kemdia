@@ -10,15 +10,19 @@ import {
   SESSION_TOKEN_PATTERN,
   ShopSchema,
   VENDOR_ERROR_CODES,
+  VendorKycSchema,
   VendorOrderPageSchema,
   VendorOrderSchema,
   VendorProductPageSchema,
   VendorProductSchema,
   type IdentityErrorCode,
+  type KycDocumentKind,
+  type KycRequest,
   type OrderErrorCode,
   type Shop,
   type ShopApplicationRequest,
   type VendorErrorCode,
+  type VendorKyc,
   type VendorOrder,
   type VendorOrderPage,
   type VendorOrderStatus,
@@ -70,7 +74,12 @@ const KNOWN_CODES: readonly VendorFailureCode[] = [
   ...ORDER_ERROR_CODES,
 ];
 /** Codes dont l'explication de l'API aide le vendeur à corriger son formulaire. */
-const DETAILED: readonly VendorFailureCode[] = ["PRODUIT_INVALIDE", "BOUTIQUE_INVALIDE"];
+const DETAILED: readonly VendorFailureCode[] = [
+  "PRODUIT_INVALIDE",
+  "BOUTIQUE_INVALIDE",
+  "KYC_INVALIDE",
+  "KYC_INCOMPLET",
+];
 const UUID_IN_PATH = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 const REFERENCE_IN_PATH = /KMD-[A-Z0-9]{6}/g;
 const routeOf = (path: string) =>
@@ -309,6 +318,20 @@ export function createVendorApi(options: VendorApiOptions) {
         ? call("POST", `${path}/refuse`, token, VendorOrderSchema, { json: { reason } })
         : noOrder();
     },
+    // --- Dossier de vérification, KYC (S6-T08, BR-024) ---
+    kyc: (token: string): Promise<VendorResult<VendorKyc>> =>
+      call("GET", "/vendors/kyc", token, VendorKycSchema),
+    saveKyc: (token: string, request: KycRequest): Promise<VendorResult<VendorKyc>> =>
+      call("PUT", "/vendors/kyc", token, VendorKycSchema, { json: request }),
+    uploadKycDocument: (
+      token: string,
+      kind: KycDocumentKind,
+      bytes: Uint8Array<ArrayBuffer>,
+      type: UploadType,
+    ): Promise<VendorResult<VendorKyc>> =>
+      call("POST", `/vendors/kyc/documents/${kind}`, token, VendorKycSchema, { bytes, type }),
+    submitKyc: (token: string): Promise<VendorResult<VendorKyc>> =>
+      call("POST", "/vendors/kyc/submit", token, VendorKycSchema),
     /** Aperçu d'une photo de SON produit (quel que soit le statut) : seulement un WebP vérifié de 2 Mo au plus. */
     async image(token: string, productId: string, imageId: string): Promise<VendorImageResult> {
       const path = productPath(productId);

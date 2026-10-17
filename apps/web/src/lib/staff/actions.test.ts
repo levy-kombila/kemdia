@@ -39,6 +39,7 @@ const api = vi.hoisted(() => ({
   regenerateRecoveryCodes: vi.fn(),
   decideShop: vi.fn(),
   decideProduct: vi.fn(),
+  decideKyc: vi.fn(),
 }));
 vi.mock("./api-staff", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api-staff")>()),
@@ -279,5 +280,25 @@ describe("décision sur un produit", () => {
       SUBMITTED,
       "Photo floue",
     );
+  });
+});
+
+describe("vérification des vendeurs (S6-T08)", () => {
+  it("valider : retour au dossier avec un avis ; refuser : motif revérifié avant l'API", async () => {
+    api.decideKyc.mockResolvedValue({ ok: true, data: undefined });
+    expect(
+      await redirectOf(actions.decideKycAction(form({ shopId: SHOP, decision: "approve" }))),
+    ).toBe(`/equipe/verifications/${SHOP}?ok=kyc-valide`);
+    for (const reason of ["", "abc", "x".repeat(301)]) {
+      expect(
+        await redirectOf(
+          actions.decideKycAction(form({ shopId: SHOP, decision: "reject", reason })),
+        ),
+      ).toBe(`/equipe/verifications/${SHOP}?erreur=KYC_INVALIDE`);
+    }
+    expect(api.decideKyc).toHaveBeenCalledTimes(1);
+    expect(
+      await redirectOf(actions.decideKycAction(form({ shopId: "../x", decision: "approve" }))),
+    ).toBe("/equipe/verifications");
   });
 });

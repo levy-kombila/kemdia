@@ -239,3 +239,63 @@ export async function refuseOrderAction(form: FormData): Promise<never> {
     "commande-refusee",
   );
 }
+
+// --- Dossier de vérification, KYC (S6-T08, BR-024) : formulaires HTML simples ---
+
+const KYC_PAGE = "/vendeur/verification";
+/** Champ en cause d'un `KYC_INVALIDE`, reconnu au début de l'explication de l'API (liste fermée). */
+const KYC_FIELDS: [string, string][] = [
+  ["nom sur la pièce", "legalName"],
+  ["numéro de la pièce", "idNumber"],
+  ["numéro RCCM", "rccmNumber"],
+  ["titulaire du compte", "payoutHolder"],
+  ["compte", "payoutAccount"],
+];
+const oneOf = <T extends string>(value: string | null, allowed: readonly T[]): T | null =>
+  allowed.find((a) => a === value) ?? null;
+
+export async function saveKycAction(form: FormData): Promise<never> {
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(KYC_PAGE)}`);
+  const holderKind = oneOf(field(form, "holderKind", 20), ["individual", "company"] as const);
+  const idType = oneOf(field(form, "idType", 20), ["cni", "passeport", "carte_sejour"] as const);
+  const payoutMethod = oneOf(field(form, "payoutMethod", 20), ["airtel", "moov", "bank"] as const);
+  const legalName = field(form, "legalName", 200);
+  const idNumber = field(form, "idNumber", 60);
+  const rccm = field(form, "rccmNumber", 80);
+  const payoutAccount = field(form, "payoutAccount", 70);
+  const payoutHolder = field(form, "payoutHolder", 200);
+  if (
+    !holderKind ||
+    !idType ||
+    !payoutMethod ||
+    legalName === null ||
+    idNumber === null ||
+    payoutAccount === null ||
+    payoutHolder === null
+  )
+    redirect(`${KYC_PAGE}?erreur=KYC_INVALIDE`);
+  const result = await vendorApi().saveKyc(token, {
+    holderKind,
+    legalName,
+    idType,
+    idNumber,
+    // Le RCCM ne vaut que pour une entreprise : ignoré sinon (le champ peut rester rempli à l'écran)
+    rccmNumber: holderKind === "company" ? (rccm ?? "") : null,
+    payoutMethod,
+    payoutAccount,
+    payoutHolder,
+  });
+  if (!result.ok && result.code === "KYC_INVALIDE") {
+    const detail = result.detail ?? "";
+    const key = KYC_FIELDS.find(([start]) => detail.startsWith(start))?.[1];
+    redirect(`${KYC_PAGE}?erreur=KYC_INVALIDE${key ? `&champ=${key}` : ""}`);
+  }
+  return after(token, KYC_PAGE, result, "kyc-enregistre");
+}
+
+export async function submitKycAction(): Promise<never> {
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(KYC_PAGE)}`);
+  return after(token, KYC_PAGE, await vendorApi().submitKyc(token), "kyc-envoye");
+}

@@ -8,7 +8,6 @@ import {
   Smartphone,
   Star,
   Truck,
-  Wallet,
 } from "lucide-react";
 import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
@@ -91,7 +90,6 @@ export function Footer() {
             {[
               { icon: Smartphone, label: "Airtel Money" },
               { icon: Smartphone, label: "Moov Money" },
-              { icon: Wallet, label: "Carte bancaire" },
               { icon: PackageCheck, label: "Paiement à la livraison" },
             ].map(({ icon: Icon, label }) => (
               <span key={label} className="flex items-center gap-1 rounded-md bg-white/5 px-2 py-1">

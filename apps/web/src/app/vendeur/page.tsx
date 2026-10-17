@@ -1,4 +1,13 @@
-import { ChevronRight, Clock, PackageCheck, PackagePlus, PackageX, Store } from "lucide-react";
+import {
+  ChevronRight,
+  ClipboardList,
+  Clock,
+  PackageCheck,
+  PackagePlus,
+  PackageX,
+  ShieldCheck,
+  Store,
+} from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -8,7 +17,7 @@ import { VendorShell } from "@/components/vendor/VendorShell";
 import { formatGabonPhone } from "@/lib/auth/validation";
 import { formatDateTime } from "@/lib/format";
 import { first } from "@/lib/search-params";
-import { SHOP_STATUS } from "@/lib/vendor/labels";
+import { KYC_STATUS, SHOP_STATUS } from "@/lib/vendor/labels";
 import { vendorErrorFromParam, vendorNotice } from "@/lib/vendor/messages";
 import { readShop, requireAccount, vendorApi } from "@/lib/vendor/vendor";
 
@@ -16,6 +25,8 @@ export const metadata: Metadata = { title: "Tableau de bord" };
 
 /** Produits lus pour les compteurs : au-delà, « 100+ ». */
 const COUNT_LIMIT = 100;
+/** Commandes à traiter comptées au plus (au-delà : « 50+ ») */
+const ORDER_COUNT_LIMIT = 50;
 
 function Counter({
   href,
@@ -122,7 +133,20 @@ export default async function VendorHomePage({
     );
   }
 
-  const page = await vendorApi().products(member.token, { limit: COUNT_LIMIT });
+  const [page, orders, kyc] = await Promise.all([
+    vendorApi().products(member.token, { limit: COUNT_LIMIT }),
+    vendorApi().orders(member.token, { status: "pending", limit: ORDER_COUNT_LIMIT }),
+    vendorApi().kyc(member.token),
+  ]);
+  const toProcess = orders.ok
+    ? `${orders.data.items.length}${orders.data.nextCursor ? "+" : ""}`
+    : "—";
+  // Pas encore de dossier : « à commencer » ; vérification indisponible : rien n'est affiché
+  const kycState = kyc.ok
+    ? KYC_STATUS[kyc.data.status]
+    : kyc.code === "KYC_INTROUVABLE"
+      ? { label: "À commencer", tone: "wait" as const }
+      : null;
   const count = (status: string) => {
     if (!page.ok) return "—";
     const n = page.data.items.filter((p) => p.status === status).length;
@@ -139,6 +163,31 @@ export default async function VendorHomePage({
           Vos produits sont momentanément illisibles. Rechargez dans un instant.
         </FormAlert>
       )}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Counter
+          href="/vendeur/commandes?statut=pending"
+          icon={ClipboardList}
+          label="commandes à accepter ou refuser (24 h)"
+          count={toProcess}
+        />
+        {kycState && (
+          <Link
+            href="/vendeur/verification"
+            className="hover:ring-brand-100 flex flex-col gap-2 rounded-xl bg-white p-4 transition hover:ring-4"
+          >
+            <span className="flex items-center gap-2 font-semibold">
+              <ShieldCheck className="text-brand-600 size-5" aria-hidden /> Vérification de la
+              boutique
+            </span>
+            <StatusBadge tone={kycState.tone}>{kycState.label}</StatusBadge>
+            {kycState.tone !== "ok" && (
+              <span className="text-ink-500 text-sm">
+                Nécessaire pour recevoir l&apos;argent de vos ventes.
+              </span>
+            )}
+          </Link>
+        )}
+      </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <Counter
           href="/vendeur/produits?statut=published"
@@ -165,9 +214,7 @@ export default async function VendorHomePage({
       >
         <PackagePlus className="size-5" aria-hidden /> Ajouter un produit
       </Link>
-      <p className="text-ink-500 text-sm">
-        Bientôt ici : vos commandes, la vérification de votre identité et vos versements.
-      </p>
+      <p className="text-ink-500 text-sm">Bientôt ici : vos versements.</p>
     </VendorShell>
   );
 }

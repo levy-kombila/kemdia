@@ -216,4 +216,45 @@ test.describe("espace vendeur : parcours", () => {
     const malformed = await page.goto("/vendeur/commandes/..%2F..%2Fadmin");
     expect(malformed?.status()).toBe(404);
   });
+
+  test("vérification (S6-T08) : dossier, photos réduites, envoi ; accessible", async ({ page }) => {
+    await login(page, VENDOR, "/vendeur/verification");
+    await expect(
+      page.getByRole("heading", { name: "Vérification de la boutique", level: 1 }),
+    ).toBeVisible();
+    await expect(page.getByText("Pas encore commencée")).toBeVisible();
+    await expectAccessible(page);
+
+    await page.getByLabel("Nom tel qu'il est écrit sur la pièce").fill("Fatou Vendeuse");
+    await page.getByLabel("Numéro de la pièce").fill("GA 1234 5678");
+    await page.getByLabel("Numéro du compte").fill("066 76 54 32");
+    await page.getByLabel("Titulaire du compte").fill("Fatou Vendeuse");
+    await page.getByRole("button", { name: "Enregistrer le dossier" }).click();
+    // Airtel choisi par défaut, numéro Moov : refusé, champ signalé
+    await expect(page).toHaveURL(/erreur=KYC_INVALIDE&champ=payoutAccount$/);
+    await page
+      .getByRole("combobox", { name: "Recevoir l'argent des ventes sur" })
+      .selectOption("moov");
+    await page.getByLabel("Numéro de la pièce").fill("GA 1234 5678");
+    await page.getByLabel("Numéro du compte").fill("066 76 54 32");
+    await page.getByRole("button", { name: "Enregistrer les modifications" }).click();
+    await expect(page).toHaveURL(/\?ok=kyc-enregistre$/);
+    await expect(page.getByText("À compléter")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Envoyer à l'équipe Kemdia" })).toBeDisabled();
+
+    const photo = await phonePhoto();
+    for (const [index, label] of ["recto", "verso"].entries()) {
+      await page
+        .getByLabel(new RegExp(`Prendre ou choisir la photo : Pièce d'identité — ${label}`))
+        .setInputFiles({ name: `${label}.jpg`, mimeType: "image/jpeg", buffer: photo });
+      // L'adresse ne change pas à la 2e photo : on attend la photo marquée « reçue »
+      await expect(page.getByText("— reçue")).toHaveCount(index + 1);
+    }
+    await expectAccessible(page);
+    await page.getByRole("button", { name: "Envoyer à l'équipe Kemdia" }).click();
+    await expect(page).toHaveURL(/\?ok=kyc-envoye$/);
+    await expect(page.getByText("En cours de vérification")).toBeVisible();
+    // Envoyé : plus de formulaire
+    await expect(page.getByLabel("Numéro de la pièce")).toHaveCount(0);
+  });
 });

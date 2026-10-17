@@ -1,16 +1,23 @@
-import { LayoutDashboard, ShieldCheck, Store, Tags } from "lucide-react";
+import { IdCard, LayoutDashboard, ShieldCheck, Store, Tags } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Breadcrumbs, type Crumb } from "@/components/catalog/Breadcrumbs";
 import { FormAlert } from "@/components/ui/Field";
 import { cn } from "@/lib/cn";
 
-export type StaffSection = "accueil" | "boutiques" | "moderation" | "securite";
+export type StaffSection = "accueil" | "boutiques" | "verifications" | "moderation" | "securite";
 
 const LINKS: { id: StaffSection; label: string; href: string; icon: typeof Store; admin?: true }[] =
   [
     { id: "accueil", label: "Tableau de bord", href: "/equipe", icon: LayoutDashboard },
     { id: "boutiques", label: "Boutiques", href: "/equipe/boutiques", icon: Store, admin: true },
+    {
+      id: "verifications",
+      label: "Vérifications",
+      href: "/equipe/verifications",
+      icon: IdCard,
+      admin: true,
+    },
     { id: "moderation", label: "Modération", href: "/equipe/moderation", icon: Tags },
     { id: "securite", label: "Sécurité", href: "/equipe/securite", icon: ShieldCheck },
   ];
