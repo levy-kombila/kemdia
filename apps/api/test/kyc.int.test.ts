@@ -342,4 +342,23 @@ describe("Vérification des vendeurs (PostgreSQL, HTTP)", () => {
       ),
     ).toBe("KYC_INVALIDE");
   });
+
+  it("un administrateur qui a aussi une boutique n'examine pas son propre dossier", async () => {
+    const vendor = await sentFile();
+    await prisma.accountRole.create({
+      data: { accountId: vendor.session.accountId, role: "ADMIN" },
+    });
+    await confirmSecondFactor(prisma, vendor.session.accountId);
+    for (const url of [
+      `/api/v1/admin/kyc/${vendor.shopId}`,
+      `/api/v1/admin/kyc/${vendor.shopId}/documents/id_front`,
+    ]) {
+      expect(codeOf((await call("get", url, vendor.session.token).expect(403)).body)).toBe(
+        "BOUTIQUE_SUR_SOI_INTERDITE",
+      );
+    }
+    await call("post", `/api/v1/admin/kyc/${vendor.shopId}/approve`, vendor.session.token)
+      .send({})
+      .expect(403);
+  });
 });

@@ -187,6 +187,7 @@ export class KycService {
       const file = shop ? await this.files.find(shop.id) : null;
       // Un brouillon reste chez le vendeur : l'équipe ne voit que les dossiers envoyés
       if (!shop || !file || file.status === "draft") throw notFound();
+      if (shop.ownerAccountId === adminId) throw ownShop();
       const secrets = await this.files.readSecrets(shop.id);
       if (!secrets) throw notFound();
       await this.audit.record({
@@ -216,8 +217,10 @@ export class KycService {
   ): Promise<Uint8Array> {
     this.requireBox();
     return this.tx.run(async () => {
-      const file = await this.files.find(shopId);
-      if (!file || file.status === "draft") throw notFound();
+      const shop = await this.shops.findById(shopId);
+      const file = shop ? await this.files.find(shop.id) : null;
+      if (!shop || !file || file.status === "draft") throw notFound();
+      if (shop.ownerAccountId === adminId) throw ownShop();
       const box = await this.files.readDocument(file.shopId, kind);
       if (!box) {
         throw new VendorsError(
@@ -247,12 +250,7 @@ export class KycService {
     return this.tx.run(async () => {
       const shop = await this.shops.findById(shopId);
       if (!shop) throw notFound();
-      if (shop.ownerAccountId === adminId) {
-        throw new VendorsError(
-          "BOUTIQUE_SUR_SOI_INTERDITE",
-          "vous ne pouvez pas décider pour votre propre boutique",
-        );
-      }
+      if (shop.ownerAccountId === adminId) throw ownShop();
       const file = await this.files.lock(shop.id);
       if (!file || file.status === "draft") throw notFound();
       const now = this.clock();
@@ -316,6 +314,13 @@ export class KycService {
     };
   }
 }
+
+/** Personne n'examine son propre dossier : ni décision, ni consultation (relecture S6-T08). */
+const ownShop = () =>
+  new VendorsError(
+    "BOUTIQUE_SUR_SOI_INTERDITE",
+    "vous ne pouvez pas examiner votre propre boutique",
+  );
 
 function inactive(shop: Shop | null): VendorsError {
   return shop

@@ -211,8 +211,15 @@ export class PrismaKycRepository implements KycRepository {
   }
 
   async purgeDocuments(now: Date): Promise<number> {
+    // Dossiers décidés seulement, verrouillés le temps de l'effacement ; un dossier en cours de correction par son
+    // vendeur (verrouillé) est laissé pour le passage suivant (relecture S6-T08)
+    const due = await this.tx.db.$queryRaw<{ shop_id: string }[]>`
+      SELECT "shop_id" FROM "vendors"."kyc_files"
+      WHERE "documents_purge_at" <= ${now} AND "status" IN ('APPROVED', 'REJECTED')
+      FOR UPDATE SKIP LOCKED`;
+    if (due.length === 0) return 0;
     const { count } = await this.tx.db.kycDocument.deleteMany({
-      where: { file: { documentsPurgeAt: { lte: now } } },
+      where: { shopId: { in: due.map((row) => row.shop_id) } },
     });
     return count;
   }

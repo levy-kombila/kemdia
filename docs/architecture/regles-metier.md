@@ -27,13 +27,13 @@
 
 ### Finances et commissions
 
-| ID     | Règle                                                                                                                                                | Module     | Sprint    |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | --------- |
-| BR-020 | Commission marketplace de **8 % à 14 %** sur chaque vente d'un vendeur tiers (taux par catégorie ou par vendeur).                                    | vendors    | S6        |
-| BR-021 | Kemdia perçoit **15 %** de chaque frais de livraison facturé.                                                                                        | shipping   | S7        |
-| BR-022 | Vente via un affilié d'un produit tiers : sur 14 % de commission, **10 % à l'affilié, 4 % à Kemdia** ; produit Kemdia : commission fixe à l'affilié. | affiliates | Après MVP |
-| BR-023 | TVA de **18 %** appliquée dès que le chiffre d'affaires annuel dépasse **25 millions de FCFA** (à confirmer par un comptable).                       | payments   | S7        |
-| BR-024 | Un vendeur ne reçoit aucun versement tant que son **KYC** (identité + compte Mobile Money / bancaire) n'est pas validé.                              | vendors    | S6        |
+| ID     | Règle                                                                                                                                                                                                                                     | Module     | Sprint    |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | --------- |
+| BR-020 | Commission marketplace de **8 % à 14 %** sur chaque vente d'un vendeur tiers (taux par catégorie ou par vendeur).                                                                                                                         | vendors    | S6        |
+| BR-021 | Kemdia perçoit **15 %** de chaque frais de livraison facturé.                                                                                                                                                                             | shipping   | S7        |
+| BR-022 | Vente via un affilié d'un produit tiers : sur 14 % de commission, **10 % à l'affilié, 4 % à Kemdia** ; produit Kemdia : commission fixe à l'affilié.                                                                                      | affiliates | Après MVP |
+| BR-023 | TVA de **18 %** appliquée dès que le chiffre d'affaires annuel dépasse **25 millions de FCFA** (à confirmer par un comptable).                                                                                                            | payments   | S7        |
+| BR-024 | Un vendeur ne reçoit aucun versement tant que son **KYC** (identité + compte Mobile Money / bancaire) n'est pas validé. ✅ S6-T08 : dossier vérifié par un administrateur, chiffré ; versements à brancher avec les commissions (BR-020). | vendors    | S6        |
 
 ### Promotions
 
@@ -95,3 +95,7 @@
 8. ~~**Profondeur des catégories**~~ — ✅ **Tranchée le 2026-10-06 : 3 niveaux au plus** (règle BR-005).
    Le rayon « Mode › Sport › Fitness » était mal classé : « Fitness » et ses sous-catégories (Musculation, Yoga, Cardio,
    Accessoires fitness — 7 produits) sont déplacés sous « Sport & Loisirs ». Les adresses des pages ne changent pas.
+9. **Conservation des pièces d'identité des vendeurs** (APDPVP) : combien de temps garder les photos après la
+   vérification ? et le résultat (qui a vérifié, quand) ?
+   _2026-10-17 (S6-T08) : en attendant, photos effacées **30 jours** après la décision (réglable dans le code) ; le
+   résultat et les 4 derniers caractères restent. À confirmer avec le client et la déclaration APDPVP._

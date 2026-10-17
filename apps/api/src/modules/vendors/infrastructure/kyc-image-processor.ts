@@ -15,6 +15,8 @@ const MIN_SIDE = 300;
 const MAX_SIDE = 1600;
 const TIMEOUT_SECONDS = 15;
 const MAX_CONCURRENT = 2;
+/** Au-delà, refus tout de suite (« réessayez ») plutôt qu'une file qui grossit en mémoire (relecture S6-T08). */
+const MAX_WAITING = 8;
 
 type Format = "jpeg" | "png" | "webp";
 
@@ -49,6 +51,12 @@ const tooBig = () =>
 let active = 0;
 const waiting: (() => void)[] = [];
 async function oneAtATime<T>(work: () => Promise<T>): Promise<T> {
+  if (active >= MAX_CONCURRENT && waiting.length >= MAX_WAITING) {
+    throw new VendorsError(
+      "KYC_INDISPONIBLE",
+      "beaucoup de photos en cours de traitement : réessayez dans quelques secondes",
+    );
+  }
   if (active >= MAX_CONCURRENT) await new Promise<void>((resolve) => waiting.push(resolve));
   active += 1;
   try {

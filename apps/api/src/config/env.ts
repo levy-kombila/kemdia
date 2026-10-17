@@ -114,6 +114,14 @@ const envSchema = z
       .default("Kemdia"),
   })
   .superRefine((env, ctx) => {
+    // Deux clés différentes (relecture S6-T08) : la fuite de l'une ne livre pas les données de l'autre
+    if (env.KYC_ENCRYPTION_KEY && env.KYC_ENCRYPTION_KEY === env.TOTP_ENCRYPTION_KEY) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["KYC_ENCRYPTION_KEY"],
+        message: "doit être différente de TOTP_ENCRYPTION_KEY",
+      });
+    }
     const transport = env.EMAIL_TRANSPORT;
     const onDevMachine = env.APP_ENV === "local" && env.NODE_ENV !== "production";
     if (transport === "console" && !onDevMachine) {
