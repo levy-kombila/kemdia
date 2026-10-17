@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "1.18.0",
+    "version": "1.19.0",
     "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.\n- Factures (S5-T06) : établies au paiement reçu, avoir à l'annulation, numéros par année sans trou, PDF et e-mail.\n- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo.\n- Boutiques (S6-T01) : un client demande à ouvrir sa boutique ; un administrateur la valide (rôle vendeur accordé), la refuse ou la suspend.\n- Double authentification (S6-T03) : obligatoire pour les modérateurs et administrateurs sur les routes d'équipe (`DEUX_FACTEURS_A_ACTIVER`, `DEUX_FACTEURS_REQUIS`).\n- Produits des vendeurs (S6-T02) : invisibles jusqu'à leur validation par la modération (BR-003) ; cachés si la boutique est suspendue.\n- Photos des vendeurs (S6-T04) : fichier envoyé tel quel (JPEG, PNG, WebP, 5 Mo), réencodé en WebP sans métadonnées ; publiques seulement pour un produit visible.\n- Commandes des vendeurs (S6-T07) : chaque boutique accepte ou refuse sa part dans les 24 h (BR-013) ; un refus ou l'absence de réponse annule la commande entière."
   },
   "servers": [
@@ -6777,6 +6777,939 @@
         }
       }
     },
+    "/api/v1/vendors/kyc": {
+      "get": {
+        "tags": ["Vérification des vendeurs"],
+        "summary": "Mon dossier de vérification",
+        "description": "Rôle **vendeur** et boutique **active**. Un KYC non validé bloque seulement les **versements** (BR-024), pas les ventes.\n\nNuméro de la pièce, compte de versement et photos sont **chiffrés** (AES-256-GCM) ; le vendeur ne revoit que les 4 derniers caractères et la liste des photos reçues. Photos exigées : recto ; verso sauf passeport ; extrait RCCM pour une entreprise.\n\nModifiable « en préparation » ou après un refus ; envoyé, il attend l'équipe ; validé, il ne change plus (service client). Sans clé de chiffrement sur le serveur : `KYC_INDISPONIBLE` (503).",
+        "operationId": "getVendorKyc",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le dossier (numéros masqués)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorKyc"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle vendeur requis) ou `BOUTIQUE_INACTIVE` (aucune boutique active pour ce compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`KYC_INTROUVABLE` : pas encore de dossier",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`KYC_INDISPONIBLE` : clé de chiffrement absente sur le serveur",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Vérification des vendeurs"],
+        "summary": "Créer ou modifier mon dossier (il repasse en préparation)",
+        "description": "Rôle **vendeur** et boutique **active**. Un KYC non validé bloque seulement les **versements** (BR-024), pas les ventes.\n\nNuméro de la pièce, compte de versement et photos sont **chiffrés** (AES-256-GCM) ; le vendeur ne revoit que les 4 derniers caractères et la liste des photos reçues. Photos exigées : recto ; verso sauf passeport ; extrait RCCM pour une entreprise.\n\nModifiable « en préparation » ou après un refus ; envoyé, il attend l'équipe ; validé, il ne change plus (service client). Sans clé de chiffrement sur le serveur : `KYC_INDISPONIBLE` (503).",
+        "operationId": "saveVendorKyc",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KycRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Le dossier enregistré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorKyc"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle vendeur requis) ou `BOUTIQUE_INACTIVE` (aucune boutique active pour ce compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STATUT_KYC_INCOMPATIBLE` (dossier envoyé ou validé)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`KYC_INVALIDE` (champ en cause dans le message)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`KYC_INDISPONIBLE` : clé de chiffrement absente sur le serveur",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vendors/kyc/documents/{kind}": {
+      "post": {
+        "tags": ["Vérification des vendeurs"],
+        "summary": "Envoyer une photo du dossier (remplace la précédente)",
+        "description": "Rôle **vendeur** et boutique **active**. Un KYC non validé bloque seulement les **versements** (BR-024), pas les ventes.\n\nNuméro de la pièce, compte de versement et photos sont **chiffrés** (AES-256-GCM) ; le vendeur ne revoit que les 4 derniers caractères et la liste des photos reçues. Photos exigées : recto ; verso sauf passeport ; extrait RCCM pour une entreprise.\n\nModifiable « en préparation » ou après un refus ; envoyé, il attend l'équipe ; validé, il ne change plus (service client). Sans clé de chiffrement sur le serveur : `KYC_INDISPONIBLE` (503).\n\nCorps : le fichier lui-même (JPEG, PNG ou WebP, 5 Mo au plus, 300 px au moins de chaque côté). Réencodé en WebP sans métadonnées, puis chiffré. 10 envois par minute au plus.",
+        "operationId": "uploadVendorKycDocument",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "description": "`id_front` (recto), `id_back` (verso) ou `rccm` (extrait RCCM)",
+            "schema": {
+              "type": "string",
+              "enum": ["id_front", "id_back", "rccm"]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Le dossier à jour",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorKyc"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle vendeur requis) ou `BOUTIQUE_INACTIVE` (aucune boutique active pour ce compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`KYC_INTROUVABLE` : remplir le dossier d'abord",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STATUT_KYC_INCOMPATIBLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`IMAGE_TROP_GRANDE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "`FORMAT_IMAGE_INVALIDE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`IMAGE_TROP_PETITE` ou `KYC_INVALIDE` (photo non demandée)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`KYC_INDISPONIBLE` : clé de chiffrement absente sur le serveur",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vendors/kyc/submit": {
+      "post": {
+        "tags": ["Vérification des vendeurs"],
+        "summary": "Envoyer mon dossier à l'équipe Kemdia",
+        "description": "Rôle **vendeur** et boutique **active**. Un KYC non validé bloque seulement les **versements** (BR-024), pas les ventes.\n\nNuméro de la pièce, compte de versement et photos sont **chiffrés** (AES-256-GCM) ; le vendeur ne revoit que les 4 derniers caractères et la liste des photos reçues. Photos exigées : recto ; verso sauf passeport ; extrait RCCM pour une entreprise.\n\nModifiable « en préparation » ou après un refus ; envoyé, il attend l'équipe ; validé, il ne change plus (service client). Sans clé de chiffrement sur le serveur : `KYC_INDISPONIBLE` (503).",
+        "operationId": "submitVendorKyc",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le dossier, en attente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorKyc"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle vendeur requis) ou `BOUTIQUE_INACTIVE` (aucune boutique active pour ce compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`KYC_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`KYC_INCOMPLET` (photos manquantes) ou `STATUT_KYC_INCOMPATIBLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`KYC_INDISPONIBLE` : clé de chiffrement absente sur le serveur",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/kyc": {
+      "get": {
+        "tags": ["Vérification des vendeurs"],
+        "summary": "File des dossiers envoyés (du plus ancien envoi au plus récent)",
+        "description": "Réservé aux **administrateurs** (pas aux modérateurs), session confirmée par la double authentification depuis moins de 15 minutes.\n\nSeuls les dossiers **envoyés** sont visibles (un brouillon reste chez le vendeur). Ouvrir un dossier (numéros complets) et regarder une photo sont **inscrits au journal d'audit**. Photos effacées **30 jours après la décision**.",
+        "operationId": "listKyc",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Seulement ce statut",
+            "schema": {
+              "type": "string",
+              "enum": ["pending", "approved", "rejected"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Dossiers par page (50 par défaut, 100 au plus)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "`nextCursor` de la page précédente",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Une page de dossiers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminKycPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Paramètre invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`KYC_INDISPONIBLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/kyc/{shopId}": {
+      "get": {
+        "tags": ["Vérification des vendeurs"],
+        "summary": "Un dossier, numéros complets (consultation au journal d'audit)",
+        "description": "Réservé aux **administrateurs** (pas aux modérateurs), session confirmée par la double authentification depuis moins de 15 minutes.\n\nSeuls les dossiers **envoyés** sont visibles (un brouillon reste chez le vendeur). Ouvrir un dossier (numéros complets) et regarder une photo sont **inscrits au journal d'audit**. Photos effacées **30 jours après la décision**.",
+        "operationId": "getKyc",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "shopId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant de la boutique",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le dossier",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminKyc"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`KYC_INTROUVABLE` (aucun dossier envoyé pour cette boutique)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`KYC_INDISPONIBLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/kyc/{shopId}/documents/{kind}": {
+      "get": {
+        "tags": ["Vérification des vendeurs"],
+        "summary": "Une photo du dossier, déchiffrée (consultation au journal d'audit)",
+        "description": "Réservé aux **administrateurs** (pas aux modérateurs), session confirmée par la double authentification depuis moins de 15 minutes.\n\nSeuls les dossiers **envoyés** sont visibles (un brouillon reste chez le vendeur). Ouvrir un dossier (numéros complets) et regarder une photo sont **inscrits au journal d'audit**. Photos effacées **30 jours après la décision**.",
+        "operationId": "getKycDocument",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "shopId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant de la boutique",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "description": "`id_front` (recto), `id_back` (verso) ou `rccm` (extrait RCCM)",
+            "schema": {
+              "type": "string",
+              "enum": ["id_front", "id_back", "rccm"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "La photo (WebP), jamais mise en cache",
+            "content": {
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Paramètre invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`KYC_INTROUVABLE` ou `DOCUMENT_INTROUVABLE` (jamais envoyée, ou effacée)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`KYC_INDISPONIBLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/kyc/{shopId}/approve": {
+      "post": {
+        "tags": ["Vérification des vendeurs"],
+        "summary": "Valider le dossier",
+        "description": "Réservé aux **administrateurs** (pas aux modérateurs), session confirmée par la double authentification depuis moins de 15 minutes.\n\nSeuls les dossiers **envoyés** sont visibles (un brouillon reste chez le vendeur). Ouvrir un dossier (numéros complets) et regarder une photo sont **inscrits au journal d'audit**. Photos effacées **30 jours après la décision**.",
+        "operationId": "approveKyc",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "shopId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant de la boutique",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Décision enregistrée (photos effacées dans 30 jours)"
+          },
+          "400": {
+            "description": "Identifiant invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`KYC_INTROUVABLE` (aucun dossier envoyé pour cette boutique)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STATUT_KYC_INCOMPATIBLE` (le dossier n'est pas en attente)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`KYC_INDISPONIBLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/kyc/{shopId}/reject": {
+      "post": {
+        "tags": ["Vérification des vendeurs"],
+        "summary": "Refuser le dossier (motif montré au vendeur)",
+        "description": "Réservé aux **administrateurs** (pas aux modérateurs), session confirmée par la double authentification depuis moins de 15 minutes.\n\nSeuls les dossiers **envoyés** sont visibles (un brouillon reste chez le vendeur). Ouvrir un dossier (numéros complets) et regarder une photo sont **inscrits au journal d'audit**. Photos effacées **30 jours après la décision**.",
+        "operationId": "rejectKyc",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "shopId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant de la boutique",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShopDecisionReason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Décision enregistrée (photos effacées dans 30 jours)"
+          },
+          "400": {
+            "description": "Identifiant invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle administrateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`KYC_INTROUVABLE` (aucun dossier envoyé pour cette boutique)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STATUT_KYC_INCOMPATIBLE` (le dossier n'est pas en attente)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`KYC_INVALIDE` : motif de 5 à 300 caractères",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`KYC_INDISPONIBLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/vendors/products/{productId}/images": {
       "post": {
         "tags": ["Produits des vendeurs"],
@@ -7504,6 +8437,218 @@
         "required": ["note"],
         "additionalProperties": false
       },
+      "AdminKyc": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["draft", "pending", "approved", "rejected"]
+          },
+          "holderKind": {
+            "type": "string",
+            "enum": ["individual", "company"]
+          },
+          "legalName": {
+            "type": "string"
+          },
+          "idType": {
+            "type": "string",
+            "enum": ["cni", "passeport", "carte_sejour"]
+          },
+          "rccmNumber": {
+            "type": ["string", "null"]
+          },
+          "payoutMethod": {
+            "type": "string",
+            "enum": ["airtel", "moov", "bank"]
+          },
+          "payoutHolder": {
+            "type": "string"
+          },
+          "documents": {
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KycDocument"
+            }
+          },
+          "missingDocuments": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["id_front", "id_back", "rccm"]
+            },
+            "description": "Photos encore attendues avant l'envoi"
+          },
+          "submittedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reviewedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rejectionReason": {
+            "description": "Motif du refus, montré au vendeur",
+            "type": ["string", "null"]
+          },
+          "shopId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "idNumber": {
+            "type": "string",
+            "description": "Numéro complet de la pièce (consultation inscrite au journal)"
+          },
+          "payoutAccount": {
+            "type": "string",
+            "description": "Compte de versement complet (consultation inscrite au journal)"
+          },
+          "reviewedBy": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Identifiant UUID (BR-042)"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "documentsPurgeAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Date d'effacement des photos (30 jours après la décision)"
+          }
+        },
+        "required": [
+          "status",
+          "holderKind",
+          "legalName",
+          "idType",
+          "rccmNumber",
+          "payoutMethod",
+          "payoutHolder",
+          "documents",
+          "missingDocuments",
+          "submittedAt",
+          "reviewedAt",
+          "rejectionReason",
+          "shopId",
+          "shopName",
+          "idNumber",
+          "payoutAccount",
+          "reviewedBy",
+          "documentsPurgeAt"
+        ],
+        "additionalProperties": false,
+        "description": "Dossier de vérification vu par un administrateur"
+      },
+      "AdminKycPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminKycSummary"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{20,120}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["items", "nextCursor"],
+        "additionalProperties": false,
+        "description": "Dossiers de vérification, du plus ancien envoi au plus récent (file d'attente)"
+      },
+      "AdminKycSummary": {
+        "type": "object",
+        "properties": {
+          "shopId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "pending", "approved", "rejected"]
+          },
+          "holderKind": {
+            "type": "string",
+            "enum": ["individual", "company"]
+          },
+          "submittedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reviewedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["shopId", "shopName", "status", "holderKind", "submittedAt", "reviewedAt"],
+        "additionalProperties": false,
+        "description": "Ligne de la file des dossiers de vérification"
+      },
       "AdminShop": {
         "type": "object",
         "properties": {
@@ -7687,7 +8832,14 @@
               "mfa.reset",
               "order.vendor_accepted",
               "order.vendor_refused",
-              "order.vendor_timeout"
+              "order.vendor_timeout",
+              "kyc.updated",
+              "kyc.document_added",
+              "kyc.submitted",
+              "kyc.viewed",
+              "kyc.document_viewed",
+              "kyc.approved",
+              "kyc.rejected"
             ]
           },
           "actor": {
@@ -8975,6 +10127,85 @@
         "additionalProperties": false,
         "description": "Facture ou avoir d'une commande (PDF téléchargeable)"
       },
+      "KycDocument": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["id_front", "id_back", "rccm"]
+          },
+          "uploadedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": ["kind", "uploadedAt"],
+        "additionalProperties": false,
+        "description": "Photo envoyée (jamais renvoyée au vendeur)"
+      },
+      "KycRequest": {
+        "type": "object",
+        "properties": {
+          "holderKind": {
+            "type": "string",
+            "enum": ["individual", "company"],
+            "description": "Personne seule ou entreprise"
+          },
+          "legalName": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Nom tel qu'il est écrit sur la pièce (2 à 100 caractères)"
+          },
+          "idType": {
+            "type": "string",
+            "enum": ["cni", "passeport", "carte_sejour"]
+          },
+          "idNumber": {
+            "type": "string",
+            "maxLength": 60,
+            "description": "Numéro de la pièce (4 à 30 lettres ou chiffres) : chiffré"
+          },
+          "rccmNumber": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Numéro RCCM : obligatoire pour une entreprise, vide sinon"
+          },
+          "payoutMethod": {
+            "type": "string",
+            "enum": ["airtel", "moov", "bank"]
+          },
+          "payoutAccount": {
+            "type": "string",
+            "maxLength": 68,
+            "description": "Mobile gabonais (Airtel, Moov) ou numéro de compte bancaire (RIB / IBAN) : chiffré"
+          },
+          "payoutHolder": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Titulaire du compte de versement"
+          }
+        },
+        "required": [
+          "holderKind",
+          "legalName",
+          "idType",
+          "idNumber",
+          "rccmNumber",
+          "payoutMethod",
+          "payoutAccount",
+          "payoutHolder"
+        ],
+        "additionalProperties": false,
+        "description": "Dossier de vérification du vendeur (modifiable tant qu'il n'est pas envoyé)"
+      },
       "LoginRequest": {
         "type": "object",
         "properties": {
@@ -9933,7 +11164,13 @@
               "IMAGE_TROP_GRANDE",
               "IMAGE_TROP_PETITE",
               "TROP_DE_PHOTOS",
-              "PHOTO_INTROUVABLE"
+              "PHOTO_INTROUVABLE",
+              "KYC_INVALIDE",
+              "KYC_INTROUVABLE",
+              "KYC_INCOMPLET",
+              "STATUT_KYC_INCOMPATIBLE",
+              "KYC_INDISPONIBLE",
+              "DOCUMENT_INTROUVABLE"
             ]
           },
           "requestId": {
@@ -10959,6 +12196,110 @@
         ],
         "additionalProperties": false,
         "description": "Variante d'un produit, avec son propre stock (FR-013)"
+      },
+      "VendorKyc": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["draft", "pending", "approved", "rejected"]
+          },
+          "holderKind": {
+            "type": "string",
+            "enum": ["individual", "company"]
+          },
+          "legalName": {
+            "type": "string"
+          },
+          "idType": {
+            "type": "string",
+            "enum": ["cni", "passeport", "carte_sejour"]
+          },
+          "rccmNumber": {
+            "type": ["string", "null"]
+          },
+          "payoutMethod": {
+            "type": "string",
+            "enum": ["airtel", "moov", "bank"]
+          },
+          "payoutHolder": {
+            "type": "string"
+          },
+          "documents": {
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KycDocument"
+            }
+          },
+          "missingDocuments": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["id_front", "id_back", "rccm"]
+            },
+            "description": "Photos encore attendues avant l'envoi"
+          },
+          "submittedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reviewedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rejectionReason": {
+            "description": "Motif du refus, montré au vendeur",
+            "type": ["string", "null"]
+          },
+          "idNumberEnd": {
+            "type": "string",
+            "description": "4 derniers caractères du numéro de la pièce"
+          },
+          "payoutAccountEnd": {
+            "type": "string",
+            "description": "4 derniers caractères du compte de versement"
+          },
+          "canEdit": {
+            "type": "boolean",
+            "description": "Le dossier peut être modifié et envoyé"
+          }
+        },
+        "required": [
+          "status",
+          "holderKind",
+          "legalName",
+          "idType",
+          "rccmNumber",
+          "payoutMethod",
+          "payoutHolder",
+          "documents",
+          "missingDocuments",
+          "submittedAt",
+          "reviewedAt",
+          "rejectionReason",
+          "idNumberEnd",
+          "payoutAccountEnd",
+          "canEdit"
+        ],
+        "additionalProperties": false,
+        "description": "Le dossier de vérification du vendeur connecté (numéros masqués)"
       },
       "VendorOrder": {
         "type": "object",

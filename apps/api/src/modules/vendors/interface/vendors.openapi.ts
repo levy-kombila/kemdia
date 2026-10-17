@@ -709,4 +709,199 @@ export const vendorOrderPaths = {
     "refuseVendorOrder",
     true,
   ),
+
+  ...kycPaths(),
 };
+
+// --- Vérification des vendeurs, KYC (S6-T08, ADR-0039 ; BR-024) ---
+
+function kycPaths() {
+  const KYC_RULES = [
+    "Rôle **vendeur** et boutique **active**. Un KYC non validé bloque seulement les **versements** (BR-024), pas les ventes.",
+    "Numéro de la pièce, compte de versement et photos sont **chiffrés** (AES-256-GCM) ; le vendeur ne revoit que les 4 derniers caractères et la liste des photos reçues. Photos exigées : recto ; verso sauf passeport ; extrait RCCM pour une entreprise.",
+    "Modifiable « en préparation » ou après un refus ; envoyé, il attend l'équipe ; validé, il ne change plus (service client). Sans clé de chiffrement sur le serveur : `KYC_INDISPONIBLE` (503).",
+  ].join("\n\n");
+  const ADMIN_KYC_RULES = [
+    "Réservé aux **administrateurs** (pas aux modérateurs), session confirmée par la double authentification depuis moins de 15 minutes.",
+    "Seuls les dossiers **envoyés** sont visibles (un brouillon reste chez le vendeur). Ouvrir un dossier (numéros complets) et regarder une photo sont **inscrits au journal d'audit**. Photos effacées **30 jours après la décision**.",
+  ].join("\n\n");
+  const kycErrors = {
+    ...vendorErrors,
+    "503": problem("`KYC_INDISPONIBLE` : clé de chiffrement absente sur le serveur"),
+  };
+  const kindParam = {
+    name: "kind",
+    in: "path",
+    required: true,
+    description: "`id_front` (recto), `id_back` (verso) ou `rccm` (extrait RCCM)",
+    schema: { type: "string", enum: ["id_front", "id_back", "rccm"] },
+  };
+  const adminKycErrors = {
+    ...adminErrors,
+    "404": problem("`KYC_INTROUVABLE` (aucun dossier envoyé pour cette boutique)"),
+    "503": problem("`KYC_INDISPONIBLE`"),
+  };
+  const adminDecision = (summary: string, operationId: string, withReason: boolean) => ({
+    post: {
+      tags: ["Vérification des vendeurs"],
+      summary,
+      description: ADMIN_KYC_RULES,
+      operationId,
+      security: bearer,
+      parameters: [shopIdParam],
+      ...(withReason
+        ? {
+            requestBody: {
+              required: true,
+              content: { "application/json": { schema: ref("ShopDecisionReason") } },
+            },
+          }
+        : {}),
+      responses: {
+        "204": { description: "Décision enregistrée (photos effacées dans 30 jours)" },
+        "400": problem("Identifiant invalide"),
+        ...adminKycErrors,
+        "409": problem("`STATUT_KYC_INCOMPATIBLE` (le dossier n'est pas en attente)"),
+        ...(withReason ? { "422": problem("`KYC_INVALIDE` : motif de 5 à 300 caractères") } : {}),
+      },
+    },
+  });
+  return {
+    "/api/v1/vendors/kyc": {
+      get: {
+        tags: ["Vérification des vendeurs"],
+        summary: "Mon dossier de vérification",
+        description: KYC_RULES,
+        operationId: "getVendorKyc",
+        security: bearer,
+        responses: {
+          "200": json("VendorKyc", "Le dossier (numéros masqués)"),
+          ...kycErrors,
+          "404": problem("`KYC_INTROUVABLE` : pas encore de dossier"),
+        },
+      },
+      put: {
+        tags: ["Vérification des vendeurs"],
+        summary: "Créer ou modifier mon dossier (il repasse en préparation)",
+        description: KYC_RULES,
+        operationId: "saveVendorKyc",
+        security: bearer,
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: ref("KycRequest") } },
+        },
+        responses: {
+          "200": json("VendorKyc", "Le dossier enregistré"),
+          ...kycErrors,
+          "409": problem("`STATUT_KYC_INCOMPATIBLE` (dossier envoyé ou validé)"),
+          "422": problem("`KYC_INVALIDE` (champ en cause dans le message)"),
+        },
+      },
+    },
+    "/api/v1/vendors/kyc/documents/{kind}": {
+      post: {
+        tags: ["Vérification des vendeurs"],
+        summary: "Envoyer une photo du dossier (remplace la précédente)",
+        description: `${KYC_RULES}\n\nCorps : le fichier lui-même (JPEG, PNG ou WebP, 5 Mo au plus, 300 px au moins de chaque côté). Réencodé en WebP sans métadonnées, puis chiffré. 10 envois par minute au plus.`,
+        operationId: "uploadVendorKycDocument",
+        security: bearer,
+        parameters: [kindParam],
+        requestBody: {
+          required: true,
+          content: {
+            "image/jpeg": { schema: { type: "string", format: "binary" } },
+            "image/png": { schema: { type: "string", format: "binary" } },
+            "image/webp": { schema: { type: "string", format: "binary" } },
+          },
+        },
+        responses: {
+          "200": json("VendorKyc", "Le dossier à jour"),
+          ...kycErrors,
+          "404": problem("`KYC_INTROUVABLE` : remplir le dossier d'abord"),
+          "409": problem("`STATUT_KYC_INCOMPATIBLE`"),
+          "413": problem("`IMAGE_TROP_GRANDE`"),
+          "415": problem("`FORMAT_IMAGE_INVALIDE`"),
+          "422": problem("`IMAGE_TROP_PETITE` ou `KYC_INVALIDE` (photo non demandée)"),
+        },
+      },
+    },
+    "/api/v1/vendors/kyc/submit": {
+      post: {
+        tags: ["Vérification des vendeurs"],
+        summary: "Envoyer mon dossier à l'équipe Kemdia",
+        description: KYC_RULES,
+        operationId: "submitVendorKyc",
+        security: bearer,
+        responses: {
+          "200": json("VendorKyc", "Le dossier, en attente"),
+          ...kycErrors,
+          "404": problem("`KYC_INTROUVABLE`"),
+          "409": problem("`KYC_INCOMPLET` (photos manquantes) ou `STATUT_KYC_INCOMPATIBLE`"),
+        },
+      },
+    },
+    "/api/v1/admin/kyc": {
+      get: {
+        tags: ["Vérification des vendeurs"],
+        summary: "File des dossiers envoyés (du plus ancien envoi au plus récent)",
+        description: ADMIN_KYC_RULES,
+        operationId: "listKyc",
+        security: bearer,
+        parameters: pageParams(["pending", "approved", "rejected"], "Seulement ce statut").map(
+          (p) =>
+            p.name === "limit"
+              ? { ...p, description: "Dossiers par page (50 par défaut, 100 au plus)" }
+              : p,
+        ),
+        responses: {
+          "200": json("AdminKycPage", "Une page de dossiers"),
+          "400": problem("Paramètre invalide"),
+          ...adminErrors,
+          "503": problem("`KYC_INDISPONIBLE`"),
+        },
+      },
+    },
+    "/api/v1/admin/kyc/{shopId}": {
+      get: {
+        tags: ["Vérification des vendeurs"],
+        summary: "Un dossier, numéros complets (consultation au journal d'audit)",
+        description: ADMIN_KYC_RULES,
+        operationId: "getKyc",
+        security: bearer,
+        parameters: [shopIdParam],
+        responses: {
+          "200": json("AdminKyc", "Le dossier"),
+          "400": problem("Identifiant invalide"),
+          ...adminKycErrors,
+        },
+      },
+    },
+    "/api/v1/admin/kyc/{shopId}/documents/{kind}": {
+      get: {
+        tags: ["Vérification des vendeurs"],
+        summary: "Une photo du dossier, déchiffrée (consultation au journal d'audit)",
+        description: ADMIN_KYC_RULES,
+        operationId: "getKycDocument",
+        security: bearer,
+        parameters: [shopIdParam, kindParam],
+        responses: {
+          "200": {
+            description: "La photo (WebP), jamais mise en cache",
+            content: { "image/webp": { schema: { type: "string", format: "binary" } } },
+          },
+          "400": problem("Paramètre invalide"),
+          ...adminKycErrors,
+          "404": problem(
+            "`KYC_INTROUVABLE` ou `DOCUMENT_INTROUVABLE` (jamais envoyée, ou effacée)",
+          ),
+        },
+      },
+    },
+    "/api/v1/admin/kyc/{shopId}/approve": adminDecision("Valider le dossier", "approveKyc", false),
+    "/api/v1/admin/kyc/{shopId}/reject": adminDecision(
+      "Refuser le dossier (motif montré au vendeur)",
+      "rejectKyc",
+      true,
+    ),
+  };
+}
