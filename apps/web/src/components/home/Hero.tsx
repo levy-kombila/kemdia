@@ -66,6 +66,7 @@ export function Hero({
         </p>
         <div>
           <Link
+            prefetch={false}
             href="/categorie/high-tech"
             className={`${ctaClass} text-brand-700 bg-white hover:bg-white/90`}
           >
@@ -103,6 +104,7 @@ export function Hero({
         </ul>
         <div>
           <Link
+            prefetch={false}
             href="/infos/paiement"
             className={`${ctaClass} bg-accent-400 text-ink-900 hover:bg-accent-300`}
           >
@@ -131,6 +133,7 @@ export function Hero({
         </p>
         <div>
           <Link
+            prefetch={false}
             href="/infos/livraison"
             className={`${ctaClass} bg-ink-900 hover:bg-ink-800 text-white`}
           >
@@ -156,6 +159,7 @@ export function Hero({
           {categories.map((c) => (
             <li key={c.id}>
               <Link
+                prefetch={false}
                 href={`/categorie/${c.slug}`}
                 className="hover:bg-ink-50 hover:text-brand-700 flex items-center gap-3 px-4 py-2.5 text-sm font-medium"
               >
@@ -167,6 +171,7 @@ export function Hero({
           ))}
           <li>
             <Link
+              prefetch={false}
               href="/promotions"
               className="hover:bg-ink-50 text-brand-700 flex items-center gap-3 px-4 py-2.5 text-sm font-semibold"
             >
@@ -178,6 +183,7 @@ export function Hero({
           </li>
           <li className="border-ink-100 mt-1 border-t pt-1">
             <Link
+              prefetch={false}
               href="/categories"
               className="text-ink-500 hover:text-brand-700 block px-4 py-2.5 text-sm"
             >
@@ -205,12 +211,14 @@ export function Hero({
           <p className="text-ink-500 text-sm">Suivez vos commandes et retrouvez vos favoris.</p>
           <div className="mt-auto grid gap-2 pt-3">
             <Link
+              prefetch={false}
               href="/connexion"
               className="bg-brand-600 hover:bg-brand-700 rounded-full py-2 text-center text-sm font-semibold text-white"
             >
               Se connecter
             </Link>
             <Link
+              prefetch={false}
               href="/inscription"
               className="border-ink-200 hover:border-ink-900 rounded-full border py-2 text-center text-sm font-semibold"
             >
@@ -219,6 +227,7 @@ export function Hero({
           </div>
         </div>
         <Link
+          prefetch={false}
           href="/vendre"
           className="bg-forest-600 hover:bg-forest-700 group flex flex-col rounded-xl p-4 text-white"
         >

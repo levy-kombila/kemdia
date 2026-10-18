@@ -15,7 +15,18 @@ import { formatFCFA } from "@/lib/format";
  * (MED-06 / MED-14), plus de redirection construite depuis l'URL (MED-01).
  * Implémentée avec <dialog> natif : gestion du focus et de la touche Échap par le navigateur.
  */
+/**
+ * Fenêtre montée seulement à la première ouverture (S7-T03) : fermée, elle n'est ni rendue par le serveur ni hydratée
+ * au chargement de chaque page (liste des villes et quartiers). Une fois ouverte, elle reste montée.
+ */
 export function LocationModal() {
+  const { isModalOpen } = useDeliveryLocation();
+  const [opened, setOpened] = useState(false);
+  if (isModalOpen && !opened) setOpened(true);
+  return opened ? <LocationDialog /> : null;
+}
+
+function LocationDialog() {
   const { isModalOpen, closeModal, location, setLocation } = useDeliveryLocation();
   const { subtotal } = useCart();
   const { notify } = useToast();

@@ -22,6 +22,7 @@ export function SectionHeader({
       </div>
       {href && (
         <Link
+          prefetch={false}
           href={href}
           className="text-brand-700 hover:text-brand-800 flex shrink-0 items-center text-sm font-semibold hover:underline"
         >

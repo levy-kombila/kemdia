@@ -87,6 +87,7 @@ export function CategoryNav({ tree }: { tree: NavCategory[] }) {
           {tree.map((c) => (
             <li key={c.slug} className="hidden lg:block">
               <Link
+                prefetch={false}
                 href={`/categorie/${c.slug}`}
                 className={cn(
                   "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-white/85 hover:bg-white/10 hover:text-white",
@@ -100,6 +101,7 @@ export function CategoryNav({ tree }: { tree: NavCategory[] }) {
           ))}
           <li>
             <Link
+              prefetch={false}
               href="/promotions"
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-white/85 hover:bg-white/10 hover:text-white"
             >
@@ -108,6 +110,7 @@ export function CategoryNav({ tree }: { tree: NavCategory[] }) {
           </li>
           <li>
             <Link
+              prefetch={false}
               href="/promotions#ventes-flash"
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-white/85 hover:bg-white/10 hover:text-white"
             >
@@ -116,6 +119,7 @@ export function CategoryNav({ tree }: { tree: NavCategory[] }) {
           </li>
           <li className="ml-auto hidden 2xl:block">
             <Link
+              prefetch={false}
               href="/infos/contact"
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-white/85 hover:bg-white/10 hover:text-white"
             >
@@ -137,6 +141,7 @@ export function CategoryNav({ tree }: { tree: NavCategory[] }) {
                 {tree.map((c, i) => (
                   <li key={c.slug}>
                     <Link
+                      prefetch={false}
                       href={`/categorie/${c.slug}`}
                       onMouseEnter={() => setActive(i)}
                       onFocus={() => setActive(i)}
@@ -156,6 +161,7 @@ export function CategoryNav({ tree }: { tree: NavCategory[] }) {
                 {current.children.map((sub) => (
                   <div key={sub.slug}>
                     <Link
+                      prefetch={false}
                       href={`/categorie/${sub.slug}`}
                       className="text-brand-600 mb-2 flex items-center gap-2 text-sm font-bold hover:underline"
                     >
@@ -166,6 +172,7 @@ export function CategoryNav({ tree }: { tree: NavCategory[] }) {
                       {sub.children.slice(0, 6).map((leaf) => (
                         <li key={leaf.slug}>
                           <Link
+                            prefetch={false}
                             href={`/categorie/${leaf.slug}`}
                             className="text-ink-700 hover:text-brand-600 text-sm"
                           >
@@ -177,6 +184,7 @@ export function CategoryNav({ tree }: { tree: NavCategory[] }) {
                   </div>
                 ))}
                 <Link
+                  prefetch={false}
                   href="/promotions"
                   className="from-accent-300 to-accent-500 text-ink-900 flex flex-col justify-between rounded-xl bg-gradient-to-br p-4"
                 >
@@ -234,6 +242,7 @@ export function CategoryNav({ tree }: { tree: NavCategory[] }) {
                   <ul className="bg-ink-50 pb-2">
                     <li>
                       <Link
+                        prefetch={false}
                         href={`/categorie/${c.slug}`}
                         className="text-brand-600 block px-12 py-2 text-sm font-semibold"
                       >
@@ -242,7 +251,11 @@ export function CategoryNav({ tree }: { tree: NavCategory[] }) {
                     </li>
                     {c.children.map((sub) => (
                       <li key={sub.slug}>
-                        <Link href={`/categorie/${sub.slug}`} className="block px-12 py-2 text-sm">
+                        <Link
+                          prefetch={false}
+                          href={`/categorie/${sub.slug}`}
+                          className="block px-12 py-2 text-sm"
+                        >
                           {sub.name}
                         </Link>
                       </li>
@@ -250,7 +263,11 @@ export function CategoryNav({ tree }: { tree: NavCategory[] }) {
                   </ul>
                 </details>
               ))}
-              <Link href="/infos/contact" className="flex items-center gap-3 px-4 py-3 font-medium">
+              <Link
+                prefetch={false}
+                href="/infos/contact"
+                className="flex items-center gap-3 px-4 py-3 font-medium"
+              >
                 <Headset className="text-brand-600 size-5" aria-hidden /> Service client
               </Link>
             </div>

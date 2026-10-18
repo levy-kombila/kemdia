@@ -22,13 +22,18 @@ if (process.argv.includes("--annotations")) {
   for (const r of results) {
     console.log(
       `::notice title=Performance — ${r.page}::premier affichage ${r.fcp} ms · plus grand élément ${r.lcp} ms · ` +
-        `décalages ${r.cls} · blocage ${r.tbt} ms (budget ${r.budget.tbt}) · JS ${r.jsKb} Ko · total ${r.totalKb} Ko`,
+        `décalages ${r.cls} · blocage ${r.tbt} ms (budget ${r.budget.tbt}${r.budget.tbtMax ? `, bloquant au-delà de ${r.budget.tbtMax}` : ""}) · JS ${r.jsKb} Ko · total ${r.totalKb} Ko`,
     );
   }
   process.exit(0);
 }
 const cell = (v, max, soft = false) =>
   v <= max ? `${v} / ${max}` : `**${v}** / ${max} ${soft ? "⚠️" : "❌"}`;
+/** Blocage : signalé au-delà du budget, bloquant au-delà de `tbtMax` (accueil, S7-T03). */
+const tbtCell = (r) =>
+  r.budget.tbtMax && r.tbt > r.budget.tbtMax
+    ? `**${r.tbt}** / ${r.budget.tbt} (max ${r.budget.tbtMax}) ❌`
+    : cell(r.tbt, r.budget.tbt, true) + (r.budget.tbtMax ? ` (max ${r.budget.tbtMax})` : "");
 const { network, cpu } = results[0];
 console.log(
   [
@@ -40,10 +45,10 @@ console.log(
     "| --- | --- | --- | --- | --- | --- | --- |",
     ...results.map(
       (r) =>
-        `| ${r.page} | ${cell(r.fcp, r.budget.fcp)} | ${cell(r.lcp, r.budget.lcp)} | ${cell(r.cls, r.budget.cls)} | ${cell(r.tbt, r.budget.tbt, true)} | ${cell(r.jsKb, r.budget.jsKb)} | ${cell(r.totalKb, r.budget.totalKb)} |`,
+        `| ${r.page} | ${cell(r.fcp, r.budget.fcp)} | ${cell(r.lcp, r.budget.lcp)} | ${cell(r.cls, r.budget.cls)} | ${tbtCell(r)} | ${cell(r.jsKb, r.budget.jsKb)} | ${cell(r.totalKb, r.budget.totalKb)} |`,
     ),
     "",
-    "❌ bloque la PR · ⚠️ signalé seulement (le blocage du fil principal varie selon la machine de CI).",
+    "❌ bloque la PR · ⚠️ signalé seulement (le blocage du fil principal varie selon la machine de CI ; l'accueil bloque au-delà de son maximum).",
     "",
     ...results.filter((r) => r.why).map((r) => `- **${r.page}** : budget adapté, ${r.why}.`),
   ].join("\n"),
