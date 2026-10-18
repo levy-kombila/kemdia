@@ -15,6 +15,7 @@ function DealCard({ product }: { product: ProductSummary }) {
   const ratio = Math.min(1, left / STOCK_SCALE);
   return (
     <Link
+      prefetch={false}
       href={`/produit/${product.slug}`}
       className="group flex h-full flex-col rounded-lg p-2 hover:shadow-[var(--shadow-card-hover)]"
     >
@@ -70,6 +71,7 @@ export function FlashSales({ deals }: { deals: ProductSummary[] }) {
           <Countdown compact />
         </p>
         <Link
+          prefetch={false}
           href="/promotions"
           className="ml-auto flex items-center text-sm font-semibold hover:underline"
         >

@@ -25,6 +25,7 @@ export function CategoryBubbles({
         {items.map(({ category, image }) => (
           <li key={category.id} className="shrink-0">
             <Link
+              prefetch={false}
               href={`/categorie/${category.slug}`}
               className="group flex w-[4.75rem] flex-col items-center gap-2 text-center"
             >

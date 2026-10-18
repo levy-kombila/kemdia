@@ -118,6 +118,7 @@ export function ProductCard({
       <div className="flex flex-1 flex-col gap-1 px-0.5 pt-2.5">
         <h3 className="text-ink-800 line-clamp-2 h-10 text-[0.85rem] leading-5">
           <Link
+            prefetch={false}
             href={href}
             className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
           >
@@ -135,6 +136,7 @@ export function ProductCard({
           {/* z-10 : le bouton reste cliquable au-dessus du lien « carte entière » */}
           {choice ? (
             <Link
+              prefetch={false}
               href={href}
               aria-label={`Choisir une option pour « ${product.title} »`}
               className="bg-brand-600 hover:bg-brand-700 relative z-10 grid size-10 shrink-0 place-items-center rounded-full text-white"

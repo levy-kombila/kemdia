@@ -13,7 +13,8 @@ const BUDGET = {
   fcp: 2000, // premier affichage (ms)
   lcp: 2500, // plus grand élément affiché (ms) — « bon » selon Google
   cls: 0.1, // décalages de mise en page
-  tbt: 300, // blocage du fil principal (ms) — indicatif, voir plus bas
+  tbt: 300, // blocage du fil principal (ms) — avertissement au-delà, voir plus bas
+  tbtMax: 0, // blocage au-delà duquel la PR échoue (0 : jamais, la mesure reste indicative)
   jsKb: 300, // JavaScript transféré (Ko compressés)
   totalKb: 1200, // poids total transféré (Ko)
 };
@@ -22,8 +23,10 @@ type Budget = typeof BUDGET;
 
 /** Pages d'arrivée (liens WhatsApp, Google) + panier. Les exceptions sont justifiées et suivies comme dette. */
 const PAGES: { name: string; path: string; override?: Partial<Budget>; why?: string }[] = [
-  // Accueil : budget commun depuis le S3-T08 (zones chargées progressivement, mise en page différée hors écran)
-  { name: "Accueil", path: "/" },
+  // Accueil : budget commun depuis le S3-T08 (zones chargées progressivement, mise en page différée hors écran).
+  // S7-T03 (ADR-0042) : blocage BLOQUANT au-delà de 350 ms (avertissement au-delà de 300 ms) — marge pour les
+  // serveurs de CI, partagés et irréguliers (choix du 2026-10-18).
+  { name: "Accueil", path: "/", override: { tbtMax: 350 } },
   { name: "Catégorie", path: "/categorie/high-tech" },
   { name: "Fiche produit", path: "/produit/apple-google-pixel-modern-blanc" },
   { name: "Recherche", path: "/recherche?q=noir" },
@@ -174,8 +177,10 @@ for (const { name, path, override, why } of PAGES) {
     expect
       .soft(m.cls, `décalages de mise en page — éléments : ${m.shifts?.join(" | ") || "aucun"}`)
       .toBeLessThanOrEqual(b.cls);
-    // Le blocage dépend beaucoup de la machine (les serveurs de CI sont partagés et irréguliers) :
-    // il est affiché dans le résumé et signalé, mais ne bloque pas la PR.
+    // Le blocage dépend beaucoup de la machine (les serveurs de CI sont partagés et irréguliers) : au-delà du budget,
+    // il est signalé ; il ne bloque la PR qu'au-delà de `tbtMax` (accueil seulement, S7-T03).
+    if (b.tbtMax > 0)
+      expect.soft(m.tbt, "blocage du fil principal (ms)").toBeLessThanOrEqual(b.tbtMax);
     if (m.tbt > b.tbt)
       test.info().annotations.push({
         type: "avertissement",

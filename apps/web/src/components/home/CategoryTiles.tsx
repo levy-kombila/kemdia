@@ -16,7 +16,7 @@ export function CategoryTiles({ tiles }: { tiles: CategoryTile[] }) {
           <ul className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-2 sm:gap-3">
             {products.map((p) => (
               <li key={p.id}>
-                <Link href={`/produit/${p.slug}`} className="group block">
+                <Link prefetch={false} href={`/produit/${p.slug}`} className="group block">
                   <span className="bg-ink-50 relative block aspect-square overflow-hidden rounded-lg">
                     {p.image && (
                       <ProductImage
@@ -39,6 +39,7 @@ export function CategoryTiles({ tiles }: { tiles: CategoryTile[] }) {
             ))}
           </ul>
           <Link
+            prefetch={false}
             href={`/categorie/${category.slug}`}
             className="text-brand-700 mt-auto pt-3 text-sm font-semibold hover:underline"
           >
