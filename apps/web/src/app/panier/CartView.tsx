@@ -17,12 +17,14 @@ import { useDeliveryLocation } from "@/components/providers/LocationProvider";
 import { QuantityInput } from "@/components/product/QuantityInput";
 import { Price } from "@/components/ui/Price";
 import { MAX_QTY_PER_LINE, issueMessage } from "@/lib/cart";
-import { estimateDelivery, formatDelay } from "@/lib/delivery";
+import { useDeliveryEstimate } from "@/components/providers/DeliveryTariffsProvider";
+import { formatDelay } from "@/lib/delivery";
 import { formatFCFA } from "@/lib/format";
 
 /** Barre « livraison offerte » : montre ce qu'il reste à ajouter (incite à compléter le panier). */
 function FreeShippingMeter({ subtotal }: { subtotal: number }) {
   const { city, openModal } = useDeliveryLocation();
+  const estimateDelivery = useDeliveryEstimate();
   const estimate = city ? estimateDelivery(city.id, subtotal) : null;
   if (!city || !estimate) {
     return (
@@ -68,6 +70,7 @@ function FreeShippingMeter({ subtotal }: { subtotal: number }) {
 export function CartView() {
   const { state, hydrated, subtotal, count, canCheckout, setQuantity, remove, clear } = useCart();
   const { city, openModal } = useDeliveryLocation();
+  const estimateDelivery = useDeliveryEstimate();
   const estimate = city ? estimateDelivery(city.id, subtotal) : null;
   const total = subtotal + (estimate?.fee ?? 0);
 

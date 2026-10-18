@@ -2,6 +2,7 @@ import "server-only";
 import {
   CLIENT_IP_HEADER,
   COUPON_ERROR_CODES,
+  CustomerShipmentSchema,
   INTERNAL_KEY_HEADER,
   INVOICE_NUMBER_PATTERN,
   InvoiceListSchema,
@@ -15,6 +16,7 @@ import {
   ProblemDetailsSchema,
   SESSION_TOKEN_PATTERN,
   type CreateOrderRequest,
+  type CustomerShipment,
   type InvoiceList,
   type Order,
   type OrderPage,
@@ -49,6 +51,8 @@ export type OrderFailureCode =
   | "PANIER_OCCUPE"
   | "SESSION_INVALIDE"
   | "TROP_DE_REQUETES"
+  // Pas encore remise au transporteur (S7-T02)
+  | "EXPEDITION_INTROUVABLE"
   | "INDISPONIBLE";
 export type OrderApiResult<T> = { ok: true; data: T } | { ok: false; code: OrderFailureCode };
 
@@ -59,6 +63,7 @@ const KNOWN_CODES: ReadonlySet<string> = new Set<OrderFailureCode>([
   "PANIER_OCCUPE",
   "SESSION_INVALIDE",
   "TROP_DE_REQUETES",
+  "EXPEDITION_INTROUVABLE",
 ]);
 
 export interface OrdersApiOptions {
@@ -181,6 +186,9 @@ export function createOrdersApi(options: OrdersApiOptions) {
       ),
     get: (token: string, reference: string): Promise<OrderApiResult<Order>> =>
       call("GET", orderPath(reference), token, OrderSchema),
+    /** Livraison de la commande (S7-T02) : état et étapes, sans le motif écrit par l'équipe. */
+    shipment: (token: string, reference: string): Promise<OrderApiResult<CustomerShipment>> =>
+      call("GET", `${orderPath(reference)}/shipment`, token, CustomerShipmentSchema),
     cancel: (token: string, reference: string): Promise<OrderApiResult<Order>> =>
       call("POST", `${orderPath(reference)}/cancel`, token, OrderSchema),
     /** Demande (ou redemande) la validation sur le téléphone ; `phone` : autre numéro du même opérateur. */

@@ -51,6 +51,7 @@ const MESSAGES: Record<OrderFailureCode, string> = {
   // Communs
   SESSION_INVALIDE: "Votre session a expiré : reconnectez-vous.",
   TROP_DE_REQUETES: "Trop de demandes d'un coup : patientez une minute.",
+  EXPEDITION_INTROUVABLE: "Votre commande n'a pas encore été remise au livreur.",
   INDISPONIBLE: "Le service ne répond pas pour le moment. Réessayez dans un instant.",
 };
 

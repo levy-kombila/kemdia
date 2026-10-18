@@ -31,7 +31,8 @@ import {
   type PaymentMethod,
 } from "@/lib/checkout";
 import { cn } from "@/lib/cn";
-import { CITIES, deliveryWindow, estimateDelivery, getCity } from "@/lib/delivery";
+import { useDeliveryEstimate } from "@/components/providers/DeliveryTariffsProvider";
+import { CITIES, deliveryWindow, getCity } from "@/lib/delivery";
 import { formatFCFA } from "@/lib/format";
 import { placeOrder, quoteOrder } from "@/lib/orders/order-actions";
 import { newUuid } from "@/lib/uuid";
@@ -68,6 +69,7 @@ export function CheckoutFlow({ account }: { account: CheckoutAccount }) {
   const router = useRouter();
   const { state, hydrated, mode, subtotal, canCheckout, reload } = useCart();
   const { location, setLocation } = useDeliveryLocation();
+  const estimateDelivery = useDeliveryEstimate();
   const [step, setStep] = useState<Step>(1);
   const [draft, setDraft] = useState<Address>({
     fullName: account.fullName,

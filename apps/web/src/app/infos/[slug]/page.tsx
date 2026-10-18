@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
-import { CITIES, ZONES, formatDelay } from "@/lib/delivery";
+import { CITIES, formatDelay } from "@/lib/delivery";
 import { formatFCFA } from "@/lib/format";
+import { deliveryTariffs } from "@/lib/shipping/tariffs";
 import { INFO_PAGES, SITE, type InfoSlug } from "@/lib/site";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -20,7 +21,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: isInfoSlug(slug) ? INFO_PAGES[slug] : "Page introuvable" };
 }
 
-function DeliveryTable() {
+/** Barème en vigueur (S7-T02) : réglé par l'équipe dans l'API, gardé 5 minutes par le site. */
+async function DeliveryTable() {
+  const zones = await deliveryTariffs();
   return (
     <div className="not-prose overflow-x-auto">
       <table className="w-full min-w-[32rem] text-left text-sm">
@@ -34,7 +37,7 @@ function DeliveryTable() {
           </tr>
         </thead>
         <tbody className="divide-ink-100 divide-y">
-          {Object.values(ZONES).map((z) => (
+          {Object.values(zones).map((z) => (
             <tr key={z.id}>
               <td className="px-3 py-2 font-medium">{z.label}</td>
               <td className="px-3 py-2">

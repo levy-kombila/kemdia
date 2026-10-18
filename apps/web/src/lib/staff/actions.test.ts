@@ -40,6 +40,8 @@ const api = vi.hoisted(() => ({
   decideShop: vi.fn(),
   decideProduct: vi.fn(),
   decideKyc: vi.fn(),
+  shipmentStep: vi.fn(),
+  updateTariffs: vi.fn(),
 }));
 vi.mock("./api-staff", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api-staff")>()),
@@ -300,5 +302,101 @@ describe("vérification des vendeurs (S6-T08)", () => {
     expect(
       await redirectOf(actions.decideKycAction(form({ shopId: "../x", decision: "approve" }))),
     ).toBe("/equipe/verifications");
+  });
+});
+
+describe("livraisons (S7-T02)", () => {
+  const REF = "KMD-7F3K9Q";
+
+  it("remise au transporteur : retour à la liste ; autres étapes : retour à la fiche", async () => {
+    api.shipmentStep.mockResolvedValue({ ok: true, data: {} });
+    expect(
+      await redirectOf(actions.shipmentStepAction(form({ reference: REF, step: "hand-over" }))),
+    ).toBe("/equipe/livraisons?ok=livraison-remise");
+    expect(
+      await redirectOf(actions.shipmentStepAction(form({ reference: REF, step: "delivered" }))),
+    ).toBe(`/equipe/livraisons/${REF}?ok=livraison-livree`);
+    expect(api.shipmentStep).toHaveBeenLastCalledWith(TOKEN, REF, "delivered", undefined);
+  });
+
+  it("échec et annulation : texte de 3 à 200 caractères revérifié avant l'API", async () => {
+    api.shipmentStep.mockResolvedValue({ ok: true, data: {} });
+    for (const reason of ["", "ab", "x".repeat(201)]) {
+      expect(
+        await redirectOf(
+          actions.shipmentStepAction(form({ reference: REF, step: "failed", reason })),
+        ),
+      ).toBe(`/equipe/livraisons/${REF}?erreur=EXPEDITION_INVALIDE`);
+    }
+    expect(api.shipmentStep).not.toHaveBeenCalled();
+    expect(
+      await redirectOf(
+        actions.shipmentStepAction(
+          form({ reference: REF, step: "cancel", reason: "  Client injoignable  " }),
+        ),
+      ),
+    ).toBe(`/equipe/livraisons/${REF}?ok=livraison-annulee`);
+    expect(api.shipmentStep).toHaveBeenCalledWith(TOKEN, REF, "cancel", "Client injoignable");
+  });
+
+  it("numéro ou étape inconnus : retour à la liste sans appel ; refus de l'API : code dans l'adresse", async () => {
+    for (const bad of [
+      { reference: "../admin", step: "delivered" },
+      { reference: REF, step: "supprimer" },
+    ]) {
+      expect(await redirectOf(actions.shipmentStepAction(form(bad)))).toBe("/equipe/livraisons");
+    }
+    expect(api.shipmentStep).not.toHaveBeenCalled();
+    api.shipmentStep.mockResolvedValue({ ok: false, code: "STATUT_EXPEDITION_INCOMPATIBLE" });
+    expect(
+      await redirectOf(actions.shipmentStepAction(form({ reference: REF, step: "retry" }))),
+    ).toBe(`/equipe/livraisons/${REF}?erreur=STATUT_EXPEDITION_INCOMPATIBLE`);
+    api.shipmentStep.mockResolvedValue({ ok: false, code: "DEUX_FACTEURS_REQUIS" });
+    expect(
+      await redirectOf(actions.shipmentStepAction(form({ reference: REF, step: "retry" }))),
+    ).toBe(`/equipe/confirmer?retour=${encodeURIComponent(`/equipe/livraisons/${REF}`)}`);
+  });
+
+  const tariffs = (change: Record<string, string> = {}) => {
+    const values: Record<string, string> = {};
+    for (const id of ["zone_1", "zone_2", "zone_3", "zone_4"]) {
+      values[`${id}.baseFee`] = "2 000";
+      values[`${id}.freeThreshold`] = "50000";
+      values[`${id}.daysMin`] = "2";
+      values[`${id}.daysMax`] = "3";
+    }
+    return form({ ...values, ...change });
+  };
+
+  it("barème : 4 zones en nombres entiers (espaces tolérés), envoyé à l'API", async () => {
+    api.updateTariffs.mockResolvedValue({ ok: true, data: {} });
+    expect(await redirectOf(actions.updateTariffsAction(tariffs()))).toBe(
+      "/equipe/livraisons/bareme?ok=bareme-enregistre",
+    );
+    const sent = api.updateTariffs.mock.calls[0]![1] as { zones: unknown[] };
+    expect(sent.zones).toHaveLength(4);
+    expect(sent.zones[0]).toEqual({
+      id: "zone_1",
+      baseFee: 2000,
+      freeThreshold: 50000,
+      daysMin: 2,
+      daysMax: 3,
+    });
+  });
+
+  it("barème invalide : refusé avant l'API", async () => {
+    const changes: Record<string, string>[] = [
+      { "zone_2.baseFee": "-5" },
+      { "zone_2.baseFee": "12,5" },
+      { "zone_3.baseFee": "100001" },
+      { "zone_4.daysMin": "5", "zone_4.daysMax": "1" },
+      { "zone_1.freeThreshold": "" },
+    ];
+    for (const change of changes) {
+      expect(await redirectOf(actions.updateTariffsAction(tariffs(change)))).toBe(
+        "/equipe/livraisons/bareme?erreur=TARIFS_INVALIDES",
+      );
+    }
+    expect(api.updateTariffs).not.toHaveBeenCalled();
   });
 });

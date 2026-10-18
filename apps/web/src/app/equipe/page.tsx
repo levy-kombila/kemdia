@@ -1,4 +1,4 @@
-import { ChevronRight, Store, Tags } from "lucide-react";
+import { ChevronRight, Store, Tags, Truck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { StaffShell } from "@/components/staff/StaffShell";
@@ -47,9 +47,11 @@ export default async function StaffHomePage() {
   const { account, token, factor } = await requireVerifiedStaff("/equipe");
   const admin = isAdmin(account.roles);
   const api = staffApi();
-  const [products, shops] = await Promise.all([
+  const [products, shops, ready] = await Promise.all([
     api.moderationQueue(token, { status: "pending", limit: COUNT_LIMIT }),
     admin ? api.shops(token, { status: "pending", limit: COUNT_LIMIT }) : null,
+    // Livraisons (S7-T02) : l'API renvoie 100 commandes prêtes au plus
+    admin ? api.readyOrders(token) : null,
   ]);
 
   return (
@@ -73,8 +75,22 @@ export default async function StaffHomePage() {
             count={shops.ok ? counted(shops.data) : null}
           />
         )}
+        {ready && (
+          <Counter
+            href="/equipe/livraisons"
+            icon={Truck}
+            label="commandes à remettre au transporteur"
+            count={
+              ready.ok
+                ? ready.data.items.length >= COUNT_LIMIT
+                  ? `${COUNT_LIMIT}+`
+                  : String(ready.data.items.length)
+                : null
+            }
+          />
+        )}
       </div>
-      {(!products.ok || (shops && !shops.ok)) && (
+      {(!products.ok || (shops && !shops.ok) || (ready && !ready.ok)) && (
         <p className="text-ink-500 text-sm">
           « — » : nombre momentanément indisponible. Rechargez la page dans un instant.
         </p>

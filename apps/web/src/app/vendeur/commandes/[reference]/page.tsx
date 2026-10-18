@@ -7,7 +7,7 @@ import { VendorShell } from "@/components/vendor/VendorShell";
 import { formatDateTime, formatFCFA } from "@/lib/format";
 import { first } from "@/lib/search-params";
 import { acceptOrderAction, refuseOrderAction } from "@/lib/vendor/actions";
-import { ORDER_STATUS } from "@/lib/vendor/labels";
+import { deliveryState, ORDER_STATUS } from "@/lib/vendor/labels";
 import { vendorErrorFromParam, vendorErrorMessage, vendorNotice } from "@/lib/vendor/messages";
 import { requireActiveVendor, vendorApi } from "@/lib/vendor/vendor";
 
@@ -45,6 +45,7 @@ export default async function VendorOrderPage({
 
   const order = result.data;
   const state = ORDER_STATUS[order.status];
+  const delivery = deliveryState(order.status, order.orderStatus);
   const hidden = <input type="hidden" name="reference" value={order.reference} />;
 
   return (
@@ -57,7 +58,15 @@ export default async function VendorOrderPage({
       error={vendorErrorFromParam(first(query.erreur))}
     >
       <section aria-label="État de la commande" className="space-y-2 rounded-xl bg-white p-5">
-        <StatusBadge tone={state.tone}>{state.label}</StatusBadge>
+        <div className="flex flex-wrap gap-2">
+          <StatusBadge tone={state.tone}>{state.label}</StatusBadge>
+          {delivery && <StatusBadge tone={delivery.tone}>{delivery.label}</StatusBadge>}
+        </div>
+        {delivery && order.orderStatus === "preparing" && (
+          <p className="text-ink-600 text-sm">
+            Préparez le colis : l&apos;équipe Kemdia le remettra au livreur.
+          </p>
+        )}
         <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-ink-500 inline">Reçue le </dt>
