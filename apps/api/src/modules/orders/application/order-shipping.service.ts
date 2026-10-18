@@ -39,6 +39,13 @@ export class OrderShipping {
     return this.orders.listReadyToShip(limit);
   }
 
+  /** Commande du compte, sans verrou (suivi de la livraison par le client, S7-T02). */
+  async findForAccount(accountId: string, reference: string): Promise<OrderRecord> {
+    const order = await this.orders.findByReference(accountId, reference);
+    if (!order) throw new OrdersError("COMMANDE_INTROUVABLE", "commande introuvable");
+    return order;
+  }
+
   /** Commande de n'importe quel compte, verrouillée (à appeler dans `transaction`). */
   async lock(reference: string): Promise<OrderRecord> {
     const order = await this.orders.findByReference(null, reference, true);

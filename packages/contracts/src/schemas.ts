@@ -1872,6 +1872,22 @@ export const ShipmentSchema = z
   .meta({ id: "Shipment", description: "Expédition d'une commande (une par commande)" });
 export type Shipment = z.infer<typeof ShipmentSchema>;
 
+/**
+ * Livraison vue par le client (S7-T02) : l'état et les étapes, jamais le motif écrit par l'équipe, ni le transporteur,
+ * ni les parts des frais (BR-021).
+ */
+export const CustomerShipmentSchema = z
+  .object({
+    reference: orderReference,
+    status: z.enum(SHIPMENT_STATUSES),
+    attempt: z.int().positive().describe("Tentative de livraison en cours (1 = première)"),
+    handedOverAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+    events: z.array(z.object({ status: z.enum(SHIPMENT_STATUSES), at: z.iso.datetime() })),
+  })
+  .meta({ id: "CustomerShipment", description: "Livraison d'une commande, vue par son client" });
+export type CustomerShipment = z.infer<typeof CustomerShipmentSchema>;
+
 export const ShipmentListSchema = z
   .object({ items: z.array(ShipmentSchema).max(SHIPPING_LIMITS.listMax) })
   .meta({ id: "ShipmentList" });

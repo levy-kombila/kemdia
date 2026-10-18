@@ -13,6 +13,7 @@ import {
   OrderQuoteSchema,
   OrderSchema,
   PaymentSchema,
+  CustomerShipmentSchema,
   ProblemDetailsSchema,
   ReadyOrderListSchema,
   ShipmentListSchema,
@@ -396,6 +397,45 @@ describe("Livraisons (PostgreSQL, HTTP)", () => {
     // Une seconde fois : rien ne change
     await act(order.reference, "cancel", { note: "Client injoignable trois jours" }).expect(200);
     expect(await prisma.refund.count({ where: { orderReference: order.reference } })).toBe(1);
+  });
+
+  it("client (S7-T02) : SA livraison sans motif ni parts ; un autre compte ne la voit pas ; e-mails « en route » et « livrée » en file", async () => {
+    const order = await placeOrder(kemdiaVariant);
+    const mine = (token = client.token) =>
+      call("get", `/api/v1/orders/${order.reference}/shipment`, token);
+    expect(codeOf((await mine().expect(404)).body)).toBe("EXPEDITION_INTROUVABLE");
+    await act(order.reference, "hand-over").expect(200);
+    await act(order.reference, "failed", { reason: "Client absent, voisin 077 11 22 33" }).expect(
+      200,
+    );
+    const seen = matches(CustomerShipmentSchema, (await mine().expect(200)).body);
+    expect(seen).toMatchObject({ reference: order.reference, status: "failed", attempt: 1 });
+    // Ni le motif, ni le transporteur, ni les parts des frais
+    const text = JSON.stringify(seen);
+    for (const hidden of ["absent", "077", "manuel", "kemdiaShare", "carrier"])
+      expect(text).not.toContain(hidden);
+    expect(Object.keys(seen).sort()).toEqual(
+      ["attempt", "events", "handedOverAt", "reference", "status", "updatedAt"].sort(),
+    );
+    const stranger = await openSession();
+    expect(codeOf((await mine(stranger.token).expect(404)).body)).toBe("COMMANDE_INTROUVABLE");
+    await call("get", `/api/v1/orders/${order.reference}/shipment`).expect(401);
+
+    await act(order.reference, "retry").expect(200);
+    await act(order.reference, "delivered").expect(200);
+    await act(order.reference, "delivered").expect(200);
+    const emails = await prisma.shipmentEmail.findMany({
+      where: { orderReference: order.reference },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(emails.map((e) => e.kind)).toEqual(["HANDED_OVER", "DELIVERED"]);
+    expect(emails.every((e) => e.accountId === client.accountId && e.sentAt === null)).toBe(true);
+    await expect(
+      prisma.$executeRawUnsafe(
+        `DELETE FROM "shipping"."shipment_emails" WHERE "order_reference" = $1`,
+        order.reference,
+      ),
+    ).rejects.toThrow();
   });
 
   it("refus : vendeur qui n'a pas répondu, commande inconnue, pas d'expédition, compte non administrateur", async () => {

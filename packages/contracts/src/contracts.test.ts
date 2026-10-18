@@ -140,6 +140,7 @@ describe("schémas", () => {
       "CouponUpdateRequest",
       "CreateOrderRequest",
       "CurrentSession",
+      "CustomerShipment",
       "DeliveryAddress",
       "DeliveryTariffs",
       "DeliveryTariffsRequest",
