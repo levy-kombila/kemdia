@@ -68,6 +68,11 @@ describe("barème du site (S7-T02)", () => {
     expect(await error.tariffs.current()).toEqual(ZONES);
   });
 
+  it("réponse trop lourde (plus de 16 Ko) : refusée, barème du contrat", async () => {
+    const huge = source(() => Promise.resolve(json({ ...TARIFFS, padding: "x".repeat(20_000) })));
+    expect(await huge.tariffs.current()).toEqual(ZONES);
+  });
+
   it("toute première lecture trop lente : barème du contrat après 1 s, sans attendre l'API", async () => {
     vi.useFakeTimers();
     try {

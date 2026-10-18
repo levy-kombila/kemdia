@@ -5,7 +5,11 @@ import {
   type DeliveryTariffs,
 } from "@kemdia/contracts";
 import { ZONES, type DeliveryTariffTable } from "@kemdia/contracts/delivery";
+import { readAtMost } from "@/lib/orders/api-orders";
 import { tariffTableOf } from "./tariff-table";
+
+/** Le barème fait moins d'1 Ko : au-delà de 16 Ko, la réponse est refusée (relecture de sécurité du S7-T02). */
+const MAX_BYTES = 16_384;
 
 /** Barème gardé 5 minutes (choix du 2026-10-18). */
 export const TARIFF_TTL_MS = 5 * 60_000;
@@ -44,9 +48,14 @@ export function createTariffSource(options: TariffSourceOptions) {
         redirect: "error",
         signal: AbortSignal.timeout(options.timeoutMs),
       });
-      const parsed = DeliveryTariffsSchema.safeParse(
-        response.ok ? await response.json().catch(() => undefined) : undefined,
-      );
+      const bytes = response.ok ? await readAtMost(response, MAX_BYTES) : null;
+      let body: unknown;
+      try {
+        body = bytes ? JSON.parse(new TextDecoder().decode(bytes)) : undefined;
+      } catch {
+        body = undefined;
+      }
+      const parsed = DeliveryTariffsSchema.safeParse(body);
       if (parsed.success) tariffs = parsed.data;
       else console.error(`[livraison] barème : réponse refusée (statut ${response.status})`);
     } catch {

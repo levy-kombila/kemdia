@@ -87,15 +87,16 @@ describe("e-mails de livraison au client (S7-T02)", () => {
     ]);
   });
 
-  it("plus d'objet : « en route » d'une commande déjà livrée ou annulée, « livrée » non livrée → abandon", async () => {
+  it("plus d'objet : « en route » d'une commande en échec, livrée ou annulée, « livrée » non livrée → abandon", async () => {
     const { service, outbox, mailer } = notifier([
       email({ id: "a", shipmentStatus: "delivered" }),
       email({ id: "b", shipmentStatus: "cancelled" }),
       email({ id: "c", kind: "delivered", shipmentStatus: "in_transit" }),
       email({ id: "d", shipmentStatus: "failed" }),
+      email({ id: "e" }),
     ]);
     expect(await service.sendPending()).toBe(1);
-    expect(outbox.given).toEqual(["a", "b", "c"]);
+    expect(outbox.given).toEqual(["a", "b", "c", "d"]);
     expect(mailer.mails.map((m) => m.kind)).toEqual(["handed_over"]);
   });
 

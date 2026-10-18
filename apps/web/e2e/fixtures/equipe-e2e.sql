@@ -55,7 +55,7 @@ INSERT INTO "vendors"."shops"
    "submitted_at", "updated_at")
 VALUES (
   '0e2e0000-0000-4000-8000-0000000000a2', 'PARTNER', '0e2e0000-0000-4000-8000-000000000003',
-  'Boutique en attente E2E', 'boutique en attente e2e', 'boutique-en-attente-e2e', 'Port-Gentil', '+241077123456',
+  'Boutique en attente E2E', 'boutique en attente e2e', 'boutique-en-attente-e2e', 'Port-Gentil', '+241060000000',
   'Demande de boutique de test des parcours de bout en bout.', 'PENDING', now(), now()
 )
 ON CONFLICT ("id") DO UPDATE SET

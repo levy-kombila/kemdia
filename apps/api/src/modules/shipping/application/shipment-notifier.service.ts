@@ -14,11 +14,14 @@ const RETRY_DELAYS_MS = [60_000, 10 * 60_000, 60 * 60_000, 6 * 60 * 60_000];
 export const shipmentEmailRetryDelayMs = (attempt: number) =>
   RETRY_DELAYS_MS[Math.min(attempt - 1, RETRY_DELAYS_MS.length - 1)]!;
 
-/** L'e-mail a-t-il encore un sens ? « En route » : pas si la commande est déjà livrée ou annulée. */
+/**
+ * L'e-mail a-t-il encore un sens ? « En route » : seulement si la livraison est en route au moment de l'envoi (pas
+ * après un échec noté entre-temps — relecture de sécurité du S7-T02), « livrée » : seulement si elle est livrée.
+ */
 function stillRelevant(email: ShipmentEmailRecord): boolean {
   return email.kind === "delivered"
     ? email.shipmentStatus === "delivered"
-    : email.shipmentStatus === "in_transit" || email.shipmentStatus === "failed";
+    : email.shipmentStatus === "in_transit";
 }
 
 /**
@@ -67,9 +70,10 @@ export class ShipmentNotifier {
         delivered = true;
       } catch (error) {
         const last = email.attempts + 1 >= MAX_EMAIL_ATTEMPTS;
+        // Nom de l'erreur seulement : le message du fournisseur peut contenir l'adresse du client
         this.logger.warn(
           `e-mail de livraison de ${email.orderReference} impossible${last ? " — abandonné après 5 essais" : ""} : ${
-            error instanceof Error ? error.message : "erreur inconnue"
+            error instanceof Error ? error.name : "erreur inconnue"
           }`,
         );
       }

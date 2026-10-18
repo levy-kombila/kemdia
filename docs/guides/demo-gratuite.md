@@ -265,6 +265,17 @@ démo affiche « vérification momentanément indisponible » : rien d'autre ne 
 
 > La démo ne se met à jour qu'après un passage de la CI sur `main`. Tant que GitHub Actions est bloqué, rien ne change sur Render.
 
+### 12. Livraisons (S7-T02)
+
+Rien à régler sur Render. Après la fusion : `db:deploy` puis `db:check` (nouvelles tables du schéma `shipping`).
+
+1. Un administrateur (double authentification confirmée) ouvre **Équipe → Livraisons** : les commandes payées (ou à la
+   livraison) dont tous les vendeurs sont d'accord y sont « Prêtes ».
+2. « Remettre au transporteur », puis sur la fiche : « Noter la commande livrée », ou un échec (motif), puis une nouvelle
+   tentative ou l'annulation. Le client reçoit un e-mail « en route » puis « livrée » (Brevo, dans la minute).
+3. **Barème** : Équipe → Livraisons → Barème de livraison. Le site affiche le nouveau barème dans 5 minutes au plus ;
+   le total du paiement, lui, change tout de suite.
+
 ## En cas de problème
 
 | Symptôme                                                                           | Cause probable et solution                                                                                                                                    |
