@@ -111,7 +111,7 @@ ON CONFLICT ("id") DO NOTHING;
 INSERT INTO "identity"."accounts"
   ("id", "first_name", "last_name", "email", "password_hash", "status", "email_verified_at", "updated_at")
 VALUES (
-  '0e2e0000-0000-4000-8000-000000000004',
+  '0e2e0000-0000-4000-8000-0000000000e1',
   'Lea', 'Livraison', 'livraison-e2e@kemdia.test',
   '$argon2id$v=19$m=19456,t=2,p=1$ufEYzS6ytasl8iqSYhzX7A$zYn/ogqlE/5RH3oahXfwvzyiIUNvMDAKB2OhrUHOIlw',
   'ACTIVE', now(), now()
@@ -122,7 +122,7 @@ INSERT INTO "orders"."orders"
    "delivery_fee", "total", "delivery_name", "delivery_phone", "delivery_city_id", "delivery_city_name",
    "delivery_neighborhood", "delivery_landmark", "delivery_days_min", "delivery_days_max")
 VALUES (
-  '0e2e0000-0000-4000-8000-0000000000d1', 'KMD-E2ELVR', '0e2e0000-0000-4000-8000-000000000004',
+  '0e2e0000-0000-4000-8000-0000000000d1', 'KMD-E2ELVR', '0e2e0000-0000-4000-8000-0000000000e1',
   '0e2e0000-0000-4000-8000-0000000000d2', repeat('e2', 32), 'CONFIRMED', 'COD', 9000, 1000, 10000,
   'Lea Livraison', '+241077123456', 'libreville', 'Libreville', 'Glass', 'Portail vert, test E2E', 1, 2
 )
