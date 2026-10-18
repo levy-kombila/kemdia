@@ -1,4 +1,4 @@
-import type { DeliveryTariffs, ReadyOrder, Shipment } from "@kemdia/contracts";
+import type { CustomerShipment, DeliveryTariffs, ReadyOrder, Shipment } from "@kemdia/contracts";
 import { ZONES } from "@kemdia/contracts/delivery";
 import type { OrderRecord } from "../../orders/index.js";
 import type { ShipmentRecord, TariffRecord } from "../application/ports.js";
@@ -18,6 +18,18 @@ export function presentShipment(s: ShipmentRecord): Shipment {
     handedOverAt: s.handedOverAt.toISOString(),
     updatedAt: s.updatedAt.toISOString(),
     events: s.events.map((e) => ({ status: e.status, at: e.at.toISOString(), note: e.note })),
+  };
+}
+
+/** Vue du client (S7-T02) : ni motif, ni transporteur, ni parts des frais. */
+export function presentCustomerShipment(s: ShipmentRecord): CustomerShipment {
+  return {
+    reference: s.orderReference,
+    status: s.status,
+    attempt: s.attempt,
+    handedOverAt: s.handedOverAt.toISOString(),
+    updatedAt: s.updatedAt.toISOString(),
+    events: s.events.map((e) => ({ status: e.status, at: e.at.toISOString() })),
   };
 }
 

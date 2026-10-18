@@ -16,6 +16,7 @@
 | **4.5** | 2026-10-17 | S6     | Vérification des vendeurs, KYC (ADR-0039, BR-024) : §3.21 (nouvelle) dossier chiffré (AES-256-GCM, `KYC_ENCRYPTION_KEY`), examen par un administrateur, photos effacées 30 jours après la décision ; contrat 1.19.0 ; §5.16 pages « Vérification » ; menu du compte selon les rôles |
 | **4.6** | 2026-10-17 | S6     | Clôture du Sprint 6 : version v0.7.0 (« vendeurs partenaires opérationnels »), contrat de l'API 1.19.0 ; aucune section technique modifiée                                                                                                                                          |
 | **4.7** | 2026-10-17 | S7     | Livraisons, module `shipping` (ADR-0040, BR-021) : §3.3 sens de la dépendance `shipping` → `orders`, §3.7 routes des livraisons, §3.22 (nouvelle) barème réglable, expéditions, part de Kemdia de 15 % ; contrat 1.20.0                                                             |
+| **4.8** | 2026-10-18 | S7     | Livraisons à l'écran (ADR-0041) : §3.7 route client de la livraison, §3.22 e-mails « en route » et « livrée », §5.15 pages `/equipe/livraisons`, §5.16 état de la livraison côté vendeur, §5.17 (nouvelle) barème du site gardé 5 min ; contrat 1.21.0                              |
 | **3.9** | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                |
 | **3.8** | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                      |
 | **3.7** | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                         |
@@ -446,6 +447,7 @@ Décision : [ADR-0010](adr/0010-api-rest-openapi.md). Description complète : [`
 | `GET /api/v1/moderation/products/{id}/images/{imageId}`                                  | Photo d'un produit à modérer, quel que soit son statut — modérateur ou admin, 2FA (S6-T04)                                                      | aucun | 120/min                      |
 | `GET /api/v1/product-images/{imageId}/{large\|small}`                                    | Photo publique, seulement si le produit est visible ; relayée par le site sous `/images/v/…` (S6-T04)                                           | 60 s  | 300/min/IP                   |
 | `POST /api/v1/admin/shops/{id}/approve\|reject\|suspend`                                 | Valider (rôle vendeur accordé), refuser ou suspendre (rôle retiré), motif montré — admin, < 15 min, journal (S6-T01)                            | aucun | 30/min/IP                    |
+| `GET /api/v1/orders/{n°}/shipment`                                                       | Livraison de SA commande : état, tentative, étapes — sans motif, transporteur ni parts (S7-T02)                                                 | aucun | aucune                       |
 | `GET /api/v1/shipping/tariffs`                                                           | Barème de livraison en vigueur des 4 zones (S7-T01)                                                                                             | aucun | aucune                       |
 | `GET\|PUT /api/v1/admin/shipping/tariffs`                                                | Régler le barème (frais de base, livraison offerte, délais) — admin, < 15 min, journal (S7-T01)                                                 | aucun | 30/min/IP                    |
 | `GET /api/v1/admin/shipping/ready`, `…/shipments?status=`, `…/shipments/{n°}`            | Commandes prêtes à expédier, expéditions par statut, une expédition et son historique — admin, < 15 min (S7-T01)                                | aucun | 60/min/IP                    |
@@ -980,7 +982,11 @@ Commande confirmée ou en préparation, vendeurs d'accord ─► GET /admin/ship
       commande annulée (livraison_echec), stock et coupon rendus, payments : remboursement « à faire », avoir
 ```
 
-Transporteur « manuel » (port `Carrier`) tant que la question ouverte n° 5 n'est pas tranchée. Administrateurs seuls,
+Transporteur « manuel » (port `Carrier`) tant que la question ouverte n° 5 n'est pas tranchée.
+
+S7-T02 ([ADR-0041](adr/0041-livraisons-ecrans.md)) : le client lit sa livraison (`GET /orders/{n°}/shipment`) ; e-mails
+« en route » et « livrée » mis en file (`shipment_emails`) dans la transaction de l'étape, envoyés chaque minute
+(réservation, 5 essais, abandon sans adresse vérifiée ou sans objet). Administrateurs seuls,
 double authentification confirmée. Règles SQL : parts des frais, passages de statut, champs figés, historique en ajout
 seul, bornes du barème ; la commande peut passer d'« expédiée » à « annulée » (jamais par le client).
 
@@ -1337,16 +1343,19 @@ administrateur trouve le lien « Ouvrir l'espace de l'équipe » dans « Mon com
 
 Décision : [ADR-0037](adr/0037-espace-vendeur.md). Pages sous `/vendeur` (jamais indexées), pour tout compte connecté :
 
-| Page                                 | Contenu                                                                                                               |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `/vendeur`                           | Selon la boutique : demande, demande en cours, refus (motif + nouvelle demande), suspension, tableau de bord          |
-| `/vendeur/produits[?statut=…]`       | Produits par statut (en ligne, en attente, refusés, retirés), du plus récent au plus ancien                           |
-| `/vendeur/produits/nouveau`          | Fiche et variantes (1 à 20) ; part en modération                                                                      |
-| `/vendeur/produits/{id}`             | État de la modération et motif, photos, prix et stock par variante, fiche, retrait / remise en vente                  |
-| `/vendeur/commandes[?statut=…]`      | Commandes de la boutique (« À traiter » d'abord) : statut, montant de ses articles, ville, échéance (S6-T07)          |
-| `/vendeur/commandes/{référence}`     | Ses articles, échéance ; accepter, ou refuser avec motif (la commande entière est annulée) (S6-T07)                   |
-| `/vendeur/verification`              | Dossier de vérification (identité, RCCM, compte de versement), photos réduites dans le navigateur, envoi (S6-T08)     |
-| `/equipe/verifications[/{boutique}]` | Équipe (administrateurs) : file des dossiers envoyés, dossier et photos (journal d'audit), valider / refuser (S6-T08) |
+| Page                                 | Contenu                                                                                                                                              |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/vendeur`                           | Selon la boutique : demande, demande en cours, refus (motif + nouvelle demande), suspension, tableau de bord                                         |
+| `/vendeur/produits[?statut=…]`       | Produits par statut (en ligne, en attente, refusés, retirés), du plus récent au plus ancien                                                          |
+| `/vendeur/produits/nouveau`          | Fiche et variantes (1 à 20) ; part en modération                                                                                                     |
+| `/vendeur/produits/{id}`             | État de la modération et motif, photos, prix et stock par variante, fiche, retrait / remise en vente                                                 |
+| `/vendeur/commandes[?statut=…]`      | Commandes de la boutique (« À traiter » d'abord) : statut, montant de ses articles, ville, échéance (S6-T07)                                         |
+| `/vendeur/commandes/{référence}`     | Ses articles, échéance ; accepter, ou refuser avec motif (la commande entière est annulée) (S6-T07) ; état de la livraison en lecture seule (S7-T02) |
+| `/vendeur/verification`              | Dossier de vérification (identité, RCCM, compte de versement), photos réduites dans le navigateur, envoi (S6-T08)                                    |
+| `/equipe/verifications[/{boutique}]` | Équipe (administrateurs) : file des dossiers envoyés, dossier et photos (journal d'audit), valider / refuser (S6-T08)                                |
+| `/equipe/livraisons[?statut=…]`      | Équipe (administrateurs) : commandes prêtes (« Remettre au transporteur »), expéditions par statut (S7-T02)                                          |
+| `/equipe/livraisons/{n°}`            | Frais et parts (BR-021), étapes ; livrée, échec (motif), nouvelle tentative, annulation (note) (S7-T02)                                              |
+| `/equipe/livraisons/bareme`          | Barème des 4 zones : frais de base, livraison offerte dès, délais (S7-T02)                                                                           |
 
 ```
 Photo choisie ─► navigateur : réduite à 1 600 px (JPEG 85) ─► POST /vendeur/produits/{id}/photos (route du site)
@@ -1356,6 +1365,15 @@ Aperçu ─► /vendeur/produits/{id}/photos/{photo} ─► API avec le jeton �
 
 `/vendre` reste la page de présentation : son bouton « Devenir vendeur » mène à `/vendeur` (connexion demandée). Aucun taux de
 commission n'y est annoncé tant que le client n'a pas répondu (question ouverte n° 3).
+
+### 5.17 Barème de livraison du site (S7-T02)
+
+Décision : [ADR-0041](adr/0041-livraisons-ecrans.md). Le serveur du site lit `GET /shipping/tariffs` et garde le barème
+**5 minutes** en mémoire ; ensuite, il rend la valeur gardée tout de suite et la relit en arrière-plan. Seule la toute
+première lecture attend (1 s au plus), puis prend le barème du contrat. Le layout le transmet aux composants du
+navigateur (`DeliveryTariffsProvider`, `useDeliveryEstimate`) : fiche produit, panier, choix de la ville, caisse, page
+« Livraison ». Une estimation : le devis de l'API fait foi au paiement. La commande du client montre une section
+« Livraison » (`GET /orders/{n°}/shipment`) dès la remise au transporteur.
 
 ## 6. Sécurité
 

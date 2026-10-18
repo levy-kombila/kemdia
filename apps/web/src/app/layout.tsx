@@ -10,6 +10,7 @@ import { Suspense } from "react";
 import { Header, HeaderFallback } from "@/components/layout/Header";
 import { WakeUpNotice } from "@/components/layout/WakeUpNotice";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
+import { deliveryTariffs } from "@/lib/shipping/tariffs";
 import { Providers } from "@/components/providers/Providers";
 import { SESSION_COOKIE } from "@/lib/auth/cookies";
 import { sandboxPageEnabled } from "@/lib/payments/sandbox";
@@ -73,6 +74,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // Panier du compte ou du navigateur (S5-T01) : simple présence du cookie, aucun appel à l'API (rien ne bloque).
   // Next.js redessine ce layout après une connexion ou une déconnexion (l'action serveur pose ou efface le cookie).
   const signedIn = (await cookies()).has(SESSION_COOKIE);
+  // Barème de livraison (S7-T02) : gardé en mémoire, relu en arrière-plan ; jamais plus d'1 s d'attente au démarrage
+  const tariffs = await deliveryTariffs();
   return (
     // data-scroll-behavior : défilement doux seulement à l'intérieur d'une page, pas lors d'un changement de page
     <html lang="fr-GA" className={archivo.variable} data-scroll-behavior="smooth">
@@ -83,7 +86,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         >
           Aller au contenu
         </a>
-        <Providers signedIn={signedIn}>
+        <Providers signedIn={signedIn} tariffs={tariffs}>
           {/* Bac à sable (S5-T08) : démo, poste de développement et tests seulement */}
           {sandboxPageEnabled() && <DemoBanner />}
           {demo ? (

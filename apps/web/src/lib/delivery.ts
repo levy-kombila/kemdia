@@ -2,7 +2,8 @@
  * Zone de couverture : Gabon uniquement (phase 1).
  * Zones, villes et frais vivent dans le contrat partagé depuis le S5-T02 (`@kemdia/contracts/delivery`) :
  * l'API y calcule le montant FACTURÉ ; ici, la même estimation sert à l'affichage (leçon CRIT-01 / HIGH-05).
- * Restent ici l'affichage des délais et des dates.
+ * Restent ici l'affichage des délais et des dates. S7-T02 : le barème des zones vient de l'API
+ * (`useDeliveryEstimate` dans le navigateur, `deliveryTariffs()` côté serveur).
  */
 
 export {
@@ -13,6 +14,7 @@ export {
   getCity,
   type City,
   type DeliveryEstimate,
+  type DeliveryTariffTable,
   type DeliveryZone,
   type ZoneId,
 } from "@kemdia/contracts/delivery";

@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { useCart } from "@/components/providers/CartProvider";
 import { useDeliveryLocation } from "@/components/providers/LocationProvider";
 import { useToast } from "@/components/providers/ToastProvider";
-import { CITIES, COUNTRY, estimateDelivery, formatDelay, getCity } from "@/lib/delivery";
+import { useDeliveryEstimate } from "@/components/providers/DeliveryTariffsProvider";
+import { CITIES, COUNTRY, formatDelay, getCity } from "@/lib/delivery";
 import { formatFCFA } from "@/lib/format";
 
 /**
@@ -34,6 +35,7 @@ export function LocationModal() {
     }
   }, [isModalOpen, location]);
 
+  const estimateDelivery = useDeliveryEstimate();
   const city = getCity(cityId);
   const estimate = city ? estimateDelivery(city.id, subtotal) : null;
 

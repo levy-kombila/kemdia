@@ -55,7 +55,7 @@ INSERT INTO "vendors"."shops"
    "submitted_at", "updated_at")
 VALUES (
   '0e2e0000-0000-4000-8000-0000000000a2', 'PARTNER', '0e2e0000-0000-4000-8000-000000000003',
-  'Boutique en attente E2E', 'boutique en attente e2e', 'boutique-en-attente-e2e', 'Port-Gentil', '+241077123456',
+  'Boutique en attente E2E', 'boutique en attente e2e', 'boutique-en-attente-e2e', 'Port-Gentil', '+241060000000',
   'Demande de boutique de test des parcours de bout en bout.', 'PENDING', now(), now()
 )
 ON CONFLICT ("id") DO UPDATE SET
@@ -104,5 +104,45 @@ SELECT '0e2e0000-0000-4000-8000-0000000000c3', '0e2e0000-0000-4000-8000-00000000
 FROM "catalog"."product_images" i
 WHERE i."id" = '0e2e0000-0000-4000-8000-0000000000c1'
 ON CONFLICT ("id") DO NOTHING;
+
+-- Livraisons (S7-T02) : une commande prête à remettre au transporteur (boutique Kemdia, paiement à la livraison), d'un
+-- client de test. Une commande et son expédition ne s'effacent jamais : relancer ce fichier ne la remet PAS « prête »
+-- (sur un poste de développement, changer le numéro KMD-E2ELVR pour rejouer le parcours).
+INSERT INTO "identity"."accounts"
+  ("id", "first_name", "last_name", "email", "password_hash", "status", "email_verified_at", "updated_at")
+VALUES (
+  '0e2e0000-0000-4000-8000-000000000004',
+  'Lea', 'Livraison', 'livraison-e2e@kemdia.test',
+  '$argon2id$v=19$m=19456,t=2,p=1$ufEYzS6ytasl8iqSYhzX7A$zYn/ogqlE/5RH3oahXfwvzyiIUNvMDAKB2OhrUHOIlw',
+  'ACTIVE', now(), now()
+)
+ON CONFLICT ("id") DO NOTHING;
+INSERT INTO "orders"."orders"
+  ("id", "reference", "account_id", "idempotency_key", "request_hash", "status", "payment_method", "subtotal",
+   "delivery_fee", "total", "delivery_name", "delivery_phone", "delivery_city_id", "delivery_city_name",
+   "delivery_neighborhood", "delivery_landmark", "delivery_days_min", "delivery_days_max")
+VALUES (
+  '0e2e0000-0000-4000-8000-0000000000d1', 'KMD-E2ELVR', '0e2e0000-0000-4000-8000-000000000004',
+  '0e2e0000-0000-4000-8000-0000000000d2', repeat('e2', 32), 'CONFIRMED', 'COD', 9000, 1000, 10000,
+  'Lea Livraison', '+241077123456', 'libreville', 'Libreville', 'Glass', 'Portail vert, test E2E', 1, 2
+)
+ON CONFLICT ("id") DO NOTHING;
+INSERT INTO "orders"."order_items"
+  ("order_id", "variant_id", "product_id", "shop_id", "title", "variant_name", "unit_price", "quantity", "line_total",
+   "position")
+VALUES (
+  '0e2e0000-0000-4000-8000-0000000000d1', '0e2e0000-0000-4000-8000-0000000000d3',
+  '0e2e0000-0000-4000-8000-0000000000d4', '6b656d64-6961-4000-8000-000000000001', 'Panier tressé livraison E2E',
+  'Unique', 9000, 1, 9000, 0
+)
+ON CONFLICT DO NOTHING;
+INSERT INTO "orders"."order_shop_parts" ("order_id", "shop_id", "status", "subtotal", "item_count", "decided_at")
+VALUES ('0e2e0000-0000-4000-8000-0000000000d1', '6b656d64-6961-4000-8000-000000000001', 'ACCEPTED', 9000, 1, now())
+ON CONFLICT DO NOTHING;
+INSERT INTO "orders"."order_status_history" ("id", "order_id", "status")
+SELECT '0e2e0000-0000-4000-8000-0000000000d5', '0e2e0000-0000-4000-8000-0000000000d1', 'CONFIRMED'
+WHERE NOT EXISTS (
+  SELECT 1 FROM "orders"."order_status_history" WHERE "id" = '0e2e0000-0000-4000-8000-0000000000d5'
+);
 
 COMMIT;

@@ -3,7 +3,9 @@
 import { useEffect } from "react";
 import { LocationModal } from "@/components/location/LocationModal";
 import { markFirstHydrationDone } from "@/lib/hydration";
+import { ZONES, type DeliveryTariffTable } from "@/lib/delivery";
 import { CartProvider } from "./CartProvider";
+import { DeliveryTariffsProvider } from "./DeliveryTariffsProvider";
 import { FavoritesProvider } from "./FavoritesProvider";
 import { LocationProvider } from "./LocationProvider";
 import { ToastProvider } from "./ToastProvider";
@@ -12,21 +14,26 @@ import { ToastProvider } from "./ToastProvider";
 export function Providers({
   children,
   signedIn = false,
+  tariffs,
 }: {
   children: React.ReactNode;
   signedIn?: boolean;
+  /** Barème de livraison lu par le serveur (S7-T02) ; absent : barème du contrat */
+  tariffs?: DeliveryTariffTable;
 }) {
   useEffect(markFirstHydrationDone, []);
   return (
     <ToastProvider>
-      <CartProvider signedIn={signedIn}>
-        <FavoritesProvider>
-          <LocationProvider>
-            {children}
-            <LocationModal />
-          </LocationProvider>
-        </FavoritesProvider>
-      </CartProvider>
+      <DeliveryTariffsProvider tariffs={tariffs ?? ZONES}>
+        <CartProvider signedIn={signedIn}>
+          <FavoritesProvider>
+            <LocationProvider>
+              {children}
+              <LocationModal />
+            </LocationProvider>
+          </FavoritesProvider>
+        </CartProvider>
+      </DeliveryTariffsProvider>
     </ToastProvider>
   );
 }

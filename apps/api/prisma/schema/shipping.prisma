@@ -12,6 +12,15 @@ enum ShipmentStatus {
   @@schema("shipping")
 }
 
+/// E-mail au client (S7-T02) : commande remise au transporteur, commande livrée.
+enum ShipmentEmailKind {
+  HANDED_OVER
+  DELIVERED
+
+  @@map("shipment_email_kind")
+  @@schema("shipping")
+}
+
 /// Barème d'une zone (zone_1 … zone_4), changé par un administrateur ; les 4 lignes sont posées par la migration.
 model DeliveryTariff {
   zoneId        String    @id @map("zone_id") @db.VarChar(10)
@@ -49,6 +58,7 @@ model Shipment {
   handedOverAt   DateTime        @map("handed_over_at") @db.Timestamptz(3)
   updatedAt      DateTime        @map("updated_at") @db.Timestamptz(3)
   events         ShipmentEvent[]
+  emails         ShipmentEmail[]
 
   @@index([status, updatedAt])
   @@map("shipments")
@@ -68,5 +78,27 @@ model ShipmentEvent {
 
   @@index([shipmentId, at])
   @@map("shipment_events")
+  @@schema("shipping")
+}
+
+/// E-mails au client à envoyer (S7-T02), écrits dans la transaction de l'étape et envoyés APRÈS par une tâche planifiée :
+/// réservés avant l'envoi (deux instances n'envoient pas le même), 5 essais au plus, puis abandon.
+model ShipmentEmail {
+  id             String            @id @db.Uuid
+  shipmentId     String            @map("shipment_id") @db.Uuid
+  shipment       Shipment          @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  kind           ShipmentEmailKind
+  /// Client (module identity) : UUID seul ; son adresse e-mail VÉRIFIÉE est lue au moment de l'envoi
+  accountId      String            @map("account_id") @db.Uuid
+  orderReference String            @map("order_reference") @db.VarChar(10)
+  attempts       Int               @default(0) @db.SmallInt
+  /// Prochain essai ; vide : envoyé ou abandonné
+  nextAt         DateTime?         @map("next_at") @db.Timestamptz(3)
+  sentAt         DateTime?         @map("sent_at") @db.Timestamptz(3)
+  createdAt      DateTime          @map("created_at") @db.Timestamptz(3)
+
+  @@unique([shipmentId, kind])
+  @@index([nextAt])
+  @@map("shipment_emails")
   @@schema("shipping")
 }

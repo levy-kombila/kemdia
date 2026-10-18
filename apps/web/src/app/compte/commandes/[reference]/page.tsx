@@ -1,4 +1,4 @@
-import type { InvoiceSummary, Order, Payment } from "@kemdia/contracts";
+import type { CustomerShipment, InvoiceSummary, Order, Payment } from "@kemdia/contracts";
 import { CircleCheck, FileDown, Truck, Wallet } from "lucide-react";
 import type { Metadata } from "next";
 import { ProductImage } from "@/components/ui/ProductImage";
@@ -80,9 +80,15 @@ export default async function OrderPage({
   const order = result.data;
   const mobileMoney = order.paymentMethod !== "cod";
   const waitingPayment = order.status === "pending_payment";
-  const [payment, invoices] = await Promise.all([
+  // Livraison (S7-T02) : dès la remise au transporteur, et après une annulation faute de livraison
+  const handedOver =
+    order.status === "shipped" ||
+    order.status === "delivered" ||
+    order.cancelReason === "livraison_echec";
+  const [payment, invoices, shipment] = await Promise.all([
     waitingPayment && mobileMoney ? api.latestPayment(token, reference) : null,
     order.paidAt ? api.invoices(token, reference) : null,
+    handedOver ? api.shipment(token, reference) : null,
   ]);
   const latest: Payment | null = payment?.ok ? payment.data : null;
   const fresh = first(query.nouvelle) === "1";
@@ -144,6 +150,7 @@ export default async function OrderPage({
         <Lines order={order} />
         <Details order={order} />
         {invoices && <Invoices order={order} result={invoices} />}
+        {shipment?.ok && <Delivery shipment={shipment.data} cod={!mobileMoney} />}
         <History order={order} />
 
         <section className="space-y-2 rounded-xl bg-white p-5">
@@ -322,6 +329,33 @@ function Invoices({
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+/** Ce que le client lit de sa livraison : jamais le motif écrit par l'équipe. */
+const DELIVERY_TEXT: Record<CustomerShipment["status"], string> = {
+  in_transit: "En route : le livreur vous appellera avant de passer.",
+  failed:
+    "Nous n'avons pas pu vous livrer. Le service client Kemdia vous recontacte pour une nouvelle tentative.",
+  delivered: "Livrée. Merci pour votre confiance !",
+  cancelled: "La livraison n'a pas pu se faire : la commande a été annulée.",
+};
+
+function Delivery({ shipment, cod }: { shipment: CustomerShipment; cod: boolean }) {
+  return (
+    <section aria-labelledby="livraison" className="rounded-xl bg-white p-5">
+      <h2 id="livraison" className="mb-2 flex items-center gap-2 text-lg font-extrabold">
+        <Truck className="size-5" aria-hidden /> Livraison
+      </h2>
+      <p>{DELIVERY_TEXT[shipment.status]}</p>
+      {shipment.status === "in_transit" && cod && (
+        <p className="text-ink-500 mt-1 text-sm">Préparez le montant à payer au livreur.</p>
+      )}
+      <p className="text-ink-500 mt-1 text-sm">
+        Remise au livreur le {formatDateTime(shipment.handedOverAt)}
+        {shipment.attempt > 1 && ` · tentative ${shipment.attempt}`}
+      </p>
     </section>
   );
 }

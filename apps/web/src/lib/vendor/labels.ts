@@ -1,4 +1,5 @@
 import type {
+  OrderStatus,
   KycDocumentKind,
   KycIdType,
   KycPayoutMethod,
@@ -43,6 +44,22 @@ export const ORDER_STATUS: Record<VendorOrderStatus, { label: string; tab: strin
   expired: { label: "Sans réponse à temps", tab: "Sans réponse", tone: "bad" },
   cancelled: { label: "Annulée", tab: "Annulées", tone: "off" },
 };
+
+/**
+ * Livraison d'une commande acceptée (S7-T02), en lecture seule : l'équipe Kemdia remet le colis au transporteur et
+ * suit la livraison. `null` : rien à montrer (commande pas encore acceptée par toutes les boutiques…).
+ */
+export function deliveryState(
+  part: VendorOrderStatus,
+  order: OrderStatus,
+): { label: string; tone: Tone } | null {
+  if (part !== "accepted") return null;
+  if (order === "preparing") return { label: "En attente du livreur", tone: "wait" };
+  if (order === "shipped") return { label: "En livraison", tone: "wait" };
+  if (order === "delivered") return { label: "Livrée au client", tone: "ok" };
+  if (order === "cancelled") return { label: "Commande annulée", tone: "off" };
+  return null;
+}
 
 /** Onglets de « Mes commandes » : ce qui attend une réponse d'abord. */
 export const ORDER_TABS = ["pending", "accepted", "refused", "expired", "cancelled"] as const;

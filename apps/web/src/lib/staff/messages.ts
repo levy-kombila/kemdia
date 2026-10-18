@@ -1,6 +1,8 @@
 import {
   IDENTITY_ERROR_CODES,
+  SHIPPING_LIMITS,
   type IdentityErrorCode,
+  type ShippingErrorCode,
   type VendorErrorCode,
 } from "@kemdia/contracts/constants";
 import { authErrorMessage, formatWait } from "@/lib/auth/messages";
@@ -9,7 +11,30 @@ import { authErrorMessage, formatWait } from "@/lib/auth/messages";
  * Messages de l'espace de l'équipe (S6-T05). Les codes de l'identité réutilisent les messages du S4 ; les codes des
  * boutiques et de la modération sont écrits pour l'équipe (le vendeur a ses propres messages, plus tard au S6).
  */
-export type StaffMessageCode = IdentityErrorCode | VendorErrorCode | "INDISPONIBLE";
+export type StaffMessageCode =
+  | IdentityErrorCode
+  | VendorErrorCode
+  | ShippingErrorCode
+  | "COMMANDE_INTROUVABLE"
+  | "PANIER_OCCUPE"
+  | "INDISPONIBLE";
+
+/** Livraisons (S7-T02) et codes des commandes renvoyés par leurs routes. */
+const SHIPPING_MESSAGES: Record<
+  ShippingErrorCode | "COMMANDE_INTROUVABLE" | "PANIER_OCCUPE",
+  string
+> = {
+  EXPEDITION_INTROUVABLE: "Cette commande n'a pas encore été remise au transporteur.",
+  EXPEDITION_IMPOSSIBLE:
+    "Action impossible pour cette commande (paiement attendu, vendeur qui n'a pas répondu, ou espèces déjà encaissées). La page a été rechargée.",
+  STATUT_EXPEDITION_INCOMPATIBLE:
+    "Cette étape n'est plus possible : la livraison a changé entre-temps. La page a été rechargée.",
+  EXPEDITION_INVALIDE: `Texte refusé : ${SHIPPING_LIMITS.reasonMin} à ${SHIPPING_LIMITS.reasonMax} caractères.`,
+  TARIFS_INVALIDES:
+    "Barème refusé : montants entiers dans les bornes, délai minimum inférieur ou égal au maximum.",
+  COMMANDE_INTROUVABLE: "Cette commande n'existe pas.",
+  PANIER_OCCUPE: "Une autre opération est en cours sur cette commande. Réessayez dans un instant.",
+};
 
 const VENDOR_MESSAGES: Record<VendorErrorCode, string> = {
   // Vérification des vendeurs (S6-T08)
@@ -55,10 +80,13 @@ const isIdentityCode = (value: string): value is IdentityErrorCode =>
   (IDENTITY_ERROR_CODES as readonly string[]).includes(value);
 
 const isVendorCode = (code: StaffMessageCode): code is VendorErrorCode => code in VENDOR_MESSAGES;
+const isShippingCode = (code: StaffMessageCode): code is keyof typeof SHIPPING_MESSAGES =>
+  Object.hasOwn(SHIPPING_MESSAGES, code);
 
 /** Message en français pour une erreur de l'espace de l'équipe. */
 export function staffErrorMessage(code: StaffMessageCode, retryAfterSeconds?: number): string {
   if (isVendorCode(code)) return VENDOR_MESSAGES[code];
+  if (isShippingCode(code)) return SHIPPING_MESSAGES[code];
   // 2FA : un code faux n'a rien à voir avec un code reçu par e-mail
   if (code === "CODE_INVALIDE")
     return "Code incorrect. Saisissez le code à 6 chiffres affiché maintenant dans votre application, ou un code de secours.";
@@ -79,6 +107,14 @@ export const STAFF_NOTICES = {
     "Boutique suspendue : ses produits sont cachés et le rôle vendeur est retiré.",
   "produit-valide": "Produit validé : il est maintenant visible sur le site.",
   "produit-refuse": "Produit refusé : le vendeur voit votre motif.",
+  // Livraisons (S7-T02)
+  "livraison-remise": "Commande remise au transporteur : le client reçoit un e-mail « en route ».",
+  "livraison-livree": "Commande notée livrée : le client reçoit un e-mail.",
+  "livraison-echec": "Échec noté. Relancez une tentative, ou annulez la commande.",
+  "livraison-relancee": "Nouvelle tentative de livraison : la commande est de nouveau en route.",
+  "livraison-annulee":
+    "Commande annulée : stock et coupon rendus ; un paiement Mobile Money est à rembourser (liste des remboursements).",
+  "bareme-enregistre": "Barème enregistré : le site l'affiche dans 5 minutes au plus.",
 } as const;
 export type StaffNotice = keyof typeof STAFF_NOTICES;
 
@@ -94,7 +130,12 @@ export function staffNotice(value: unknown): string | null {
  */
 export function staffErrorFromParam(value: unknown): string | null {
   if (typeof value !== "string" || !/^[A-Z_]{3,40}$/.test(value)) return null;
-  if (value === "INDISPONIBLE" || Object.hasOwn(VENDOR_MESSAGES, value) || isIdentityCode(value))
+  if (
+    value === "INDISPONIBLE" ||
+    Object.hasOwn(VENDOR_MESSAGES, value) ||
+    Object.hasOwn(SHIPPING_MESSAGES, value) ||
+    isIdentityCode(value)
+  )
     return staffErrorMessage(value as StaffMessageCode);
   return null;
 }

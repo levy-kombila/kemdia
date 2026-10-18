@@ -7,7 +7,7 @@ import { VendorShell } from "@/components/vendor/VendorShell";
 import { cn } from "@/lib/cn";
 import { formatDateTime, formatFCFA } from "@/lib/format";
 import { first } from "@/lib/search-params";
-import { CURSOR, ORDER_STATUS, ORDER_TABS } from "@/lib/vendor/labels";
+import { CURSOR, deliveryState, ORDER_STATUS, ORDER_TABS } from "@/lib/vendor/labels";
 import { vendorErrorMessage, vendorNotice } from "@/lib/vendor/messages";
 import { requireActiveVendor, vendorApi } from "@/lib/vendor/vendor";
 
@@ -86,6 +86,7 @@ export default async function VendorOrdersPage({
           <ul className="space-y-2">
             {result.data.items.map((order) => {
               const state = ORDER_STATUS[order.status];
+              const delivery = deliveryState(order.status, order.orderStatus);
               return (
                 <li key={order.reference}>
                   <Link
@@ -96,6 +97,9 @@ export default async function VendorOrdersPage({
                       <span className="flex flex-wrap items-center gap-2">
                         <span className="font-bold">{order.reference}</span>
                         <StatusBadge tone={state.tone}>{state.label}</StatusBadge>
+                        {delivery && (
+                          <StatusBadge tone={delivery.tone}>{delivery.label}</StatusBadge>
+                        )}
                       </span>
                       <span className="text-ink-600 mt-1 block text-sm">
                         {order.itemCount} article{order.itemCount > 1 ? "s" : ""} ·{" "}

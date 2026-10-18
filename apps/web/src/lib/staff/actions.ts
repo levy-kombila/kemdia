@@ -1,6 +1,12 @@
 "use server";
 
-import { OTP_CODE_PATTERN, SHOP_LIMITS, VENDOR_PRODUCT_LIMITS } from "@kemdia/contracts/constants";
+import {
+  OTP_CODE_PATTERN,
+  SHIPPING_LIMITS,
+  SHOP_LIMITS,
+  VENDOR_PRODUCT_LIMITS,
+} from "@kemdia/contracts/constants";
+import type { DeliveryTariffsRequest } from "@kemdia/contracts";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE, expiredCookieOptions } from "@/lib/auth/cookies";
@@ -207,4 +213,76 @@ export async function decideKycAction(form: FormData): Promise<never> {
   const result = await staffApi().decideKyc(token, shopId, decision, reason);
   if (!result.ok) return afterFailure(token, result, page);
   redirect(`${page}?ok=${decision === "approve" ? "kyc-valide" : "kyc-refuse"}`);
+}
+
+// --- Livraisons (S7-T02, administrateurs) ---
+
+const ORDER_REFERENCE = /^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/;
+const SHIPMENT_STEPS = ["hand-over", "delivered", "failed", "retry", "cancel"] as const;
+const STEP_NOTICES: Record<(typeof SHIPMENT_STEPS)[number], StaffNotice> = {
+  "hand-over": "livraison-remise",
+  delivered: "livraison-livree",
+  failed: "livraison-echec",
+  retry: "livraison-relancee",
+  cancel: "livraison-annulee",
+};
+
+/**
+ * Étape d'une livraison. La remise au transporteur part de la liste « Prêtes » (on y revient) ; les autres étapes, de
+ * la fiche de l'expédition. Motif (échec) et note (annulation) : 3 à 200 caractères, revérifiés par l'API.
+ */
+export async function shipmentStepAction(form: FormData): Promise<never> {
+  const reference = field(form, "reference", 10);
+  const step = SHIPMENT_STEPS.find((s) => s === form.get("step"));
+  if (!reference || !ORDER_REFERENCE.test(reference) || !step) redirect("/equipe/livraisons");
+  const page = step === "hand-over" ? "/equipe/livraisons" : `/equipe/livraisons/${reference}`;
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(page)}`);
+  let text: string | undefined;
+  if (step === "failed" || step === "cancel") {
+    text = field(form, "reason", SHIPPING_LIMITS.reasonMax * 2)?.trim();
+    const length = text ? [...text].length : 0;
+    if (!text || length < SHIPPING_LIMITS.reasonMin || length > SHIPPING_LIMITS.reasonMax)
+      redirect(`${page}?erreur=EXPEDITION_INVALIDE`);
+  }
+  const result = await staffApi().shipmentStep(token, reference, step, text);
+  if (!result.ok) return afterFailure(token, result, page);
+  // Après la remise, on reste sur la liste des commandes prêtes (plusieurs colis à la suite)
+  redirect(`${page}?ok=${STEP_NOTICES[step]}`);
+}
+
+const ZONE_IDS = ["zone_1", "zone_2", "zone_3", "zone_4"] as const;
+
+/** Nombre entier saisi dans le formulaire (espaces de milliers tolérés), dans les bornes ; sinon `null`. */
+function integer(form: FormData, name: string, max: number): number | null {
+  const raw = field(form, name, 20)?.replace(/[\s\u202f\u00a0]/g, "");
+  if (!raw || !/^\d{1,9}$/.test(raw)) return null;
+  const value = Number(raw);
+  return value <= max ? value : null;
+}
+
+/** Barème des 4 zones (administrateurs) ; l'API revérifie tout et inscrit le changement au journal d'audit. */
+export async function updateTariffsAction(form: FormData): Promise<never> {
+  const page = "/equipe/livraisons/bareme";
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(page)}`);
+  const zones: DeliveryTariffsRequest["zones"] = [];
+  for (const id of ZONE_IDS) {
+    const baseFee = integer(form, `${id}.baseFee`, SHIPPING_LIMITS.baseFeeMax);
+    const freeThreshold = integer(form, `${id}.freeThreshold`, SHIPPING_LIMITS.freeThresholdMax);
+    const daysMin = integer(form, `${id}.daysMin`, SHIPPING_LIMITS.daysMax);
+    const daysMax = integer(form, `${id}.daysMax`, SHIPPING_LIMITS.daysMax);
+    if (
+      baseFee === null ||
+      freeThreshold === null ||
+      daysMin === null ||
+      daysMax === null ||
+      daysMin > daysMax
+    )
+      redirect(`${page}?erreur=TARIFS_INVALIDES`);
+    zones.push({ id, baseFee, freeThreshold, daysMin, daysMax });
+  }
+  const result = await staffApi().updateTariffs(token, { zones });
+  if (!result.ok) return afterFailure(token, result, page);
+  redirect(`${page}?ok=bareme-enregistre`);
 }

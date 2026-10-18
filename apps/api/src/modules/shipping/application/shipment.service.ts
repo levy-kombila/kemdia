@@ -11,9 +11,11 @@ import {
 import { ShippingError } from "../domain/shipping-error.js";
 import {
   CARRIER,
+  SHIPMENT_EMAILS,
   SHIPMENT_REPOSITORY,
   SHIPPING_RANDOM,
   type Carrier,
+  type ShipmentEmailOutbox,
   type ShipmentRecord,
   type ShipmentRepository,
   type ShippingRandom,
@@ -39,7 +41,19 @@ export class ShipmentService {
     @Inject(CARRIER) private readonly carrier: Carrier,
     @Inject(SHIPPING_RANDOM) private readonly random: ShippingRandom,
     @Inject(AuditLog) private readonly audit: Pick<AuditLog, "record">,
+    @Inject(SHIPMENT_EMAILS) private readonly emails: Pick<ShipmentEmailOutbox, "enqueue">,
   ) {}
+
+  /**
+   * Livraison vue par le client (S7-T02) : seulement pour SA commande (une commande d'un autre compte est « introuvable »,
+   * comme sur les autres routes des commandes).
+   */
+  async getForAccount(accountId: string, reference: string): Promise<ShipmentRecord> {
+    const order = await this.orders.findForAccount(accountId, reference);
+    const shipment = await this.shipments.findByReference(order.reference);
+    if (!shipment) throw notFound();
+    return shipment;
+  }
 
   /** Commandes prêtes à remettre au transporteur (payées ou à la livraison, tous les vendeurs d'accord). */
   listReady(): Promise<OrderRecord[]> {
@@ -79,6 +93,15 @@ export class ShipmentService {
         { id: this.random.uuid(), status: "in_transit", at: now, note: null, actorId: adminId },
       );
       await this.carrier.handOver({ orderReference: order.reference, cityName: shipment.cityName });
+      // E-mail « en route » au client, envoyé après la transaction (S7-T02)
+      await this.emails.enqueue({
+        id: this.random.uuid(),
+        shipmentId: shipment.id,
+        kind: "handed_over",
+        accountId: order.accountId,
+        orderReference: order.reference,
+        now,
+      });
       await this.record("shipment.handed_over", adminId, order, context, { attempt: 1 });
       return { shipment, changed: true };
     });
@@ -88,6 +111,14 @@ export class ShipmentService {
   delivered(adminId: string, reference: string, context: AuditContext): Promise<ShipmentResult> {
     return this.move(adminId, reference, "delivered", context, async (order, shipment, now) => {
       await this.orders.markDelivered(order, now);
+      await this.emails.enqueue({
+        id: this.random.uuid(),
+        shipmentId: shipment.id,
+        kind: "delivered",
+        accountId: order.accountId,
+        orderReference: order.reference,
+        now,
+      });
       return { attempt: shipment.attempt, failureReason: null, note: null };
     });
   }

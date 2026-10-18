@@ -90,6 +90,7 @@ describe("Description OpenAPI", () => {
       "/api/v1/orders/{reference}/invoices",
       "/api/v1/orders/{reference}/invoices/{number}",
       "/api/v1/orders/{reference}/payments",
+      "/api/v1/orders/{reference}/shipment",
       "/api/v1/product-images/{imageId}/{size}",
       "/api/v1/products",
       "/api/v1/products/facets",

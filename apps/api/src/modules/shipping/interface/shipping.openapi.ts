@@ -60,6 +60,24 @@ const action = (
 });
 
 export const shippingPaths = {
+  "/api/v1/orders/{reference}/shipment": {
+    get: {
+      tags: ["Livraisons"],
+      summary: "Livraison de ma commande",
+      description:
+        "Session ouverte ; seulement les commandes du compte. L'état et les étapes de la livraison (S7-T02) — ni le motif d'un échec, ni le transporteur, ni les parts des frais.",
+      operationId: "getMyShipment",
+      security: bearer,
+      parameters: [reference],
+      responses: {
+        "200": json("CustomerShipment", "La livraison"),
+        "401": problem("`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé"),
+        "404": problem(
+          "`COMMANDE_INTROUVABLE` (pas une commande du compte) ou `EXPEDITION_INTROUVABLE` (pas encore remise au transporteur)",
+        ),
+      },
+    },
+  },
   "/api/v1/shipping/tariffs": {
     get: {
       tags: ["Livraisons"],

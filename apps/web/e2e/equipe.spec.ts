@@ -176,5 +176,48 @@ test.describe("espace de l'équipe : parcours complet", () => {
     // Page « Sécurité » : 9 codes de secours restants
     await page.goto("/equipe/securite");
     await expect(page.getByText("Codes de secours encore utilisables")).toContainText("9");
+
+    // --- Livraisons (S7-T02) : remise au transporteur, échec, nouvelle tentative, livrée ---
+    await page.goto("/equipe");
+    await expect(
+      page.getByRole("link", { name: /commandes à remettre au transporteur/ }),
+    ).toBeVisible();
+    await page.getByRole("link", { name: /commandes à remettre au transporteur/ }).click();
+    await expect(page).toHaveURL(/\/equipe\/livraisons$/);
+    await expectAccessible(page);
+    const ready = page.getByRole("listitem").filter({ hasText: "KMD-E2ELVR" });
+    await expect(ready).toContainText("Libreville");
+    // Ni le nom ni le téléphone du client dans la liste
+    await expect(ready).not.toContainText("Lea");
+    await ready.getByRole("button", { name: "Remettre au transporteur" }).click();
+    await expect(page).toHaveURL(/\/equipe\/livraisons\?ok=livraison-remise$/);
+    await expect(page.getByRole("status")).toContainText("remise au transporteur");
+
+    await page.getByRole("link", { name: "En route", exact: true }).click();
+    await page.getByRole("link", { name: /KMD-E2ELVR/ }).click();
+    await expect(
+      page.getByRole("heading", { name: "Livraison KMD-E2ELVR", level: 1 }),
+    ).toBeVisible();
+    await expect(page.getByText(/Kemdia 150\s?FCFA · transporteur 850\s?FCFA/)).toBeVisible();
+    await expectAccessible(page);
+    await page.getByText("Noter un échec de livraison…").click();
+    await page.getByLabel("Pourquoi la livraison n'a pas pu se faire ?").fill("Portail fermé");
+    await page.getByRole("button", { name: "Noter un échec de livraison", exact: true }).click();
+    await expect(page).toHaveURL(/\?ok=livraison-echec$/);
+    await page.getByRole("button", { name: "Nouvelle tentative de livraison" }).click();
+    await expect(page).toHaveURL(/\?ok=livraison-relancee$/);
+    await page.getByRole("button", { name: "Noter la commande livrée" }).click();
+    await expect(page).toHaveURL(/\?ok=livraison-livree$/);
+    await expect(page.getByText("Livrée", { exact: true }).first()).toBeVisible();
+    // Livrée : plus aucune étape proposée
+    await expect(page.getByRole("button", { name: "Noter la commande livrée" })).toHaveCount(0);
+
+    // Barème : lisible et accessible (pas modifié : la base de la CI sert aux autres parcours)
+    await page.goto("/equipe/livraisons/bareme");
+    await expect(
+      page.getByRole("heading", { name: "Barème de livraison", level: 1 }),
+    ).toBeVisible();
+    await expect(page.getByRole("group", { name: "Libreville / Grand Libreville" })).toBeVisible();
+    await expectAccessible(page);
   });
 });

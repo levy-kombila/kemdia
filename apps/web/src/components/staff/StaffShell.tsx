@@ -1,11 +1,12 @@
-import { IdCard, LayoutDashboard, ShieldCheck, Store, Tags } from "lucide-react";
+import { IdCard, LayoutDashboard, ShieldCheck, Store, Tags, Truck } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Breadcrumbs, type Crumb } from "@/components/catalog/Breadcrumbs";
 import { FormAlert } from "@/components/ui/Field";
 import { cn } from "@/lib/cn";
 
-export type StaffSection = "accueil" | "boutiques" | "verifications" | "moderation" | "securite";
+export type StaffSection =
+  "accueil" | "boutiques" | "verifications" | "livraisons" | "moderation" | "securite";
 
 const LINKS: { id: StaffSection; label: string; href: string; icon: typeof Store; admin?: true }[] =
   [
@@ -18,6 +19,8 @@ const LINKS: { id: StaffSection; label: string; href: string; icon: typeof Store
       icon: IdCard,
       admin: true,
     },
+    // Livraisons (S7-T02) : administrateurs seulement, comme dans l'API
+    { id: "livraisons", label: "Livraisons", href: "/equipe/livraisons", icon: Truck, admin: true },
     { id: "moderation", label: "Modération", href: "/equipe/moderation", icon: Tags },
     { id: "securite", label: "Sécurité", href: "/equipe/securite", icon: ShieldCheck },
   ];

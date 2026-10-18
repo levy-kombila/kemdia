@@ -5,6 +5,18 @@ import {
   AdminShopPageSchema,
   AdminShopSchema,
   CLIENT_IP_HEADER,
+  DeliveryTariffsSchema,
+  ReadyOrderListSchema,
+  SHIPPING_ERROR_CODES,
+  ShipmentListSchema,
+  ShipmentSchema,
+  type DeliveryTariffs,
+  type DeliveryTariffsRequest,
+  type ReadyOrderList,
+  type Shipment,
+  type ShipmentList,
+  type ShipmentStatus,
+  type ShippingErrorCode,
   IDENTITY_ERROR_CODES,
   INTERNAL_KEY_HEADER,
   ModerationProductPageSchema,
@@ -48,7 +60,10 @@ import { readAtMost } from "@/lib/orders/api-orders";
  * - les journaux ne contiennent ni jeton, ni mot de passe, ni code, ni secret : seulement la route et le statut.
  */
 
-export type StaffFailureCode = IdentityErrorCode | VendorErrorCode | "INDISPONIBLE";
+/** S7-T02 : codes des livraisons, et deux codes des commandes renvoyés par ces routes. */
+export type StaffOrderCode = "COMMANDE_INTROUVABLE" | "PANIER_OCCUPE";
+export type StaffFailureCode =
+  IdentityErrorCode | VendorErrorCode | ShippingErrorCode | StaffOrderCode | "INDISPONIBLE";
 export type StaffFailure = { ok: false; code: StaffFailureCode; retryAfterSeconds?: number };
 export type StaffResult<T> = { ok: true; data: T } | StaffFailure;
 
@@ -61,7 +76,15 @@ export interface StaffApiOptions {
   visitorIp?: () => Promise<string | null>;
 }
 
-const KNOWN_CODES: readonly StaffFailureCode[] = [...IDENTITY_ERROR_CODES, ...VENDOR_ERROR_CODES];
+const KNOWN_CODES: readonly StaffFailureCode[] = [
+  ...IDENTITY_ERROR_CODES,
+  ...VENDOR_ERROR_CODES,
+  ...SHIPPING_ERROR_CODES,
+  "COMMANDE_INTROUVABLE",
+  "PANIER_OCCUPE",
+];
+/** Numéro de commande (« KMD-7F3K9Q ») : vérifié avant de construire l'adresse de l'API. */
+const ORDER_REFERENCE = /^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Route lisible dans les journaux : jamais d'identifiant. */
@@ -92,7 +115,7 @@ export function createStaffApi(options: StaffApiOptions) {
   }
 
   async function call<T>(
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "PUT",
     path: string,
     token: string,
     schema: z.ZodType<T>,
@@ -194,7 +217,7 @@ export function createStaffApi(options: StaffApiOptions) {
     }
     return { status: 200, bytes };
   }
-  const notFound = <T>(code: VendorErrorCode): StaffResult<T> => ({ ok: false, code });
+  const notFound = <T>(code: StaffFailureCode): StaffResult<T> => ({ ok: false, code });
 
   function listQuery(params: { status?: string; after?: string; limit?: number }): string {
     const query = new URLSearchParams();
@@ -324,6 +347,41 @@ export function createStaffApi(options: StaffApiOptions) {
         decision === "approve" ? undefined : { reason: reason ?? "" },
       );
     },
+    // --- Livraisons (S7-T02, administrateurs) ---
+    readyOrders: (token: string): Promise<StaffResult<ReadyOrderList>> =>
+      call("GET", "/admin/shipping/ready", token, ReadyOrderListSchema),
+    shipments: (token: string, status: ShipmentStatus): Promise<StaffResult<ShipmentList>> =>
+      call("GET", `/admin/shipping/shipments?status=${status}`, token, ShipmentListSchema),
+    shipment: (token: string, reference: string): Promise<StaffResult<Shipment>> =>
+      ORDER_REFERENCE.test(reference)
+        ? call("GET", `/admin/shipping/shipments/${reference}`, token, ShipmentSchema)
+        : Promise.resolve(notFound("EXPEDITION_INTROUVABLE")),
+    /** Étape d'une livraison ; motif (échec) ou note (annulation) vérifiés à nouveau par l'API. */
+    shipmentStep: (
+      token: string,
+      reference: string,
+      step: "hand-over" | "delivered" | "failed" | "retry" | "cancel",
+      text?: string,
+    ): Promise<StaffResult<Shipment>> => {
+      if (!ORDER_REFERENCE.test(reference))
+        return Promise.resolve(notFound("COMMANDE_INTROUVABLE"));
+      const body =
+        step === "failed" ? { reason: text ?? "" } : step === "cancel" ? { note: text ?? "" } : {};
+      return call(
+        "POST",
+        `/admin/shipping/shipments/${reference}/${step}`,
+        token,
+        ShipmentSchema,
+        body,
+      );
+    },
+    tariffs: (token: string): Promise<StaffResult<DeliveryTariffs>> =>
+      call("GET", "/admin/shipping/tariffs", token, DeliveryTariffsSchema),
+    updateTariffs: (
+      token: string,
+      tariffs: DeliveryTariffsRequest,
+    ): Promise<StaffResult<DeliveryTariffs>> =>
+      call("PUT", "/admin/shipping/tariffs", token, DeliveryTariffsSchema, tariffs),
     /** Photo du dossier, déchiffrée par l'API (consultation au journal) : WebP vérifié, 5 Mo au plus. */
     kycDocument(token: string, shopId: string, kind: KycDocumentKind): Promise<StaffImageResult> {
       const shop = id(shopId);

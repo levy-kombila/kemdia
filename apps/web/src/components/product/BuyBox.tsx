@@ -13,7 +13,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useDeliveryLocation } from "@/components/providers/LocationProvider";
 import { MAX_QTY_PER_LINE, type CartLine } from "@/lib/cart";
-import { deliveryWindow, estimateDelivery } from "@/lib/delivery";
+import { useDeliveryEstimate } from "@/components/providers/DeliveryTariffsProvider";
+import { deliveryWindow } from "@/lib/delivery";
 import { formatFCFA } from "@/lib/format";
 import { AddToCartButton } from "./AddToCartButton";
 import { QuantityInput } from "./QuantityInput";
@@ -25,6 +26,7 @@ export function BuyBox({ line }: { line: Omit<CartLine, "quantity"> }) {
   const { city, location, openModal } = useDeliveryLocation();
   const inStock = line.maxQuantity > 0;
   const max = Math.min(line.maxQuantity, MAX_QTY_PER_LINE);
+  const estimateDelivery = useDeliveryEstimate();
   const estimate = city ? estimateDelivery(city.id, line.price * qty) : null;
 
   return (

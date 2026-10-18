@@ -1,4 +1,4 @@
-import type { ShopStatus, VendorProductStatus } from "@kemdia/contracts/constants";
+import type { ShipmentStatus, ShopStatus, VendorProductStatus } from "@kemdia/contracts/constants";
 
 /** Libellés et couleurs des statuts (S6-T05) : le texte porte le sens, la couleur n'est qu'un repère. */
 export type Tone = "wait" | "ok" | "bad" | "off";
@@ -37,3 +37,20 @@ export const KYC_STATUS = {
   draft: { label: "En préparation", tab: "En préparation", tone: "off" },
 } as const satisfies Record<string, { label: string; tab: string; tone: Tone }>;
 export const KYC_TABS = ["pending", "approved", "rejected"] as const;
+
+/** Livraisons (S7-T02) : « Prêtes » = commandes sans expédition ; les autres onglets = statut de l'expédition. */
+export const SHIPMENT_STATUS: Record<ShipmentStatus, { label: string; tab: string; tone: Tone }> = {
+  in_transit: { label: "En route", tab: "En route", tone: "wait" },
+  failed: { label: "Échec de livraison", tab: "Échecs", tone: "bad" },
+  delivered: { label: "Livrée", tab: "Livrées", tone: "ok" },
+  cancelled: { label: "Annulée", tab: "Annulées", tone: "off" },
+};
+export const SHIPPING_TABS = ["ready", "in_transit", "failed", "delivered", "cancelled"] as const;
+export type ShippingTab = (typeof SHIPPING_TABS)[number];
+export const SHIPPING_TAB_LABEL: Record<ShippingTab, string> = {
+  ready: "Prêtes",
+  in_transit: SHIPMENT_STATUS.in_transit.tab,
+  failed: SHIPMENT_STATUS.failed.tab,
+  delivered: SHIPMENT_STATUS.delivered.tab,
+  cancelled: SHIPMENT_STATUS.cancelled.tab,
+};
