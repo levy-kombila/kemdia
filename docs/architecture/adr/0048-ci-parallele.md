@@ -31,12 +31,21 @@ attend que tout soit vert.
 2. **Les déploiements attendent tout.** Les jobs « Déploiement STAGING » et « Déploiement DÉMO (Render) » exigent :
    qualité, base, bout en bout, pile serveur et les deux images. Avant, ils n'attendaient que les images, et la pile
    serveur n'était pas une condition.
-3. **La production attend une CI verte.** Sur `main`, les images sont publiées pendant que les tests tournent encore.
-   « L'image existe » ne prouve donc plus que « la CI a réussi ». Avant de promouvoir quoi que ce soit, `release.yml`
-   vérifie que la CI/CD du commit taggé est **terminée et verte** (attente de 30 min au plus). Sinon il s'arrête.
-4. **Scan ZAP passif : les 4 rôles en même temps.** Ce sont 4 processus ZAP, chacun avec son propre port de proxy (ZAP
+3. **La production attend des tests verts.** Sur `main`, les images sont publiées avec leur seule étiquette `sha-…`
+   pendant que les tests tournent. « L'image existe » ne prouve donc plus que « la CI a réussi ». Avant de promouvoir
+   quoi que ce soit, `release.yml` vérifie que les **6 jobs de test** de la CI/CD du commit sont verts : qualité, base,
+   bout en bout, pile serveur et les deux images. Le run doit venir de `main`, d'un push et de `ci.yml` ; l'attente est
+   de 30 min au plus, et le job dispose désormais de 60 min. Les déploiements staging et démo ne comptent pas : une
+   panne de Render ne bloque pas la production.
+4. **Étiquettes mobiles après validation.** `main` (GHCR, Docker Hub) et `latest` (Docker Hub, l'image que tire
+   Render) ne sont posées que par le nouveau job « Étiquettes main et latest », une fois tous les tests verts, sur le
+   digest déjà publié (`docker buildx imagetools create`, sans rien reconstruire).
+5. **Scan ZAP passif : les 4 rôles en même temps.** Ce sont 4 processus ZAP, chacun avec son propre port de proxy (ZAP
    l'ouvre même en ligne de commande) et son dossier de travail neuf. Les rapports et annotations sont lus ensuite, un
    rôle après l'autre, comme avant. Le scan **actif** du dimanche reste séquentiel, pour ne pas surcharger la pile.
+   Mémoire de Java bornée (1 Go par ZAP en passif, 4 Go en actif). Un ZAP sorti avec un code différent de 0 sans
+   alerte bloquante (plan en échec, Java arrêté…) rend la CI **rouge** : un rapport partiel ne passe plus pour un vert.
+   Les jetons de test sont retirés des journaux avant l'envoi de l'artefact public.
 
 ## Conséquences
 
@@ -46,8 +55,8 @@ attend que tout soit vert.
   - Les déploiements sont **plus** stricts qu'avant, car la pile serveur devient une condition.
 - **Négatives** :
   - Sur `main`, une image peut être publiée dans GHCR et Docker Hub pour un commit dont les tests échouent ensuite.
-    Elle n'est alors déployée nulle part : staging et démo attendent tout, et la production vérifie la CI. Elle reste
-    seulement visible dans les registres sous l'étiquette `sha-…`.
+    Elle n'est alors déployée nulle part et ne reçoit ni `main` ni `latest` : elle reste seulement visible dans les
+    registres sous l'étiquette `sha-…`.
   - Quand le job de qualité échoue, les autres jobs tournent quand même jusqu'au bout. Il y a plus de minutes de runner
     consommées, mais elles sont gratuites pour un dépôt public. Un nouveau push annule l'ancien passage d'une PR.
   - Environ 17 jobs démarrent ensemble, sous la limite de 20 runners simultanés d'un compte gratuit.

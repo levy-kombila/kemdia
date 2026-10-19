@@ -313,11 +313,13 @@ jobs:
         name: Noms et étiquettes de l'image
         run: |
           ghcr="ghcr.io/${GITHUB_REPOSITORY,,}/web"
-          tags="$ghcr:sha-$GITHUB_SHA"$'\n'"$ghcr:main"
+          # S7.5-T01 : seulement l'étiquette du commit ici ; « main » et « latest » sont posées par le job
+          # « Étiquettes main et latest », une fois TOUS les tests verts (relecture S7.5-T01)
+          tags="$ghcr:sha-$GITHUB_SHA"
           dockerhub=""
           if [ -n "$DOCKERHUB_USERNAME" ]; then
             dockerhub="docker.io/${DOCKERHUB_USERNAME,,}/${DOCKERHUB_REPO,,}"
-            tags="$tags"$'\n'"$dockerhub:sha-$GITHUB_SHA"$'\n'"$dockerhub:main"$'\n'"$dockerhub:latest"
+            tags="$tags"$'\n'"$dockerhub:sha-$GITHUB_SHA"
           fi
           {
             echo "image=$ghcr"
@@ -465,10 +467,10 @@ jobs:
         name: Noms et étiquettes de l'image
         run: |
           ghcr="ghcr.io/${GITHUB_REPOSITORY,,}/api"
-          tags="$ghcr:sha-$GITHUB_SHA"$'\n'"$ghcr:main"
+          tags="$ghcr:sha-$GITHUB_SHA" # « main » et « latest » : après les tests (job « Étiquettes main et latest »)
           if [ -n "$DOCKERHUB_USERNAME" ]; then
             dockerhub="docker.io/${DOCKERHUB_USERNAME,,}/${DOCKERHUB_API_REPO,,}"
-            tags="$tags"$'\n'"$dockerhub:sha-$GITHUB_SHA"$'\n'"$dockerhub:main"$'\n'"$dockerhub:latest"
+            tags="$tags"$'\n'"$dockerhub:sha-$GITHUB_SHA"
           fi
           {
             echo "image=$ghcr"
@@ -934,6 +936,55 @@ jobs:
             | sed 's/%/%25/g' | tr '\n' '\r' | sed 's/\r/%0A/g' )
           [ -z "$note" ] || echo "::warning title=Surveillance::$note"
           tail -n 40 "$RUNNER_TEMP/s3.log" 2>/dev/null || true
+
+  # S7.5-T01 (relecture) : les images sont publiées pendant que les tests tournent ; les étiquettes mobiles « main » et
+  # « latest » (celle que tire Render) ne bougent qu'ici, quand TOUT est vert, vers le digest déjà publié et testé.
+  tag-floating:
+    name: Étiquettes main et latest (après validation)
+    needs: [quality, database, e2e, server-stack, image, image-api]
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    env:
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_REPO: ${{ vars.DOCKERHUB_REPO || 'kemdia' }}
+      DOCKERHUB_API_REPO: ${{ vars.DOCKERHUB_API_REPO || 'kemdia-api' }}
+      WEB_IMAGE: ${{ needs.image.outputs.image }}
+      WEB_DIGEST: ${{ needs.image.outputs.digest }}
+      API_IMAGE: ${{ needs.image-api.outputs.image }}
+      API_DIGEST: ${{ needs.image-api.outputs.digest }}
+    steps:
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Connexion au registre GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Connexion à Docker Hub
+        if: env.DOCKERHUB_USERNAME != ''
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Poser main et latest sur les digests testés
+        run: |
+          for d in "$WEB_DIGEST" "$API_DIGEST"; do
+            [[ $d =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "::error::digest invalide : $d"; exit 1; }
+          done
+          docker buildx imagetools create -t "$WEB_IMAGE:main" "$WEB_IMAGE@$WEB_DIGEST"
+          docker buildx imagetools create -t "$API_IMAGE:main" "$API_IMAGE@$API_DIGEST"
+          if [ -n "$DOCKERHUB_USERNAME" ]; then
+            hub="docker.io/${DOCKERHUB_USERNAME,,}"
+            docker buildx imagetools create -t "$hub/${DOCKERHUB_REPO,,}:main" -t "$hub/${DOCKERHUB_REPO,,}:latest" \
+              "$hub/${DOCKERHUB_REPO,,}@$WEB_DIGEST"
+            docker buildx imagetools create -t "$hub/${DOCKERHUB_API_REPO,,}:main" -t "$hub/${DOCKERHUB_API_REPO,,}:latest" \
+              "$hub/${DOCKERHUB_API_REPO,,}@$API_DIGEST"
+          fi
+          echo "✅ main et latest posées sur $WEB_DIGEST (site) et $API_DIGEST (API)"
 
   deploy-staging:
     name: Déploiement STAGING
