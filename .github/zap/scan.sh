@@ -4,9 +4,9 @@
 #
 #   .github/zap/scan.sh <passif|actif> <site|api> <url> <dossier des rapports>
 #
-# Lance ZAP (déjà installé dans $ZAP_DIR) une fois par rôle : anonyme, client, vendeur, équipe (en même temps pour le
-# scan passif). Les jetons des sessions de test sont lus dans $ZAP_TOKENS_FILE (« rôle=jeton », hors du dépôt) et
-# passés à ZAP par ses variables d'environnement : ni dans le plan, ni dans les rapports, ni dans la liste des processus de la CI.
+# Lance ZAP (déjà installé dans $ZAP_DIR) une fois par rôle : anonyme, client, vendeur, équipe (l'un après l'autre).
+# Les jetons des sessions de test sont lus dans $ZAP_TOKENS_FILE (« rôle=jeton », hors du dépôt) et passés à ZAP par
+# ses variables d'environnement : ni dans le plan, ni dans les rapports, ni dans la liste des processus de la CI.
 # Résumé dans $GITHUB_STEP_SUMMARY ; une annotation par alerte moyenne ou élevée ; code 1 si l'une d'elles existe.
 # =============================================================================
 set -Eeuo pipefail
@@ -63,31 +63,20 @@ run_role() {
 
   home=$(mktemp -d)
   local code=0
-  # Mémoire de Java bornée (relecture S7.5-T01) : 4 ZAP en même temps ne doivent pas affamer la pile testée
+  # Mémoire de Java bornée (relecture S7.5-T01) : ZAP ne doit pas affamer la pile testée sur le même runner
   env "${auth[@]}" "$ZAP_DIR/zap.sh" "$XMX" -cmd -silent -port "$port" -dir "$home" -autorun "$plan" \
     >"$OUT/zap-$CIBLE-$role.log" 2>&1 || code=$?
   rm -rf "$home" "$plan"
   echo "$code" >"$OUT/zap-$CIBLE-$role.code"
 }
 
-# Scan passif (chaque PR) : les 4 rôles EN MÊME TEMPS (S7.5-T01) — l'exploration de chacun dure jusqu'à 3 min, et
-# les rapports restent séparés. Scan actif (dimanche) : un rôle après l'autre, pour ne pas surcharger la pile.
+# Un rôle après l'autre. S7.5-T01 a essayé les 4 rôles en même temps : aucun gain mesuré en CI (6 min 35 contre
+# 6 min 20), car les 4 ZAP et la pile se partagent les 4 processeurs du runner, et l'exploration ralentit (ADR-0048).
+XMX=-Xmx4g
 port=8091
-if [[ $MODE == passif ]]; then
-  XMX=-Xmx1g
-  pids=()
-  for role in "${ROLES[@]}"; do
-    run_role "$role" "$port" &
-    pids+=($!)
-    port=$((port + 1))
-  done
-  for pid in "${pids[@]}"; do wait "$pid" || true; done
-else
-  XMX=-Xmx4g
-  for role in "${ROLES[@]}"; do
-    run_role "$role" "$port" || true
-  done
-fi
+for role in "${ROLES[@]}"; do
+  run_role "$role" "$port" || true
+done
 
 status=0
 for role in "${ROLES[@]}"; do

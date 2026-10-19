@@ -40,17 +40,21 @@ attend que tout soit vert.
 4. **Étiquettes mobiles après validation.** `main` (GHCR, Docker Hub) et `latest` (Docker Hub, l'image que tire
    Render) ne sont posées que par le nouveau job « Étiquettes main et latest », une fois tous les tests verts, sur le
    digest déjà publié (`docker buildx imagetools create`, sans rien reconstruire).
-5. **Scan ZAP passif : les 4 rôles en même temps.** Ce sont 4 processus ZAP, chacun avec son propre port de proxy (ZAP
-   l'ouvre même en ligne de commande) et son dossier de travail neuf. Les rapports et annotations sont lus ensuite, un
-   rôle après l'autre, comme avant. Le scan **actif** du dimanche reste séquentiel, pour ne pas surcharger la pile.
-   Mémoire de Java bornée (1 Go par ZAP en passif, 4 Go en actif). Un ZAP sorti avec un code différent de 0 sans
-   alerte bloquante (plan en échec, Java arrêté…) rend la CI **rouge** : un rapport partiel ne passe plus pour un vert.
-   Les jetons de test sont retirés des journaux avant l'envoi de l'artefact public.
+5. **Scan ZAP : toujours un rôle après l'autre, mais plus robuste.** Les 4 rôles en même temps ont été essayés sur la
+   PR #82 : le scan du site a duré 6 min 35, contre 6 min 20 en séquentiel. Les 4 ZAP et la pile testée se partagent
+   les 4 processeurs du runner, donc chaque exploration ralentit ; c'est un gain nul pour une couverture moins sûre.
+   On garde l'ordre séquentiel et les corrections de la relecture :
+   - mémoire de Java bornée (4 Go) ;
+   - un ZAP sorti avec un code différent de 0 sans alerte bloquante (plan en échec, Java arrêté…) rend la CI
+     **rouge**, car un rapport partiel ne doit plus passer pour un vert ;
+   - jetons de test retirés des journaux avant l'envoi de l'artefact public.
 
 ## Conséquences
 
 - **Positives** :
-  - Le chemin le plus long passe d'environ 13 min à environ 6–7 min, avec la pile serveur et ZAP en tête.
+  - Mesuré sur la PR #82 : la CI/CD passe de **13 min 20 à 6 min** (pile serveur en dernier). Le passage complet,
+    jusqu'au dernier check run, passe d'environ **13 min à 10 min** : c'est maintenant ZAP du site (environ 10 min,
+    dont 2 min 20 pour monter la pile) qui termine en dernier.
   - Un passage rouge est connu plus tôt, puisque chaque job signale son échec sans attendre les autres.
   - Les déploiements sont **plus** stricts qu'avant, car la pile serveur devient une condition.
 - **Négatives** :
@@ -66,3 +70,4 @@ attend que tout soit vert.
     entre jobs, et c'est plus complexe pour un gain nul en sécurité, la production vérifiant déjà la CI.
   - Raccourcir l'exploration de ZAP : la couverture du test d'intrusion aurait baissé.
   - Un job ZAP par rôle : 8 jobs de plus, au risque de dépasser la limite de runners simultanés.
+  - Les 4 rôles ZAP en même temps sur un seul runner : essayé, sans gain mesuré (voir le point 5).
