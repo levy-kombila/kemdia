@@ -1,0 +1,60 @@
+# Pile serveur Kemdia montée comme sur le VPS (S7-T04, ADR-0043) : images construites depuis le cache de la CI et
+# servies par un registre local, VRAIS fichiers de deploy/ (setup-server.sh --fichiers-seulement, init-secrets.sh,
+# Caddy, deploy.sh). Partagée par le job « Pile serveur » (ci.yml) et le test d'intrusion (zap.yml, S7-T07).
+#
+# Le job appelant doit déclarer le service « registry » (registry:2, port 5000) et la variable REPO.
+name: Pile serveur Kemdia
+description: Construit les images, installe les fichiers du serveur, démarre Caddy et déploie la production (ci-v1).
+outputs:
+  web-digest:
+    description: Digest de l'image du site
+    value: ${{ steps.web.outputs.digest }}
+  api-digest:
+    description: Digest de l'image de l'API
+    value: ${{ steps.api.outputs.digest }}
+runs:
+  using: composite
+  steps:
+    - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      with:
+        driver-opts: network=host # le constructeur doit joindre le registre local
+
+    - name: Image du site (cache de la CI) → registre local
+      id: web
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      with:
+        context: .
+        file: apps/web/Dockerfile
+        push: true
+        tags: ${{ env.REPO }}/web:ci
+        build-args: |
+          NEXT_PUBLIC_SITE_URL=https://localhost
+          APP_VERSION=ci
+        cache-from: type=gha
+
+    - name: Image de l'API (cache de la CI) → registre local
+      id: api
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      with:
+        context: .
+        file: apps/api/Dockerfile
+        push: true
+        tags: ${{ env.REPO }}/api:ci
+        cache-from: type=gha,scope=api
+
+    - name: Fichiers du serveur, secrets de la production et Caddy (comme sur le VPS)
+      shell: bash
+      run: |
+        sudo GITHUB_ACTIONS=true IMAGE_REPO="$REPO" KEMDIA_GROUP=docker bash deploy/bin/setup-server.sh --fichiers-seulement
+        sudo KEMDIA_SECRETS_GROUP=docker /opt/kemdia/bin/init-secrets.sh production localhost
+        hash=$(docker run --rm caddy:2-alpine caddy hash-password --plaintext "ci-$RANDOM-$RANDOM")
+        printf 'ACME_EMAIL=ci@example.com\nPROD_DOMAIN=localhost\nSTAGING_DOMAIN=staging.localhost\nSTAGING_USER=ci\nSTAGING_PASSWORD_HASH=%s\n' \
+          "${hash//\$/\$\$}" | sudo tee /opt/kemdia/proxy/.env >/dev/null
+        (cd /opt/kemdia/proxy && sudo docker compose up -d)
+
+    - name: Déployer avec le vrai deploy.sh (migrations, puis bascule)
+      shell: bash
+      env:
+        WEB: ${{ steps.web.outputs.digest }}
+        API: ${{ steps.api.outputs.digest }}
+      run: sudo /opt/kemdia/bin/deploy.sh production "$REPO/web@$WEB" "$REPO/api@$API" ci-v1 < /dev/null

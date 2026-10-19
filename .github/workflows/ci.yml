@@ -669,37 +669,12 @@ jobs:
       REPO: localhost:5000/kemdia
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-        with:
-          driver-opts: network=host # le constructeur doit joindre le registre local
+      - name: Pile serveur (images, fichiers du serveur, Caddy, déploiement ci-v1)
+        id: stack
+        uses: ./.github/actions/pile-serveur
 
-      - name: Image du site (cache de la CI) → registre local
-        id: web
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          file: apps/web/Dockerfile
-          push: true
-          tags: ${{ env.REPO }}/web:ci
-          build-args: |
-            NEXT_PUBLIC_SITE_URL=https://localhost
-            APP_VERSION=ci
-          cache-from: type=gha
-
-      - name: Image de l'API (cache de la CI) → registre local
-        id: api
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          file: apps/api/Dockerfile
-          push: true
-          tags: ${{ env.REPO }}/api:ci
-          cache-from: type=gha,scope=api
-
-      - name: Fichiers du serveur, secrets et Caddy (comme sur le VPS)
+      - name: Vérifier — secrets non remplacés, droits, moindre privilège
         run: |
-          sudo GITHUB_ACTIONS=true IMAGE_REPO="$REPO" KEMDIA_GROUP=docker bash deploy/bin/setup-server.sh --fichiers-seulement
-          sudo KEMDIA_SECRETS_GROUP=docker /opt/kemdia/bin/init-secrets.sh production localhost
           # Un second passage ne remplace RIEN (une clé perdue rend des données illisibles)
           before=$(sudo sha256sum /opt/kemdia/secrets/production.api.env)
           if sudo KEMDIA_SECRETS_GROUP=docker /opt/kemdia/bin/init-secrets.sh production localhost 2>/dev/null; then
@@ -714,17 +689,6 @@ jobs:
           if sudo grep -qE '^(TOTP_ENCRYPTION_KEY|KYC_ENCRYPTION_KEY|DATABASE_URL)=' /opt/kemdia/secrets/production.web.env; then
             echo "::error::le fichier du site contient un secret de l'API"; exit 1
           fi
-          hash=$(docker run --rm caddy:2-alpine caddy hash-password --plaintext "ci-$RANDOM-$RANDOM")
-          printf 'ACME_EMAIL=ci@example.com\nPROD_DOMAIN=localhost\nSTAGING_DOMAIN=staging.localhost\nSTAGING_USER=ci\nSTAGING_PASSWORD_HASH=%s\n' \
-            "${hash//\$/\$\$}" | sudo tee /opt/kemdia/proxy/.env >/dev/null
-          (cd /opt/kemdia/proxy && sudo docker compose up -d)
-
-      - name: Déployer avec le vrai deploy.sh (migrations, puis bascule)
-        env:
-          WEB: ${{ steps.web.outputs.digest }}
-          API: ${{ steps.api.outputs.digest }}
-        run: |
-          sudo /opt/kemdia/bin/deploy.sh production "$REPO/web@$WEB" "$REPO/api@$API" ci-v1 < /dev/null
 
       - name: Vérifier — santé, en-têtes, isolement des réseaux
         run: |
@@ -752,8 +716,8 @@ jobs:
 
       - name: Nouvelle version, retour arrière, refus
         env:
-          WEB: ${{ steps.web.outputs.digest }}
-          API: ${{ steps.api.outputs.digest }}
+          WEB: ${{ steps.stack.outputs.web-digest }}
+          API: ${{ steps.stack.outputs.api-digest }}
         run: |
           version() { curl -fsSk --max-time 10 https://localhost/api/health | jq -r .version; }
           sudo /opt/kemdia/bin/deploy.sh production "$REPO/web@$WEB" "$REPO/api@$API" ci-v2 < /dev/null
