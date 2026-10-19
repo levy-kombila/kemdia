@@ -126,7 +126,7 @@ export async function signupAction(input: unknown): Promise<AuthResult<CodeSent>
   if (firstName === null || lastName === null) return invalid("NOM_INVALIDE");
   if (identifier === null) return invalid("IDENTIFIANT_INVALIDE");
   if (password === null) return invalid("MOT_DE_PASSE_FAIBLE");
-  if (data.acceptTerms !== true) return invalid("INDISPONIBLE");
+  if (data.acceptTerms !== true || data.adult !== true) return invalid("INDISPONIBLE");
 
   const result = await identityApi().signup({
     firstName,
@@ -134,6 +134,7 @@ export async function signupAction(input: unknown): Promise<AuthResult<CodeSent>
     identifier,
     password,
     acceptTerms: true,
+    adult: true,
   });
   if (!result.ok) return result;
   (await cookies()).set(

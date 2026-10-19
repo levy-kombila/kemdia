@@ -5,7 +5,7 @@ import { useToast } from "@/components/providers/ToastProvider";
 
 /**
  * Inscription newsletter — l'envoi réel sera branché sur l'API au Sprint 4
- * (double opt-in, consentement explicite, conforme à la loi gabonaise n°001/2011 sur les données personnelles).
+ * (double opt-in, consentement explicite, conforme à la loi gabonaise n°001/2011 modifiée par la loi n°025/2023 sur les données personnelles).
  */
 export function Newsletter() {
   const { notify } = useToast();

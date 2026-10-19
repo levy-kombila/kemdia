@@ -8,6 +8,7 @@ import { paymentPaths } from "../modules/payments/interface/payments.openapi.js"
 import { orderPaths } from "../modules/orders/interface/order.openapi.js";
 import { identityPaths } from "../modules/identity/interface/identity.openapi.js";
 import { shippingPaths } from "../modules/shipping/interface/shipping.openapi.js";
+import { privacyPaths } from "../modules/privacy/interface/privacy.openapi.js";
 import {
   productImagePaths,
   vendorOrderPaths,
@@ -16,7 +17,7 @@ import {
 } from "../modules/vendors/interface/vendors.openapi.js";
 
 /** Version du contrat HTTP (indépendante de la version de l'image) : à augmenter à chaque changement de l'API. */
-export const API_CONTRACT_VERSION = "1.22.0";
+export const API_CONTRACT_VERSION = "1.23.0";
 
 /** Document OpenAPI complet de l'API, généré à partir des schémas réellement utilisés. */
 export function buildOpenApiDocument(): Record<string, unknown> {
@@ -46,6 +47,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         "- Produits des vendeurs (S6-T02) : invisibles jusqu'à leur validation par la modération (BR-003) ; cachés si la boutique est suspendue.",
         "- Photos des vendeurs (S6-T04) : fichier envoyé tel quel (JPEG, PNG, WebP, 5 Mo), réencodé en WebP sans métadonnées ; publiques seulement pour un produit visible.",
         "- Commandes des vendeurs (S6-T07) : chaque boutique accepte ou refuse sa part dans les 24 h (BR-013) ; un refus ou l'absence de réponse annule la commande entière.",
+        "- Données personnelles (S7-T08) : copie JSON, suppression du compte par le titulaire, comptes effacés après 3 ans sans connexion (prévenus 30 jours avant).",
       ].join("\n"),
     },
     servers: [{ url: "/", description: "Même adresse que cette documentation" }],
@@ -93,6 +95,11 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         name: "Livraisons",
         description:
           "Barème de livraison et suivi des expéditions par l'équipe (module shipping, S7-T01) ; part de Kemdia sur les frais (BR-021)",
+      },
+      {
+        name: "Données personnelles",
+        description:
+          "Droits du titulaire (module privacy, S7-T08) : copie de ses données, suppression du compte (loi n°001/2011 modifiée, APDPVP)",
       },
       {
         name: "Boutiques",
@@ -147,6 +154,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       ...vendorOrderPaths,
       ...productImagePaths,
       ...shippingPaths,
+      ...privacyPaths,
     },
     // Schémas du contrat partagé avec le site (@kemdia/contracts)
     components: {

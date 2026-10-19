@@ -26,6 +26,9 @@ describe("Description OpenAPI", () => {
   it("documente toutes les routes", () => {
     expect(Object.keys(document.paths as object).sort()).toEqual([
       "/api/health",
+      "/api/v1/account/data",
+      "/api/v1/account/delete",
+      "/api/v1/account/deletion",
       "/api/v1/admin/accounts/lookup",
       "/api/v1/admin/accounts/{accountId}/roles/{role}",
       "/api/v1/admin/audit",

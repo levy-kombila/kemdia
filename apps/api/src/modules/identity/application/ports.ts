@@ -162,7 +162,9 @@ export interface PasswordHasher {
  * - `code` : le code à usage unique ;
  * - `signup-alert` : « quelqu'un a essayé de créer un compte avec votre adresse » (elle a déjà un compte, ADR-0016) ;
  * - `password-changed` : « votre mot de passe vient d'être modifié » (S4-T04, ADR-0018) ;
- * - `second-factor` : avis de sécurité de la double authentification (S6-T03).
+ * - `second-factor` : avis de sécurité de la double authentification (S6-T03) ;
+ * - `account-deleted` : « votre compte a été supprimé » (S7-T08, ADR-0047) ;
+ * - `inactivity-warning` : « sans connexion d'ici `deleteOn`, votre compte sera supprimé » (S7-T08).
  */
 export type OtpMessage = {
   channel: OtpChannel;
@@ -173,6 +175,8 @@ export type OtpMessage = {
   | { kind: "signup-alert" }
   | { kind: "password-changed" }
   | { kind: "second-factor"; event: SecondFactorEvent }
+  | { kind: "account-deleted" }
+  | { kind: "inactivity-warning"; deleteOn: Date }
 );
 
 /** Envoi des messages : console (développement), e-mail (S4-T02), SMS (quand le client aura choisi un fournisseur). */

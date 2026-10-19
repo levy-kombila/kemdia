@@ -96,7 +96,8 @@ model Order {
   deliveryFee          Int                 @map("delivery_fee")
   total                Int
   deliveryName         String              @map("delivery_name") @db.VarChar(120)
-  deliveryPhone        String              @map("delivery_phone") @db.VarChar(13)
+  /// Vide seulement pour une commande anonymisée (compte effacé, S7-T08)
+  deliveryPhone        String?             @map("delivery_phone") @db.VarChar(13)
   deliveryCityId       String              @map("delivery_city_id") @db.VarChar(40)
   deliveryCityName     String              @map("delivery_city_name") @db.VarChar(60)
   deliveryNeighborhood String              @map("delivery_neighborhood") @db.VarChar(80)
@@ -116,6 +117,9 @@ model Order {
   couponRedemption     CouponRedemption?
   createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime            @default(now()) @map("updated_at") @db.Timestamptz(3)
+
+  /// Compte effacé (S7-T08) : nom, téléphones et adresse de livraison effacés, montants et lignes gardés
+  anonymizedAt DateTime? @map("anonymized_at") @db.Timestamptz(3)
 
   @@unique([accountId, idempotencyKey])
   @@index([accountId, createdAt])

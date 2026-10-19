@@ -19,6 +19,16 @@ export const AUDIT_ACTIONS = [
   "password.change_failed",
   /** 3e mot de passe actuel faux : changement bloqué 15 minutes, session fermée (détails : attempts) — S7-T07 */
   "password.change_locked",
+  /** Copie de ses données téléchargée par le titulaire (droit d'accès et portabilité) — S7-T08 */
+  "account.data_exported",
+  /** Compte effacé : à sa demande (détails : reason=request) ou après 3 ans d'inactivité (reason=inactivity) — S7-T08 */
+  "account.deleted",
+  /** Mot de passe faux lors d'une demande de suppression (détails : attempts) — S7-T08 */
+  "account.delete_failed",
+  /** 3e mot de passe faux : suppression bloquée 15 minutes, session fermée (détails : attempts) — S7-T08 */
+  "account.delete_locked",
+  /** Compte inactif depuis près de 3 ans prévenu de son effacement dans 30 jours — S7-T08 */
+  "account.inactivity_notified",
   /** « Déconnecter tous mes appareils » (détails : count) */
   "sessions.revoked_all",
   /** Coupon créé par un administrateur (détails : code, kind, value) — S5-T03 */

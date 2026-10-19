@@ -144,6 +144,12 @@ export const AUDIT_ACTIONS = [
   "password.changed",
   "password.change_failed",
   "password.change_locked",
+  // Données personnelles (S7-T08)
+  "account.data_exported",
+  "account.deleted",
+  "account.delete_failed",
+  "account.delete_locked",
+  "account.inactivity_notified",
   "sessions.revoked_all",
   // Coupons (S5-T03)
   "coupon.created",
@@ -619,6 +625,35 @@ export const SHIPPING_ERROR_CODES = [
 ] as const;
 export type ShippingErrorCode = (typeof SHIPPING_ERROR_CODES)[number];
 
+// --- Données personnelles (S7-T08, ADR-0047) ---
+
+/**
+ * Conservation des comptes (loi gabonaise n°001/2011 modifiée, art. 70 : pas plus longtemps que nécessaire) : un compte
+ * sans connexion depuis 3 ans est effacé ; son titulaire est prévenu par e-mail 30 jours avant.
+ * Les factures restent 10 ans (Acte uniforme OHADA relatif au droit comptable, art. 24), telles qu'émises (acheteur compris :
+ * une facture ne change jamais) ; les commandes, elles, sont anonymisées.
+ */
+export const ACCOUNT_RETENTION = {
+  inactiveYears: 3,
+  noticeDays: 30,
+  invoiceYears: 10,
+} as const;
+
+/** Ce qui empêche de supprimer son compte maintenant (409). */
+export const PRIVACY_ERROR_CODES = [
+  // Commande pas encore livrée, annulée ou remboursée : il faut pouvoir livrer, rembourser, répondre
+  "COMMANDE_EN_COURS",
+  // Un remboursement reste à verser au client
+  "REMBOURSEMENT_EN_ATTENTE",
+  // Paiement Mobile Money sans réponse définitive de l'opérateur (en attente, ou expiré / échoué depuis moins de 24 h)
+  "PAIEMENT_EN_ATTENTE",
+  // Boutique en attente, ouverte ou suspendue : la fermer d'abord (commandes des clients, factures)
+  "BOUTIQUE_OUVERTE",
+  // Compte de l'équipe (administration, modération) : un administrateur retire d'abord ses rôles
+  "COMPTE_EQUIPE",
+] as const;
+export type PrivacyErrorCode = (typeof PRIVACY_ERROR_CODES)[number];
+
 /** Tous les codes d'erreur métier que l'API peut renvoyer. */
 export const API_ERROR_CODES = [
   ...IDENTITY_ERROR_CODES,
@@ -628,6 +663,7 @@ export const API_ERROR_CODES = [
   ...PAYMENT_ERROR_CODES,
   ...VENDOR_ERROR_CODES,
   ...SHIPPING_ERROR_CODES,
+  ...PRIVACY_ERROR_CODES,
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
 

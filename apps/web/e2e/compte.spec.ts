@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { MAILPIT_URL, lastCode, lastEmail } from "./mailpit";
@@ -90,7 +91,8 @@ test("inscription : l'API répond, l'écran du code s'affiche, le ticket reste c
   await page.getByLabel("Nom", { exact: true }).fill("Mba");
   await page.getByLabel("Adresse e-mail").fill(email);
   await page.getByLabel("Mot de passe", { exact: true }).fill("Mangue2026");
-  await page.getByRole("checkbox").check();
+  await page.getByRole("checkbox", { name: /conditions générales/ }).check();
+  await page.getByRole("checkbox", { name: "J'ai 18 ans ou plus." }).check();
   await page.getByRole("button", { name: "Créer mon compte" }).click();
   await expect(page.getByText("Saisissez le code reçu")).toBeVisible();
   await expect(page.getByText(/^no•••@exemple\.ga$/)).toBeVisible();
@@ -129,7 +131,8 @@ test.describe("parcours complets avec l'e-mail reçu (Mailpit)", () => {
     await page.getByLabel("Nom", { exact: true }).fill("Mba");
     await page.getByLabel("Adresse e-mail").fill(email);
     await page.getByLabel("Mot de passe", { exact: true }).fill("Mangue2026");
-    await page.getByRole("checkbox").check();
+    await page.getByRole("checkbox", { name: /conditions générales/ }).check();
+    await page.getByRole("checkbox", { name: "J'ai 18 ans ou plus." }).check();
     await page.getByRole("button", { name: "Créer mon compte" }).click();
     await expect(page.getByText("Saisissez le code reçu")).toBeVisible();
 
@@ -178,5 +181,33 @@ test.describe("parcours complets avec l'e-mail reçu (Mailpit)", () => {
     await page.reload();
     await expect(page.getByRole("heading", { name: "Léa Mba" })).toBeVisible();
     expect((await lastEmail(email, "a été modifié")).text).toContain("déconnectés");
+
+    // Mes données (S7-T08) : copie JSON téléchargée, puis suppression du compte
+    const download = page.waitForEvent("download");
+    await page.getByRole("link", { name: "Télécharger mes données (JSON)" }).click();
+    const file = await download;
+    expect(file.suggestedFilename()).toMatch(/^kemdia-mes-donnees-\d{4}-\d{2}-\d{2}\.json$/);
+    const copy = JSON.parse(await readFile(await file.path(), "utf8"));
+    expect(copy.identite.compte.email).toBe(email);
+    expect(JSON.stringify(copy)).not.toMatch(/argon2|goyaves/);
+
+    const removal = page.getByRole("form", { name: "Supprimer mon compte" });
+    await removal.getByLabel("Mot de passe actuel").fill("goyaves du marché");
+    await removal.getByRole("button", { name: "Supprimer définitivement mon compte" }).click();
+    await expect(removal.getByRole("alert")).toContainText("Cochez la case");
+    await removal
+      .getByRole("checkbox", { name: /suppression de mon compte est définitive/ })
+      .check();
+    await removal.getByLabel("Mot de passe actuel").fill("goyaves du marché");
+    await removal.getByRole("button", { name: "Supprimer définitivement mon compte" }).click();
+    await expect(page.getByText("Votre compte a été supprimé")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Espace client" })).toBeVisible();
+    expect((await lastEmail(email, "a été supprimé")).text).toContain("10 ans");
+    // Plus de connexion possible avec cette adresse
+    await page.goto("/connexion");
+    await page.getByLabel("Adresse e-mail").fill(email);
+    await page.getByLabel("Mot de passe", { exact: true }).fill("goyaves du marché");
+    await page.getByRole("button", { name: "Se connecter" }).click();
+    await expect(page.getByRole("alert")).toBeVisible();
   });
 });

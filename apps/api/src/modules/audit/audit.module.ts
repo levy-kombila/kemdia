@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AuditLog, AuditReader } from "./application/audit-log.js";
 import { AUDIT_REPOSITORY } from "./application/ports.js";
+import { AuditPersonalData } from "./infrastructure/audit-personal-data.js";
 import { AuditRetentionScheduler } from "./infrastructure/audit-retention.js";
 import { PrismaAuditRepository } from "./infrastructure/prisma-audit.repository.js";
 
@@ -14,8 +15,10 @@ import { PrismaAuditRepository } from "./infrastructure/prisma-audit.repository.
     AuditLog,
     AuditReader,
     AuditRetentionScheduler,
+    // Copie des données personnelles (S7-T08) : lignes du compte, pour le module privacy
+    AuditPersonalData,
     { provide: AUDIT_REPOSITORY, useClass: PrismaAuditRepository },
   ],
-  exports: [AuditLog, AuditReader],
+  exports: [AuditLog, AuditReader, AuditPersonalData],
 })
 export class AuditModule {}

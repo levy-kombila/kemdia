@@ -88,6 +88,40 @@ export function renderEmail(message: OtpMessage): Email {
     };
   }
 
+  if (message.kind === "account-deleted") {
+    const lines = [
+      "Votre compte Kemdia a été supprimé, comme demandé. Vos nom, adresse e-mail, téléphone et adresses de livraison ont été effacés.",
+      "Seules les factures restent conservées 10 ans, comme l'exige la loi comptable (OHADA), telles qu'elles ont été émises (nom, téléphone et adresse de l'acheteur) ; elles ne servent plus qu'à la comptabilité.",
+      "Si vous n'êtes pas à l'origine de cette suppression, contactez tout de suite le service client Kemdia.",
+    ];
+    return {
+      to: message.to,
+      subject: "Votre compte Kemdia a été supprimé",
+      text: ["Kemdia", "", ...lines].join("\n"),
+      html: layout("Votre compte a été supprimé", lines),
+    };
+  }
+
+  if (message.kind === "inactivity-warning") {
+    const date = message.deleteOn.toLocaleDateString("fr-FR", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "Africa/Libreville",
+    });
+    const lines = [
+      `Vous ne vous êtes pas connecté à Kemdia depuis bientôt 3 ans. Pour ne pas garder vos données plus longtemps que nécessaire, votre compte sera supprimé le ${date}.`,
+      "Pour le garder, il suffit de vous connecter sur le site avant cette date.",
+      "Si vous ne faites rien, vos données personnelles seront effacées ; seules les factures restent conservées 10 ans (loi comptable OHADA), telles qu'elles ont été émises.",
+    ];
+    return {
+      to: message.to,
+      subject: "Votre compte Kemdia sera bientôt supprimé",
+      text: ["Kemdia", "", ...lines].join("\n"),
+      html: layout("Votre compte sera bientôt supprimé", lines),
+    };
+  }
+
   if (message.kind === "password-changed") {
     const lines = [
       "Le mot de passe de votre compte Kemdia vient d'être modifié, et vos autres appareils ont été déconnectés.",

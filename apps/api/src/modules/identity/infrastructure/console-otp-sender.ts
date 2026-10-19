@@ -19,6 +19,12 @@ export class ConsoleOtpSender implements OtpSender {
       );
     } else if (message.kind === "password-changed") {
       this.logger.warn(`[${message.channel}] ${message.to} — avis : mot de passe modifié`);
+    } else if (message.kind === "account-deleted") {
+      this.logger.warn(`[${message.channel}] ${message.to} — avis : compte supprimé`);
+    } else if (message.kind === "inactivity-warning") {
+      this.logger.warn(
+        `[${message.channel}] ${message.to} — avis : suppression pour inactivité le ${message.deleteOn.toISOString()}`,
+      );
     } else if (message.kind === "signup-alert") {
       this.logger.warn(
         `[${message.channel}] ${message.to} — alerte : inscription tentée sur un compte existant`,

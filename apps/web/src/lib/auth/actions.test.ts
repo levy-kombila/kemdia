@@ -130,6 +130,7 @@ describe("inscription", () => {
       identifier: "awa@exemple.ga",
       password: "Mangue2026",
       acceptTerms: true,
+      adult: true,
     });
     expect(result).toEqual({
       ok: true,

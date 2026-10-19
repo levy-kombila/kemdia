@@ -37,6 +37,7 @@ import { OrderController } from "./interface/order.controller.js";
 import { CartCleanupScheduler } from "./infrastructure/cart-cleanup.js";
 import { PrismaCartRepository } from "./infrastructure/prisma-cart.repository.js";
 import { CartController } from "./interface/cart.controller.js";
+import { OrdersPersonalData } from "./infrastructure/orders-personal-data.js";
 
 /**
  * Module orders (ADR-0006) : panier serveur (S5-T01, ADR-0023) ; commandes et réservation du stock (S5-T02, ADR-0024) ;
@@ -48,6 +49,8 @@ import { CartController } from "./interface/cart.controller.js";
   imports: [CatalogModule, IdentityModule, AuditModule],
   controllers: [CartController, OrderController, CouponController, CodSettingsController],
   providers: [
+    // Données personnelles (S7-T08) : copie, effacement — utilisé par le module privacy
+    OrdersPersonalData,
     CartService,
     CartCleanupScheduler,
     { provide: CART_REPOSITORY, useClass: PrismaCartRepository },
@@ -76,6 +79,7 @@ import { CartController } from "./interface/cart.controller.js";
     },
   ],
   exports: [
+    OrdersPersonalData,
     CartService,
     OrderService,
     OrderPayments,

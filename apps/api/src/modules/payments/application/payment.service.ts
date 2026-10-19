@@ -301,8 +301,21 @@ export class PaymentService implements OnModuleInit {
           }
         }
       } else if (order) {
-        await this.refunds.createFor(paid, order.reference, "paiement_non_attendu", now, received);
-        this.logger.warn("paiement reçu que la commande n'attendait pas : remboursement à faire");
+        const refund = await this.refunds.createFor(
+          paid,
+          order.reference,
+          "paiement_non_attendu",
+          now,
+          received,
+        );
+        if (!refund && paid.method !== "cod" && !paid.phone) {
+          // Compte supprimé entre-temps (S7-T08) : plus de numéro, remboursement impossible à enregistrer
+          this.logger.error(
+            "paiement reçu sur un compte supprimé : remboursement à traiter À LA MAIN avec l'opérateur",
+          );
+        } else {
+          this.logger.warn("paiement reçu que la commande n'attendait pas : remboursement à faire");
+        }
       }
       return paid;
     });

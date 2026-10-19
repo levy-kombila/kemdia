@@ -63,6 +63,8 @@ describe("Inscription", () => {
     expect(screen.getByLabelText("Prénom")).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByLabelText("Adresse e-mail")).toHaveAccessibleDescription(/invalide/);
     expect(screen.getByText(/accepter les conditions/)).toBeInTheDocument();
+    // S7-T08 : « 18 ans ou plus » obligatoire, case distincte
+    expect(screen.getByText(/réservé aux personnes de 18 ans ou plus/)).toBeInTheDocument();
     expect(screen.getByLabelText("Prénom")).toHaveFocus();
     expect(fake.client!.calls).toEqual([]);
   });
@@ -79,7 +81,8 @@ describe("Inscription", () => {
     await user.type(screen.getByLabelText("Nom"), "Nze");
     await user.type(screen.getByLabelText("Adresse e-mail"), "Marie@Exemple.ga");
     await user.type(screen.getByLabelText("Mot de passe"), password);
-    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("checkbox", { name: /conditions générales/ }));
+    await user.click(screen.getByRole("checkbox", { name: "J'ai 18 ans ou plus." }));
     await user.click(screen.getByRole("button", { name: "Créer mon compte" }));
   }
 

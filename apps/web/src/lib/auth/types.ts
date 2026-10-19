@@ -20,6 +20,8 @@ export type SignupInput = {
   identifier: string;
   password: string;
   acceptTerms: boolean;
+  /** « J'ai 18 ans ou plus » (S7-T08, loi 001/2011 modifiée art. 74) */
+  adult: boolean;
 };
 
 /** Ce que le navigateur reçoit du compte connecté (jamais l'identifiant interne ni le jeton). */
