@@ -48,8 +48,9 @@ Choix du propriétaire (2026-10-19) :
    ni la liste des processus (vérifié en local). Avant le scan, la CI vérifie le contrôle d'accès de l'équipe : 200
    pour l'administratrice, 403 pour le client et la vendeuse, refus sans session. Dans cette pile de test seulement,
    la limite de débit de l'API est relevée, sinon ZAP ne recevrait que des 429 ; elle est testée ailleurs.
-4. **Caddy `default_sni`.** Un client qui n'envoie pas de nom de serveur (SNI) reçoit le certificat de la production
-   au lieu d'une coupure : vieux logiciels, certaines sondes, Java pour `localhost`, donc ZAP en CI.
+4. **Caddy `default_sni`, dans la CI seulement.** ZAP (Java) n'envoie pas de nom de serveur (SNI) pour `localhost`.
+   Sans lui, Caddy coupe la connexion. La CI ajoute `default_sni` à SA copie du Caddyfile ; celui du dépôt, donc
+   celui du serveur, ne change pas (relecture S7-T07 : ne pas élargir la production pour un besoin de test).
 5. **Exceptions** (dans `plan.py`, appliquées avant l'exploration) :
    - CSP `style-src 'unsafe-inline'` (règle 10055) : **risque accepté** (choix du 2026-10-09, ADR-0021) ; ramené à
      « Info » ;
