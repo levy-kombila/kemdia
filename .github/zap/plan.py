@@ -27,9 +27,27 @@ EXCLUSIONS = [
     r".*/deconnexion.*",
 ]
 
-# Faux positifs ou risques acceptés, justifiés. Format : ruleId, URL (expression régulière), raison.
+# Faux positifs et risques acceptés : chacun JUSTIFIÉ ici (relu en PR comme du code) et dans le rapport du test
+# d'intrusion. « cible » : site ou api ; « url » : expression régulière ; « risque » : nouveau niveau dans ZAP.
 EXCEPTIONS: list[dict] = [
-    # (aucune pour l'instant : chaque ajout se justifie ici et dans le rapport du test d'intrusion)
+    {
+        "ruleId": 10055,  # CSP: style-src unsafe-inline
+        "cible": "site",
+        "url": ".*",
+        "risque": "Info",
+        "raison": "Risque accepté (choix du 2026-10-09, ADR-0021) : React écrit des attributs style=\"…\" (barres, "
+        "carrousel, notes) qu'aucun nonce ne couvre ; un style injecté n'exécute pas de code, les scripts restent "
+        "verrouillés par nonce et 'strict-dynamic'.",
+    },
+    {
+        "ruleId": 10202,  # Absence of Anti-CSRF Tokens
+        "cible": "site",
+        "url": ".*",
+        "risque": "False Positive",
+        "raison": "Faux positif : les formulaires sont des actions serveur de Next.js, protégées par la vérification "
+        "de l'en-tête Origin / Sec-Fetch-Site (proxy.ts, ADR-0021) et des cookies SameSite=Lax, méthode admise par "
+        "OWASP ASVS 5.0 V3.5.1 ; ZAP ne reconnaît que les jetons cachés dans les formulaires.",
+    },
 ]
 
 def plan(args: argparse.Namespace) -> dict:
@@ -41,6 +59,17 @@ def plan(args: argparse.Namespace) -> dict:
         "excludePaths": EXCLUSIONS,
     }
     jobs: list[dict] = []
+
+    # Filtres d'alertes AVANT l'exploration : ZAP ne les applique qu'aux alertes levées après eux
+    exceptions = [e for e in EXCEPTIONS if e["cible"] == args.cible]
+    if exceptions:
+        jobs.append({
+            "type": "alertFilter",
+            "alertFilters": [
+                {"ruleId": e["ruleId"], "newRisk": e["risque"], "url": e["url"], "urlRegex": True}
+                for e in exceptions
+            ],
+        })
 
     jobs.append({"type": "passiveScan-config", "parameters": {"maxAlertsPerRule": 10, "scanOnlyInScope": True}})
 
@@ -78,15 +107,6 @@ def plan(args: argparse.Namespace) -> dict:
                 "handleAntiCSRFTokens": True,
             },
             "policyDefinition": {"defaultStrength": "medium", "defaultThreshold": "medium"},
-        })
-
-    if EXCEPTIONS:
-        jobs.append({
-            "type": "alertFilter",
-            "alertFilters": [
-                {"ruleId": e["ruleId"], "newRisk": "False Positive", "url": e["url"], "urlRegex": True}
-                for e in EXCEPTIONS
-            ],
         })
 
     for template, suffix in (("traditional-json", "json"), ("traditional-html", "html")):
