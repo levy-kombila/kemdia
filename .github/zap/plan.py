@@ -47,7 +47,9 @@ EXCEPTIONS: list[dict] = [
         "ruleId": 10202,  # Absence of Anti-CSRF Tokens
         "cible": "site",
         "url": ".*",
-        "risque": "False Positive",
+        # « Info » et non « False Positive » : dans ZAP, faux positif change la CONFIANCE, pas le risque (le seuil le
+        # compterait encore)
+        "risque": "Info",
         "raison": "Faux positif : les formulaires sont des actions serveur de Next.js, protégées par la vérification "
         "de l'en-tête Origin / Sec-Fetch-Site (proxy.ts, ADR-0021) et des cookies SameSite=Lax, méthode admise par "
         "OWASP ASVS 5.0 V3.5.1 ; ZAP ne reconnaît que les jetons cachés dans les formulaires.",
