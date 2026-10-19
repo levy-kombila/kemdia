@@ -204,3 +204,33 @@ export async function resetPasswordAction(
   await openSession(result.data.token);
   return { ok: true, account: toSummary(result.data.account) };
 }
+
+// --- Changer son mot de passe depuis « Mon compte » (S7-T07, ASVS 5.0 V6.2.2 et V6.2.3) ---
+
+/**
+ * Mot de passe actuel + nouveau. Réussite : l'API ferme toutes les sessions du compte et en ouvre une nouvelle,
+ * posée ici. Au 3e mot de passe actuel faux, l'API ferme la session : le cookie est effacé.
+ */
+export async function changePasswordAction(
+  currentPassword: unknown,
+  newPassword: unknown,
+): Promise<AuthResult<{ account: AccountSummary }>> {
+  const current = text(currentPassword, 200);
+  const next = text(newPassword, 200);
+  if (!current) return invalid("MOT_DE_PASSE_INCORRECT");
+  if (next === null) return invalid("MOT_DE_PASSE_FAIBLE");
+  const store = await cookies();
+  const token = store.get(SESSION_COOKIE)?.value;
+  if (!token) return invalid("SESSION_INVALIDE");
+  const result = await identityApi().changePassword(token, current, next, await userAgent());
+  if (!result.ok) {
+    if (result.code === "COMPTE_BLOQUE" || result.code === "SESSION_INVALIDE") {
+      forgetSession(token);
+      await clearCookie(SESSION_COOKIE);
+    }
+    return result;
+  }
+  forgetAllSessions();
+  store.set(SESSION_COOKIE, result.data.token, cookieOptions(SESSION_MAX_AGE_S));
+  return { ok: true, account: toSummary(result.data.account) };
+}

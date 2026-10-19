@@ -13,6 +13,12 @@ export const AUDIT_ACTIONS = [
   "role.revoked",
   /** Mot de passe changé par « mot de passe oublié » : toutes les sessions fermées */
   "password.reset",
+  /** Mot de passe changé depuis « Mon compte » avec le mot de passe actuel ; toutes les sessions fermées — S7-T07 */
+  "password.changed",
+  /** Mot de passe actuel faux lors d'un changement (détails : attempts) — S7-T07 */
+  "password.change_failed",
+  /** 3e mot de passe actuel faux : changement bloqué 15 minutes, session fermée (détails : attempts) — S7-T07 */
+  "password.change_locked",
   /** « Déconnecter tous mes appareils » (détails : count) */
   "sessions.revoked_all",
   /** Coupon créé par un administrateur (détails : code, kind, value) — S5-T03 */

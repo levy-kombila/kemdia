@@ -2,7 +2,11 @@ import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../../database/prisma.service.js";
 import { TransactionContext } from "../../../database/transaction-context.js";
 import type { ResetTicket } from "../domain/reset-ticket.js";
-import type { PasswordResetChange, ResetTicketRepository } from "../application/ports.js";
+import type {
+  PasswordChange,
+  PasswordResetChange,
+  ResetTicketRepository,
+} from "../application/ports.js";
 
 @Injectable()
 export class PrismaResetTicketRepository implements ResetTicketRepository {
@@ -43,6 +47,22 @@ export class PrismaResetTicketRepository implements ResetTicketRepository {
         data: { revokedAt: change.now },
       });
       await tx.loginGuard.deleteMany({ where: { identifier: { in: change.guardIdentifiers } } });
+      return true;
+    });
+  }
+
+  async applyPasswordChange(change: PasswordChange): Promise<boolean> {
+    return this.transactions.run(async () => {
+      const tx = this.transactions.db;
+      const { count } = await tx.account.updateMany({
+        where: { id: change.accountId, status: "ACTIVE", passwordVersion: change.expectedVersion },
+        data: { passwordHash: change.passwordHash, passwordVersion: { increment: 1 } },
+      });
+      if (count !== 1) return false;
+      await tx.session.updateMany({
+        where: { accountId: change.accountId, revokedAt: null },
+        data: { revokedAt: change.now },
+      });
       return true;
     });
   }

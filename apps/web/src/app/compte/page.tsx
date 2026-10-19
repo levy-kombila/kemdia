@@ -1,6 +1,7 @@
 import { CircleUser, Heart, LogOut, MapPin, MonitorSmartphone, Package } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ChangePasswordForm } from "@/components/account/ChangePasswordForm";
 import { RoleList } from "@/components/account/RoleList";
 import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 import { FormAlert } from "@/components/ui/Field";
@@ -132,8 +133,9 @@ function SignedIn({ account, error }: { account: AccountSummary; error: boolean 
             </button>
           </form>
         </div>
+        <ChangePasswordForm />
         <p className="text-ink-500 mt-3 text-sm">
-          Mot de passe perdu ou volé ?{" "}
+          Mot de passe actuel oublié ?{" "}
           <Link href="/mot-de-passe-oublie" className="text-brand-700 font-semibold underline">
             Choisir un nouveau mot de passe
           </Link>{" "}

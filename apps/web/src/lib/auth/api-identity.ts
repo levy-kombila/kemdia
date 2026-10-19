@@ -153,6 +153,20 @@ export function createIdentityApi(options: IdentityApiOptions) {
         body: { ticket, code, newPassword },
         userAgent,
       }),
+    /** Mot de passe actuel + nouveau (S7-T07) : toutes les sessions fermées, une nouvelle ouverte ici. */
+    changePassword: (
+      token: string,
+      currentPassword: string,
+      newPassword: string,
+      userAgent: string | null,
+    ): Promise<ApiResult<OpenedSession>> =>
+      SESSION_TOKEN_PATTERN.test(token)
+        ? call("POST", "/password/change", OpenedSessionSchema, {
+            token,
+            body: { currentPassword, newPassword },
+            userAgent,
+          })
+        : Promise.resolve({ ok: false, code: "SESSION_INVALIDE" }),
   };
 }
 

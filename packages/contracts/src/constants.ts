@@ -140,6 +140,10 @@ export const AUDIT_ACTIONS = [
   "role.granted",
   "role.revoked",
   "password.reset",
+  // Changement du mot de passe depuis « Mon compte » (S7-T07)
+  "password.changed",
+  "password.change_failed",
+  "password.change_locked",
   "sessions.revoked_all",
   // Coupons (S5-T03)
   "coupon.created",

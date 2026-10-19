@@ -6,6 +6,7 @@ import {
   type OtpMessage,
   type LoginGuardRepository,
   type OtpSender,
+  type PasswordChange,
   type PasswordResetChange,
   type ResetTicketRepository,
   type SecondFactorRecord,
@@ -303,6 +304,21 @@ export class InMemoryResetTickets implements ResetTicketRepository {
       .filter((s) => s.accountId === change.accountId && s.revokedAt === null)
       .forEach((s) => (s.revokedAt = change.now));
     change.guardIdentifiers.forEach((id) => this.guards!.rows.delete(id));
+    return Promise.resolve(true);
+  }
+  applyPasswordChange(change: PasswordChange): Promise<boolean> {
+    if (!this.accounts || !this.sessions) throw new Error("dépôts manquants");
+    const row = this.accounts.rows.get(change.accountId);
+    if (!row || row.status !== "active" || row.passwordVersion !== change.expectedVersion)
+      return Promise.resolve(false);
+    this.accounts.rows.set(row.id, {
+      ...row,
+      passwordHash: change.passwordHash,
+      passwordVersion: row.passwordVersion + 1,
+    });
+    this.sessions.rows
+      .filter((s) => s.accountId === change.accountId && s.revokedAt === null)
+      .forEach((s) => (s.revokedAt = change.now));
     return Promise.resolve(true);
   }
 }

@@ -162,5 +162,21 @@ test.describe("parcours complets avec l'e-mail reçu (Mailpit)", () => {
     await page.getByLabel("Mot de passe", { exact: true }).fill("Papaye2027");
     await page.getByRole("button", { name: "Se connecter" }).click();
     await expect(page.getByRole("button", { name: /Léa/ })).toBeVisible();
+
+    // Changer son mot de passe depuis « Mon compte » (S7-T07, ASVS 5.0 V6.2.2 et V6.2.3)
+    await page.goto("/compte");
+    const form = page.getByRole("form", { name: "Changer mon mot de passe" });
+    await form.getByLabel("Mot de passe actuel").fill("pas le bon");
+    await form.getByLabel("Nouveau mot de passe").fill("goyaves du marché");
+    await form.getByRole("button", { name: "Enregistrer le nouveau mot de passe" }).click();
+    await expect(form.getByRole("alert")).toHaveText("Mot de passe incorrect.");
+    await form.getByLabel("Mot de passe actuel").fill("Papaye2027");
+    await form.getByLabel("Nouveau mot de passe").fill("goyaves du marché");
+    await form.getByRole("button", { name: "Enregistrer le nouveau mot de passe" }).click();
+    await expect(form.getByRole("status")).toContainText("Mot de passe modifié");
+    // Toujours connecté ici (nouvelle session), et le nouveau mot de passe sert à la connexion suivante
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Léa Mba" })).toBeVisible();
+    expect((await lastEmail(email, "a été modifié")).text).toContain("déconnectés");
   });
 });

@@ -1,15 +1,18 @@
+import { SECLISTS_COMMON_PASSWORDS } from "./common-passwords.js";
 import { IdentityError } from "./identity-error.js";
 
 /**
  * Règles du mot de passe : les mêmes que le site (S2-T01), vérifiées ici par le serveur qui seul fait foi.
- * Longueur 8 à 128, au moins une lettre et un chiffre, pas dans la liste des mots de passe les plus courants.
- * (Recommandation NIST SP 800-63B : longueur et liste de refus plutôt que des règles de composition compliquées.)
+ * Longueur 8 à 128 et pas dans la liste des mots de passe les plus courants (10 000 + liste locale), quelle que soit la
+ * casse. AUCUNE règle de composition (lettre, chiffre, majuscule…) depuis le S7-T07 : OWASP ASVS 5.0 V6.2.5 et NIST
+ * SP 800-63B les interdisent (elles poussent vers « Motdepasse1 » sans rendre plus sûr). Les mots de passe déjà
+ * enregistrés restent valables. Le mot de passe est vérifié tel quel : ni coupé, ni mis en minuscules (V6.2.8).
  */
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
 
-/** Mots de passe très courants (dont ceux du site) ; refusés quelle que soit la casse. */
-const COMMON_PASSWORDS = new Set([
+/** Mots de passe courants propres au Gabon et à Kemdia (s'ajoutent à la liste SecLists) ; refusés quelle que soit la casse. */
+const LOCAL_COMMON_PASSWORDS = new Set([
   "12345678",
   "123456789",
   "1234567890",
@@ -48,23 +51,25 @@ const COMMON_PASSWORDS = new Set([
   "gabon241",
 ]);
 
-export type PasswordIssue = "length" | "max" | "letter" | "digit" | "common";
+export type PasswordIssue = "length" | "max" | "common";
+
+/** Mot de passe courant (liste SecLists des 10 000 plus fréquents, ou liste locale), quelle que soit la casse. */
+export function isCommonPassword(password: string): boolean {
+  const lower = password.toLowerCase();
+  return SECLISTS_COMMON_PASSWORDS.has(lower) || LOCAL_COMMON_PASSWORDS.has(lower);
+}
 
 export function passwordIssues(password: string): PasswordIssue[] {
   const issues: PasswordIssue[] = [];
   if (password.length < PASSWORD_MIN_LENGTH) issues.push("length");
   if (password.length > PASSWORD_MAX_LENGTH) issues.push("max");
-  if (!/\p{L}/u.test(password)) issues.push("letter");
-  if (!/\d/.test(password)) issues.push("digit");
-  if (COMMON_PASSWORDS.has(password.toLowerCase())) issues.push("common");
+  if (isCommonPassword(password)) issues.push("common");
   return issues;
 }
 
 const LABELS: Record<PasswordIssue, string> = {
   length: `au moins ${PASSWORD_MIN_LENGTH} caractères`,
   max: `${PASSWORD_MAX_LENGTH} caractères au plus`,
-  letter: "au moins une lettre",
-  digit: "au moins un chiffre",
   common: "mot de passe trop courant",
 };
 

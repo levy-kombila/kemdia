@@ -215,6 +215,32 @@ export const identityPaths = {
     },
   },
 
+  "/api/v1/auth/password/change": {
+    post: {
+      tags: ["Identité"],
+      summary:
+        "Changer son mot de passe (mot de passe actuel + nouveau) : reconnecté ici, déconnecté partout ailleurs",
+      description:
+        "S7-T07 (OWASP ASVS 5.0 V6.2.2, V6.2.3). Toutes les sessions du compte sont fermées, une nouvelle est ouverte et " +
+        "un e-mail « mot de passe modifié » est envoyé. Au 3ᵉ mot de passe actuel faux : blocage de 15 minutes et session fermée.",
+      operationId: "changePassword",
+      security: bearer,
+      parameters: [userAgent],
+      requestBody: body("ChangePasswordRequest"),
+      responses: {
+        "200": json("OpenedSession", "Mot de passe changé, nouvelle session ouverte"),
+        "400": invalidBody,
+        "401": sessionRefused,
+        "422": problem(
+          "`MOT_DE_PASSE_FAIBLE` (aucun essai consommé) ou `MOT_DE_PASSE_INCORRECT` (mot de passe actuel)",
+        ),
+        "429": problem(
+          "`COMPTE_BLOQUE` : 3 mots de passe actuels faux (15 minutes), ou `TROP_DE_REQUETES`",
+        ),
+      },
+    },
+  },
+
   // --- Double authentification de l'équipe (S6-T03, ADR-0034, MED-15) ---
   "/api/v1/auth/2fa": {
     get: {

@@ -66,7 +66,7 @@ export function maskIdentifier(id: Identifier): string {
   return `${local!.slice(0, 2)}•••@${domain}`;
 }
 
-// Petite liste des mots de passe les plus utilisés ; le serveur utilisera une liste complète.
+// Petite liste pour prévenir tout de suite ; l'API, qui seule fait foi, refuse les 10 000 plus courants (S7-T07).
 const COMMON_PASSWORDS = new Set([
   "12345678",
   "123456789",
@@ -84,22 +84,19 @@ const COMMON_PASSWORDS = new Set([
   "gabon2026",
 ]);
 
-export type PasswordIssue = "length" | "max" | "letter" | "digit" | "common";
+// Aucune règle de composition (lettre, chiffre…) depuis le S7-T07 : OWASP ASVS 5.0 V6.2.5, NIST SP 800-63B.
+export type PasswordIssue = "length" | "max" | "common";
 
 export function passwordIssues(password: string): PasswordIssue[] {
   const issues: PasswordIssue[] = [];
   if (password.length < PASSWORD_MIN_LENGTH) issues.push("length");
   if (password.length > PASSWORD_MAX_LENGTH) issues.push("max");
-  if (!/\p{L}/u.test(password)) issues.push("letter");
-  if (!/\d/.test(password)) issues.push("digit");
   if (COMMON_PASSWORDS.has(password.toLowerCase())) issues.push("common");
   return issues;
 }
 
 export const PASSWORD_RULES: { issue: PasswordIssue; label: string }[] = [
   { issue: "length", label: `Au moins ${PASSWORD_MIN_LENGTH} caractères` },
-  { issue: "letter", label: "Au moins une lettre" },
-  { issue: "digit", label: "Au moins un chiffre" },
 ];
 
 export function normalizeName(input: string): string | null {
