@@ -250,7 +250,8 @@ describe("API identité — inscription (HTTP)", () => {
     await post("/api/v1/auth/signup", { ...SIGNUP, acceptTerms: false }).expect(400);
     // « 18 ans ou plus » obligatoire et distinct des conditions (S7-T08)
     await post("/api/v1/auth/signup", { ...SIGNUP, adult: false }).expect(400);
-    const { adult: _adult, ...withoutAdult } = SIGNUP;
+    const withoutAdult: Record<string, unknown> = { ...SIGNUP };
+    delete withoutAdult.adult;
     await post("/api/v1/auth/signup", withoutAdult).expect(400);
     await post("/api/v1/auth/signup", { ...SIGNUP, role: "admin" }).expect(400);
     await post("/api/v1/auth/signup/verify", { ticket: "x".repeat(43), code: "12345" }).expect(400);
