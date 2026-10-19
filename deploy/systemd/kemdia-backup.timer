@@ -1,0 +1,12 @@
+# Chaque nuit à 02:00 (heure du serveur), avant les redémarrages automatiques de 03:30.
+# Persistent : une sauvegarde manquée (serveur éteint) est faite au démarrage suivant.
+[Unit]
+Description=Kemdia — sauvegarde chaque nuit
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -32,7 +32,7 @@ system_packages() {
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -q
   apt-get upgrade -yq
-  apt-get install -yq ca-certificates curl gnupg ufw fail2ban unattended-upgrades openssl
+  apt-get install -yq ca-certificates curl gnupg ufw fail2ban unattended-upgrades openssl restic
   dpkg-reconfigure -f noninteractive unattended-upgrades
   # Redémarrage automatique quand un correctif l'exige (noyau, bibliothèque C), la nuit ; les conteneurs repartent
   # seuls (restart: unless-stopped)
@@ -96,6 +96,10 @@ kemdia_files() { # kemdia_files <utilisateur> <groupe> : qui lance deploy.sh (de
   install -d -m 750 -o root -g "$group" "$ROOT/secrets"
   install -m 755 "$SRC/bin/deploy.sh" "$ROOT/bin/deploy.sh"
   install -m 700 "$SRC/bin/init-secrets.sh" "$ROOT/bin/init-secrets.sh"
+  # Sauvegardes (S7-T05) : root seulement (elles lisent le mot de passe des sauvegardes)
+  install -m 700 "$SRC/bin/backup.sh" "$ROOT/bin/backup.sh"
+  install -m 700 "$SRC/bin/restore.sh" "$ROOT/bin/restore.sh"
+  install -m 600 "$SRC/bin/backup-lib.sh" "$ROOT/bin/backup-lib.sh"
   install -m 644 "$SRC/app/compose.yml" "$ROOT/app/compose.yml"
   install -m 644 "$SRC/proxy/compose.yml" "$ROOT/proxy/compose.yml"
   install -m 644 "$SRC/proxy/Caddyfile" "$ROOT/proxy/Caddyfile"
@@ -108,6 +112,18 @@ kemdia_files() { # kemdia_files <utilisateur> <groupe> : qui lance deploy.sh (de
   for env in production staging; do
     docker network inspect "kemdia-edge-$env" >/dev/null 2>&1 || docker network create "kemdia-edge-$env" >/dev/null
   done
+}
+
+backup_timers() {
+  echo "==> Sauvegardes : chaque nuit à 02:00, restauration vérifiée chaque dimanche (S7-T05)"
+  install -d -m 700 /var/backups/kemdia /var/cache/kemdia-restic
+  local unit
+  for unit in kemdia-backup.service kemdia-backup.timer kemdia-restore-check.service kemdia-restore-check.timer; do
+    install -m 644 "$SRC/systemd/$unit" "/etc/systemd/system/$unit"
+  done
+  systemctl daemon-reload
+  # Tant que « backup.sh init » n'est pas lancé, chaque nuit échoue et le dit (backup.last : resultat=echec)
+  systemctl enable --now kemdia-backup.timer kemdia-restore-check.timer
 }
 
 ssh_hardening() {
@@ -181,6 +197,7 @@ if $FILES_ONLY; then
     exit 1
   fi
   kemdia_files root "${KEMDIA_GROUP:-deploy}"
+  backup_timers # la CI lance les sauvegardes par systemd, comme le serveur
   echo "✅ Fichiers installés (aucun durcissement : --fichiers-seulement)."
   exit 0
 fi
@@ -190,6 +207,7 @@ system_packages
 docker_engine
 accounts
 kemdia_files deploy deploy
+backup_timers
 ssh_hardening
 kernel_hardening
 firewall
@@ -202,7 +220,9 @@ cat <<EOF
   1. ssh $ADMIN_USER@<IP>                                        # vérifier l'accès admin
   2. sudo $ROOT/bin/init-secrets.sh production <domaine>         # secrets de la production (une fois)
      sudo $ROOT/bin/init-secrets.sh staging staging.<domaine>    # secrets de la préproduction (une fois)
-  3. sudo nano $ROOT/proxy/.env                                  # domaines, e-mail, mot de passe staging
-  4. cd $ROOT/proxy && sudo docker compose up -d
-  5. ssh-keyscan -t ed25519 <IP>                                 # à copier dans le secret GitHub DEPLOY_SSH_KNOWN_HOSTS
+  3. sudo $ROOT/bin/backup.sh init                                # sauvegardes ; copier $ROOT/secrets/backup.password
+                                                                 # dans ton gestionnaire de mots de passe (S3 : guide de déploiement §11)
+  4. sudo nano $ROOT/proxy/.env                                  # domaines, e-mail, mot de passe staging
+  5. cd $ROOT/proxy && sudo docker compose up -d
+  6. ssh-keyscan -t ed25519 <IP>                                 # à copier dans le secret GitHub DEPLOY_SSH_KNOWN_HOSTS
 EOF
