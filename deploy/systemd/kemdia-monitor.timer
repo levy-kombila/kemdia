@@ -1,0 +1,10 @@
+# Toutes les 5 minutes. Healthchecks.io attend ce signal : s'il cesse (serveur éteint), il alerte aussi.
+[Unit]
+Description=Kemdia — surveillance toutes les 5 minutes
+
+[Timer]
+OnCalendar=*:0/5
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

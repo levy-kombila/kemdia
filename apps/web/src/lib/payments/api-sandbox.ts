@@ -10,6 +10,7 @@ import {
   type SandboxPaymentRequestPage,
 } from "@kemdia/contracts";
 import { z } from "zod";
+import { log } from "@/lib/log";
 
 /**
  * Adaptateur « API » du téléphone simulé (S5-T05, ADR-0027) : appelle `/api/v1/sandbox/mobile-money/*` depuis le
@@ -72,7 +73,7 @@ export function createSandboxApi(options: SandboxApiOptions) {
         signal: AbortSignal.timeout(options.timeoutMs),
       });
     } catch {
-      console.error(`[téléphone simulé] ${method} : API injoignable ou délai dépassé`);
+      log.error("téléphone simulé", `${method} : API injoignable ou délai dépassé`);
       return { ok: false, code: "INDISPONIBLE" };
     }
     const payload: unknown = await response.json().catch(() => undefined);
@@ -81,12 +82,12 @@ export function createSandboxApi(options: SandboxApiOptions) {
       const code = KNOWN_CODES.find((c) => problem.success && c === problem.data.code);
       if (code) return { ok: false, code };
       if (response.status === 404) return { ok: false, code: "BAC_A_SABLE_FERME" };
-      console.error(`[téléphone simulé] ${method} : statut ${response.status}`);
+      log.error("téléphone simulé", `${method} : statut ${response.status}`);
       return { ok: false, code: "INDISPONIBLE" };
     }
     const parsed = schema.safeParse(payload);
     if (!parsed.success) {
-      console.error(`[téléphone simulé] ${method} : réponse non conforme au contrat`);
+      log.error("téléphone simulé", `${method} : réponse non conforme au contrat`);
       return { ok: false, code: "INDISPONIBLE" };
     }
     return { ok: true, data: parsed.data };

@@ -49,6 +49,7 @@ import {
 } from "@kemdia/contracts";
 import { z } from "zod";
 import { readAtMost } from "@/lib/orders/api-orders";
+import { log } from "@/lib/log";
 
 /**
  * Adaptateur « API » de l'espace de l'équipe (S6-T05, ADR-0036) : double authentification (`/auth/2fa`), boutiques
@@ -138,8 +139,9 @@ export function createStaffApi(options: StaffApiOptions) {
       });
     } catch (error) {
       const timeout = error instanceof DOMException && error.name === "TimeoutError";
-      console.error(
-        `[équipe] ${method} ${routeOf(path)} : ${timeout ? "délai dépassé" : "API injoignable"}`,
+      log.error(
+        "équipe",
+        `${method} ${routeOf(path)} : ${timeout ? "délai dépassé" : "API injoignable"}`,
       );
       return { ok: false, code: "INDISPONIBLE" };
     }
@@ -159,7 +161,7 @@ export function createStaffApi(options: StaffApiOptions) {
           ...(Number.isInteger(retry) && retry > 0 ? { retryAfterSeconds: retry } : {}),
         };
       }
-      console.error(`[équipe] ${method} ${routeOf(path)} : statut ${response.status}`);
+      log.error("équipe", `${method} ${routeOf(path)} : statut ${response.status}`);
       return { ok: false, code: "INDISPONIBLE" };
     }
 
@@ -167,8 +169,9 @@ export function createStaffApi(options: StaffApiOptions) {
     if (!parsed.success) {
       // Chemins des champs seulement : jamais les valeurs reçues dans le journal
       const fields = parsed.error.issues.map((i) => i.path.join(".") || "(racine)").slice(0, 5);
-      console.error(
-        `[équipe] ${method} ${routeOf(path)} : réponse non conforme au contrat (${fields.join(", ")})`,
+      log.error(
+        "équipe",
+        `${method} ${routeOf(path)} : réponse non conforme au contrat (${fields.join(", ")})`,
       );
       return { ok: false, code: "INDISPONIBLE" };
     }
@@ -197,7 +200,7 @@ export function createStaffApi(options: StaffApiOptions) {
         signal: AbortSignal.timeout(options.timeoutMs),
       });
     } catch {
-      console.error(`[équipe] ${what} : API injoignable`);
+      log.error("équipe", `${what} : API injoignable`);
       return { status: 503 };
     }
     if (response.status === 404 || response.status === 401 || response.status === 403) {
@@ -207,12 +210,12 @@ export function createStaffApi(options: StaffApiOptions) {
     const type = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
     if (response.status !== 200 || type !== "image/webp") {
       await response.body?.cancel().catch(() => undefined);
-      console.error(`[équipe] ${what} : statut ${response.status}`);
+      log.error("équipe", `${what} : statut ${response.status}`);
       return { status: 503 };
     }
     const bytes = await readAtMost(response, maxBytes).catch(() => null);
     if (!bytes || !isWebp(bytes)) {
-      console.error(`[équipe] ${what} : fichier non conforme`);
+      log.error("équipe", `${what} : fichier non conforme`);
       return { status: 503 };
     }
     return { status: 200, bytes };

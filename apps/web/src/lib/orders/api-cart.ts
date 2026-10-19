@@ -12,6 +12,7 @@ import {
   type CartMerged,
 } from "@kemdia/contracts";
 import { z } from "zod";
+import { log } from "@/lib/log";
 
 /**
  * Adaptateur « API » du panier serveur (S5-T01, ADR-0023) : appelle `/api/v1/cart/*` depuis le serveur du site
@@ -75,8 +76,9 @@ export function createCartApi(options: CartApiOptions) {
       });
     } catch (error) {
       const timeout = error instanceof DOMException && error.name === "TimeoutError";
-      console.error(
-        `[panier] ${method} ${routeOf(path)} : ${timeout ? "délai dépassé" : "API injoignable"}`,
+      log.error(
+        "panier",
+        `${method} ${routeOf(path)} : ${timeout ? "délai dépassé" : "API injoignable"}`,
       );
       return { ok: false, code: "INDISPONIBLE" };
     }
@@ -86,14 +88,15 @@ export function createCartApi(options: CartApiOptions) {
       const problem = ProblemDetailsSchema.safeParse(payload);
       const code = KNOWN_CODES.find((c) => problem.success && c === problem.data.code);
       if (code) return { ok: false, code };
-      console.error(`[panier] ${method} ${routeOf(path)} : statut ${response.status}`);
+      log.error("panier", `${method} ${routeOf(path)} : statut ${response.status}`);
       return { ok: false, code: "INDISPONIBLE" };
     }
     const parsed = schema.safeParse(payload);
     if (!parsed.success) {
       const fields = parsed.error.issues.map((i) => i.path.join(".") || "(racine)").slice(0, 5);
-      console.error(
-        `[panier] ${method} ${routeOf(path)} : réponse non conforme au contrat (${fields.join(", ")})`,
+      log.error(
+        "panier",
+        `${method} ${routeOf(path)} : réponse non conforme au contrat (${fields.join(", ")})`,
       );
       return { ok: false, code: "INDISPONIBLE" };
     }

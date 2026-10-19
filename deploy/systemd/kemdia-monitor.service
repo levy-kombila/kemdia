@@ -1,0 +1,19 @@
+# Surveillance interne de Kemdia (S7-T06, ADR-0045) — lancée par kemdia-monitor.timer
+[Unit]
+Description=Kemdia — surveillance (conteneurs, HTTPS, disque, sauvegardes) et alerte Healthchecks
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/kemdia/bin/monitor.sh
+TimeoutStartSec=2min
+# Confinement : écriture seulement dans l'état de Kemdia et /run (socket Docker)
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/kemdia/state /run
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true

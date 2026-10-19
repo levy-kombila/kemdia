@@ -1,4 +1,5 @@
 import type { CatalogSource } from "./catalog-source";
+import { log as serverLog } from "@/lib/log";
 
 /**
  * Démo Render gratuite (S3-T07) : le site ET l'API s'endorment après 15 min sans visite.
@@ -30,7 +31,7 @@ export async function wakeCatalogApi(
   if (appEnv !== "demo") return "skipped";
   const {
     fetch: fetchImpl = fetch,
-    log = console.log,
+    log = (message: string) => serverLog.info("démarrage", message),
     now = Date.now,
     sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
   } = options;

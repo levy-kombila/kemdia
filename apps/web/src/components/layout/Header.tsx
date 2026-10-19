@@ -7,6 +7,7 @@ import { CategoryNav, type NavCategory } from "./CategoryNav";
 import { HeaderActions } from "./HeaderActions";
 import { SearchForm } from "./SearchForm";
 import { TopBar } from "./TopBar";
+import { log } from "@/lib/log";
 
 function toNav(depth: number) {
   return (c: CategoryNode): NavCategory => ({
@@ -29,7 +30,7 @@ async function navigationTree(): Promise<NavCategory[]> {
     // (rendu à la demande), garde de construction, configuration invalide.
     unstable_rethrow(error);
     if (!(error instanceof CatalogUnavailableError)) throw error;
-    console.error("[en-tête] menu des catégories indisponible :", (error as Error).message);
+    log.error("en-tête", `menu des catégories indisponible : ${(error as Error).message}`);
     return [];
   }
 }

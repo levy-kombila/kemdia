@@ -11,6 +11,7 @@ import {
 } from "@kemdia/contracts";
 import type { z } from "zod";
 import { CatalogUnavailableError, type CatalogPort } from "./port";
+import { log } from "@/lib/log";
 
 /** Durée de conservation d'une réponse : celle annoncée par l'API (Cache-Control: max-age=60). */
 export const CACHE_TTL_MS = 60_000;
@@ -68,7 +69,7 @@ export function createApiCatalog(options: ApiCatalogOptions): CatalogPort {
         });
       } catch (error) {
         const timeout = error instanceof DOMException && error.name === "TimeoutError";
-        console.error(`[catalogue] ${path} : ${timeout ? "délai dépassé" : "API injoignable"}`);
+        log.error("catalogue", `${path} : ${timeout ? "délai dépassé" : "API injoignable"}`);
         throw new CatalogUnavailableError(timeout ? "délai dépassé" : "API injoignable");
       }
       const retry =
@@ -81,14 +82,14 @@ export function createApiCatalog(options: ApiCatalogOptions): CatalogPort {
     }
     if (response.status === 404) return null;
     if (!response.ok) {
-      console.error(`[catalogue] ${path} : statut ${response.status}`);
+      log.error("catalogue", `${path} : statut ${response.status}`);
       throw new CatalogUnavailableError(`statut ${response.status}`);
     }
     const parsed = schema.safeParse(await response.json().catch(() => undefined));
     if (!parsed.success) {
       // Chemins des champs seulement : jamais les valeurs reçues dans le journal
       const fields = parsed.error.issues.map((i) => i.path.join(".") || "(racine)").slice(0, 5);
-      console.error(`[catalogue] ${path} : réponse non conforme au contrat (${fields.join(", ")})`);
+      log.error("catalogue", `${path} : réponse non conforme au contrat (${fields.join(", ")})`);
       throw new CatalogUnavailableError("réponse non conforme au contrat");
     }
     return parsed.data;
