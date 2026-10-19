@@ -1,0 +1,150 @@
+# Test d'intrusion OWASP ZAP (S7-T07, ADR-0046) sur la pile serveur montée comme sur le VPS (Caddy, site, API,
+# PostgreSQL), avec les comptes de test client, vendeuse et administratrice.
+#   - à chaque PR : scan PASSIF (n'attaque pas, ~quelques minutes par rôle) ;
+#   - chaque dimanche et à la demande : scan ACTIF (injections, XSS, traversée de chemin…).
+# Risque moyen ou élevé → rouge. Exceptions : .github/zap/plan.py (EXCEPTIONS), chacune justifiée.
+# Toutes les actions sont épinglées par SHA de commit.
+name: Test d'intrusion (ZAP)
+
+on:
+  pull_request:
+  schedule:
+    - cron: "23 2 * * 0" # chaque dimanche 03:23 heure de Libreville
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Type de scan
+        type: choice
+        options: [actif, passif]
+        default: actif
+
+permissions:
+  contents: read
+
+concurrency:
+  # Par événement : un lancement manuel n'annule pas le scan du dimanche (relecture S7-T07)
+  group: zap-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ZAP_VERSION: "2.17.0"
+  # Somme publiée par le projet ZAP (https://github.com/zaproxy/zap-admin/blob/master/ZapVersions.xml)
+  ZAP_SHA256: efe799aaa3627db683b43f00c9c210aea0b75c00cc8f0a0f0434d12bb3ddde5a
+
+jobs:
+  zap:
+    name: ZAP ${{ (github.event_name == 'pull_request' || inputs.mode == 'passif') && 'passif' || 'actif' }} — ${{ matrix.cible }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        cible: [site, api]
+    services:
+      registry:
+        image: registry:2
+        ports: ["5000:5000"]
+    env:
+      REPO: localhost:5000/kemdia
+      MODE: ${{ (github.event_name == 'pull_request' || inputs.mode == 'passif') && 'passif' || 'actif' }}
+      CIBLE: ${{ matrix.cible }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Pile serveur (images, fichiers du serveur, Caddy, déploiement ci-v1)
+        uses: ./.github/actions/pile-serveur
+
+      - name: Installer ZAP ${{ env.ZAP_VERSION }} (somme vérifiée)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/zap.tgz" \
+            "https://github.com/zaproxy/zaproxy/releases/download/v$ZAP_VERSION/ZAP_${ZAP_VERSION}_Linux.tar.gz"
+          echo "$ZAP_SHA256  $RUNNER_TEMP/zap.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/zap.tgz" -C "$RUNNER_TEMP"
+          echo "ZAP_DIR=$RUNNER_TEMP/ZAP_$ZAP_VERSION" >> "$GITHUB_ENV"
+          java -version
+
+      - name: Données et sessions de test (base éphémère de la CI seulement)
+        run: |
+          # ZAP (Java) n'envoie pas de nom de serveur (SNI) pour « localhost » : DANS CETTE COPIE DE TEST seulement,
+          # Caddy présente alors le certificat de la production (le Caddyfile du dépôt n'est pas modifié)
+          sudo sed -i 's/^\temail {\$ACME_EMAIL}$/&\n\tdefault_sni {$PROD_DOMAIN}/' /opt/kemdia/proxy/Caddyfile
+          grep -q default_sni /opt/kemdia/proxy/Caddyfile
+          (cd /opt/kemdia/proxy && sudo docker compose restart caddy >/dev/null)
+          compose() { sudo docker compose --env-file /opt/kemdia/state/production.env -f /opt/kemdia/app/compose.yml "$@"; }
+          psql_e2e() { docker exec -i -e PGOPTIONS='-c kemdia.e2e=on' kemdia-production-db psql -q -U kemdia -d kemdia -v ON_ERROR_STOP=1 "$@"; }
+          # Limite de débit de l'API relevée POUR LE SCAN (sinon ZAP ne reçoit que des 429) : testée ailleurs
+          echo "RATE_LIMIT_PER_MINUTE=10000" | sudo tee -a /opt/kemdia/secrets/production.api.env >/dev/null
+          compose up -d --no-build --pull never --wait api web
+          # Catalogue de démonstration, puis comptes et données des parcours de bout en bout
+          compose --profile migrations run --rm --no-deps migrate node --input-type=module -e \
+            "const m = await import(process.cwd() + '/dist/database/demo-import.js'); process.exitCode = await m.runDemoImport({ env: process.env, allowedEnvs: ['production'] });"
+          for f in compte-e2e photos-vendeur-e2e equipe-e2e vendeur-e2e; do psql_e2e < "apps/web/e2e/fixtures/$f.sql"; done
+          # Jetons tirés au hasard ; seule leur empreinte va dans la base ; le fichier reste hors du dépôt (0600)
+          tokens="$RUNNER_TEMP/zap-tokens"; install -m 600 /dev/null "$tokens"
+          vars=()
+          for role in client vendeur equipe; do
+            t=$(openssl rand 32 | base64 | tr '+/' '-_' | tr -d '=\n')
+            echo "::add-mask::$t"
+            echo "$role=$t" >> "$tokens"
+            vars+=(-v "$role=$(printf '%s' "$t" | sha256sum | cut -d' ' -f1)")
+          done
+          psql_e2e "${vars[@]}" < .github/zap/sessions.sql
+          echo "ZAP_TOKENS_FILE=$tokens" >> "$GITHUB_ENV"
+          api_ip=$(docker inspect -f '{{(index .NetworkSettings.Networks "kemdia-production_app").IPAddress}}' kemdia-production-api)
+          echo "API_URL=http://$api_ip:4000" >> "$GITHUB_ENV"
+
+      - name: Vérifier les sessions et le contrôle d'accès avant le scan
+        run: |
+          tok() { sed -n "s/^$1=//p" "$ZAP_TOKENS_FILE"; }
+          code() { curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$@"; }
+          for role in client vendeur equipe; do
+            [ "$(code -H "Authorization: Bearer $(tok $role)" "$API_URL/api/v1/auth/session")" = 200 ] \
+              || { echo "::error::session de test refusée par l'API ($role)"; exit 1; }
+            [ "$(code -k -b "__Host-kemdia_session=$(tok $role)" https://localhost/compte)" = 200 ] \
+              || { echo "::error::session de test refusée par le site ($role)"; exit 1; }
+          done
+          # Route de l'équipe : 200 pour l'administratrice, refusée au client, au vendeur et sans session
+          [ "$(code -H "Authorization: Bearer $(tok equipe)" "$API_URL/api/v1/admin/shops")" = 200 ] \
+            || { echo "::error::route de l'équipe refusée à l'administratrice"; exit 1; }
+          for role in client vendeur; do
+            c=$(code -H "Authorization: Bearer $(tok $role)" "$API_URL/api/v1/admin/shops")
+            [ "$c" = 403 ] || { echo "::error::route de l'équipe : $c pour $role (403 attendu)"; exit 1; }
+          done
+          c=$(code "$API_URL/api/v1/admin/shops")
+          [ "$c" = 401 ] || [ "$c" = 403 ] || { echo "::error::route de l'équipe : $c sans session (refus attendu)"; exit 1; }
+          echo "✅ sessions valides ; contrôle d'accès de l'équipe vérifié"
+
+      - name: Scan ZAP (${{ env.MODE }}, ${{ matrix.cible }}) — anonyme, client, vendeur, équipe
+        run: |
+          # Les routes de l'équipe exigent une double authentification de moins de 15 min : renouvelée pendant le scan
+          ( while sleep 240; do
+              docker exec kemdia-production-db psql -q -U kemdia -d kemdia -c \
+                "UPDATE identity.sessions SET second_factor_at = now() WHERE user_agent = 'OWASP ZAP (CI)' AND second_factor_at IS NOT NULL" \
+                >/dev/null 2>&1 || true
+            done ) &
+          if [ "$CIBLE" = site ]; then url=https://localhost/; else url=$API_URL; fi
+          status=0
+          .github/zap/scan.sh "$MODE" "$CIBLE" "$url" "$RUNNER_TEMP/zap-rapports" || status=$?
+          # Les sessions ont-elles tenu jusqu'au bout ? Sinon le scan a continué en anonyme sans le dire
+          tok() { sed -n "s/^$1=//p" "$ZAP_TOKENS_FILE"; }
+          for role in client vendeur equipe; do
+            c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -H "Authorization: Bearer $(tok $role)" "$API_URL/api/v1/auth/session")
+            [ "$c" = 200 ] || { echo "::error::session de test ($role) fermée pendant le scan : couverture incomplète"; status=1; }
+          done
+          exit "$status"
+
+      # Rapports seulement pour une PR (scan passif) : ceux du scan actif seraient téléchargeables par tous (dépôt
+      # public) avant la correction ; le résumé suffit (relecture S7-T07)
+      - name: Rapports ZAP
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: zap-${{ env.MODE }}-${{ matrix.cible }}
+          path: ${{ runner.temp }}/zap-rapports
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Journaux en cas d'échec
+        if: failure()
+        run: |
+          sudo docker compose --env-file /opt/kemdia/state/production.env -f /opt/kemdia/app/compose.yml logs --tail 60 || true

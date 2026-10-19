@@ -131,6 +131,7 @@ describe("schémas", () => {
       "CategoryNode",
       "CategoryTree",
       "CategoryView",
+      "ChangePasswordRequest",
       "CodCollectedRequest",
       "CodSettings",
       "CodSettingsRequest",

@@ -303,7 +303,7 @@ export const SignupRequestSchema = z
     firstName: z.string().max(100),
     lastName: z.string().max(100),
     identifier: z.string().max(300).describe("Adresse e-mail ou mobile gabonais (06… / 07…)"),
-    password: z.string().max(200).describe("8 à 128 caractères, une lettre et un chiffre"),
+    password: z.string().max(200).describe("8 à 128 caractères, pas un mot de passe courant"),
     acceptTerms: z.literal(true).describe("Acceptation des conditions générales"),
   })
   .meta({
@@ -438,10 +438,20 @@ export const ResetPasswordRequestSchema = z
   .strictObject({
     ticket: z.string().regex(SIGNUP_TICKET_PATTERN),
     code: z.string().regex(OTP_CODE_PATTERN).describe("Code à 6 chiffres reçu par e-mail"),
-    newPassword: z.string().max(200).describe("8 à 128 caractères, une lettre et un chiffre"),
+    newPassword: z.string().max(200).describe("8 à 128 caractères, pas un mot de passe courant"),
   })
   .meta({ id: "ResetPasswordRequest" });
 export type ResetPasswordRequest = z.infer<typeof ResetPasswordRequestSchema>;
+
+// --- Identité : changer son mot de passe depuis « Mon compte » (S7-T07, ASVS 5.0 V6.2.2 et V6.2.3) ---
+
+export const ChangePasswordRequestSchema = z
+  .strictObject({
+    currentPassword: z.string().max(200).describe("Mot de passe actuel"),
+    newPassword: z.string().max(200).describe("8 à 128 caractères, pas un mot de passe courant"),
+  })
+  .meta({ id: "ChangePasswordRequest" });
+export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequestSchema>;
 
 // --- Administration : rôles et journal d'audit (S4-T06, ADR-0020) ---
 

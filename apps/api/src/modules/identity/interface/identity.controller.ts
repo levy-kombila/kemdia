@@ -16,6 +16,7 @@ import {
   ForgotPasswordRequestSchema,
   LoginRequestSchema,
   ResetPasswordRequestSchema,
+  ChangePasswordRequestSchema,
   ResetResendRequestSchema,
   SignupRequestSchema,
   SignupResendRequestSchema,
@@ -24,6 +25,7 @@ import {
   type ForgotPasswordRequest,
   type LoginRequest,
   type ResetPasswordRequest,
+  type ChangePasswordRequest,
   type ResetResendRequest,
   type ResetStarted,
   type LogoutAll,
@@ -36,6 +38,7 @@ import {
 } from "@kemdia/contracts";
 import { auditContextOf } from "../../audit/index.js";
 import { LoginService } from "../application/login.service.js";
+import { PasswordChangeService } from "../application/password-change.service.js";
 import { PasswordResetService } from "../application/password-reset.service.js";
 import {
   SessionService,
@@ -73,6 +76,7 @@ export class IdentityController {
     private readonly login: LoginService,
     private readonly sessions: SessionService,
     private readonly passwordReset: PasswordResetService,
+    private readonly passwordChange: PasswordChangeService,
   ) {}
 
   /** FR-001 : crée le compte en attente et envoie le code (réponse identique si le compte existe déjà). */
@@ -192,6 +196,35 @@ export class IdentityController {
       this.passwordReset.reset({
         ticket: body.ticket,
         code: body.code,
+        newPassword: body.newPassword,
+        userAgent,
+        context: auditContextOf(req),
+      }),
+    );
+    return presentOpened(opened);
+  }
+
+  /**
+   * Changer son mot de passe en donnant l'actuel (S7-T07, ASVS 5.0 V6.2.2 et V6.2.3) : toutes les sessions sont
+   * fermées et une nouvelle est ouverte sur cet appareil ; avis envoyé au titulaire. 3 erreurs : blocage et session
+   * fermée.
+   */
+  @Post("password/change")
+  @HttpCode(HttpStatus.OK)
+  @Header("Cache-Control", "no-store")
+  @UseGuards(SessionGuard)
+  // 5 par minute et par compte, en plus du blocage après 3 erreurs (chaque essai coûte un hachage Argon2id)
+  @AccountRateLimit(5)
+  async changePassword(
+    @CurrentSession() session: AuthenticatedSession,
+    @Body({ schema: ChangePasswordRequestSchema }) body: ChangePasswordRequest,
+    @Req() req: Request,
+    @Headers("x-kemdia-user-agent") userAgent?: string,
+  ): Promise<OpenedSessionView> {
+    const opened = await withIdentityErrors(() =>
+      this.passwordChange.change({
+        session,
+        currentPassword: body.currentPassword,
         newPassword: body.newPassword,
         userAgent,
         context: auditContextOf(req),

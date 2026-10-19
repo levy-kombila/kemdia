@@ -4,6 +4,7 @@ import { AuditModule } from "../audit/index.js";
 import type { AppConfig } from "../../config/env.js";
 import { LoginService } from "./application/login.service.js";
 import { OtpService } from "./application/otp.service.js";
+import { PasswordChangeService } from "./application/password-change.service.js";
 import { PasswordResetService } from "./application/password-reset.service.js";
 import { RoleService } from "./application/role.service.js";
 import { SecondFactorService } from "./application/second-factor.service.js";
@@ -70,6 +71,7 @@ import { SessionGuard } from "./interface/session.guard.js";
     LoginService,
     SessionService,
     PasswordResetService,
+    PasswordChangeService,
     { provide: RESET_TICKET_REPOSITORY, useClass: PrismaResetTicketRepository },
     SessionGuard,
     PrismaIdentityMaintenance,

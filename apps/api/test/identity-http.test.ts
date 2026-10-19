@@ -424,6 +424,119 @@ describe("API identité — inscription (HTTP)", () => {
       );
     });
 
+    describe("changer son mot de passe (S7-T07, ASVS 5.0 V6.2.2 et V6.2.3)", () => {
+      const change = (token: string, body: object) =>
+        postAuth("/api/v1/auth/password/change", token).send(body);
+      const auditActions = () =>
+        app.get<InMemoryAuditEvents>(AUDIT_REPOSITORY).rows.map((e) => e.action as string);
+      async function connecte(email: string) {
+        await compte(email);
+        const res = await post("/api/v1/auth/login", { identifier: email, password: "Mangue2026" });
+        return matches(OpenedSessionSchema, res.body);
+      }
+
+      it("mot de passe actuel + nouveau : 200, reconnecté ici, déconnecté partout ailleurs, avis envoyé", async () => {
+        const email = "changer@exemple.ga";
+        const a = await connecte(email);
+        const b = matches(
+          OpenedSessionSchema,
+          (await post("/api/v1/auth/login", { identifier: email, password: "Mangue2026" })).body,
+        );
+        const res = await change(a.token, {
+          currentPassword: "Mangue2026",
+          newPassword: "papaye et goyave",
+        })
+          .set("X-Kemdia-User-Agent", "Firefox sur Windows")
+          .expect(200);
+        expect(res.headers["cache-control"]).toBe("no-store");
+        const opened = matches(OpenedSessionSchema, res.body);
+        expect(opened.token).not.toBe(a.token);
+        expect(JSON.stringify(res.body)).not.toMatch(/papaye|Mangue|hash/);
+        // Toutes les anciennes sessions fermées (celle-ci comprise), la nouvelle valable
+        await get("/api/v1/auth/session", a.token).expect(401);
+        await get("/api/v1/auth/session", b.token).expect(401);
+        await get("/api/v1/auth/session", opened.token).expect(200);
+        await post("/api/v1/auth/login", { identifier: email, password: "Mangue2026" }).expect(401);
+        await post("/api/v1/auth/login", {
+          identifier: email,
+          password: "papaye et goyave",
+        }).expect(200);
+        expect(sender.sent.at(-1)).toMatchObject({ kind: "password-changed", to: email });
+        expect(auditActions()).toContain("password.changed");
+      });
+
+      it("sans session : 401 ; nouveau mot de passe trop faible ou courant : 422 sans consommer d'essai", async () => {
+        await request(app.getHttpServer())
+          .post("/api/v1/auth/password/change")
+          .set("X-Forwarded-For", `10.3.0.${++ip}`)
+          .send({ currentPassword: "Mangue2026", newPassword: "papaye et goyave" })
+          .expect(401);
+        const a = await connecte("faible-change@exemple.ga");
+        for (const newPassword of ["court", "baseball", "Password"]) {
+          const weak = await change(a.token, {
+            currentPassword: "faux-faux-faux",
+            newPassword,
+          }).expect(422);
+          expect(codeOf(weak.body)).toBe("MOT_DE_PASSE_FAIBLE");
+        }
+        // Aucun essai consommé : le bon mot de passe actuel passe toujours
+        await change(a.token, {
+          currentPassword: "Mangue2026",
+          newPassword: "papaye et goyave",
+        }).expect(200);
+      });
+
+      it("mot de passe actuel faux : 422, puis au 3e essai blocage (429) et session FERMÉE", async () => {
+        const email = "voleur@exemple.ga";
+        const a = await connecte(email);
+        for (let i = 1; i <= 2; i++) {
+          const wrong = await change(a.token, {
+            currentPassword: `essai-${i}-faux`,
+            newPassword: "papaye et goyave",
+          }).expect(422);
+          expect(codeOf(wrong.body)).toBe("MOT_DE_PASSE_INCORRECT");
+        }
+        const locked = await change(a.token, {
+          currentPassword: "essai-3-faux",
+          newPassword: "papaye et goyave",
+        }).expect(429);
+        expect(codeOf(locked.body)).toBe("COMPTE_BLOQUE");
+        await get("/api/v1/auth/session", a.token).expect(401);
+        // La CONNEXION du titulaire n'est pas bloquée (compteur à part) ; le changement, si, pendant 15 minutes
+        const again = matches(
+          OpenedSessionSchema,
+          (
+            await post("/api/v1/auth/login", { identifier: email, password: "Mangue2026" }).expect(
+              200,
+            )
+          ).body,
+        );
+        const still = await change(again.token, {
+          currentPassword: "Mangue2026",
+          newPassword: "papaye et goyave",
+        }).expect(429);
+        expect(codeOf(still.body)).toBe("COMPTE_BLOQUE");
+        expect(auditActions()).toEqual(
+          expect.arrayContaining(["password.change_failed", "password.change_locked"]),
+        );
+        clock.advance(16 * 60_000);
+        await change(again.token, {
+          currentPassword: "Mangue2026",
+          newPassword: "papaye et goyave",
+        }).expect(200);
+      });
+
+      it("corps invalide : 400 (champ manquant ou inconnu)", async () => {
+        const a = await connecte("corps-change@exemple.ga");
+        await change(a.token, { newPassword: "papaye et goyave" }).expect(400);
+        await change(a.token, {
+          currentPassword: "Mangue2026",
+          newPassword: "papaye et goyave",
+          role: "ADMIN",
+        }).expect(400);
+      });
+    });
+
     it("corps invalides : 400 (champ inconnu, code ou ticket mal formé)", async () => {
       await post("/api/v1/auth/password/forgot", { identifier: "a@b.ga", role: "x" }).expect(400);
       await post("/api/v1/auth/password/resend", { ticket: "court" }).expect(400);

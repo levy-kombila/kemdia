@@ -89,6 +89,21 @@ export interface ResetTicketRepository {
    * Renvoie false (et ne change rien) si le compte a changé entre-temps.
    */
   applyReset(change: PasswordResetChange): Promise<boolean>;
+  /**
+   * Changement depuis « Mon compte » (S7-T07) : nouveau mot de passe seulement si le compte est actif et n'a pas changé
+   * de mot de passe entre-temps (verrou optimiste), puis TOUTES ses sessions fermées. Faux si rien n'a été changé.
+   */
+  applyPasswordChange(change: PasswordChange): Promise<boolean>;
+}
+
+export interface PasswordChange {
+  accountId: string;
+  /** Session qui demande le changement : encore ouverte au moment d'écrire, sinon rien n'est changé (relecture S7-T07) */
+  sessionId: string;
+  /** Version lue avant le changement (verrou optimiste) */
+  expectedVersion: number;
+  passwordHash: string;
+  now: Date;
 }
 
 export interface PasswordResetChange {

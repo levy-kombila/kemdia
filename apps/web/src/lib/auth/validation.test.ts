@@ -71,9 +71,13 @@ describe("passwordIssues", () => {
   it("accepte un mot de passe correct", () => {
     expect(passwordIssues("Libreville2026!")).toEqual([]);
   });
+  it("accepte toute composition : lettres seules, chiffres seuls, phrase (ASVS 5.0 V6.2.5)", () => {
+    expect(passwordIssues("manguiers du jardin")).toEqual([]);
+    expect(passwordIssues("73915048266")).toEqual([]);
+  });
   it("signale chaque règle non respectée", () => {
-    expect(passwordIssues("abc")).toEqual(["length", "digit"]);
-    expect(passwordIssues("12345678")).toEqual(["letter", "common"]);
+    expect(passwordIssues("abc")).toEqual(["length"]);
+    expect(passwordIssues("12345678")).toEqual(["common"]);
     expect(passwordIssues("Azerty123")).toEqual(["common"]);
     expect(passwordIssues("a1".repeat(65))).toContain("max");
   });

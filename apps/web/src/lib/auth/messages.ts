@@ -11,7 +11,7 @@ const MESSAGES: Record<AuthErrorCode, string> = {
   IDENTIFIANT_INVALIDE: "Saisissez une adresse e-mail valide.",
   NOM_INVALIDE: "Prénom et nom : 2 à 60 lettres (espaces, apostrophes et tirets permis).",
   MOT_DE_PASSE_FAIBLE:
-    "Mot de passe refusé : 8 caractères au moins, avec une lettre et un chiffre, et pas un mot de passe courant.",
+    "Mot de passe refusé : 8 caractères au moins, et pas un mot de passe courant.",
   CANAL_INDISPONIBLE:
     "L'envoi par SMS sera bientôt disponible. Utilisez votre adresse e-mail pour le moment.",
   ENVOI_TROP_RAPPROCHE: "Un code vient d'être envoyé. Patientez avant d'en demander un autre.",
