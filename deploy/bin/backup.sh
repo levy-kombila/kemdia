@@ -20,46 +20,13 @@
 set -Eeuo pipefail
 umask 077
 
-ROOT=${KEMDIA_ROOT:-/opt/kemdia}
-SECRETS="$ROOT/secrets"
-STATE_DIR="$ROOT/state"
-PASSWORD_FILE="$SECRETS/backup.password"
-S3_CONF="$SECRETS/backup-s3.env"
-LOCAL_REPO=${KEMDIA_BACKUP_REPO:-/var/backups/kemdia}
+# shellcheck source=deploy/bin/backup-lib.sh
+source "$(dirname "$(readlink -f "$0")")/backup-lib.sh"
 STATUS="$STATE_DIR/backup.last"
 KEEP=(--keep-daily 7 --keep-weekly 4 --keep-monthly 6)
 
-log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >&2; }
-die() {
-  log "ERREUR : $*"
-  exit 1
-}
-
 [[ $EUID -eq 0 ]] || die "à lancer en root (sudo)"
 command -v restic >/dev/null || die "restic est requis (apt-get install restic)"
-
-export RESTIC_PASSWORD_FILE=$PASSWORD_FILE
-export RESTIC_CACHE_DIR=/var/cache/kemdia-restic
-export RESTIC_PROGRESS_FPS=0.016 # pas de barre de progression dans le journal
-
-# Dépôt S3 (facultatif) : seules ces clés sont lues, jamais le fichier exécuté
-S3_REPO=""
-load_s3() {
-  [[ -f $S3_CONF ]] || return 0
-  local key value
-  while IFS='=' read -r key value; do
-    case $key in
-      RESTIC_S3_REPOSITORY) S3_REPO=$value ;;
-      AWS_ACCESS_KEY_ID | AWS_SECRET_ACCESS_KEY | AWS_DEFAULT_REGION) export "$key=$value" ;;
-      '' | \#*) ;;
-      *) die "clé inconnue dans $S3_CONF : $key" ;;
-    esac
-  done <"$S3_CONF"
-  [[ -z $S3_REPO || $S3_REPO =~ ^s3:https?://[A-Za-z0-9.:-]+/[a-z0-9._/-]+$ ]] ||
-    die "RESTIC_S3_REPOSITORY invalide (attendu s3:https://<hôte>/<bucket>)"
-}
-
-repo_ready() { restic -r "$1" cat config >/dev/null 2>&1; }
 
 # --- init : une seule fois par serveur -----------------------------------------
 if [[ ${1:-} == init ]]; then
@@ -86,6 +53,17 @@ if [[ ${1:-} == init ]]; then
 fi
 
 # --- sauvegarde ----------------------------------------------------------------
+ENVS=() S3_REPO=""
+write_status() { # write_status <résultat> : lu par la surveillance (S7-T06)
+  printf 'date=%s\nresultat=%s\nenvironnements=%s\ns3=%s\n' "$(date -u +%FT%TZ)" "$1" "${ENVS[*]:-}" \
+    "$([[ -n $S3_REPO ]] && echo oui || echo non)" >"$STATUS.tmp"
+  chmod 644 "$STATUS.tmp"
+  mv "$STATUS.tmp" "$STATUS"
+}
+# Arrêt avant la fin (mot de passe absent, dépôt illisible…) : l'état dit « échec », jamais l'ancien « ok »
+STATUS_DONE=false
+trap '[[ $STATUS_DONE == true ]] || write_status echec:arret' EXIT
+
 [[ -r $PASSWORD_FILE ]] || die "mot de passe absent : sudo $ROOT/bin/backup.sh init"
 repo_ready "$LOCAL_REPO" || die "dépôt local absent ou illisible : sudo $ROOT/bin/backup.sh init"
 load_s3
@@ -96,7 +74,7 @@ if [[ ${#ENVS[@]} -eq 0 ]]; then
 fi
 for env in "${ENVS[@]}"; do [[ $env =~ ^(staging|production)$ ]] || die "environnement invalide : $env"; done
 
-exec 8>/run/kemdia-backup.lock
+exec 8>"$BACKUP_LOCK"
 flock -n 8 || die "une sauvegarde est déjà en cours"
 
 failures=()
@@ -120,7 +98,9 @@ for env in "${ENVS[@]}"; do
   if [[ ${status[0]} -eq 0 && ${status[1]} -eq 0 && -n $snapshot ]]; then
     log "✅ $env : base sauvegardée (${snapshot:0:8})"
   else
-    [[ -z $snapshot ]] || restic -r "$LOCAL_REPO" forget --quiet "$snapshot" || true
+    if [[ -n $snapshot ]] && ! restic -r "$LOCAL_REPO" forget --quiet "$snapshot"; then
+      log "❌ $env : sauvegarde tronquée ${snapshot:0:8} NON supprimée (à faire : restic forget)"
+    fi
     log "❌ $env : sauvegarde de la base échouée (pg_dump ${status[0]}, restic ${status[1]})"
     failures+=("$env")
   fi
@@ -130,7 +110,7 @@ files=()
 for f in "$SECRETS" "$ROOT/proxy/.env"; do [[ -e $f ]] && files+=("$f"); done
 if [[ ${#files[@]} -gt 0 ]]; then
   restic -r "$LOCAL_REPO" backup --quiet --host kemdia --tag kemdia,fichiers \
-    --exclude "$PASSWORD_FILE" --exclude "$S3_CONF" "${files[@]}" ||
+    --exclude "$SECRETS/backup*" --exclude "$SECRETS/.tmp.*" "${files[@]}" ||
     { log "❌ fichiers de secrets non sauvegardés" && failures+=(fichiers); }
 fi
 
@@ -151,9 +131,7 @@ fi
 
 result=ok
 [[ ${#failures[@]} -eq 0 ]] || result="echec:${failures[*]}"
-printf 'date=%s\nresultat=%s\nenvironnements=%s\ns3=%s\n' \
-  "$(date -u +%FT%TZ)" "${result// /,}" "${ENVS[*]}" "$([[ -n $S3_REPO ]] && echo oui || echo non)" >"$STATUS.tmp"
-chmod 644 "$STATUS.tmp"
-mv "$STATUS.tmp" "$STATUS"
+write_status "${result// /,}"
+STATUS_DONE=true
 [[ $result == ok ]] || die "sauvegarde incomplète : ${failures[*]}"
 log "✅ sauvegarde terminée"

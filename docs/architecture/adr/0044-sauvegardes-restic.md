@@ -39,14 +39,27 @@ Choix du propriétaire (2026-10-19) :
    sont lues ; le fichier n'est jamais exécuté.
 3. **`restore.sh`** : `liste`, `fichiers` (extrait les secrets dans un dossier vide, ne remplace rien), `verifier`
    (restaure dans une base temporaire `kemdia_verif`, puis la supprime ; la base en service n'est pas touchée) et
-   `remplacer` (exige `--confirmer <env>`, prend le verrou de `deploy.sh`, vérifie que la sauvegarde existe **avant**
-   d'arrêter quoi que ce soit). `--s3` lit le dépôt hors du serveur.
-4. **Vérification hebdomadaire** : minuteur le dimanche à 05:00 (`restore.sh verifier` + relecture de 10 % du dépôt).
+   `remplacer`. Ce dernier mode :
+   - exige `--confirmer <env>` et prend les verrous du déploiement et des sauvegardes ;
+   - n'accepte qu'une sauvegarde **de la base de cet environnement** (un identifiant explicite fait ignorer les
+     filtres de restic : il est donc cherché dans la liste filtrée) ;
+   - restaure d'abord **à côté** (`kemdia_restore`) pendant que le site tourne ; en cas d'échec, la base en service n'a
+     pas été touchée ;
+   - bascule ensuite par renommage. L'ancienne base est gardée (`kemdia_avant_<date>`) et remise en service si l'API
+     ne démarre pas sur la restaurée.
+
+   `--s3` lit le dépôt hors du serveur.
+
+4. **Vérification hebdomadaire** : minuteur le dimanche à 05:00 (`restore.sh verifier`, relecture de 10 % du dépôt
+   local et de 5 % du dépôt S3). Les deux minuteurs sont confinés par systemd (système en lecture seule sauf dépôts,
+   cache et état ; 4 h au plus) et écrivent « échec » même s'ils s'arrêtent avant la fin.
 5. **CI (job « Pile serveur »)** : base remplie avec le catalogue de démonstration, puis sauvegarde vers le dépôt local
-   et un S3 de test (MinIO). Le job vérifie ensuite :
+   et un S3 de test (moto). Le job vérifie ensuite :
    - pas de donnée en clair dans le dépôt, mauvais mot de passe refusé ;
    - secrets récupérables, mais pas le mot de passe des sauvegardes ;
-   - vérification hebdomadaire réussie.
+   - vérification hebdomadaire réussie (lancée par systemd, comme sur le serveur) ;
+   - refus de remplacer la base par la sauvegarde des secrets ;
+   - fichier S3 sans retour à la ligne final bien lu.
 
    Il simule enfin la **perte du serveur** : base et dépôt local effacés. La restauration depuis S3 doit redonner une
    base au contenu identique table par table (nombre de lignes et MD5), avec le site et l'API en ligne.
@@ -59,6 +72,11 @@ Choix du propriétaire (2026-10-19) :
 - Place : le dépôt déduplique (un dump non compressé change peu d'un jour à l'autre) puis compresse. Les 10 Go
   gratuits de R2 suffisent pour le lancement ; à surveiller avec les photos.
 - `pg_dump` est cohérent sans arrêter le site : une seule transaction, en lecture.
+- **Risque restant** (relecture S7-T05) : le serveur détient une clé S3 qui peut supprimer (restic en a besoin pour la
+  rétention). Un attaquant devenu root sur le serveur pourrait donc effacer aussi la copie S3. Parades à décider avec
+  le client avant l'ouverture : une copie mensuelle hors ligne du dépôt chiffré par le propriétaire, ou un second dépôt en ajout seul (`rest-server --append-only` sur une autre machine) dont la
+  rétention se fait depuis cette autre machine.
+- Un seul serveur par bucket : les sauvegardes portent toutes le nom d'hôte `kemdia`.
 
 ## Alternatives écartées
 

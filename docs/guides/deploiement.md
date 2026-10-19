@@ -281,6 +281,9 @@ journal : `journalctl -u kemdia-backup -u kemdia-restore-check`.
    ```
 
    Garde aussi ces quatre lignes dans ton gestionnaire de mots de passe (elles servent après la perte du serveur).
+   Limite : un pirate devenu root sur le serveur pourrait effacer aussi cette copie (voir ADR-0044) ; en attendant
+   une parade décidée avec le client, copie chaque mois le dossier chiffré `/var/backups/kemdia` sur un disque
+   gardé hors ligne (`sudo rsync -a /var/backups/kemdia/ …`).
 
 4. Essai immédiat : `sudo systemctl start kemdia-backup && cat /opt/kemdia/state/backup.last`.
 
@@ -292,8 +295,10 @@ journal : `journalctl -u kemdia-backup -u kemdia-restore-check`.
 | Vérifier sans rien toucher               | `sudo /opt/kemdia/bin/restore.sh verifier production`                                        |
 | Revenir en arrière (erreur, suppression) | `sudo /opt/kemdia/bin/restore.sh remplacer production <id ou latest> --confirmer production` |
 
-`remplacer` arrête le site et l'API, recrée la base à partir de la sauvegarde, puis les redémarre : tout ce qui a été
-fait **après** cette sauvegarde est perdu. Utiliser la version de l'application qui tournait au moment de la sauvegarde
+`remplacer` restaure d'abord la sauvegarde **à côté** (le site tourne encore ; en cas d'échec, rien n'est touché), puis
+arrête le site et l'API quelques secondes, met la base restaurée en service et garde l'ancienne sous
+`kemdia_avant_<date>` (la commande pour la supprimer après contrôle est affichée). Si l'API ne démarre pas sur la base
+restaurée, l'ancienne est remise en service. Tout ce qui a été fait **après** la sauvegarde choisie est perdu. Utiliser la version de l'application qui tournait au moment de la sauvegarde
 (une migration plus récente peut être relancée ensuite par un déploiement).
 
 ### Serveur perdu (incendie, piratage, résiliation)

@@ -99,6 +99,7 @@ kemdia_files() { # kemdia_files <utilisateur> <groupe> : qui lance deploy.sh (de
   # Sauvegardes (S7-T05) : root seulement (elles lisent le mot de passe des sauvegardes)
   install -m 700 "$SRC/bin/backup.sh" "$ROOT/bin/backup.sh"
   install -m 700 "$SRC/bin/restore.sh" "$ROOT/bin/restore.sh"
+  install -m 600 "$SRC/bin/backup-lib.sh" "$ROOT/bin/backup-lib.sh"
   install -m 644 "$SRC/app/compose.yml" "$ROOT/app/compose.yml"
   install -m 644 "$SRC/proxy/compose.yml" "$ROOT/proxy/compose.yml"
   install -m 644 "$SRC/proxy/Caddyfile" "$ROOT/proxy/Caddyfile"
@@ -121,7 +122,7 @@ backup_timers() {
     install -m 644 "$SRC/systemd/$unit" "/etc/systemd/system/$unit"
   done
   systemctl daemon-reload
-  # Les minuteurs n'échouent pas tant que backup.sh init n'est pas lancé : ils le signalent dans le journal
+  # Tant que « backup.sh init » n'est pas lancé, chaque nuit échoue et le dit (backup.last : resultat=echec)
   systemctl enable --now kemdia-backup.timer kemdia-restore-check.timer
 }
 
@@ -196,6 +197,7 @@ if $FILES_ONLY; then
     exit 1
   fi
   kemdia_files root "${KEMDIA_GROUP:-deploy}"
+  backup_timers # la CI lance les sauvegardes par systemd, comme le serveur
   echo "✅ Fichiers installés (aucun durcissement : --fichiers-seulement)."
   exit 0
 fi

@@ -9,6 +9,14 @@ Type=oneshot
 ExecStart=/opt/kemdia/bin/restore.sh verifier
 Nice=10
 IOSchedulingClass=idle
+# Une copie S3 bloquée ne doit pas empêcher les nuits suivantes
+TimeoutStartSec=4h
+# Confinement : écriture seulement dans les dépôts, le cache, l'état de Kemdia et /run (socket Docker, verrou)
 PrivateTmp=true
 NoNewPrivileges=true
 ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=-/var/backups/kemdia -/var/cache/kemdia-restic /opt/kemdia/state /run
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true

@@ -779,11 +779,12 @@ jobs:
         run: |
           sudo apt-get update -q >/dev/null && sudo apt-get install -y -q restic >/dev/null
           restic version
-          # Stockage S3 de test (MinIO), à la place de Cloudflare R2 ; mot de passe tiré au hasard
+          # Stockage S3 de test (moto, version épinglée), à la place de Cloudflare R2 ; clé tirée au hasard
           S3_SECRET=ci-$(openssl rand -hex 16)
-          docker run -d --name s3 -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=kemdia-ci -e MINIO_ROOT_PASSWORD="$S3_SECRET" \
-            minio/minio:RELEASE.2025-04-22T22-12-26Z server /data >/dev/null
-          for i in $(seq 1 30); do curl -fs http://127.0.0.1:9000/minio/health/live && break; sleep 1; done
+          python3 -m venv "$RUNNER_TEMP/s3" && "$RUNNER_TEMP/s3/bin/pip" install -q "moto[server]==5.1.4"
+          nohup "$RUNNER_TEMP/s3/bin/moto_server" -H 127.0.0.1 -p 9000 >"$RUNNER_TEMP/s3.log" 2>&1 &
+          for i in $(seq 1 30); do curl -fs -o /dev/null http://127.0.0.1:9000/ && break; sleep 1; done
+          curl -fs -o /dev/null http://127.0.0.1:9000/ || { echo "::error::le S3 de test ne démarre pas"; exit 1; }
 
           compose() { sudo docker compose --env-file /opt/kemdia/state/production.env -f /opt/kemdia/app/compose.yml "$@"; }
           sql() { docker exec kemdia-production-db psql -U kemdia -d kemdia -v ON_ERROR_STOP=1 -Atc "$1"; }
@@ -803,14 +804,17 @@ jobs:
           [ "$rows" -gt 150 ] || { echo "::error::base de test trop vide ($rows lignes)"; exit 1; }
 
           # Mise en place comme sur le serveur : init (mot de passe + dépôts), puis la sauvegarde de la nuit
-          printf 'RESTIC_S3_REPOSITORY=s3:http://127.0.0.1:9000/kemdia-sauvegardes\nAWS_ACCESS_KEY_ID=kemdia-ci\nAWS_SECRET_ACCESS_KEY=%s\nAWS_DEFAULT_REGION=us-east-1\n' \
+          # Sans retour à la ligne final, comme un copié-collé depuis un gestionnaire de mots de passe
+          printf 'RESTIC_S3_REPOSITORY=s3:http://127.0.0.1:9000/kemdia-sauvegardes\nAWS_ACCESS_KEY_ID=kemdia-ci\nAWS_DEFAULT_REGION=us-east-1\nAWS_SECRET_ACCESS_KEY=%s' \
             "$S3_SECRET" | sudo tee /opt/kemdia/secrets/backup-s3.env >/dev/null
           sudo chmod 600 /opt/kemdia/secrets/backup-s3.env
           sudo /opt/kemdia/bin/backup.sh init
           [ "$(sudo stat -c '%a %U' /opt/kemdia/secrets/backup.password)" = "600 root" ]
           [ "$(sudo stat -c '%a %U' /var/backups/kemdia)" = "700 root" ]
-          sudo /opt/kemdia/bin/backup.sh
+          # La sauvegarde de la nuit, lancée comme sur le serveur : par systemd, avec son confinement
+          sudo systemctl start kemdia-backup.service
           sudo grep -qx 'resultat=ok' /opt/kemdia/state/backup.last
+          sudo grep -qx 's3=oui' /opt/kemdia/state/backup.last
           [ "$(sudo /opt/kemdia/bin/restore.sh liste --s3 | grep -c 'kemdia')" -ge 2 ] \
             || { echo "::error::la copie S3 ne contient pas les sauvegardes"; exit 1; }
 
@@ -830,8 +834,19 @@ jobs:
           fi
           sudo cmp /root/kemdia-restaure/opt/kemdia/secrets/production.api.env /opt/kemdia/secrets/production.api.env
 
-          # Vérification hebdomadaire (base temporaire, la base en service n'est pas touchée)
-          sudo /opt/kemdia/bin/restore.sh verifier production
+          # Vérification hebdomadaire par systemd (base temporaire ; dépôts local ET S3 relus) : la base en service
+          # n'est pas touchée
+          sudo systemctl start kemdia-restore-check.service
+          sudo grep -qx 'resultat=ok' /opt/kemdia/state/restore-check.last
+          [ "$(fingerprint)" = "$before" ]
+
+          # Une sauvegarde qui n'est pas celle de la base de production (ici : les secrets) est refusée AVANT tout
+          # changement (relecture S7-T05)
+          other=$(sudo RESTIC_PASSWORD_FILE=/opt/kemdia/secrets/backup.password restic -r /var/backups/kemdia \
+            snapshots --json --tag kemdia,fichiers latest | grep -o '"short_id":"[a-f0-9]*"' | cut -d'"' -f4)
+          if sudo /opt/kemdia/bin/restore.sh remplacer production "$other" --confirmer production 2>/dev/null; then
+            echo "::error::remplacement accepté avec la sauvegarde des secrets"; exit 1
+          fi
           [ "$(fingerprint)" = "$before" ]
 
           # Perte du serveur : base (volume) ET dépôt local effacés ; il ne reste que S3 et le mot de passe
@@ -857,7 +872,8 @@ jobs:
           sudo docker compose --env-file /opt/kemdia/state/production.env -f /opt/kemdia/app/compose.yml logs --tail 80 || true
           (cd /opt/kemdia/proxy && sudo docker compose logs --tail 40) || true
           sudo cat /opt/kemdia/state/backup.last /opt/kemdia/state/restore-check.last 2>/dev/null || true
-          docker logs --tail 40 s3 2>/dev/null || true
+          sudo journalctl -u kemdia-backup -u kemdia-restore-check --no-pager -n 60 || true
+          tail -n 40 "$RUNNER_TEMP/s3.log" 2>/dev/null || true
 
   deploy-staging:
     name: Déploiement STAGING
