@@ -885,6 +885,8 @@ jobs:
           PY
           HC="$RUNNER_TEMP/hc.log"; : > "$HC"
           nohup python3 "$RUNNER_TEMP/hc.py" "$HC" >/dev/null 2>&1 &
+          for i in $(seq 1 20); do curl -fs -o /dev/null http://127.0.0.1:8765/pret && break; sleep 0.5; done
+          : > "$HC"
           # Certificats de Caddy en local : valables quelques heures seulement (seuil 0 jour ici, 14 sur le serveur)
           printf 'HC_PING_URL=http://127.0.0.1:8765/ping/ci-surveillance\nCERT_MIN_DAYS=0\nDISK_MAX_PCT=97\n' \
             | sudo tee /opt/kemdia/secrets/monitor.env >/dev/null
@@ -909,10 +911,12 @@ jobs:
           deep() { curl -sk -o /dev/null -w '%{http_code}' --max-time 10 'https://localhost/api/health?complet=1'; }
 
           # 1. Tout va bien : signal « ok », santé complète 200
-          monitor
-          last_ping | grep -q '^/ping/ci-surveillance|Kemdia : tout va bien'
-          [ "$(deep)" = 200 ]
-          curl -fsSk 'https://localhost/api/health?complet=1' | grep -q '"database":"ok"'
+          [ "$(deep)" = 200 ] || { echo "::error::santé complète : HTTP $(deep) au lieu de 200"; exit 1; }
+          curl -fsSk 'https://localhost/api/health?complet=1' | grep -q '"database":"ok"' \
+            || { echo "::error::santé complète sans database ok"; exit 1; }
+          monitor || { echo "::error::monitor.sh signale un problème alors que tout va bien"; exit 1; }
+          last_ping | grep -q '^/ping/ci-surveillance|Kemdia : tout va bien' \
+            || { echo "::error::signal « ok » non reçu : $(last_ping)"; exit 1; }
 
           # 2. Base arrêtée : santé complète 503 (vue de l'extérieur), alerte nommant la base, journal JSON du site
           docker stop kemdia-production-db >/dev/null
@@ -928,8 +932,9 @@ jobs:
           # 3. Retour à la normale : signal « ok » de nouveau (Healthchecks prévient que c'est réparé)
           docker start kemdia-production-db >/dev/null
           all_healthy || { echo "::error::la pile ne redevient pas saine"; exit 1; }
-          monitor
-          last_ping | grep -q '^/ping/ci-surveillance|Kemdia : tout va bien'
+          monitor || { echo "::error::monitor.sh en échec après le retour de la base"; exit 1; }
+          last_ping | grep -q '^/ping/ci-surveillance|Kemdia : tout va bien' \
+            || { echo "::error::retour à la normale non signalé : $(last_ping)"; exit 1; }
 
           # 4. Sauvegarde ratée, puis disque « plein » (seuil abaissé) : alertes
           sudo cp /opt/kemdia/state/backup.last "$RUNNER_TEMP/backup.last"
@@ -939,7 +944,7 @@ jobs:
           sudo sed -i 's/^DISK_MAX_PCT=97$/DISK_MAX_PCT=1/' /opt/kemdia/secrets/monitor.env
           expect_alert "disque / plein"
           sudo sed -i 's/^DISK_MAX_PCT=1$/DISK_MAX_PCT=97/' /opt/kemdia/secrets/monitor.env
-          monitor
+          monitor || { echo "::error::monitor.sh en échec après les pannes simulées"; exit 1; }
           [ "$(stat -c '%a' /opt/kemdia/state/monitor.last)" = 644 ]
           grep -qx 'resultat=ok' /opt/kemdia/state/monitor.last
           echo "✅ surveillance : $(grep -c . "$HC") signaux reçus (ok, alertes, retours à la normale)"
@@ -953,6 +958,10 @@ jobs:
           sudo cat /opt/kemdia/state/backup.last /opt/kemdia/state/restore-check.last 2>/dev/null || true
           sudo journalctl -u kemdia-backup -u kemdia-restore-check -u kemdia-monitor --no-pager -n 80 || true
           cat "$RUNNER_TEMP/hc.log" 2>/dev/null || true
+          # Résumé lisible dans les annotations GitHub (sans télécharger les journaux)
+          note=$( { sudo cat /opt/kemdia/state/monitor.last; sudo journalctl -u kemdia-monitor --no-pager -n 12 -o cat; } 2>/dev/null \
+            | sed 's/%/%25/g' | tr '\n' '\r' | sed 's/\r/%0A/g' )
+          [ -z "$note" ] || echo "::warning title=Surveillance::$note"
           tail -n 40 "$RUNNER_TEMP/s3.log" 2>/dev/null || true
 
   deploy-staging:
