@@ -48,8 +48,8 @@ export function ChangePasswordForm() {
       return;
     }
     if (result.code === "MOT_DE_PASSE_FAIBLE") return setNextError(authErrorMessage(result));
-    if (result.code === "COMPTE_BLOQUE" || result.code === "SESSION_INVALIDE") {
-      // Session fermée par l'API (3 erreurs) ou expirée : retour à la connexion
+    if (result.code === "SESSION_INVALIDE") {
+      // Session fermée par l'API (3e erreur) ou expirée : retour à la connexion
       router.push("/connexion?retour=/compte");
       return;
     }

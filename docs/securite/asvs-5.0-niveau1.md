@@ -12,16 +12,16 @@ Légende : ✅ conforme · 🔧 corrigé pendant le S7-T07 · ➖ sans objet (la
 
 ## V1 — Encodage et nettoyage
 
-| Exigence | Statut | Preuve                                                                                                                                                |
-| -------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| V1.2.1   | ✅     | Rendu React (échappement par contexte) ; aucun HTML construit à la main ; Semgrep (règles React / Next.js) à chaque PR                                |
-| V1.2.2   | ✅     | Segments d'URL encodés (`encodeURIComponent`, 21 appels dans `apps/web/src/lib`) ; aucune URL fournie par un utilisateur affichée en lien             |
-| V1.2.3   | ✅     | JSON-LD : `JSON.stringify` + échappement de `<` (`app/produit/[slug]/page.tsx`) ; aucun autre script construit dynamiquement                          |
-| V1.2.4   | ✅     | Prisma (requêtes paramétrées) ; `$queryRaw` en gabarits balisés seulement ; `$executeRawUnsafe` uniquement pour des points de sauvegarde à texte fixe |
-| V1.2.5   | ✅     | Seul appel système : `migrate.ts` lance Prisma avec des arguments fixes (`spawn`, sans shell) ; scripts serveur : arguments validés (`deploy.sh`)     |
-| V1.3.1   | ➖     | Aucun éditeur riche : descriptions en texte nettoyé (ADR-0033)                                                                                        |
-| V1.3.2   | ✅     | Aucun `eval` ni `new Function` (recherche dans `apps/*/src`, `packages/*/src`)                                                                        |
-| V1.5.1   | ➖     | Aucun XML lu                                                                                                                                          |
+| Exigence | Statut | Preuve                                                                                                                                                                                                       |
+| -------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| V1.2.1   | ✅     | Rendu React (échappement par contexte) ; aucun HTML construit à la main ; Semgrep (règles React / Next.js) à chaque PR                                                                                       |
+| V1.2.2   | ✅     | Segments d'URL encodés (`encodeURIComponent`, 21 appels dans `apps/web/src/lib`) ; aucune URL fournie par un utilisateur affichée en lien                                                                    |
+| V1.2.3   | ✅     | JSON-LD : `JSON.stringify` + échappement de `<` (`app/produit/[slug]/page.tsx`) ; aucun autre script construit dynamiquement                                                                                 |
+| V1.2.4   | ✅     | Prisma (requêtes paramétrées) ; `$queryRaw` en gabarits balisés seulement ; `$executeRawUnsafe` seulement avec des textes constants (points de sauvegarde, `SET LOCAL lock_timeout` d'une constante du code) |
+| V1.2.5   | ✅     | Seul appel système : `migrate.ts` lance Prisma avec des arguments fixes (`spawn`, sans shell) ; scripts serveur : arguments validés (`deploy.sh`)                                                            |
+| V1.3.1   | ➖     | Aucun éditeur riche : descriptions en texte nettoyé (ADR-0033)                                                                                                                                               |
+| V1.3.2   | ✅     | Aucun `eval` ni `new Function` (recherche dans `apps/*/src`, `packages/*/src`)                                                                                                                               |
+| V1.5.1   | ➖     | Aucun XML lu                                                                                                                                                                                                 |
 
 ## V2 — Validation et logique métier
 
@@ -63,21 +63,21 @@ Légende : ✅ conforme · 🔧 corrigé pendant le S7-T07 · ➖ sans objet (la
 
 ## V6 — Authentification
 
-| Exigence | Statut | Preuve                                                                                                                                          |
-| -------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| V6.1.1   | ✅     | Limites documentées : ADR-0017 (3 essais puis 15 min, BR-040), ADR-0021 (limites par adresse et par compte), ADR-0034 (double authentification) |
-| V6.2.1   | ✅     | 8 caractères au moins (`password-policy.ts`)                                                                                                    |
-| V6.2.2   | 🔧     | **Nouveau** : « Changer mon mot de passe » dans « Mon compte » (`POST /api/v1/auth/password/change`, `ChangePasswordForm`)                      |
-| V6.2.3   | 🔧     | **Nouveau** : mot de passe actuel exigé ; 3 erreurs → blocage 15 min et session fermée ; tests HTTP et de bout en bout                          |
-| V6.2.4   | 🔧     | **Liste portée à 10 000** mots de passe courants de 8 caractères ou plus (SecLists, MIT) + liste locale (`common-passwords.ts`)                 |
-| V6.2.5   | 🔧     | **Règle « une lettre et un chiffre » retirée** (API et site) : longueur et liste de refus seulement                                             |
-| V6.2.6   | ✅     | Champs `type="password"` avec bouton « afficher » (`PasswordField`)                                                                             |
-| V6.2.7   | ✅     | Collage et gestionnaires permis (aucun blocage ; `autocomplete` `current-password` / `new-password`)                                            |
-| V6.2.8   | ✅     | Mot de passe vérifié tel quel par Argon2id : ni coupé, ni mis en minuscules (test « espaces et casse comptent »)                                |
-| V6.3.1   | ✅     | Blocage après 3 erreurs (connexion, double authentification, changement de mot de passe), réponses neutres, limites par adresse et par compte   |
-| V6.3.2   | ✅     | Aucun compte par défaut ; les comptes de test n'existent que dans la base éphémère de la CI (garde-fou `kemdia.e2e`)                            |
-| V6.4.1   | ✅     | Codes à 6 chiffres tirés par `randomInt` (cryptographique), valables 10 min, à usage unique, essais limités (`otp.ts`)                          |
-| V6.4.2   | ✅     | Ni indice ni question secrète                                                                                                                   |
+| Exigence | Statut | Preuve                                                                                                                                                               |
+| -------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| V6.1.1   | ✅     | Limites documentées : ADR-0017 (3 essais puis 15 min, BR-040), ADR-0021 (limites par adresse et par compte), ADR-0034 (double authentification)                      |
+| V6.2.1   | ✅     | 8 caractères au moins (`password-policy.ts`)                                                                                                                         |
+| V6.2.2   | 🔧     | **Nouveau** : « Changer mon mot de passe » dans « Mon compte » (`POST /api/v1/auth/password/change`, `ChangePasswordForm`)                                           |
+| V6.2.3   | 🔧     | **Nouveau** : mot de passe actuel exigé ; 3 erreurs → blocage 15 min et session fermée ; tests HTTP et de bout en bout                                               |
+| V6.2.4   | 🔧     | **Liste portée à 10 000** mots de passe courants de 8 caractères ou plus (SecLists, MIT) + liste locale (`common-passwords.ts`)                                      |
+| V6.2.5   | 🔧     | **Règle « une lettre et un chiffre » retirée** (API et site) : longueur et liste de refus seulement                                                                  |
+| V6.2.6   | ✅     | Champs `type="password"` avec bouton « afficher » (`PasswordField`)                                                                                                  |
+| V6.2.7   | ✅     | Collage et gestionnaires permis (aucun blocage ; `autocomplete` `current-password` / `new-password`)                                                                 |
+| V6.2.8   | ✅     | Mot de passe passé tel quel à Argon2id (`login.service.ts`, `password-change.service.ts` : ni `trim`, ni minuscules) ; seule la liste de refus compare en minuscules |
+| V6.3.1   | ✅     | Blocage après 3 erreurs (connexion, double authentification, changement de mot de passe), réponses neutres, limites par adresse et par compte                        |
+| V6.3.2   | ✅     | Aucun compte par défaut ; les comptes de test n'existent que dans la base éphémère de la CI (garde-fou `kemdia.e2e`)                                                 |
+| V6.4.1   | ✅     | Codes à 6 chiffres tirés par `randomInt` (cryptographique), valables 10 min, à usage unique, essais limités (`otp.ts`)                                               |
+| V6.4.2   | ✅     | Ni indice ni question secrète                                                                                                                                        |
 
 ## V7 — Sessions
 
@@ -92,12 +92,12 @@ Légende : ✅ conforme · 🔧 corrigé pendant le S7-T07 · ➖ sans objet (la
 
 ## V8 — Autorisations
 
-| Exigence | Statut | Preuve                                                                                                                                                        |
-| -------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| V8.1.1   | ✅     | Règles d'accès : ADR-0020 (rôles), ADR-0034 (double authentification de l'équipe), ADR-0038 (commandes des vendeurs)                                          |
-| V8.2.1   | ✅     | `RoleGuard` : règles de la classe ET de la méthode ; vérifié en CI (ZAP) : route d'équipe 200 pour l'administratrice, 403 client et vendeur, 401 sans session |
-| V8.2.2   | ✅     | Données lues au nom du compte (`findByReference(accountId, …)`, boutique du vendeur) ; tests d'accès aux commandes d'autrui                                   |
-| V8.3.1   | ✅     | Décisions prises par l'API ; le site ne fait que masquer des liens                                                                                            |
+| Exigence | Statut | Preuve                                                                                                                                                                         |
+| -------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| V8.1.1   | ✅     | Règles d'accès : ADR-0020 (rôles), ADR-0034 (double authentification de l'équipe), ADR-0038 (commandes des vendeurs)                                                           |
+| V8.2.1   | ✅     | `RoleGuard` : règles de la classe ET de la méthode ; vérifié en CI (ZAP) : route d'équipe 200 pour l'administratrice, 403 client et vendeur, refusée sans session (401 ou 403) |
+| V8.2.2   | ✅     | Données lues au nom du compte (`findByReference(accountId, …)`, boutique du vendeur) ; tests d'accès aux commandes d'autrui                                                    |
+| V8.3.1   | ✅     | Décisions prises par l'API ; le site ne fait que masquer des liens                                                                                                             |
 
 ## V9 — Jetons autonomes · V10 — OAuth
 

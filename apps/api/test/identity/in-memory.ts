@@ -309,7 +309,8 @@ export class InMemoryResetTickets implements ResetTicketRepository {
   applyPasswordChange(change: PasswordChange): Promise<boolean> {
     if (!this.accounts || !this.sessions) throw new Error("dépôts manquants");
     const row = this.accounts.rows.get(change.accountId);
-    if (!row || row.status !== "active" || row.passwordVersion !== change.expectedVersion)
+    const open = this.sessions.rows.some((s) => s.id === change.sessionId && s.revokedAt === null);
+    if (!row || !open || row.status !== "active" || row.passwordVersion !== change.expectedVersion)
       return Promise.resolve(false);
     this.accounts.rows.set(row.id, {
       ...row,

@@ -22,7 +22,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: zap-${{ github.ref }}
+  # Par événement : un lancement manuel n'annule pas le scan du dimanche (relecture S7-T07)
+  group: zap-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -64,6 +65,11 @@ jobs:
 
       - name: Données et sessions de test (base éphémère de la CI seulement)
         run: |
+          # ZAP (Java) n'envoie pas de nom de serveur (SNI) pour « localhost » : DANS CETTE COPIE DE TEST seulement,
+          # Caddy présente alors le certificat de la production (le Caddyfile du dépôt n'est pas modifié)
+          sudo sed -i 's/^\temail {\$ACME_EMAIL}$/&\n\tdefault_sni {$PROD_DOMAIN}/' /opt/kemdia/proxy/Caddyfile
+          grep -q default_sni /opt/kemdia/proxy/Caddyfile
+          (cd /opt/kemdia/proxy && sudo docker compose restart caddy >/dev/null)
           compose() { sudo docker compose --env-file /opt/kemdia/state/production.env -f /opt/kemdia/app/compose.yml "$@"; }
           psql_e2e() { docker exec -i -e PGOPTIONS='-c kemdia.e2e=on' kemdia-production-db psql -q -U kemdia -d kemdia -v ON_ERROR_STOP=1 "$@"; }
           # Limite de débit de l'API relevée POUR LE SCAN (sinon ZAP ne reçoit que des 429) : testée ailleurs
@@ -117,10 +123,20 @@ jobs:
                 >/dev/null 2>&1 || true
             done ) &
           if [ "$CIBLE" = site ]; then url=https://localhost/; else url=$API_URL; fi
-          .github/zap/scan.sh "$MODE" "$CIBLE" "$url" "$RUNNER_TEMP/zap-rapports"
+          status=0
+          .github/zap/scan.sh "$MODE" "$CIBLE" "$url" "$RUNNER_TEMP/zap-rapports" || status=$?
+          # Les sessions ont-elles tenu jusqu'au bout ? Sinon le scan a continué en anonyme sans le dire
+          tok() { sed -n "s/^$1=//p" "$ZAP_TOKENS_FILE"; }
+          for role in client vendeur equipe; do
+            c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -H "Authorization: Bearer $(tok $role)" "$API_URL/api/v1/auth/session")
+            [ "$c" = 200 ] || { echo "::error::session de test ($role) fermée pendant le scan : couverture incomplète"; status=1; }
+          done
+          exit "$status"
 
+      # Rapports seulement pour une PR (scan passif) : ceux du scan actif seraient téléchargeables par tous (dépôt
+      # public) avant la correction ; le résumé suffit (relecture S7-T07)
       - name: Rapports ZAP
-        if: always()
+        if: always() && github.event_name == 'pull_request'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: zap-${{ env.MODE }}-${{ matrix.cible }}

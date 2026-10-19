@@ -54,7 +54,7 @@ for role in anonyme client vendeur equipe; do
   # Dossier de travail neuf à chaque passage : ZAP garde sinon ses réglages d'un passage à l'autre
   home=$(mktemp -d)
   set +e
-  env "${auth[@]}" "$ZAP_DIR/zap.sh" -cmd -dir "$home" -autorun "$plan" >"$OUT/zap-$CIBLE-$role.log" 2>&1
+  env "${auth[@]}" "$ZAP_DIR/zap.sh" -cmd -silent -dir "$home" -autorun "$plan" >"$OUT/zap-$CIBLE-$role.log" 2>&1
   code=$?
   set -e
   rm -rf "$home" "$plan"

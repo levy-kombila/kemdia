@@ -224,9 +224,15 @@ export async function changePasswordAction(
   if (!token) return invalid("SESSION_INVALIDE");
   const result = await identityApi().changePassword(token, current, next, await userAgent());
   if (!result.ok) {
-    if (result.code === "COMPTE_BLOQUE" || result.code === "SESSION_INVALIDE") {
+    // Blocage : la session n'est fermée que si CET essai était le 3e (pas si quelqu'un d'autre a causé le blocage) ;
+    // on ne déconnecte donc ce navigateur que si l'API refuse vraiment la session (relecture S7-T07)
+    const closed =
+      result.code === "SESSION_INVALIDE" ||
+      (result.code === "COMPTE_BLOQUE" && !(await identityApi().session(token)).ok);
+    if (closed) {
       forgetSession(token);
       await clearCookie(SESSION_COOKIE);
+      return invalid("SESSION_INVALIDE");
     }
     return result;
   }

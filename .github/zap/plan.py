@@ -20,9 +20,13 @@ import argparse
 import json
 
 # Routes jamais visitées ni attaquées : elles fermeraient la session du scan ou changeraient l'accès du compte de test.
+# Le scan actif essaie des valeurs fausses : sur les routes à essais comptés, 3 erreurs ferment la session du scan
+# (relecture S7-T07). La CI revérifie de toute façon les sessions APRÈS le scan.
 EXCLUSIONS = [
     r".*/api/v1/auth/logout.*",
-    r".*/api/v1/auth/2fa/(setup|enable|recovery-codes).*",
+    r".*/api/v1/auth/2fa.*",
+    r".*/api/v1/auth/password/.*",
+    r".*/api/v1/auth/signup.*",
     r".*/api/v1/admin/accounts/.*/roles/.*",
     r".*/deconnexion.*",
 ]
@@ -118,7 +122,8 @@ def plan(args: argparse.Namespace) -> dict:
                 "reportFile": f"{name}.{suffix}",
                 "reportTitle": f"Kemdia — test d'intrusion ({args.mode}, {args.cible}, {args.role})",
             },
-            "risks": ["high", "medium", "low", "info"],
+            # Sans le niveau « info » : il peut recopier des valeurs (cookies) en guise de preuve (relecture S7-T07)
+            "risks": ["high", "medium", "low"],
         })
 
     jobs.append({

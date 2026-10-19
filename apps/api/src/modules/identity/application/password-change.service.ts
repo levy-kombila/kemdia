@@ -101,6 +101,7 @@ export class PasswordChangeService {
     const applied = await this.transactions.run(async () => {
       const done = await this.passwords.applyPasswordChange({
         accountId,
+        sessionId: input.session.sessionId,
         expectedVersion,
         passwordHash: account.passwordHash,
         now,

@@ -98,6 +98,8 @@ export interface ResetTicketRepository {
 
 export interface PasswordChange {
   accountId: string;
+  /** Session qui demande le changement : encore ouverte au moment d'écrire, sinon rien n'est changé (relecture S7-T07) */
+  sessionId: string;
   /** Version lue avant le changement (verrou optimiste) */
   expectedVersion: number;
   passwordHash: string;

@@ -55,7 +55,13 @@ export class PrismaResetTicketRepository implements ResetTicketRepository {
     return this.transactions.run(async () => {
       const tx = this.transactions.db;
       const { count } = await tx.account.updateMany({
-        where: { id: change.accountId, status: "ACTIVE", passwordVersion: change.expectedVersion },
+        where: {
+          id: change.accountId,
+          status: "ACTIVE",
+          passwordVersion: change.expectedVersion,
+          // « Déconnecter tous mes appareils » arrivé pendant le hachage : la demande ne vaut plus rien
+          sessions: { some: { id: change.sessionId, revokedAt: null } },
+        },
         data: { passwordHash: change.passwordHash, passwordVersion: { increment: 1 } },
       });
       if (count !== 1) return false;
