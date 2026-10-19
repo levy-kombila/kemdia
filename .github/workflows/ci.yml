@@ -650,9 +650,139 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # Pile serveur (S7-T04, ADR-0043) : sans serveur loué, on monte ICI ce que le VPS fera tourner — Caddy, site, API,
+  # PostgreSQL — avec les VRAIS fichiers de deploy/ (setup-server.sh --fichiers-seulement, init-secrets.sh, deploy.sh,
+  # compose.yml, Caddyfile) et des images construites à partir du cache de la CI, servies par un registre local.
+  server-stack:
+    name: Pile serveur (Caddy · site · API · PostgreSQL)
+    runs-on: ubuntu-latest
+    needs: [changes, quality]
+    if: needs.changes.outputs.code == 'true'
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    services:
+      registry:
+        image: registry:2
+        ports: ["5000:5000"]
+    env:
+      REPO: localhost:5000/kemdia
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: network=host # le constructeur doit joindre le registre local
+
+      - name: Image du site (cache de la CI) → registre local
+        id: web
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: ${{ env.REPO }}/web:ci
+          build-args: |
+            NEXT_PUBLIC_SITE_URL=https://localhost
+            APP_VERSION=ci
+          cache-from: type=gha
+
+      - name: Image de l'API (cache de la CI) → registre local
+        id: api
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: ${{ env.REPO }}/api:ci
+          cache-from: type=gha,scope=api
+
+      - name: Fichiers du serveur, secrets et Caddy (comme sur le VPS)
+        run: |
+          sudo GITHUB_ACTIONS=true IMAGE_REPO="$REPO" KEMDIA_GROUP=docker bash deploy/bin/setup-server.sh --fichiers-seulement
+          sudo KEMDIA_SECRETS_GROUP=docker /opt/kemdia/bin/init-secrets.sh production localhost
+          # Un second passage ne remplace RIEN (une clé perdue rend des données illisibles)
+          before=$(sudo sha256sum /opt/kemdia/secrets/production.api.env)
+          if sudo KEMDIA_SECRETS_GROUP=docker /opt/kemdia/bin/init-secrets.sh production localhost 2>/dev/null; then
+            echo "::error::init-secrets.sh a accepté de réécrire des secrets existants"; exit 1
+          fi
+          [ "$before" = "$(sudo sha256sum /opt/kemdia/secrets/production.api.env)" ]
+          for f in db api web; do
+            [ "$(sudo stat -c '%a %U' /opt/kemdia/secrets/production.$f.env)" = "640 root" ] \
+              || { echo "::error::droits inattendus sur production.$f.env"; exit 1; }
+          done
+          # Moindre privilège : le site ne reçoit ni clé de chiffrement ni adresse de la base
+          if sudo grep -qE '^(TOTP_ENCRYPTION_KEY|KYC_ENCRYPTION_KEY|DATABASE_URL)=' /opt/kemdia/secrets/production.web.env; then
+            echo "::error::le fichier du site contient un secret de l'API"; exit 1
+          fi
+          hash=$(docker run --rm caddy:2-alpine caddy hash-password --plaintext "ci-$RANDOM-$RANDOM")
+          printf 'ACME_EMAIL=ci@example.com\nPROD_DOMAIN=localhost\nSTAGING_DOMAIN=staging.localhost\nSTAGING_USER=ci\nSTAGING_PASSWORD_HASH=%s\n' \
+            "${hash//\$/\$\$}" | sudo tee /opt/kemdia/proxy/.env >/dev/null
+          (cd /opt/kemdia/proxy && sudo docker compose up -d)
+
+      - name: Déployer avec le vrai deploy.sh (migrations, puis bascule)
+        env:
+          WEB: ${{ steps.web.outputs.digest }}
+          API: ${{ steps.api.outputs.digest }}
+        run: |
+          sudo /opt/kemdia/bin/deploy.sh production "$REPO/web@$WEB" "$REPO/api@$API" ci-v1 < /dev/null
+
+      - name: Vérifier — santé, en-têtes, isolement des réseaux
+        run: |
+          health() { curl -fsSk --max-time 10 https://localhost/api/health; }
+          for i in $(seq 1 20); do health | grep -q '"version":"ci-v1"' && break; sleep 3; done
+          health | grep -q '"version":"ci-v1"' || { echo "::error::le site ne répond pas en ci-v1 derrière Caddy"; exit 1; }
+          headers=$(curl -fsSk -o /dev/null -D - https://localhost/)
+          for h in content-security-policy strict-transport-security x-frame-options x-content-type-options; do
+            echo "$headers" | grep -qi "^$h:" || { echo "::error::en-tête manquant : $h"; exit 1; }
+          done
+          curl -fsSk https://localhost/ | grep -q "Kemdia" || { echo "::error::page d'accueil invalide"; exit 1; }
+          # L'API répond et joint sa base
+          docker exec kemdia-production-api wget -qO- http://127.0.0.1:4000/api/health | grep -q '"database":"ok"'
+          # Aucun port de la base, de l'API ni du site sur la machine : seul Caddy écoute (80/443)
+          if ss -ltnH | awk '{print $4}' | grep -Eq ':(5432|4000|3000)$'; then
+            echo "::error::un port interne est ouvert sur la machine"; ss -ltn; exit 1
+          fi
+          # Le site ne voit pas la base ; la base n'a aucune sortie vers Internet
+          docker exec kemdia-production-web node -e "require('dns').lookup('db',(e)=>process.exit(e?0:1))" \
+            || { echo "::error::le site résout la base de données"; exit 1; }
+          if docker exec kemdia-production-db wget -q -T 5 -O /dev/null http://example.com 2>/dev/null; then
+            echo "::error::la base de données joint Internet"; exit 1
+          fi
+          echo "✅ ci-v1 derrière Caddy ; API et base saines ; réseaux isolés"
+
+      - name: Nouvelle version, retour arrière, refus
+        env:
+          WEB: ${{ steps.web.outputs.digest }}
+          API: ${{ steps.api.outputs.digest }}
+        run: |
+          version() { curl -fsSk --max-time 10 https://localhost/api/health | jq -r .version; }
+          sudo /opt/kemdia/bin/deploy.sh production "$REPO/web@$WEB" "$REPO/api@$API" ci-v2 < /dev/null
+          [ "$(version)" = ci-v2 ]
+          sudo /opt/kemdia/bin/deploy.sh production rollback < /dev/null
+          [ "$(version)" = ci-v1 ]
+          # Images hors du dépôt déclaré, sans digest, ou version piégée : refusées avant tout téléchargement
+          fake=sha256:$(printf 'a%.0s' $(seq 1 64))
+          for args in "ghcr.io/autre/kemdia/web@$fake $REPO/api@$API ci-x" \
+                      "$REPO/web:ci $REPO/api@$API ci-x" \
+                      "$REPO/web@$WEB $REPO/api@$API ci;reboot"; do
+            # shellcheck disable=SC2086
+            if sudo /opt/kemdia/bin/deploy.sh production $args < /dev/null 2>/dev/null; then
+              echo "::error::deploy.sh a accepté : $args"; exit 1
+            fi
+          done
+          [ "$(version)" = ci-v1 ]
+          echo "✅ nouvelle version, retour arrière et refus vérifiés"
+
+      - name: Journaux en cas d'échec
+        if: failure()
+        run: |
+          sudo cat /opt/kemdia/deploy.log || true
+          sudo docker compose --env-file /opt/kemdia/state/production.env -f /opt/kemdia/app/compose.yml logs --tail 80 || true
+          (cd /opt/kemdia/proxy && sudo docker compose logs --tail 40) || true
+
   deploy-staging:
     name: Déploiement STAGING
-    needs: image
+    needs: [image, image-api]
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     concurrency:
       group: deploy-staging
@@ -664,6 +794,7 @@ jobs:
     with:
       environment: staging
       image: ${{ needs.image.outputs.image }}@${{ needs.image.outputs.digest }}
+      api-image: ${{ needs.image-api.outputs.image }}@${{ needs.image-api.outputs.digest }}
       version: sha-${{ github.sha }}
       url: ${{ vars.STAGING_URL }}
     secrets: inherit

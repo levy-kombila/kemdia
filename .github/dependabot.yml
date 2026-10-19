@@ -60,3 +60,14 @@ updates:
       # On reste sur Node.js LTS (22) : les versions majeures se décident manuellement
       - dependency-name: node
         update-types: ["version-update:semver-major"]
+
+  # Images épinglées par digest de la pile serveur (PostgreSQL, Caddy) — S7-T04, ADR-0043
+  - package-ecosystem: docker-compose
+    directories: ["/deploy/app", "/deploy/proxy"]
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Africa/Libreville }
+    labels: [dependencies]
+    commit-message: { prefix: "chore(docker)" }
+    ignore:
+      # Version majeure de PostgreSQL : décision manuelle (pg_upgrade des données)
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
