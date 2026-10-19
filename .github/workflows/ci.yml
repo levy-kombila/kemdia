@@ -932,6 +932,9 @@ jobs:
           # 3. Retour à la normale : signal « ok » de nouveau (Healthchecks prévient que c'est réparé)
           docker start kemdia-production-db >/dev/null
           all_healthy || { echo "::error::la pile ne redevient pas saine"; exit 1; }
+          # La santé complète du site garde son résultat 10 s : on attend qu'elle voie la base revenue
+          for i in $(seq 1 15); do [ "$(deep)" = 200 ] && break; sleep 2; done
+          [ "$(deep)" = 200 ] || { echo "::error::la santé complète ne voit pas la base revenue"; exit 1; }
           monitor || { echo "::error::monitor.sh en échec après le retour de la base"; exit 1; }
           last_ping | grep -q '^/ping/ci-surveillance|Kemdia : tout va bien' \
             || { echo "::error::retour à la normale non signalé : $(last_ping)"; exit 1; }
