@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   API_ERROR_CODES,
+  PRIVACY_ERROR_CODES,
   AVAILABILITY_REASONS,
   ADMIN_ASSIGNABLE_ROLES,
   AUDIT_ACTIONS,
@@ -305,6 +306,11 @@ export const SignupRequestSchema = z
     identifier: z.string().max(300).describe("Adresse e-mail ou mobile gabonais (06… / 07…)"),
     password: z.string().max(200).describe("8 à 128 caractères, pas un mot de passe courant"),
     acceptTerms: z.literal(true).describe("Acceptation des conditions générales"),
+    adult: z
+      .literal(true)
+      .describe(
+        "« J'ai 18 ans ou plus » (S7-T08, loi 001/2011 modifiée art. 74), case distincte des conditions",
+      ),
   })
   .meta({
     id: "SignupRequest",
@@ -452,6 +458,46 @@ export const ChangePasswordRequestSchema = z
   })
   .meta({ id: "ChangePasswordRequest" });
 export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequestSchema>;
+
+// --- Données personnelles (S7-T08, ADR-0047) ---
+
+export const AccountDeletionStatusSchema = z
+  .strictObject({
+    possible: z.boolean().describe("Vrai si le compte peut être supprimé maintenant"),
+    reasons: z
+      .array(z.enum(PRIVACY_ERROR_CODES))
+      .describe("Ce qui empêche la suppression (vide si elle est possible)"),
+  })
+  .meta({ id: "AccountDeletionStatus" });
+export type AccountDeletionStatus = z.infer<typeof AccountDeletionStatusSchema>;
+
+export const DeleteAccountRequestSchema = z
+  .strictObject({
+    password: z.string().max(200).describe("Mot de passe actuel"),
+    confirm: z.literal(true).describe("Case « Je comprends que la suppression est définitive »"),
+  })
+  .meta({ id: "DeleteAccountRequest" });
+export type DeleteAccountRequest = z.infer<typeof DeleteAccountRequestSchema>;
+
+export const AccountDataExportSchema = z
+  .looseObject({
+    format: z.literal("kemdia-donnees-personnelles/1"),
+    generatedAt: z.iso.datetime().describe("Date de la copie"),
+    identite: z.record(z.string(), z.unknown()),
+    commandes: z.record(z.string(), z.unknown()),
+    paiements: z.record(z.string(), z.unknown()),
+    livraisons: z.record(z.string(), z.unknown()),
+    boutique: z.record(z.string(), z.unknown()),
+    journal: z
+      .record(z.string(), z.unknown())
+      .describe("Actions du compte et celles qui le visent (journal d'audit, 365 jours)"),
+  })
+  .meta({
+    id: "AccountDataExport",
+    description:
+      "Copie des données personnelles du compte (droit d'accès et portabilité) : jamais de mot de passe, jeton, code ni photo de pièce d'identité",
+  });
+export type AccountDataExport = z.infer<typeof AccountDataExportSchema>;
 
 // --- Administration : rôles et journal d'audit (S4-T06, ADR-0020) ---
 

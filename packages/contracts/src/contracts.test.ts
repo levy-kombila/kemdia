@@ -106,6 +106,8 @@ describe("schémas", () => {
 
   it("sont tous exportés pour la documentation OpenAPI", () => {
     expect(Object.keys(openApiComponentSchemas())).toEqual([
+      "AccountDataExport",
+      "AccountDeletionStatus",
       "AccountView",
       "AdminAccount",
       "AdminAccountLookupRequest",
@@ -142,6 +144,7 @@ describe("schémas", () => {
       "CreateOrderRequest",
       "CurrentSession",
       "CustomerShipment",
+      "DeleteAccountRequest",
       "DeliveryAddress",
       "DeliveryTariffs",
       "DeliveryTariffsRequest",
@@ -231,10 +234,20 @@ describe("schémas", () => {
       identifier: "awa@exemple.ga",
       password: "Mangue2026",
     };
-    expect(SignupRequestSchema.safeParse({ ...body, acceptTerms: true }).success).toBe(true);
-    expect(SignupRequestSchema.safeParse({ ...body, acceptTerms: false }).success).toBe(false);
+    expect(SignupRequestSchema.safeParse({ ...body, acceptTerms: true, adult: true }).success).toBe(
+      true,
+    );
     expect(
-      SignupRequestSchema.safeParse({ ...body, acceptTerms: true, role: "admin" }).success,
+      SignupRequestSchema.safeParse({ ...body, acceptTerms: false, adult: true }).success,
+    ).toBe(false);
+    // « 18 ans ou plus » (S7-T08) : obligatoire, distinct des conditions
+    expect(SignupRequestSchema.safeParse({ ...body, acceptTerms: true }).success).toBe(false);
+    expect(
+      SignupRequestSchema.safeParse({ ...body, acceptTerms: true, adult: false }).success,
+    ).toBe(false);
+    expect(
+      SignupRequestSchema.safeParse({ ...body, acceptTerms: true, adult: true, role: "admin" })
+        .success,
     ).toBe(false);
     const ticket = "a".repeat(43);
     expect(SignupVerifyRequestSchema.safeParse({ ticket, code: "042917" }).success).toBe(true);

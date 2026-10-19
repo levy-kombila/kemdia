@@ -28,6 +28,7 @@ import { PrismaTariffRepository } from "./infrastructure/prisma-tariff.repositor
 import { ShippingTransactionRunner } from "./infrastructure/shipping-transaction.js";
 import { ShipmentController } from "./interface/shipment.controller.js";
 import { AdminTariffController, TariffController } from "./interface/tariff.controller.js";
+import { ShippingPersonalData } from "./infrastructure/shipping-personal-data.js";
 
 /**
  * Module shipping (ADR-0006, S7-T01, ADR-0040) : barème de livraison réglable (lu par le module orders via
@@ -44,6 +45,8 @@ import { AdminTariffController, TariffController } from "./interface/tariff.cont
     CustomerShipmentController,
   ],
   providers: [
+    // Données personnelles (S7-T08) : copie, effacement — utilisé par le module privacy
+    ShippingPersonalData,
     TariffService,
     ShipmentService,
     { provide: TARIFF_REPOSITORY, useClass: PrismaTariffRepository },
@@ -61,5 +64,6 @@ import { AdminTariffController, TariffController } from "./interface/tariff.cont
       useFactory: (config: AppConfig) => new MailShipmentMailer(createMailTransport(config)),
     },
   ],
+  exports: [ShippingPersonalData],
 })
 export class ShippingModule {}

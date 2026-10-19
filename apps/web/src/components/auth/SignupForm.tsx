@@ -13,7 +13,9 @@ import { OtpStep } from "./OtpStep";
 import { PasswordRules, passwordError } from "./PasswordRules";
 
 type Channel = "phone" | "email";
-type Errors = Partial<Record<"firstName" | "lastName" | "contact" | "password" | "terms", string>>;
+type Errors = Partial<
+  Record<"firstName" | "lastName" | "contact" | "password" | "terms" | "adult", string>
+>;
 type Step =
   | { name: "form" }
   | { name: "otp"; email: string; sent: CodeSent }
@@ -31,6 +33,8 @@ export function SignupForm() {
   const [contact, setContact] = useState("");
   const [password, setPassword] = useState("");
   const [terms, setTerms] = useState(false);
+  // « J'ai 18 ans ou plus » (S7-T08, loi 001/2011 modifiée art. 74) : case DISTINCTE des conditions
+  const [adult, setAdult] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -55,6 +59,7 @@ export function SignupForm() {
     const pwError = passwordError(password);
     if (pwError) next.password = pwError;
     if (!terms) next.terms = "Vous devez accepter les conditions pour créer un compte.";
+    if (!adult) next.adult = "Kemdia est réservé aux personnes de 18 ans ou plus.";
     setErrors(next);
     setFailure(null);
     if (Object.keys(next).length > 0 || !first || !last || !email) {
@@ -63,7 +68,14 @@ export function SignupForm() {
     }
     setPending(true);
     const result = await authClient
-      .signup({ firstName: first, lastName: last, identifier: email, password, acceptTerms: true })
+      .signup({
+        firstName: first,
+        lastName: last,
+        identifier: email,
+        password,
+        acceptTerms: true,
+        adult: true,
+      })
       .catch((): AuthResult<CodeSent> => ({ ok: false, code: "INDISPONIBLE" }));
     setPending(false);
     if (result.ok) {
@@ -255,6 +267,25 @@ export function SignupForm() {
         {errors.terms && (
           <p id="terms-error" className="text-brand-700 mt-1.5 text-sm font-medium">
             {errors.terms}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            checked={adult}
+            onChange={(e) => setAdult(e.target.checked)}
+            aria-invalid={errors.adult ? true : undefined}
+            aria-describedby={errors.adult ? "adult-error" : undefined}
+            className="accent-brand-600 mt-0.5 size-5 shrink-0"
+          />
+          <span className="text-ink-700">J&apos;ai 18 ans ou plus.</span>
+        </label>
+        {errors.adult && (
+          <p id="adult-error" className="text-brand-700 mt-1.5 text-sm font-medium">
+            {errors.adult}
           </p>
         )}
       </div>

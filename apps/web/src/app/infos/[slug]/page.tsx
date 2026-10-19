@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
+import { LegalNotice } from "@/components/legal/LegalNotice";
+import { PrivacyPolicy } from "@/components/legal/PrivacyPolicy";
 import { CITIES, formatDelay } from "@/lib/delivery";
 import { formatFCFA } from "@/lib/format";
 import { deliveryTariffs } from "@/lib/shipping/tariffs";
@@ -104,16 +106,8 @@ const CONTENT: Record<InfoSlug, React.ReactNode> = {
   cgv: (
     <p>Les conditions générales de vente seront publiées avant l&apos;ouverture des commandes.</p>
   ),
-  confidentialite: (
-    <p>
-      {SITE.name} collecte uniquement les données nécessaires au traitement de vos commandes,
-      conformément à la loi gabonaise n°001/2011 relative à la protection des données à caractère
-      personnel. La politique complète sera publiée avant l&apos;ouverture des comptes clients.
-    </p>
-  ),
-  "mentions-legales": (
-    <p>Éditeur : {SITE.name} — informations légales (RCCM, NIF, siège) à compléter.</p>
-  ),
+  confidentialite: <PrivacyPolicy />,
+  "mentions-legales": <LegalNotice />,
 };
 
 export default async function InfoPage({ params }: Props) {

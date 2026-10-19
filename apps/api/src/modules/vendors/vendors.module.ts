@@ -40,6 +40,7 @@ import { ModerationImageController } from "./interface/moderation-image.controll
 import { VendorProductImageController } from "./interface/vendor-product-image.controller.js";
 import { VendorProductController } from "./interface/vendor-product.controller.js";
 import { ShopController } from "./interface/shop.controller.js";
+import { VendorsPersonalData } from "./infrastructure/vendors-personal-data.js";
 
 const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -64,6 +65,8 @@ const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
     AdminKycController,
   ],
   providers: [
+    // Données personnelles (S7-T08) : copie, effacement — utilisé par le module privacy
+    VendorsPersonalData,
     ShopService,
     VendorProductService,
     ProductModerationService,
@@ -109,6 +112,6 @@ const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
       },
     },
   ],
-  exports: [ShopService],
+  exports: [ShopService, VendorsPersonalData],
 })
 export class VendorsModule {}

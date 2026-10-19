@@ -11,3 +11,5 @@ export {
   type PaymentProvider,
 } from "./application/ports.js";
 export { PaymentsError, type PaymentsErrorCode } from "./domain/payments-error.js";
+/** Données personnelles du module (S7-T08) : copie et effacement, pour le module privacy */
+export { PaymentsPersonalData } from "./infrastructure/payments-personal-data.js";

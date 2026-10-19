@@ -5,6 +5,7 @@ import type { AppConfig } from "../../config/env.js";
 import { LoginService } from "./application/login.service.js";
 import { OtpService } from "./application/otp.service.js";
 import { PasswordChangeService } from "./application/password-change.service.js";
+import { PasswordConfirmationService } from "./application/password-confirmation.service.js";
 import { PasswordResetService } from "./application/password-reset.service.js";
 import { RoleService } from "./application/role.service.js";
 import { SecondFactorService } from "./application/second-factor.service.js";
@@ -50,6 +51,7 @@ import { IdentityController } from "./interface/identity.controller.js";
 import { RoleGuard } from "./interface/role.guard.js";
 import { SecondFactorController } from "./interface/second-factor.controller.js";
 import { SessionGuard } from "./interface/session.guard.js";
+import { IdentityPersonalData } from "./infrastructure/identity-personal-data.js";
 
 /**
  * Module identity (S4, ADR-0015) : comptes, codes à usage unique, sessions.
@@ -62,6 +64,8 @@ import { SessionGuard } from "./interface/session.guard.js";
   imports: [AuditModule],
   controllers: [IdentityController, AdminController, SecondFactorController],
   providers: [
+    // Données personnelles (S7-T08) : copie, effacement — utilisé par le module privacy
+    IdentityPersonalData,
     RoleService,
     RoleGuard,
     { provide: ROLE_REPOSITORY, useClass: PrismaRoleRepository },
@@ -72,6 +76,7 @@ import { SessionGuard } from "./interface/session.guard.js";
     SessionService,
     PasswordResetService,
     PasswordChangeService,
+    PasswordConfirmationService,
     { provide: RESET_TICKET_REPOSITORY, useClass: PrismaResetTicketRepository },
     SessionGuard,
     PrismaIdentityMaintenance,
@@ -115,6 +120,9 @@ import { SessionGuard } from "./interface/session.guard.js";
   ],
   // Les autres modules protègent leurs routes avec SessionGuard ou @Authorize (S5 : commandes, S6 : vendeurs)
   exports: [
+    IdentityPersonalData,
+    // Le module privacy confirme la suppression du compte par le mot de passe actuel (S7-T08)
+    PasswordConfirmationService,
     OtpService,
     SessionService,
     SessionGuard,

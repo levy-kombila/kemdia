@@ -54,7 +54,8 @@ async function signUp(page: Page): Promise<string> {
   await page.getByLabel("Nom", { exact: true }).fill("Nze");
   await page.getByLabel("Adresse e-mail").fill(email);
   await page.getByLabel("Mot de passe", { exact: true }).fill(PASSWORD);
-  await page.getByRole("checkbox").check();
+  await page.getByRole("checkbox", { name: /conditions générales/ }).check();
+  await page.getByRole("checkbox", { name: "J'ai 18 ans ou plus." }).check();
   await page.getByRole("button", { name: "Créer mon compte" }).click();
   await expect(page.getByText("Saisissez le code reçu")).toBeVisible();
   await page.getByLabel("Chiffre 1").click();

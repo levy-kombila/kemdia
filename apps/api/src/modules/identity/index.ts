@@ -20,3 +20,11 @@ export { ROLES, hasRole, type Role } from "./domain/role.js";
 export type { AccountView } from "./domain/account.js";
 export type { Identifier, OtpChannel } from "./domain/identifier.js";
 export { IdentityError, type IdentityErrorCode } from "./domain/identity-error.js";
+/** Données personnelles du module (S7-T08) : copie et effacement, pour le module privacy */
+export { IdentityPersonalData } from "./infrastructure/identity-personal-data.js";
+export {
+  PasswordConfirmationService,
+  type ConfirmedAction,
+} from "./application/password-confirmation.service.js";
+/** Conversion des erreurs d'identité en réponses HTTP (le module privacy confirme le mot de passe, S7-T08) */
+export { withIdentityErrors } from "./interface/identity-http-errors.js";

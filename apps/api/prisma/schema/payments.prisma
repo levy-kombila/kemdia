@@ -74,6 +74,9 @@ model Payment {
   updatedAt     DateTime       @default(now()) @map("updated_at") @db.Timestamptz(3)
   refund        Refund?
 
+  /// Compte effacé (S7-T08) : numéro de téléphone effacé
+  anonymizedAt DateTime? @map("anonymized_at") @db.Timestamptz(3)
+
   @@unique([orderId, attempt])
   @@index([status, expiresAt])
   @@index([phone, createdAt])
@@ -92,7 +95,8 @@ model Refund {
   orderReference    String         @map("order_reference") @db.VarChar(10)
   amount            Int
   method            PaymentChannel
-  phone             String         @db.VarChar(13)
+  /// Vide seulement pour un remboursement fait d'un compte effacé (S7-T08)
+  phone             String?        @db.VarChar(13)
   reason            RefundReason
   status            RefundStatus
   /// Référence du remboursement chez l'opérateur, notée par l'administrateur
@@ -102,6 +106,9 @@ model Refund {
   createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   doneAt            DateTime?      @map("done_at") @db.Timestamptz(3)
   updatedAt         DateTime       @default(now()) @map("updated_at") @db.Timestamptz(3)
+
+  /// Compte effacé (S7-T08) : numéro de téléphone effacé
+  anonymizedAt DateTime? @map("anonymized_at") @db.Timestamptz(3)
 
   @@index([status, createdAt])
   @@index([orderId])

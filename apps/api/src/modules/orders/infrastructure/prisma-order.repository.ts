@@ -138,7 +138,8 @@ function toRecord(row: OrderRow): OrderRecord {
     total: row.total,
     delivery: {
       fullName: row.deliveryName,
-      phone: row.deliveryPhone,
+      // Commande anonymisée (compte effacé, S7-T08) : plus de numéro, vue de l'équipe seulement
+      phone: row.deliveryPhone ?? "",
       cityId: row.deliveryCityId,
       cityName: row.deliveryCityName,
       neighborhood: row.deliveryNeighborhood,

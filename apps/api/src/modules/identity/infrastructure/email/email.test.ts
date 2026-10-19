@@ -54,6 +54,27 @@ describe("modèles d'e-mails", () => {
     expect(email.html).not.toMatch(/<a |href=|<img/i);
   });
 
+  it("données personnelles (S7-T08) : suppression du compte, avis d'inactivité avec la date, aucun lien", () => {
+    const deleted = renderEmail({
+      kind: "account-deleted",
+      channel: "email",
+      to: "awa@exemple.ga",
+    });
+    expect(deleted.subject).toBe("Votre compte Kemdia a été supprimé");
+    expect(deleted.text).toMatch(/10 ans/);
+    const warning = renderEmail({
+      kind: "inactivity-warning",
+      deleteOn: new Date("2026-11-18T01:00:00.000Z"),
+      channel: "email",
+      to: "awa@exemple.ga",
+    });
+    expect(warning.subject).toBe("Votre compte Kemdia sera bientôt supprimé");
+    expect(warning.text).toContain("18 novembre 2026");
+    for (const email of [deleted, warning]) {
+      expect(email.html).not.toMatch(/<a |href=|<img/i);
+    }
+  });
+
   it("l'envoi par e-mail refuse un message SMS", async () => {
     const sender = new EmailOtpSender({ name: "test", send: vi.fn() });
     await expect(

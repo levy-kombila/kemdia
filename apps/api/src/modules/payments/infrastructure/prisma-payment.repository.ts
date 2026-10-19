@@ -75,7 +75,8 @@ function toRefund(row: RefundRow): RefundRecord {
     orderReference: row.orderReference,
     amount: row.amount,
     method: CHANNEL_FROM_DB[row.method] as "airtel" | "moov",
-    phone: row.phone,
+    // Remboursement fait d'un compte effacé (S7-T08) : plus de numéro
+    phone: row.phone ?? "",
     reason: REASON_FROM_DB[row.reason],
     status: row.status === "DONE" ? "done" : "to_do",
     externalReference: row.externalReference,

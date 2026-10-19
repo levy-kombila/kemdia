@@ -2,6 +2,7 @@ import { CircleUser, Heart, LogOut, MapPin, MonitorSmartphone, Package } from "l
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ChangePasswordForm } from "@/components/account/ChangePasswordForm";
+import { PrivacySection } from "@/components/account/PrivacySection";
 import { RoleList } from "@/components/account/RoleList";
 import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 import { FormAlert } from "@/components/ui/Field";
@@ -9,7 +10,10 @@ import { logoutAction, logoutAllAction } from "@/lib/auth/actions";
 import { getCurrentAccount } from "@/lib/auth/session";
 import type { AccountSummary } from "@/lib/auth/types";
 import { formatGabonPhone } from "@/lib/auth/validation";
+import { sessionToken } from "@/lib/orders/orders";
+import { privacyApi } from "@/lib/privacy/privacy";
 import { first } from "@/lib/search-params";
+import type { AccountDeletionStatus } from "@kemdia/contracts";
 
 export const metadata: Metadata = { title: "Mon compte", robots: { index: false } };
 
@@ -50,9 +54,17 @@ function Features() {
   );
 }
 
-function Guest() {
+function Guest({ deleted }: { deleted: boolean }) {
   return (
     <div className="mx-auto max-w-xl rounded-xl bg-white p-8 text-center">
+      {deleted && (
+        <div className="mb-6 text-left">
+          <FormAlert tone="info">
+            Votre compte a été supprimé et vos données personnelles effacées. Un e-mail de
+            confirmation vous a été envoyé.
+          </FormAlert>
+        </div>
+      )}
       <CircleUser className="text-brand-600 mx-auto size-14" aria-hidden />
       <h1 className="mt-3 text-2xl font-extrabold">Espace client</h1>
       <p className="text-ink-500 mt-2">
@@ -79,7 +91,15 @@ function Guest() {
   );
 }
 
-function SignedIn({ account, error }: { account: AccountSummary; error: boolean }) {
+function SignedIn({
+  account,
+  error,
+  deletion,
+}: {
+  account: AccountSummary;
+  error: boolean;
+  deletion: AccountDeletionStatus | null;
+}) {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       {error && (
@@ -142,8 +162,18 @@ function SignedIn({ account, error }: { account: AccountSummary; error: boolean 
           (vos autres appareils seront déconnectés).
         </p>
       </section>
+
+      <PrivacySection status={deletion} />
     </div>
   );
+}
+
+/** Suppression possible ? `null` si l'API ne répond pas (la page reste affichée). */
+async function deletionStatus(): Promise<AccountDeletionStatus | null> {
+  const token = await sessionToken();
+  if (!token) return null;
+  const result = await privacyApi().deletionStatus(token);
+  return result.ok ? result.data : null;
 }
 
 export default async function AccountPage({
@@ -156,9 +186,13 @@ export default async function AccountPage({
     <div className="container-page py-6">
       <Breadcrumbs items={[{ label: "Mon compte" }]} />
       {current.status === "signed-in" ? (
-        <SignedIn account={current.account} error={first(params.erreur) === "indisponible"} />
+        <SignedIn
+          account={current.account}
+          error={first(params.erreur) === "indisponible"}
+          deletion={await deletionStatus()}
+        />
       ) : (
-        <Guest />
+        <Guest deleted={first(params.supprime) === "1"} />
       )}
     </div>
   );

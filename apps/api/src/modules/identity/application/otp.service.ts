@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import {
   channelOf,
   maskIdentifier,
+  parseIdentifier,
   type Identifier,
   type OtpChannel,
 } from "../domain/identifier.js";
@@ -161,6 +162,36 @@ export class OtpService {
     const channel = channelOf(identifier);
     if (!this.availableChannels().includes(channel)) return;
     this.deliver({ kind: "password-changed", channel, to: identifier.value }, identifier);
+  }
+
+  /**
+   * Confirmation de la suppression du compte (S7-T08), envoyée APRÈS l'effacement à l'ancienne adresse (lue avant).
+   * `contact` : e-mail ou mobile enregistré (déjà normalisé) ; ignoré s'il n'est pas lisible.
+   */
+  notifyAccountDeleted(contact: string): void {
+    const identifier = parseIdentifier(contact);
+    if (!identifier) return;
+    const channel = channelOf(identifier);
+    if (!this.availableChannels().includes(channel)) return;
+    this.deliver({ kind: "account-deleted", channel, to: identifier.value }, identifier);
+  }
+
+  /** Un message peut-il partir vers ce contact (e-mail ou mobile normalisé) avec les canaux configurés ? */
+  canNotify(contact: string): boolean {
+    const identifier = parseIdentifier(contact);
+    return identifier !== null && this.availableChannels().includes(channelOf(identifier));
+  }
+
+  /** Prévenance 30 jours avant l'effacement d'un compte inactif (S7-T08). */
+  notifyInactivity(contact: string, deleteOn: Date): void {
+    const identifier = parseIdentifier(contact);
+    if (!identifier) return;
+    const channel = channelOf(identifier);
+    if (!this.availableChannels().includes(channel)) return;
+    this.deliver(
+      { kind: "inactivity-warning", deleteOn, channel, to: identifier.value },
+      identifier,
+    );
   }
 
   /** Avis de sécurité de la double authentification (S6-T03) : activation, nouveaux codes, blocage, remise à zéro. */

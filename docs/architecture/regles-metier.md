@@ -100,3 +100,12 @@
    vérification ? et le résultat (qui a vérifié, quand) ?
    _2026-10-17 (S6-T08) : en attendant, photos effacées **30 jours** après la décision (réglable dans le code) ; le
    résultat et les 4 derniers caractères restent. À confirmer avec le client et la déclaration APDPVP._
+   _2026-10-19 (S7-T08) : le dossier entier est effacé avec le compte du vendeur ; à confirmer avec la déclaration._
+10. **Conformité APDPVP** (loi n°001/2011 modifiée par la loi n°025/2023) : qui est le responsable des traitements
+    (raison sociale, siège, RCCM, NIF, directeur de la publication) ? Un DPO sera-t-il désigné (dispense de
+    déclaration, art. 89) ou Kemdia fait-il la déclaration (art. 78) ? Quel hébergeur pour la production et pour le
+    stockage S3 des sauvegardes (pays : transfert à déclarer, art. 87) ? Quelle adresse e-mail pour les demandes de
+    droits ?
+    _2026-10-19 (S7-T08) : pas encore de réponse. En attendant : champs « à compléter » dans `apps/web/src/lib/legal.ts`
+    (mentions légales, politique de confidentialité) et dans `docs/conformite/registre-traitements.md` ; rien
+    d'inventé. À remplir **avant l'ouverture au public**._

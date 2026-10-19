@@ -86,7 +86,9 @@ export class PrismaAccountRepository implements AccountRepository {
     try {
       await this.prisma.account.upsert({
         where: { id },
-        create: { id, createdAt, ...data },
+        // Preuve du consentement (S7-T08, art. 72 et 74) : un compte n'est CRÉÉ que par l'inscription, dont le contrat
+        // exige les deux cases (conditions acceptées, 18 ans ou plus) ; leur date est celle de la création
+        create: { id, createdAt, termsAcceptedAt: createdAt, adultConfirmedAt: createdAt, ...data },
         update: data,
       });
     } catch (error) {

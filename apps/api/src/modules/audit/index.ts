@@ -17,3 +17,5 @@ export {
   type AuditTarget,
 } from "./domain/audit-event.js";
 export { auditContextOf } from "./interface/request-context.js";
+/** Lignes du journal d'un compte, pour sa copie de données (S7-T08) */
+export { AuditPersonalData } from "./infrastructure/audit-personal-data.js";

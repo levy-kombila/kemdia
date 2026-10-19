@@ -11,3 +11,5 @@ export { VendorOrderService } from "./application/vendor-order.service.js";
 export type { Shop, ShopKind, ShopStatus } from "./domain/shop.js";
 export { VendorsError, type VendorsErrorCode } from "./domain/vendors-error.js";
 export { withVendorsErrors, VENDORS_ERROR_STATUS } from "./interface/vendors-http-errors.js";
+/** Données personnelles du module (S7-T08) : copie et effacement, pour le module privacy */
+export { VendorsPersonalData } from "./infrastructure/vendors-personal-data.js";

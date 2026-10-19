@@ -23,3 +23,5 @@ export { validatePayment, type PaymentMethod } from "./domain/order.js";
 export { withOrdersErrors, ORDERS_ERROR_STATUS } from "./interface/orders-http-errors.js";
 export { presentOrder } from "./interface/order.presenter.js";
 export { OrdersError, type OrdersErrorCode } from "./domain/orders-error.js";
+/** Données personnelles du module (S7-T08) : copie et effacement, pour le module privacy */
+export { OrdersPersonalData } from "./infrastructure/orders-personal-data.js";

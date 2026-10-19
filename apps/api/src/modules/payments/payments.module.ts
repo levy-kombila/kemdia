@@ -46,6 +46,7 @@ import { WebhookController } from "./interface/webhook.controller.js";
 import { StalePaymentsScheduler } from "./infrastructure/stale-payments.js";
 import { PaymentAdminController } from "./interface/payment-admin.controller.js";
 import { PaymentController } from "./interface/payment.controller.js";
+import { PaymentsPersonalData } from "./infrastructure/payments-personal-data.js";
 
 /**
  * Module payments (ADR-0006, S5-T04, ADR-0026) : essais de paiement Mobile Money, encaissement à la livraison,
@@ -64,6 +65,8 @@ import { PaymentController } from "./interface/payment.controller.js";
     BillingSettingsController,
   ],
   providers: [
+    // Données personnelles (S7-T08) : copie, effacement — utilisé par le module privacy
+    PaymentsPersonalData,
     PaymentService,
     PaymentAdminService,
     StalePaymentsScheduler,
@@ -111,6 +114,6 @@ import { PaymentController } from "./interface/payment.controller.js";
       useFactory: (sandbox: SandboxOperator | null) => sandbox ?? new UnavailablePaymentProvider(),
     },
   ],
-  exports: [PaymentService],
+  exports: [PaymentService, PaymentsPersonalData],
 })
 export class PaymentsModule {}
