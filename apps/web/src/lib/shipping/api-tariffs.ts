@@ -7,6 +7,7 @@ import {
 import { ZONES, type DeliveryTariffTable } from "@kemdia/contracts/delivery";
 import { readAtMost } from "@/lib/orders/api-orders";
 import { tariffTableOf } from "./tariff-table";
+import { log } from "@/lib/log";
 
 /** Le barème fait moins d'1 Ko : au-delà de 16 Ko, la réponse est refusée (relecture de sécurité du S7-T02). */
 const MAX_BYTES = 16_384;
@@ -57,9 +58,9 @@ export function createTariffSource(options: TariffSourceOptions) {
       }
       const parsed = DeliveryTariffsSchema.safeParse(body);
       if (parsed.success) tariffs = parsed.data;
-      else console.error(`[livraison] barème : réponse refusée (statut ${response.status})`);
+      else log.error("livraison", `barème : réponse refusée (statut ${response.status})`);
     } catch {
-      console.error("[livraison] barème : API injoignable");
+      log.error("livraison", "barème : API injoignable");
     }
     if (tariffs) {
       const table = tariffTableOf(tariffs);

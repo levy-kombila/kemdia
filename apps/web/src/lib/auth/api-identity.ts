@@ -19,6 +19,7 @@ import {
 } from "@kemdia/contracts";
 import { z } from "zod";
 import type { AuthFailure, SignupInput } from "./types";
+import { log } from "@/lib/log";
 
 /**
  * Adaptateur « API » de l'identité (S4-T05, ADR-0019) : appelle les routes `/api/v1/auth/*`
@@ -76,7 +77,7 @@ export function createIdentityApi(options: IdentityApiOptions) {
       });
     } catch (error) {
       const timeout = error instanceof DOMException && error.name === "TimeoutError";
-      console.error(`[identité] ${path} : ${timeout ? "délai dépassé" : "API injoignable"}`);
+      log.error("identité", `${path} : ${timeout ? "délai dépassé" : "API injoignable"}`);
       return { ok: false, code: "INDISPONIBLE" };
     }
 
@@ -95,7 +96,7 @@ export function createIdentityApi(options: IdentityApiOptions) {
           ...(Number.isInteger(retry) && retry > 0 ? { retryAfterSeconds: retry } : {}),
         };
       }
-      console.error(`[identité] ${path} : statut ${response.status}`);
+      log.error("identité", `${path} : statut ${response.status}`);
       return { ok: false, code: "INDISPONIBLE" };
     }
 
@@ -103,7 +104,7 @@ export function createIdentityApi(options: IdentityApiOptions) {
     if (!parsed.success) {
       // Chemins des champs seulement : jamais les valeurs reçues dans le journal
       const fields = parsed.error.issues.map((i) => i.path.join(".") || "(racine)").slice(0, 5);
-      console.error(`[identité] ${path} : réponse non conforme au contrat (${fields.join(", ")})`);
+      log.error("identité", `${path} : réponse non conforme au contrat (${fields.join(", ")})`);
       return { ok: false, code: "INDISPONIBLE" };
     }
     return { ok: true, data: parsed.data };

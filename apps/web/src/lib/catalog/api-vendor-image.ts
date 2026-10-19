@@ -1,6 +1,7 @@
 import "server-only";
 import { CLIENT_IP_HEADER, INTERNAL_KEY_HEADER, PRODUCT_IMAGE_LIMITS } from "@kemdia/contracts";
 import { readAtMost } from "@/lib/orders/api-orders";
+import { log } from "@/lib/log";
 
 export interface VendorImageApiOptions {
   url: string;
@@ -55,7 +56,7 @@ export async function fetchVendorImage(
     });
   } catch (error) {
     const timeout = error instanceof DOMException && error.name === "TimeoutError";
-    console.error(`[photos] ${timeout ? "délai dépassé" : "API injoignable"}`);
+    log.error("photos", `${timeout ? "délai dépassé" : "API injoignable"}`);
     return { status: 503 };
   }
   const etag = response.headers.get("etag");
@@ -68,12 +69,12 @@ export async function fetchVendorImage(
   const type = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
   if (response.status !== 200 || type !== "image/webp") {
     await response.body?.cancel().catch(() => undefined);
-    console.error(`[photos] réponse inattendue de l'API : statut ${response.status}`);
+    log.error("photos", `réponse inattendue de l'API : statut ${response.status}`);
     return { status: 503 };
   }
   const bytes = await readAtMost(response, PRODUCT_IMAGE_LIMITS.maxStoredBytes).catch(() => null);
   if (!bytes || !isWebp(bytes)) {
-    console.error("[photos] fichier non conforme");
+    log.error("photos", "fichier non conforme");
     return { status: 503 };
   }
   return { status: 200, bytes, etag: safeEtag };

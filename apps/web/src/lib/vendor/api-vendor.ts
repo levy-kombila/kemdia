@@ -36,6 +36,7 @@ import {
 import { z } from "zod";
 import { readAtMost } from "@/lib/orders/api-orders";
 import { isUuid, type UploadType } from "./images";
+import { log } from "@/lib/log";
 
 /**
  * Adaptateur « API » de l'espace vendeur (S6-T06, ADR-0037) : boutique (`/vendors/shop`), produits
@@ -142,8 +143,9 @@ export function createVendorApi(options: VendorApiOptions) {
       });
     } catch (error) {
       const timeout = error instanceof DOMException && error.name === "TimeoutError";
-      console.error(
-        `[vendeur] ${method} ${routeOf(path)} : ${timeout ? "délai dépassé" : "API injoignable"}`,
+      log.error(
+        "vendeur",
+        `${method} ${routeOf(path)} : ${timeout ? "délai dépassé" : "API injoignable"}`,
       );
       return { ok: false, code: "INDISPONIBLE" };
     }
@@ -163,15 +165,16 @@ export function createVendorApi(options: VendorApiOptions) {
           ...(Number.isInteger(retry) && retry > 0 ? { retryAfterSeconds: retry } : {}),
         };
       }
-      console.error(`[vendeur] ${method} ${routeOf(path)} : statut ${response.status}`);
+      log.error("vendeur", `${method} ${routeOf(path)} : statut ${response.status}`);
       return { ok: false, code: "INDISPONIBLE" };
     }
 
     const parsed = schema.safeParse(payload);
     if (!parsed.success) {
       const fields = parsed.error.issues.map((i) => i.path.join(".") || "(racine)").slice(0, 5);
-      console.error(
-        `[vendeur] ${method} ${routeOf(path)} : réponse non conforme au contrat (${fields.join(", ")})`,
+      log.error(
+        "vendeur",
+        `${method} ${routeOf(path)} : réponse non conforme au contrat (${fields.join(", ")})`,
       );
       return { ok: false, code: "INDISPONIBLE" };
     }
@@ -345,7 +348,7 @@ export function createVendorApi(options: VendorApiOptions) {
           signal: AbortSignal.timeout(options.timeoutMs),
         });
       } catch {
-        console.error("[vendeur] aperçu de photo : API injoignable");
+        log.error("vendeur", "aperçu de photo : API injoignable");
         return { status: 503 };
       }
       if ([401, 403, 404].includes(response.status)) {
@@ -355,14 +358,14 @@ export function createVendorApi(options: VendorApiOptions) {
       const type = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
       if (response.status !== 200 || type !== "image/webp") {
         await response.body?.cancel().catch(() => undefined);
-        console.error(`[vendeur] aperçu de photo : statut ${response.status}`);
+        log.error("vendeur", `aperçu de photo : statut ${response.status}`);
         return { status: 503 };
       }
       const bytes = await readAtMost(response, PRODUCT_IMAGE_LIMITS.maxStoredBytes).catch(
         () => null,
       );
       if (!bytes || !isWebp(bytes)) {
-        console.error("[vendeur] aperçu de photo : fichier non conforme");
+        log.error("vendeur", "aperçu de photo : fichier non conforme");
         return { status: 503 };
       }
       return { status: 200, bytes };

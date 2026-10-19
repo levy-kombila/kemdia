@@ -24,6 +24,7 @@ import {
   type Payment,
 } from "@kemdia/contracts";
 import { z } from "zod";
+import { log } from "@/lib/log";
 
 /**
  * Adaptateur « API » des commandes, paiements et factures (S5-T07, ADR-0029) : appelle `/api/v1/orders/*` depuis le
@@ -119,8 +120,9 @@ export function createOrdersApi(options: OrdersApiOptions) {
       return { ok: true, response };
     } catch (error) {
       const timeout = error instanceof DOMException && error.name === "TimeoutError";
-      console.error(
-        `[commandes] ${method} ${routeOf(path)} : ${timeout ? "délai dépassé" : "API injoignable"}`,
+      log.error(
+        "commandes",
+        `${method} ${routeOf(path)} : ${timeout ? "délai dépassé" : "API injoignable"}`,
       );
       return { ok: false, code: "INDISPONIBLE" };
     }
@@ -132,7 +134,7 @@ export function createOrdersApi(options: OrdersApiOptions) {
     if (problem.success && problem.data.code && KNOWN_CODES.has(problem.data.code)) {
       return { ok: false as const, code: problem.data.code as OrderFailureCode };
     }
-    console.error(`[commandes] ${method} ${routeOf(path)} : statut ${response.status}`);
+    log.error("commandes", `${method} ${routeOf(path)} : statut ${response.status}`);
     return { ok: false as const, code: "INDISPONIBLE" as const };
   }
 
@@ -151,8 +153,9 @@ export function createOrdersApi(options: OrdersApiOptions) {
     const parsed = schema.safeParse(payload);
     if (!parsed.success) {
       const fields = parsed.error.issues.map((i) => i.path.join(".") || "(racine)").slice(0, 5);
-      console.error(
-        `[commandes] ${method} ${routeOf(path)} : réponse non conforme au contrat (${fields.join(", ")})`,
+      log.error(
+        "commandes",
+        `${method} ${routeOf(path)} : réponse non conforme au contrat (${fields.join(", ")})`,
       );
       return { ok: false, code: "INDISPONIBLE" };
     }
@@ -223,7 +226,7 @@ export function createOrdersApi(options: OrdersApiOptions) {
       const type = response.headers.get("content-type") ?? "";
       const length = Number(response.headers.get("content-length") ?? "0");
       if (!type.startsWith("application/pdf") || length > INVOICE_PDF_MAX_BYTES) {
-        console.error("[commandes] GET /{commande}/invoices/{numéro} : réponse inattendue");
+        log.error("commandes", "GET /{commande}/invoices/{numéro} : réponse inattendue");
         return { ok: false, code: "INDISPONIBLE" };
       }
       // Lu par morceaux, arrêté dès 2 Mo : une réponse sans taille annoncée ne peut pas remplir la mémoire
@@ -234,7 +237,7 @@ export function createOrdersApi(options: OrdersApiOptions) {
         bytes.length > 5 &&
         String.fromCharCode(...bytes.subarray(0, 5)) === "%PDF-";
       if (!isPdf) {
-        console.error("[commandes] GET /{commande}/invoices/{numéro} : fichier non conforme");
+        log.error("commandes", "GET /{commande}/invoices/{numéro} : fichier non conforme");
         return { ok: false, code: "INDISPONIBLE" };
       }
       return { ok: true, data: bytes };

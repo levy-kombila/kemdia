@@ -219,12 +219,42 @@ Historique des déploiements : `/opt/kemdia/deploy.log`.
 | Besoin           | Commande / action                                                                                                                           |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | Voir l'état      | `docker ps` · `curl -s https://kemdia.ga/api/health`                                                                                        |
-| Logs applicatifs | `docker logs kemdia-production-web --since 1h` · `docker logs kemdia-production-api --since 1h`                                             |
+| Logs applicatifs | JSON (S7-T06) : `docker logs kemdia-production-web --since 1h \| grep '^{' \| jq` · idem pour `kemdia-production-api`                       |
 | Base de données  | `sudo docker exec -it kemdia-production-db psql -U kemdia` (aucun port ouvert : seulement depuis le serveur)                                |
 | Logs HTTP        | `docker logs kemdia-caddy --since 1h`                                                                                                       |
-| Surveillance     | Service externe gratuit (ex. UptimeRobot) qui appelle `https://kemdia.ga/api/health` toutes les 5 min et vous alerte par e-mail/SMS         |
+| Surveillance     | UptimeRobot (extérieur) + Healthchecks.io (`monitor.sh` toutes les 5 min) : voir ci-dessous ; état : `cat /opt/kemdia/state/monitor.last`   |
 | Mises à jour OS  | Automatiques (unattended-upgrades) ; redémarrage mensuel planifié conseillé                                                                 |
 | Sauvegardes      | Automatiques chaque nuit (bases, secrets, Caddy) : voir [§11](#11-sauvegardes-et-restauration) ; état : `cat /opt/kemdia/state/backup.last` |
+
+### Surveillance et alertes (S7-T06, ADR-0045)
+
+Deux comptes gratuits, à créer le jour de la location. Les alertes arrivent par e-mail ; Healthchecks propose aussi
+Telegram et d'autres canaux.
+
+1. **Healthchecks.io** (ce que voit le serveur) : créer un « check », période **5 minutes**, délai de grâce
+   **10 minutes**. Copier son adresse de ping, puis sur le serveur :
+
+   ```bash
+   sudo install -m 600 /dev/null /opt/kemdia/secrets/monitor.env
+   sudo nano /opt/kemdia/secrets/monitor.env      # HC_PING_URL=https://hc-ping.com/<identifiant>
+   sudo systemctl start kemdia-monitor && cat /opt/kemdia/state/monitor.last
+   ```
+
+   Tu es prévenu si un problème apparaît, si le serveur se tait (éteint, minuteur arrêté) et quand tout revient à la
+   normale. Seuils réglables dans le même fichier : `DISK_MAX_PCT=85`, `MEM_MIN_PCT=10`, `CERT_MIN_DAYS=14`,
+   `BACKUP_MAX_HOURS=26`, `RESTORE_CHECK_MAX_DAYS=8`.
+
+2. **UptimeRobot** (ce que voit un visiteur) : moniteur HTTP(S) sur `https://kemdia.ga/api/health?complet=1`, toutes
+   les 5 minutes. La réponse est 503 si l'API ou la base est en panne, et rien ne répond si le serveur est éteint.
+
+| Alerte (Healthchecks)                     | Première chose à regarder                                                        |
+| ----------------------------------------- | -------------------------------------------------------------------------------- |
+| `production : db/api/web unhealthy`       | `docker ps`, `docker logs --tail 50 kemdia-production-<partie>`                  |
+| `parcours https → site → API → base`      | Caddy : `docker logs kemdia-caddy --since 15m`                                   |
+| `certificat de … expire dans N jour(s)`   | DNS du domaine, ports 80/443 ouverts, `docker logs kemdia-caddy \| grep -i acme` |
+| `disque … plein` / `mémoire libre`        | `df -h`, `docker system df`, `sudo docker image prune`                           |
+| `dernière sauvegarde …` / `restauration…` | §11 ; `journalctl -u kemdia-backup -u kemdia-restore-check`                      |
+| Silence (pas de signal)                   | Le serveur répond-il en SSH ? `systemctl status kemdia-monitor.timer`            |
 
 ### Adresse des visiteurs en production (S4-T07, ADR-0021)
 
@@ -332,7 +362,7 @@ Sans protection de branche, la règle d'équipe est : **jamais de push direct su
 
 - [ ] Secrets de l'ancien projet Django changés, ancien dépôt archivé
 - [ ] Domaine, DNS et HTTPS opérationnels (note A sur <https://www.ssllabs.com/ssltest/>)
-- [ ] Surveillance externe de `/api/health` active
+- [ ] Surveillance active : Healthchecks (`monitor.env`) et UptimeRobot sur `/api/health?complet=1` (§10)
 - [ ] Sauvegardes : `backup.sh init`, copie S3 configurée, mot de passe dans le gestionnaire, `backup.last` à `ok`
 - [ ] Mentions légales et politique de confidentialité complétées
 - [ ] Vrai catalogue et photos HD (les données actuelles sont des données de démonstration)
