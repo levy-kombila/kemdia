@@ -4,9 +4,9 @@
 #
 #   .github/zap/scan.sh <passif|actif> <site|api> <url> <dossier des rapports>
 #
-# Lance ZAP (déjà installé dans $ZAP_DIR) une fois par rôle : anonyme, client, vendeur, équipe. Les jetons des
-# sessions de test sont lus dans $ZAP_TOKENS_FILE (« rôle=jeton », hors du dépôt) et passés à ZAP par ses variables
-# d'environnement : ni dans le plan, ni dans les rapports, ni dans la liste des processus de la CI.
+# Lance ZAP (déjà installé dans $ZAP_DIR) une fois par rôle : anonyme, client, vendeur, équipe (l'un après l'autre).
+# Les jetons des sessions de test sont lus dans $ZAP_TOKENS_FILE (« rôle=jeton », hors du dépôt) et passés à ZAP par
+# ses variables d'environnement : ni dans le plan, ni dans les rapports, ni dans la liste des processus de la CI.
 # Résumé dans $GITHUB_STEP_SUMMARY ; une annotation par alerte moyenne ou élevée ; code 1 si l'une d'elles existe.
 # =============================================================================
 set -Eeuo pipefail
@@ -28,21 +28,31 @@ host=$(sed -E 's#^https?://([^/:]+).*#\1#' <<<"$URL")
 
 token_of() { sed -n "s/^$1=//p" "$ZAP_TOKENS_FILE"; }
 
-status=0
-for role in anonyme client vendeur equipe; do
-  echo "::group::ZAP $MODE — $CIBLE — $role"
-  plan=$(mktemp --suffix=.yaml)
-  args=(--mode "$MODE" --cible "$CIBLE" --role "$role" --url "$URL" --rapports "$OUT")
-  [[ $CIBLE == api ]] && args+=(--openapi "$ROOT/docs/api/openapi.json")
-  python3 "$HERE/plan.py" "${args[@]}" >"$plan"
+ROLES=(anonyme client vendeur equipe)
+for role in "${ROLES[@]:1}"; do
+  [[ -n $(token_of "$role") ]] || {
+    echo "::error::jeton de test absent pour $role"
+    exit 1
+  }
+done
 
-  auth=()
+# Un passage de ZAP pour un rôle. Port du proxy propre à chaque passage (ZAP l'ouvre même en ligne de commande) et
+# dossier de travail neuf (ZAP garde sinon ses réglages d'un passage à l'autre).
+run_role() {
+  local role=$1 port=$2 plan home token
+  plan=$(mktemp --suffix=.yaml)
+  local args=(--mode "$MODE" --cible "$CIBLE" --role "$role" --url "$URL" --rapports "$OUT")
+  [[ $CIBLE == api ]] && args+=(--openapi "$ROOT/docs/api/openapi.json")
+  # Échec du plan = échec du rôle, explicitement (relecture S7.5-T01 : « || true » à l'appel neutralise set -e ici)
+  if ! python3 "$HERE/plan.py" "${args[@]}" >"$plan" 2>"$OUT/zap-$CIBLE-$role.log"; then
+    echo "plan" >"$OUT/zap-$CIBLE-$role.code"
+    rm -f "$plan"
+    return 1
+  fi
+
+  local auth=()
   if [[ $role != anonyme ]]; then
     token=$(token_of "$role")
-    [[ -n $token ]] || {
-      echo "::error::jeton de test absent pour $role"
-      exit 1
-    }
     if [[ $CIBLE == site ]]; then
       auth=(ZAP_AUTH_HEADER=Cookie "ZAP_AUTH_HEADER_VALUE=__Host-kemdia_session=$token")
     else
@@ -51,27 +61,41 @@ for role in anonyme client vendeur equipe; do
     auth+=("ZAP_AUTH_HEADER_SITE=$host")
   fi
 
-  # Dossier de travail neuf à chaque passage : ZAP garde sinon ses réglages d'un passage à l'autre
   home=$(mktemp -d)
-  set +e
-  env "${auth[@]}" "$ZAP_DIR/zap.sh" -cmd -silent -dir "$home" -autorun "$plan" >"$OUT/zap-$CIBLE-$role.log" 2>&1
-  code=$?
-  set -e
+  local code=0
+  # Mémoire de Java bornée (relecture S7.5-T01) : ZAP ne doit pas affamer la pile testée sur le même runner
+  env "${auth[@]}" "$ZAP_DIR/zap.sh" "$XMX" -cmd -silent -port "$port" -dir "$home" -autorun "$plan" \
+    >"$OUT/zap-$CIBLE-$role.log" 2>&1 || code=$?
   rm -rf "$home" "$plan"
+  echo "$code" >"$OUT/zap-$CIBLE-$role.code"
+}
+
+# Un rôle après l'autre. S7.5-T01 a essayé les 4 rôles en même temps : aucun gain mesuré en CI (6 min 35 contre
+# 6 min 20), car les 4 ZAP et la pile se partagent les 4 processeurs du runner, et l'exploration ralentit (ADR-0048).
+XMX=-Xmx4g
+port=8091
+for role in "${ROLES[@]}"; do
+  run_role "$role" "$port" || true
+done
+
+status=0
+for role in "${ROLES[@]}"; do
+  echo "::group::ZAP $MODE — $CIBLE — $role"
+  code=$(cat "$OUT/zap-$CIBLE-$role.code" 2>/dev/null || echo inconnu)
   echo "code de sortie de ZAP : $code"
-  tail -n 15 "$OUT/zap-$CIBLE-$role.log"
+  tail -n 15 "$OUT/zap-$CIBLE-$role.log" 2>/dev/null || true
   echo "::endgroup::"
 
   report="$OUT/kemdia-$CIBLE-$role.json"
   if [[ ! -s $report ]]; then
     # Dernières lignes du journal de ZAP dans l'annotation (lisible sans télécharger les rapports)
-    last=$(grep -v '^\s*$' "$OUT/zap-$CIBLE-$role.log" | tail -n 4 | tr '\n' ' ' | cut -c1-400)
+    last=$({ grep -v '^\s*$' "$OUT/zap-$CIBLE-$role.log" 2>/dev/null || true; } | tail -n 4 | tr '\n' ' ' | cut -c1-400)
     echo "::error::ZAP n'a produit aucun rapport ($CIBLE, $role) : $last"
     status=1
     continue
   fi
   # Résumé et annotations : nom de l'alerte, risque, nombre d'adresses (jamais le contenu des requêtes)
-  python3 - "$report" "$CIBLE" "$role" "$MODE" <<'PY' || status=1
+  if python3 - "$report" "$CIBLE" "$role" "$MODE" <<'PY'
 import json, os, sys
 report, cible, role, mode = sys.argv[1:5]
 alerts = [a for s in json.load(open(report)).get("site", []) for a in s.get("alerts", [])]
@@ -94,5 +118,15 @@ for a in blocking:
     print(f"::error title=ZAP {cible} {role}::{order[a['riskcode']]} — {a['name']} (règle {a['pluginid']}) : {urls}")
 sys.exit(1 if blocking else 0)
 PY
+  then
+    # Aucune alerte bloquante : ZAP doit alors être sorti avec 0. Un autre code (plan en échec, Java tué faute de
+    # mémoire…) donnerait un rapport partiel, donc un faux vert (relecture S7.5-T01)
+    if [[ $code != 0 ]]; then
+      echo "::error::ZAP ($CIBLE, $role) s'est arrêté avec le code $code sans alerte bloquante : scan incomplet"
+      status=1
+    fi
+  else
+    status=1
+  fi
 done
 exit "$status"

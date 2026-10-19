@@ -30,10 +30,11 @@ jobs:
     name: Promouvoir l'image testée
     runs-on: ubuntu-latest
     if: github.actor == github.repository_owner
-    timeout-minutes: 30
+    timeout-minutes: 60 # S7.5-T01 : jusqu'à 30 min d'attente de la CI, puis 20 min pour l'image
     permissions:
       contents: write # création de la Release GitHub
       packages: write # ajout de l'étiquette de version sur l'image
+      actions: read # S7.5-T01 : lire le résultat de la CI du commit
     outputs:
       image: ${{ steps.ref.outputs.image }}
       digest: ${{ steps.ref.outputs.digest }}
@@ -56,6 +57,7 @@ jobs:
         id: ref
         env:
           INPUT_VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           image="ghcr.io/${GITHUB_REPOSITORY,,}/web"
           api="ghcr.io/${GITHUB_REPOSITORY,,}/api"
@@ -64,6 +66,32 @@ jobs:
             [[ $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Tag invalide : $version"; exit 1; }
             git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
               || { echo "::error::Le tag $version ne pointe pas sur un commit de main."; exit 1; }
+            # S7.5-T01 : les images sont publiées pendant que les tests tournent encore ; avant toute promotion, les
+            # jobs de TEST de la CI/CD de ce commit sur main doivent être verts (les déploiements staging et démo
+            # n'en font pas partie : une panne de Render ne bloque pas la production — relecture S7.5-T01)
+            required=("Lint · Types · Tests · Build" "API — migrations et intégration (PostgreSQL)"
+              "Bout en bout et performance (site + API + PostgreSQL)" "Pile serveur (Caddy · site · API · PostgreSQL)"
+              "Image Docker (build · scan · publication)" "Image Docker de l'API (build · scan · migrations · publication)")
+            echo "Attente des tests de la CI/CD de main pour $GITHUB_SHA…"
+            ok=""
+            for i in $(seq 1 60); do
+              run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&branch=main&event=push&per_page=1" \
+                --jq '.workflow_runs[0] | select(.path == ".github/workflows/ci.yml") | .id' || true)
+              if [[ $run =~ ^[0-9]+$ ]]; then
+                jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/jobs?per_page=100" \
+                  --jq '.jobs[] | "\(.name)\t\(.status)\t\(.conclusion)"' || true)
+                pending=0; failed=""
+                for name in "${required[@]}"; do
+                  line=$(printf '%s\n' "$jobs" | awk -F'\t' -v n="$name" '$1 == n' | head -1)
+                  if [ -z "$line" ] || [ "$(cut -f2 <<<"$line")" != completed ]; then pending=1
+                  elif [ "$(cut -f3 <<<"$line")" != success ]; then failed="$failed « $name »"; fi
+                done
+                [ -z "$failed" ] || { echo "::error::Tests de la CI/CD pas verts pour ce commit :$failed — rien n'est promu."; exit 1; }
+                [ "$pending" = 0 ] && { ok=1; echo "✅ tests de la CI/CD verts (run $run)"; break; }
+              fi
+              sleep 30
+            done
+            [ -n "$ok" ] || { echo "::error::Tests de la CI/CD de ce commit introuvables ou pas terminés après 30 min."; exit 1; }
             src="$image:sha-$GITHUB_SHA"
             echo "Attente de l'image $src (publiée par la CI de main)…"
             for i in $(seq 1 40); do

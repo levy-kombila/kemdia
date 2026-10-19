@@ -213,13 +213,24 @@ Clôture (2026-10-19) : [rapport](rapports/2026-10-19_S7_cloture.md), version **
 
 ## S7.5 — Sprint correctif 🚧
 
-Choix du 2026-10-19 (ouverture) : **S7 clôturé sans S7-T09**, repris au S7.5 ; CI : l'image Docker n'attend plus les tests de bout en bout, **seul le déploiement** attend que tout soit vert.
+Décisions : [ADR-0048](architecture/adr/0048-ci-parallele.md) (CI plus rapide).
+Choix du 2026-10-19 (ouverture) : **S7 clôturé sans S7-T09**, repris au S7.5 ; CI : l'image Docker n'attend plus les
+tests de bout en bout, **seul le déploiement** attend que tout soit vert.
+Choix du 2026-10-19 (remarques du propriétaire) : **fiche produit commune + offres des vendeurs avant la bêta** ;
+**rôles détaillés** de l'équipe (catalogue, service client, logistique, finance, administrateur) ; validation des
+produits **humaine pendant la bêta**, IA « kemdIA » étudiée après la bêta (serveur GPU à chiffrer).
 
-| ID       | Tâche                                                                                                              | Statut |
-| -------- | ------------------------------------------------------------------------------------------------------------------ | ------ |
-| S7.5-T01 | CI plus rapide : jobs lancés en parallèle, image Docker construite sans attendre les tests de bout en bout         | ⏳     |
-| S7.5-T02 | Écrans d'administration reportés du S6 (ex-S7-T09) : factures, encaissements à la livraison, remboursements, audit | ⏳     |
-| S7.5-T03 | Remarques du propriétaire (liste à fournir)                                                                        | ⏳     |
+| ID       | Tâche                                                                                                                                                                                                                                                                     | Statut |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| S7.5-T01 | CI plus rapide : qualité, base, bout en bout, pile serveur et images en même temps ; déploiements seulement si tout est vert ; production et étiquettes `latest` après des tests verts ; ZAP plus robuste ; CI/CD **13 → 6 min**, passage complet ~13 → ~7 min — ADR-0048 | ✅     |
+| S7.5-T02 | Fiche produit commune + offres de plusieurs vendeurs (modèle Amazon/Jumia), formulaire « photo d'abord », doublons repérés                                                                                                                                                | ⏳     |
+| S7.5-T03 | Équipe : rôles détaillés, écran Utilisateurs (rôles retirés, compte désactivé, sessions coupées), alerte « nouvel appareil »                                                                                                                                              | ⏳     |
+| S7.5-T04 | Écrans d'administration reportés du S6 (ex-S7-T09) : factures, encaissements à la livraison, remboursements, journal d'audit                                                                                                                                              | ⏳     |
+| S7.5-T05 | Recherche : suggestions pendant la frappe, tolérance aux fautes                                                                                                                                                                                                           | ⏳     |
+| S7.5-T06 | Boutiques : page publique, quartier, « boutiques près de chez moi »                                                                                                                                                                                                       | ⏳     |
+| S7.5-T07 | Photo de profil (téléversée, initiales par défaut)                                                                                                                                                                                                                        | ⏳     |
+
+Après la bêta : IA « kemdIA » (remplissage depuis la photo, pré-tri des produits), connexion avec Google, distance GPS.
 
 ## S5 à S8 — grandes lignes
 

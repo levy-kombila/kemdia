@@ -133,6 +133,20 @@ jobs:
           done
           exit "$status"
 
+      # Relecture S7.5-T01 : les jetons de test ne doivent jamais sortir dans l'artefact (dépôt public), même si un
+      # journal de ZAP les recopiait ; « *** » à leur place
+      - name: Retirer les jetons de test des rapports et journaux
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          [ -s "${ZAP_TOKENS_FILE:-}" ] && [ -d "$RUNNER_TEMP/zap-rapports" ] || exit 0
+          while IFS='=' read -r _ token; do
+            [[ $token =~ ^[A-Za-z0-9_-]+$ ]] || continue
+            grep -rlF -- "$token" "$RUNNER_TEMP/zap-rapports" | while read -r f; do sed -i "s/$token/***/g" "$f"; done || true
+          done < "$ZAP_TOKENS_FILE"
+          if grep -rqF -f <(cut -d= -f2- "$ZAP_TOKENS_FILE") "$RUNNER_TEMP/zap-rapports"; then
+            echo "::error::un jeton de test est encore présent dans les rapports"; rm -rf "$RUNNER_TEMP/zap-rapports"; exit 1
+          fi
+
       # Rapports seulement pour une PR (scan passif) : ceux du scan actif seraient téléchargeables par tous (dépôt
       # public) avant la correction ; le résumé suffit (relecture S7-T07)
       - name: Rapports ZAP
