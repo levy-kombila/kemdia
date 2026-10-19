@@ -791,8 +791,10 @@ jobs:
           # Empreinte de la base : nombre de lignes et somme MD5 du contenu de chaque table
           fingerprint() {
             local t
-            for t in $(sql "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY 1"); do
-              sql "SELECT '$t', count(*), md5(coalesce(string_agg(x::text, '|' ORDER BY x::text), '')) FROM \"$t\" x"
+            # Toutes les tables de l'application : un schéma PostgreSQL par module (catalog, orders…), plus public
+            for t in $(sql "SELECT format('%I.%I', schemaname, tablename) FROM pg_tables
+                            WHERE schemaname NOT IN ('pg_catalog', 'information_schema') ORDER BY 1"); do
+              sql "SELECT '$t', count(*), md5(coalesce(string_agg(x::text, '|' ORDER BY x::text), '')) FROM $t x"
             done
           }
 

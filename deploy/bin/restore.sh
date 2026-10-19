@@ -108,7 +108,7 @@ case $MODE in
         continue
       fi
       if restore_into "$env" "$id" kemdia_verif; then
-        tables=$(psql_as "$env" kemdia_verif "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'" || echo 0)
+        tables=$(psql_as "$env" kemdia_verif "SELECT count(*) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema')" || echo 0)
         migrations=$(psql_as "$env" kemdia_verif \
           "SELECT count(*) FROM _prisma_migrations WHERE finished_at IS NOT NULL" 2>/dev/null || echo 0)
         if [[ $tables -gt 0 && $migrations -gt 0 ]]; then
