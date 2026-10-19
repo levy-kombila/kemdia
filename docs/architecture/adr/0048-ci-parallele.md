@@ -53,8 +53,8 @@ attend que tout soit vert.
 
 - **Positives** :
   - Mesuré sur la PR #82 : la CI/CD passe de **13 min 20 à 6 min** (pile serveur en dernier). Le passage complet,
-    jusqu'au dernier check run, passe d'environ **13 min à 10 min** : c'est maintenant ZAP du site (environ 10 min,
-    dont 2 min 20 pour monter la pile) qui termine en dernier.
+    jusqu'au dernier check run, passe d'environ **13 min à 7 min** : ZAP du site (6 min 48, dont 2 min 20 pour
+    monter la pile) et la pile serveur terminent en dernier.
   - Un passage rouge est connu plus tôt, puisque chaque job signale son échec sans attendre les autres.
   - Les déploiements sont **plus** stricts qu'avant, car la pile serveur devient une condition.
 - **Négatives** :
