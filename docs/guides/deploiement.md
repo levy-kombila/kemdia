@@ -23,17 +23,20 @@ flowchart LR
     prod -->|échec du test| rb[Retour arrière auto]
 ```
 
-| Fichier                          | Rôle                                                                  |
-| -------------------------------- | --------------------------------------------------------------------- |
-| `.github/workflows/ci.yml`       | Qualité → image → scan Trivy → publication GHCR → déploiement staging |
-| `.github/workflows/release.yml`  | Tag `vX.Y.Z` → promotion de l'image → Release GitHub → production     |
-| `.github/workflows/_deploy.yml`  | Déploiement réutilisable : SSH, test de fumée, retour arrière         |
-| `.github/workflows/security.yml` | Gitleaks, pnpm audit, Semgrep, ShellCheck (+ CodeQL si dépôt public)  |
-| `deploy/bin/setup-server.sh`     | Prépare et durcit un serveur neuf (une fois)                          |
-| `deploy/bin/init-secrets.sh`     | Tire les secrets d'un environnement sur le serveur (une fois, S7-T04) |
-| `deploy/bin/deploy.sh`           | Seule commande que la CI peut lancer sur le serveur                   |
-| `deploy/app/compose.yml`         | Site + API + PostgreSQL (lecture seule, sans privilèges, S7-T04)      |
-| `deploy/proxy/`                  | Caddy : HTTPS Let's Encrypt, staging protégé par mot de passe         |
+| Fichier                          | Rôle                                                                   |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| `.github/workflows/ci.yml`       | Qualité → image → scan Trivy → publication GHCR → déploiement staging  |
+| `.github/workflows/release.yml`  | Tag `vX.Y.Z` → promotion de l'image → Release GitHub → production      |
+| `.github/workflows/_deploy.yml`  | Déploiement réutilisable : SSH, test de fumée, retour arrière          |
+| `.github/workflows/security.yml` | Gitleaks, pnpm audit, Semgrep, ShellCheck (+ CodeQL si dépôt public)   |
+| `deploy/bin/setup-server.sh`     | Prépare et durcit un serveur neuf (une fois)                           |
+| `deploy/bin/init-secrets.sh`     | Tire les secrets d'un environnement sur le serveur (une fois, S7-T04)  |
+| `deploy/bin/deploy.sh`           | Seule commande que la CI peut lancer sur le serveur                    |
+| `deploy/bin/backup.sh`           | Sauvegarde chiffrée chaque nuit : bases, secrets, Caddy (S7-T05)       |
+| `deploy/bin/restore.sh`          | Liste, vérifie et restaure les sauvegardes (S7-T05)                    |
+| `deploy/systemd/`                | Minuteurs : sauvegarde 02:00, vérification de restauration le dimanche |
+| `deploy/app/compose.yml`         | Site + API + PostgreSQL (lecture seule, sans privilèges, S7-T04)       |
+| `deploy/proxy/`                  | Caddy : HTTPS Let's Encrypt, staging protégé par mot de passe          |
 
 > **S7-T04 (ADR-0043)** : le serveur fait tourner, par environnement (staging, production), le **site**, l'**API** et
 > **PostgreSQL 18**, chacun dans son conteneur durci. Les deux images (site et API) sont déployées ensemble, par digest,
@@ -100,6 +103,10 @@ Ils sont écrits dans `/opt/kemdia/secrets/<env>.{db,api,web}.env` (0640, root e
 que la clé interne et son adresse ; seule l'API a les clés de chiffrement et l'adresse de la base. **Copie
 `TOTP_ENCRYPTION_KEY` et `KYC_ENCRYPTION_KEY` dans ton gestionnaire de mots de passe** : perdues, les doubles
 authentifications et les dossiers des vendeurs deviennent illisibles. Le script refuse de remplacer un fichier existant.
+
+Puis les **sauvegardes** (une fois, voir [§11](#11-sauvegardes-et-restauration)) :
+`sudo /opt/kemdia/bin/backup.sh init`, et copie `/opt/kemdia/secrets/backup.password` dans ton gestionnaire de mots
+de passe.
 
 **E-mails** : `EMAIL_TRANSPORT=none` au départ. Pour envoyer avec Brevo, ouvre `sudo nano /opt/kemdia/secrets/<env>.api.env`,
 mets `EMAIL_TRANSPORT=brevo`, `BREVO_API_KEY=…` et `EMAIL_FROM=…` (adresse vérifiée dans Brevo), puis redéploie.
@@ -209,15 +216,15 @@ Historique des déploiements : `/opt/kemdia/deploy.log`.
 
 ## 10. Exploitation
 
-| Besoin           | Commande / action                                                                                                                   |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Voir l'état      | `docker ps` · `curl -s https://kemdia.ga/api/health`                                                                                |
-| Logs applicatifs | `docker logs kemdia-production-web --since 1h` · `docker logs kemdia-production-api --since 1h`                                     |
-| Base de données  | `sudo docker exec -it kemdia-production-db psql -U kemdia` (aucun port ouvert : seulement depuis le serveur)                        |
-| Logs HTTP        | `docker logs kemdia-caddy --since 1h`                                                                                               |
-| Surveillance     | Service externe gratuit (ex. UptimeRobot) qui appelle `https://kemdia.ga/api/health` toutes les 5 min et vous alerte par e-mail/SMS |
-| Mises à jour OS  | Automatiques (unattended-upgrades) ; redémarrage mensuel planifié conseillé                                                         |
-| Sauvegardes      | `/opt/kemdia/proxy/.env` et `/opt/kemdia/secrets/` (hors serveur, chiffrés) ; PostgreSQL : sauvegarde chiffrée et testée au S7-T05  |
+| Besoin           | Commande / action                                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Voir l'état      | `docker ps` · `curl -s https://kemdia.ga/api/health`                                                                                        |
+| Logs applicatifs | `docker logs kemdia-production-web --since 1h` · `docker logs kemdia-production-api --since 1h`                                             |
+| Base de données  | `sudo docker exec -it kemdia-production-db psql -U kemdia` (aucun port ouvert : seulement depuis le serveur)                                |
+| Logs HTTP        | `docker logs kemdia-caddy --since 1h`                                                                                                       |
+| Surveillance     | Service externe gratuit (ex. UptimeRobot) qui appelle `https://kemdia.ga/api/health` toutes les 5 min et vous alerte par e-mail/SMS         |
+| Mises à jour OS  | Automatiques (unattended-upgrades) ; redémarrage mensuel planifié conseillé                                                                 |
+| Sauvegardes      | Automatiques chaque nuit (bases, secrets, Caddy) : voir [§11](#11-sauvegardes-et-restauration) ; état : `cat /opt/kemdia/state/backup.last` |
 
 ### Adresse des visiteurs en production (S4-T07, ADR-0021)
 
@@ -240,7 +247,72 @@ Points d'attention :
 - Avant l'ouverture, refaire sur la production la vérification de la démo (adresse réelle puis fausse valeur, en `-4` **et** en `-6`,
   en Wi-Fi et en 4G), avec un diagnostic temporaire équivalent.
 
-## 11. Limites du plan GitHub gratuit (dépôt privé)
+## 11. Sauvegardes et restauration
+
+S7-T05 ([ADR-0044](../architecture/adr/0044-sauvegardes-restic.md)). Outil : **restic** (paquet Ubuntu), chiffrement
+AES-256 avec un mot de passe qui n'existe que sur le serveur et dans ton gestionnaire de mots de passe.
+
+| Quoi                         | Quand                                         | Où                                                                     |
+| ---------------------------- | --------------------------------------------- | ---------------------------------------------------------------------- |
+| Base de chaque environnement | Chaque nuit, 02:00 (`kemdia-backup`)          | `/var/backups/kemdia` (local), puis copie vers S3 si configuré         |
+| Secrets et `.env` de Caddy   | Même sauvegarde                               | Idem (sans le mot de passe des sauvegardes ni l'accès S3)              |
+| Vérification de restauration | Chaque dimanche, 05:00                        | Base temporaire `kemdia_verif`, supprimée ensuite ; 10 % du dépôt relu |
+| Rétention                    | 7 quotidiennes, 4 hebdomadaires, 6 mensuelles | Dans chaque dépôt                                                      |
+
+Résultats : `/opt/kemdia/state/backup.last` et `/opt/kemdia/state/restore-check.last` (`resultat=ok` attendu) ;
+journal : `journalctl -u kemdia-backup -u kemdia-restore-check`.
+
+### Mise en place (une fois)
+
+1. `sudo /opt/kemdia/bin/backup.sh init` : crée `/opt/kemdia/secrets/backup.password` et le dépôt local.
+2. **Copie ce mot de passe dans ton gestionnaire de mots de passe**, avec `TOTP_ENCRYPTION_KEY` et
+   `KYC_ENCRYPTION_KEY`. Sans lui, aucune sauvegarde ne peut être relue, par personne.
+3. Copie hors du serveur (recommandé) : créer un bucket chez un stockage compatible S3 (ex. Cloudflare R2, 10 Go
+   gratuits) et une clé d'accès **limitée à ce bucket**, puis :
+
+   ```bash
+   sudo install -m 600 /dev/null /opt/kemdia/secrets/backup-s3.env
+   sudo nano /opt/kemdia/secrets/backup-s3.env
+   #   RESTIC_S3_REPOSITORY=s3:https://<compte>.r2.cloudflarestorage.com/kemdia-sauvegardes
+   #   AWS_ACCESS_KEY_ID=…
+   #   AWS_SECRET_ACCESS_KEY=…
+   #   AWS_DEFAULT_REGION=auto
+   sudo /opt/kemdia/bin/backup.sh init        # prépare aussi le dépôt S3
+   ```
+
+   Garde aussi ces quatre lignes dans ton gestionnaire de mots de passe (elles servent après la perte du serveur).
+
+4. Essai immédiat : `sudo systemctl start kemdia-backup && cat /opt/kemdia/state/backup.last`.
+
+### Restaurer
+
+| Situation                                | Commande                                                                                     |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Voir les sauvegardes                     | `sudo /opt/kemdia/bin/restore.sh liste` (ajouter `--s3` pour la copie hors du serveur)       |
+| Vérifier sans rien toucher               | `sudo /opt/kemdia/bin/restore.sh verifier production`                                        |
+| Revenir en arrière (erreur, suppression) | `sudo /opt/kemdia/bin/restore.sh remplacer production <id ou latest> --confirmer production` |
+
+`remplacer` arrête le site et l'API, recrée la base à partir de la sauvegarde, puis les redémarre : tout ce qui a été
+fait **après** cette sauvegarde est perdu. Utiliser la version de l'application qui tournait au moment de la sauvegarde
+(une migration plus récente peut être relancée ensuite par un déploiement).
+
+### Serveur perdu (incendie, piratage, résiliation)
+
+1. Nouveau serveur : §4 (`setup-server.sh`), **sans** lancer `init-secrets.sh`.
+2. Mot de passe et accès S3 depuis le gestionnaire de mots de passe :
+   `sudo install -m 600 /dev/null /opt/kemdia/secrets/backup.password` puis `sudo nano` (même chose pour
+   `backup-s3.env`).
+3. Secrets : `sudo /opt/kemdia/bin/restore.sh fichiers /root/kemdia-restaure --s3`, puis recopier
+   `/root/kemdia-restaure/opt/kemdia/secrets/*.env` dans `/opt/kemdia/secrets/` (`sudo install -m 640 -g deploy …`)
+   et `…/proxy/.env` dans `/opt/kemdia/proxy/` ; supprimer `/root/kemdia-restaure`.
+4. Caddy (§5), puis déployer la dernière version (Release → Run workflow).
+5. `sudo /opt/kemdia/bin/restore.sh remplacer production latest --confirmer production --s3`, puis
+   `sudo /opt/kemdia/bin/backup.sh init` (nouveau dépôt local).
+
+Ce scénario complet (base et dépôt local effacés, restauration depuis S3, contenu comparé table par table) est rejoué
+par la CI à chaque PR (job « Pile serveur »).
+
+## 12. Limites du plan GitHub gratuit (dépôt privé)
 
 | Fonction                                                   | Gratuit (privé)          | GitHub Pro / Team                                   |
 | ---------------------------------------------------------- | ------------------------ | --------------------------------------------------- |
@@ -251,10 +323,11 @@ Points d'attention :
 
 Sans protection de branche, la règle d'équipe est : **jamais de push direct sur `main`**, toujours une PR avec CI verte.
 
-## 12. Liste de contrôle avant la vraie ouverture au public
+## 13. Liste de contrôle avant la vraie ouverture au public
 
 - [ ] Secrets de l'ancien projet Django changés, ancien dépôt archivé
 - [ ] Domaine, DNS et HTTPS opérationnels (note A sur <https://www.ssllabs.com/ssltest/>)
 - [ ] Surveillance externe de `/api/health` active
+- [ ] Sauvegardes : `backup.sh init`, copie S3 configurée, mot de passe dans le gestionnaire, `backup.last` à `ok`
 - [ ] Mentions légales et politique de confidentialité complétées
 - [ ] Vrai catalogue et photos HD (les données actuelles sont des données de démonstration)

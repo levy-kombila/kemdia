@@ -219,7 +219,7 @@ cat <<EOF
   2. sudo $ROOT/bin/init-secrets.sh production <domaine>         # secrets de la production (une fois)
      sudo $ROOT/bin/init-secrets.sh staging staging.<domaine>    # secrets de la préproduction (une fois)
   3. sudo $ROOT/bin/backup.sh init                                # sauvegardes ; copier $ROOT/secrets/backup.password
-                                                                 # dans ton gestionnaire de mots de passe (S3 : guide §11)
+                                                                 # dans ton gestionnaire de mots de passe (S3 : guide de déploiement §11)
   4. sudo nano $ROOT/proxy/.env                                  # domaines, e-mail, mot de passe staging
   5. cd $ROOT/proxy && sudo docker compose up -d
   6. ssh-keyscan -t ed25519 <IP>                                 # à copier dans le secret GitHub DEPLOY_SSH_KNOWN_HOSTS
