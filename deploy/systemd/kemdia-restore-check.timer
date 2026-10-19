@@ -1,0 +1,10 @@
+# Chaque dimanche à 05:00 (heure du serveur), après la sauvegarde de la nuit et les redémarrages de 03:30.
+[Unit]
+Description=Kemdia — vérification de restauration chaque semaine
+
+[Timer]
+OnCalendar=Sun *-*-* 05:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

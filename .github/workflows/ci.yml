@@ -773,12 +773,91 @@ jobs:
           [ "$(version)" = ci-v1 ]
           echo "✅ nouvelle version, retour arrière et refus vérifiés"
 
+      # S7-T05 (ADR-0044) : base remplie → sauvegarde chiffrée (locale + S3) → perte du serveur (base ET dépôt local
+      # effacés) → restauration depuis S3 → contenu identique table par table, site et API en ligne.
+      - name: Sauvegardes — chiffrées, copie S3, restauration après perte du serveur
+        run: |
+          sudo apt-get update -q >/dev/null && sudo apt-get install -y -q restic >/dev/null
+          restic version
+          # Stockage S3 de test (MinIO), à la place de Cloudflare R2 ; mot de passe tiré au hasard
+          S3_SECRET=ci-$(openssl rand -hex 16)
+          docker run -d --name s3 -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=kemdia-ci -e MINIO_ROOT_PASSWORD="$S3_SECRET" \
+            minio/minio:RELEASE.2025-04-22T22-12-26Z server /data >/dev/null
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:9000/minio/health/live && break; sleep 1; done
+
+          compose() { sudo docker compose --env-file /opt/kemdia/state/production.env -f /opt/kemdia/app/compose.yml "$@"; }
+          sql() { docker exec kemdia-production-db psql -U kemdia -d kemdia -v ON_ERROR_STOP=1 -Atc "$1"; }
+          # Empreinte de la base : nombre de lignes et somme MD5 du contenu de chaque table
+          fingerprint() {
+            local t
+            for t in $(sql "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY 1"); do
+              sql "SELECT '$t', count(*), md5(coalesce(string_agg(x::text, '|' ORDER BY x::text), '')) FROM \"$t\" x"
+            done
+          }
+
+          # Base remplie : catalogue de démonstration (112 catégories, 50 produits avec photos) importé par l'image de l'API
+          compose --profile migrations run --rm --no-deps migrate node --input-type=module -e \
+            "const m = await import(process.cwd() + '/dist/database/demo-import.js'); process.exitCode = await m.runDemoImport({ env: process.env, allowedEnvs: ['production'] });"
+          before=$(fingerprint)
+          rows=$(echo "$before" | awk -F'|' '{ s += $2 } END { print s }')
+          [ "$rows" -gt 150 ] || { echo "::error::base de test trop vide ($rows lignes)"; exit 1; }
+
+          # Mise en place comme sur le serveur : init (mot de passe + dépôts), puis la sauvegarde de la nuit
+          printf 'RESTIC_S3_REPOSITORY=s3:http://127.0.0.1:9000/kemdia-sauvegardes\nAWS_ACCESS_KEY_ID=kemdia-ci\nAWS_SECRET_ACCESS_KEY=%s\nAWS_DEFAULT_REGION=us-east-1\n' \
+            "$S3_SECRET" | sudo tee /opt/kemdia/secrets/backup-s3.env >/dev/null
+          sudo chmod 600 /opt/kemdia/secrets/backup-s3.env
+          sudo /opt/kemdia/bin/backup.sh init
+          [ "$(sudo stat -c '%a %U' /opt/kemdia/secrets/backup.password)" = "600 root" ]
+          [ "$(sudo stat -c '%a %U' /var/backups/kemdia)" = "700 root" ]
+          sudo /opt/kemdia/bin/backup.sh
+          sudo grep -qx 'resultat=ok' /opt/kemdia/state/backup.last
+          [ "$(sudo /opt/kemdia/bin/restore.sh liste --s3 | grep -c 'kemdia')" -ge 2 ] \
+            || { echo "::error::la copie S3 ne contient pas les sauvegardes"; exit 1; }
+
+          # Chiffrement : rien de lisible dans les dépôts ; un mauvais mot de passe n'ouvre rien
+          if sudo grep -rqa "_prisma_migrations" /var/backups/kemdia; then
+            echo "::error::donnée en clair dans le dépôt local"; exit 1
+          fi
+          if sudo RESTIC_PASSWORD=faux restic -r /var/backups/kemdia snapshots >/dev/null 2>&1; then
+            echo "::error::dépôt ouvert avec un mauvais mot de passe"; exit 1
+          fi
+          # Le mot de passe des sauvegardes et l'accès S3 ne sont pas dans les sauvegardes ; les clés de l'API, si
+          sudo /opt/kemdia/bin/restore.sh fichiers /root/kemdia-restaure
+          sudo test -f /root/kemdia-restaure/opt/kemdia/secrets/production.api.env
+          if sudo test -e /root/kemdia-restaure/opt/kemdia/secrets/backup.password \
+            || sudo test -e /root/kemdia-restaure/opt/kemdia/secrets/backup-s3.env; then
+            echo "::error::le mot de passe des sauvegardes ou l'accès S3 est dans la sauvegarde"; exit 1
+          fi
+          sudo cmp /root/kemdia-restaure/opt/kemdia/secrets/production.api.env /opt/kemdia/secrets/production.api.env
+
+          # Vérification hebdomadaire (base temporaire, la base en service n'est pas touchée)
+          sudo /opt/kemdia/bin/restore.sh verifier production
+          [ "$(fingerprint)" = "$before" ]
+
+          # Perte du serveur : base (volume) ET dépôt local effacés ; il ne reste que S3 et le mot de passe
+          compose down -v
+          sudo rm -rf /var/backups/kemdia /var/cache/kemdia-restic
+          if sudo /opt/kemdia/bin/restore.sh remplacer production latest --s3 2>/dev/null; then
+            echo "::error::remplacement accepté sans --confirmer"; exit 1
+          fi
+          sudo /opt/kemdia/bin/restore.sh remplacer production latest --confirmer production --s3
+          after=$(fingerprint)
+          if [ "$after" != "$before" ]; then
+            echo "::error::contenu restauré différent"; diff <(echo "$before") <(echo "$after") || true; exit 1
+          fi
+          curl -fsSk --max-time 10 https://localhost/api/health | grep -q '"version":"ci-v1"'
+          docker exec kemdia-production-api wget -qO- http://127.0.0.1:4000/api/health | grep -q '"database":"ok"'
+          curl -fsSk https://localhost/ | grep -q "Kemdia"
+          echo "✅ $(echo "$before" | wc -l) tables, $rows lignes : sauvegardées, chiffrées, copiées sur S3, restaurées à l'identique"
+
       - name: Journaux en cas d'échec
         if: failure()
         run: |
           sudo cat /opt/kemdia/deploy.log || true
           sudo docker compose --env-file /opt/kemdia/state/production.env -f /opt/kemdia/app/compose.yml logs --tail 80 || true
           (cd /opt/kemdia/proxy && sudo docker compose logs --tail 40) || true
+          sudo cat /opt/kemdia/state/backup.last /opt/kemdia/state/restore-check.last 2>/dev/null || true
+          docker logs --tail 40 s3 2>/dev/null || true
 
   deploy-staging:
     name: Déploiement STAGING

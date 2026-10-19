@@ -1,0 +1,14 @@
+# Sauvegarde chiffrée de Kemdia (S7-T05, ADR-0044) — lancée par kemdia-backup.timer
+[Unit]
+Description=Kemdia — sauvegarde chiffrée (bases et secrets)
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/kemdia/bin/backup.sh
+Nice=10
+IOSchedulingClass=idle
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=true

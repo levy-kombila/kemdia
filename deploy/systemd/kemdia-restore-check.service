@@ -1,0 +1,14 @@
+# Vérification hebdomadaire : la dernière sauvegarde se restaure-t-elle ? (S7-T05, ADR-0044)
+[Unit]
+Description=Kemdia — vérification de restauration des sauvegardes
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/kemdia/bin/restore.sh verifier
+Nice=10
+IOSchedulingClass=idle
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=true
