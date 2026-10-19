@@ -158,7 +158,8 @@ jobs:
   e2e:
     name: Bout en bout et performance (site + API + PostgreSQL)
     runs-on: ubuntu-latest
-    needs: [changes, quality]
+    # S7.5-T01 : démarre tout de suite, sans attendre « Lint · Types · Tests · Build » (gain ~5 min)
+    needs: changes
     if: needs.changes.outputs.code == 'true'
     timeout-minutes: 30
     # Le site lit la VRAIE API (S3-T05) : base éphémère, détruite à la fin du job
@@ -288,8 +289,10 @@ jobs:
   image:
     name: Image Docker (build · scan · publication)
     runs-on: ubuntu-latest
-    # Aucune image n'est construite ni publiée si un parcours client est cassé
-    needs: [quality, e2e, database]
+    # S7.5-T01 : construite et scannée EN MÊME TEMPS que les tests ; rien n'est DÉPLOYÉ (staging, démo) si un job est
+    # rouge (needs des déploiements), et la production refuse un commit dont la CI n'est pas verte (release.yml)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     timeout-minutes: 25
     permissions:
       contents: read
@@ -427,7 +430,8 @@ jobs:
   image-api:
     name: Image Docker de l'API (build · scan · migrations · publication)
     runs-on: ubuntu-latest
-    needs: [quality, database]
+    needs: changes # S7.5-T01 : en même temps que les tests (voir le job « image »)
+    if: needs.changes.outputs.code == 'true'
     timeout-minutes: 25
     permissions:
       contents: read
@@ -656,7 +660,7 @@ jobs:
   server-stack:
     name: Pile serveur (Caddy · site · API · PostgreSQL)
     runs-on: ubuntu-latest
-    needs: [changes, quality]
+    needs: changes # S7.5-T01 : sans attendre « Lint · Types · Tests · Build »
     if: needs.changes.outputs.code == 'true'
     timeout-minutes: 30
     permissions:
@@ -933,7 +937,8 @@ jobs:
 
   deploy-staging:
     name: Déploiement STAGING
-    needs: [image, image-api]
+    # S7.5-T01 : déployé seulement si TOUT est vert (qualité, base, bout en bout, pile serveur, images)
+    needs: [quality, database, e2e, server-stack, image, image-api]
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     concurrency:
       group: deploy-staging
@@ -955,7 +960,8 @@ jobs:
   # (voir docs/guides/demo-gratuite.md).
   deploy-demo:
     name: Déploiement DÉMO (Render)
-    needs: [image, image-api]
+    # S7.5-T01 : déployé seulement si TOUT est vert (qualité, base, bout en bout, pile serveur, images)
+    needs: [quality, database, e2e, server-stack, image, image-api]
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 40

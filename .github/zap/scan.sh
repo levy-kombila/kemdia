@@ -4,9 +4,9 @@
 #
 #   .github/zap/scan.sh <passif|actif> <site|api> <url> <dossier des rapports>
 #
-# Lance ZAP (déjà installé dans $ZAP_DIR) une fois par rôle : anonyme, client, vendeur, équipe. Les jetons des
-# sessions de test sont lus dans $ZAP_TOKENS_FILE (« rôle=jeton », hors du dépôt) et passés à ZAP par ses variables
-# d'environnement : ni dans le plan, ni dans les rapports, ni dans la liste des processus de la CI.
+# Lance ZAP (déjà installé dans $ZAP_DIR) une fois par rôle : anonyme, client, vendeur, équipe (en même temps pour le
+# scan passif). Les jetons des sessions de test sont lus dans $ZAP_TOKENS_FILE (« rôle=jeton », hors du dépôt) et
+# passés à ZAP par ses variables d'environnement : ni dans le plan, ni dans les rapports, ni dans la liste des processus de la CI.
 # Résumé dans $GITHUB_STEP_SUMMARY ; une annotation par alerte moyenne ou élevée ; code 1 si l'une d'elles existe.
 # =============================================================================
 set -Eeuo pipefail
@@ -28,21 +28,26 @@ host=$(sed -E 's#^https?://([^/:]+).*#\1#' <<<"$URL")
 
 token_of() { sed -n "s/^$1=//p" "$ZAP_TOKENS_FILE"; }
 
-status=0
-for role in anonyme client vendeur equipe; do
-  echo "::group::ZAP $MODE — $CIBLE — $role"
+ROLES=(anonyme client vendeur equipe)
+for role in "${ROLES[@]:1}"; do
+  [[ -n $(token_of "$role") ]] || {
+    echo "::error::jeton de test absent pour $role"
+    exit 1
+  }
+done
+
+# Un passage de ZAP pour un rôle. Port du proxy propre à chaque passage (ZAP l'ouvre même en ligne de commande) et
+# dossier de travail neuf (ZAP garde sinon ses réglages d'un passage à l'autre).
+run_role() {
+  local role=$1 port=$2 plan home token
   plan=$(mktemp --suffix=.yaml)
-  args=(--mode "$MODE" --cible "$CIBLE" --role "$role" --url "$URL" --rapports "$OUT")
+  local args=(--mode "$MODE" --cible "$CIBLE" --role "$role" --url "$URL" --rapports "$OUT")
   [[ $CIBLE == api ]] && args+=(--openapi "$ROOT/docs/api/openapi.json")
   python3 "$HERE/plan.py" "${args[@]}" >"$plan"
 
-  auth=()
+  local auth=()
   if [[ $role != anonyme ]]; then
     token=$(token_of "$role")
-    [[ -n $token ]] || {
-      echo "::error::jeton de test absent pour $role"
-      exit 1
-    }
     if [[ $CIBLE == site ]]; then
       auth=(ZAP_AUTH_HEADER=Cookie "ZAP_AUTH_HEADER_VALUE=__Host-kemdia_session=$token")
     else
@@ -51,14 +56,35 @@ for role in anonyme client vendeur equipe; do
     auth+=("ZAP_AUTH_HEADER_SITE=$host")
   fi
 
-  # Dossier de travail neuf à chaque passage : ZAP garde sinon ses réglages d'un passage à l'autre
   home=$(mktemp -d)
-  set +e
-  env "${auth[@]}" "$ZAP_DIR/zap.sh" -cmd -silent -dir "$home" -autorun "$plan" >"$OUT/zap-$CIBLE-$role.log" 2>&1
-  code=$?
-  set -e
+  local code=0
+  env "${auth[@]}" "$ZAP_DIR/zap.sh" -cmd -silent -port "$port" -dir "$home" -autorun "$plan" \
+    >"$OUT/zap-$CIBLE-$role.log" 2>&1 || code=$?
   rm -rf "$home" "$plan"
-  echo "code de sortie de ZAP : $code"
+  echo "$code" >"$OUT/zap-$CIBLE-$role.code"
+}
+
+# Scan passif (chaque PR) : les 4 rôles EN MÊME TEMPS (S7.5-T01) — l'exploration de chacun dure jusqu'à 3 min, et
+# les rapports restent séparés. Scan actif (dimanche) : un rôle après l'autre, pour ne pas surcharger la pile.
+port=8091
+if [[ $MODE == passif ]]; then
+  pids=()
+  for role in "${ROLES[@]}"; do
+    run_role "$role" "$port" &
+    pids+=($!)
+    port=$((port + 1))
+  done
+  for pid in "${pids[@]}"; do wait "$pid" || true; done
+else
+  for role in "${ROLES[@]}"; do
+    run_role "$role" "$port" || true
+  done
+fi
+
+status=0
+for role in "${ROLES[@]}"; do
+  echo "::group::ZAP $MODE — $CIBLE — $role"
+  echo "code de sortie de ZAP : $(cat "$OUT/zap-$CIBLE-$role.code" 2>/dev/null || echo inconnu)"
   tail -n 15 "$OUT/zap-$CIBLE-$role.log"
   echo "::endgroup::"
 
