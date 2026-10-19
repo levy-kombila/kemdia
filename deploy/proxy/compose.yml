@@ -4,7 +4,8 @@ name: kemdia-proxy
 
 services:
   caddy:
-    image: caddy:2-alpine
+    # Épinglée par digest (mise à jour par Dependabot, écosystème docker-compose)
+    image: caddy:2-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
     container_name: kemdia-caddy
     restart: unless-stopped
     ports:
@@ -23,12 +24,17 @@ services:
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "5" }
-    networks: [edge]
+    # Un réseau d'entrée par environnement (S7-T04) : Caddy rejoint les deux, les sites ne se voient pas
+    networks: [edge-production, edge-staging]
 
 volumes:
   caddy_data:
   caddy_config:
 
 networks:
-  edge:
+  edge-production:
     external: true
+    name: kemdia-edge-production
+  edge-staging:
+    external: true
+    name: kemdia-edge-staging

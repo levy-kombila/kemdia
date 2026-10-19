@@ -37,6 +37,7 @@ die() {
 set -f # pas d'expansion de jokers (*, ?) dans les arguments reçus
 # shellcheck disable=SC2086
 set -- ${SSH_ORIGINAL_COMMAND:-$*}
+set +f # arguments découpés : jokers de nouveau permis (ménage des images, étape 4)
 ENVNAME=${1:-}
 [[ $ENVNAME =~ ^(staging|production)$ ]] || die "environnement invalide"
 
@@ -69,6 +70,9 @@ exec 9>"$STATE_DIR/$ENVNAME.lock"
 flock -n 9 || die "un déploiement $ENVNAME est déjà en cours"
 
 STATE="$STATE_DIR/$ENVNAME.env"
+# Dernière version qui a TOURNÉ et été saine (relecture S7-T04) : le retour arrière vise toujours une version réelle,
+# même si un déploiement a été interrompu (coupure SSH) ou si la même version est redéployée
+GOOD="$STATE_DIR/$ENVNAME.good.env"
 PREVIOUS="$STATE_DIR/$ENVNAME.previous.env"
 
 compose() { docker compose --env-file "$STATE" -f "$COMPOSE_FILE" "$@"; }
@@ -78,7 +82,7 @@ up() { compose up -d --no-build --pull never --wait --wait-timeout 180 db api we
 # (règle du projet : migrations d'ajout) : un retour arrière ne les défait pas et n'en a pas besoin.
 migrate() {
   # PostgreSQL : image officielle, téléchargée seulement si absente (premier déploiement, nouvelle version mineure)
-  compose up -d --no-build --pull missing --wait --wait-timeout 120 db
+  compose up -d --no-build --pull missing --wait --wait-timeout 120 db || return 1
   compose --profile migrations run --rm --no-deps migrate
 }
 
@@ -88,7 +92,11 @@ if [[ $MODE == rollback ]]; then
   cp "$STATE" "$STATE.failed" 2>/dev/null || true
   cp "$PREVIOUS" "$STATE"
   log "↩️  retour arrière demandé : $(grep APP_VERSION "$STATE")"
-  up && log "✅ version précédente rétablie" && exit 0
+  if up; then
+    cp "$STATE" "$GOOD"
+    log "✅ version précédente rétablie"
+    exit 0
+  fi
   die "le retour arrière a échoué"
 fi
 
@@ -114,28 +122,41 @@ write_state() { # write_state <site> <api> <version>
   mv "$STATE.tmp" "$STATE"
 }
 
-[[ -f $STATE ]] && cp "$STATE" "$PREVIOUS"
+# L'état redevient la dernière version saine (premier déploiement : aucun état)
+restore_good() { if [[ -f $GOOD ]]; then cp "$GOOD" "$STATE"; else rm -f "$STATE"; fi; }
+
 write_state "$WEB_IMAGE" "$API_IMAGE" "$VERSION"
+# Version précédente = dernière version saine, si elle est différente de celle qu'on déploie
+if [[ -f $GOOD ]] && ! cmp -s "$GOOD" "$STATE"; then cp "$GOOD" "$PREVIOUS"; fi
 
 if ! migrate; then
   log "❌ migrations refusées : rien n'a basculé"
-  # L'état redevient celui d'avant (premier déploiement : aucun état)
-  if [[ -f $PREVIOUS ]]; then cp "$PREVIOUS" "$STATE"; else rm -f "$STATE"; fi
+  restore_good
   exit 1
 fi
 log "migrations appliquées"
 
 if up; then
+  cp "$STATE" "$GOOD"
   log "✅ $VERSION en ligne (site et API sains)"
 else
   log "❌ le site ou l'API n'est pas sain"
-  if [[ -f $PREVIOUS ]]; then
-    log "↩️  retour à la version précédente"
-    cp "$PREVIOUS" "$STATE"
+  if [[ -f $GOOD ]]; then
+    log "↩️  retour à la dernière version saine"
+    restore_good
     up || log "ATTENTION : le retour arrière a aussi échoué, intervention manuelle requise"
+  else
+    restore_good
   fi
   exit 1
 fi
 
-# --- 4. Ménage : images de plus de 14 jours non utilisées ---------------------
-docker image prune -af --filter "until=336h" >/dev/null 2>&1 || true
+# --- 4. Ménage : nos images que plus aucun état ne cite (relecture S7-T04 : jamais celles de la version en ligne
+# ni de la précédente, dans aucun des deux environnements — sinon le retour arrière ne pourrait plus démarrer)
+KEEP=$(sed -n 's/^KEMDIA_\(API_\)\{0,1\}IMAGE=//p' "$STATE_DIR"/*.env 2>/dev/null | sort -u)
+docker image ls --digests --format '{{.Repository}}@{{.Digest}}' |
+  grep -E "^${REG_RE}/(web|api)@sha256:[a-f0-9]{64}$" |
+  while IFS= read -r ref; do
+    grep -qxF "$ref" <<<"$KEEP" || docker image rm "$ref" >/dev/null 2>&1 || true
+  done
+docker image prune -f >/dev/null 2>&1 || true

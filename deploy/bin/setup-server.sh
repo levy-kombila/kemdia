@@ -104,7 +104,10 @@ kemdia_files() { # kemdia_files <utilisateur> <groupe> : qui lance deploy.sh (de
   printf 'REGISTRY=%s\n' "$IMAGE_REPO" >"$ROOT/deploy.conf"
   chmod 644 "$ROOT/deploy.conf"
   touch "$ROOT/deploy.log" && chown "$user:$group" "$ROOT/deploy.log"
-  docker network inspect edge >/dev/null 2>&1 || docker network create edge >/dev/null
+  local env
+  for env in production staging; do
+    docker network inspect "kemdia-edge-$env" >/dev/null 2>&1 || docker network create "kemdia-edge-$env" >/dev/null
+  done
 }
 
 ssh_hardening() {
@@ -172,6 +175,11 @@ F2B
 }
 
 if $FILES_ONLY; then
+  # Garde-fou (relecture S7-T04) : sur un vrai serveur, cette option rendrait l'état à root et casserait deploy.sh
+  if [[ ${GITHUB_ACTIONS:-} != true ]] || id deploy >/dev/null 2>&1; then
+    echo "--fichiers-seulement est réservé au test de la CI (GitHub Actions, sans compte deploy)" >&2
+    exit 1
+  fi
   kemdia_files root "${KEMDIA_GROUP:-deploy}"
   echo "✅ Fichiers installés (aucun durcissement : --fichiers-seulement)."
   exit 0

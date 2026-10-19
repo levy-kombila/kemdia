@@ -52,26 +52,31 @@ NOW=$(date -u +%FT%TZ)
 
 install -d -m 750 -o root -g "$GROUP" "$DIR"
 
-write() { # write <fichier> : contenu sur l'entrée standard, droits posés AVANT d'écrire
-  local file=$1 tmp
+# Les trois fichiers sont d'abord écrits à part (umask 077 : jamais lisibles par d'autres), puis mis en place
+# ensemble : une erreur au milieu ne laisse pas un mot de passe de base sans le fichier de l'API qui va avec.
+TMPS=()
+cleanup() { [[ ${#TMPS[@]} -eq 0 ]] || rm -f "${TMPS[@]}"; }
+trap cleanup EXIT
+stage() { # stage <variable> : contenu sur l'entrée standard ; chemin du fichier temporaire dans <variable>
+  local tmp
   tmp=$(mktemp "$DIR/.tmp.XXXXXX")
+  TMPS+=("$tmp")
   cat >"$tmp"
   chown "root:$GROUP" "$tmp"
   chmod 640 "$tmp"
-  mv -n "$tmp" "$file" || true
-  [[ -e $tmp ]] && { rm -f "$tmp"; die "$file est apparu pendant l'écriture : rien n'est remplacé"; }
-  return 0
+  printf -v "$1" '%s' "$tmp"
 }
 
-write "$DB_FILE" <<EOF
+stage DB_TMP <<SECRETS
 # Kemdia $ENVNAME — PostgreSQL. Généré le $NOW par init-secrets.sh. Ne jamais copier dans Git ni dans un message.
 POSTGRES_PASSWORD=$DB_PASSWORD
-EOF
+SECRETS
 
-write "$API_FILE" <<EOF
+stage API_TMP <<SECRETS
 # Kemdia $ENVNAME — API. Généré le $NOW par init-secrets.sh. Ne jamais copier dans Git ni dans un message.
 # Garder une copie de TOTP_ENCRYPTION_KEY et KYC_ENCRYPTION_KEY dans un gestionnaire de mots de passe :
 # perdues, les doubles authentifications et les dossiers des vendeurs deviennent illisibles.
+# Valeur ajoutée à la main contenant « \$ » : l'écrire « \$\$ » (docker compose lit ce fichier et interprète « \$ »).
 DATABASE_URL=postgresql://kemdia:$DB_PASSWORD@db:5432/kemdia
 API_INTERNAL_KEY=$INTERNAL_KEY
 TOTP_ENCRYPTION_KEY=$TOTP_KEY
@@ -81,13 +86,19 @@ LOG_LEVEL=info
 # E-mails : « none » tant que Brevo n'est pas configuré. Pour l'activer : EMAIL_TRANSPORT=brevo, BREVO_API_KEY et
 # EMAIL_FROM (adresse vérifiée dans Brevo), puis redéployer.
 EMAIL_TRANSPORT=none
-EOF
+SECRETS
 
-write "$WEB_FILE" <<EOF
+stage WEB_TMP <<SECRETS
 # Kemdia $ENVNAME — site. Généré le $NOW par init-secrets.sh. Ne jamais copier dans Git ni dans un message.
 API_INTERNAL_KEY=$INTERNAL_KEY
 SITE_URL=https://$DOMAIN
-EOF
+SECRETS
+
+for pair in "$DB_TMP:$DB_FILE" "$API_TMP:$API_FILE" "$WEB_TMP:$WEB_FILE"; do
+  mv -n "${pair%%:*}" "${pair#*:}" || true
+  [[ -e ${pair%%:*} ]] && die "${pair#*:} est apparu pendant l'écriture : rien n'est remplacé"
+done
+TMPS=()
 
 printf "✅ Secrets de %s écrits dans %s (db, api, web — 0640 root:%s). Aucun n'a été affiché.\n" \
   "$ENVNAME" "$DIR" "$GROUP"

@@ -698,7 +698,7 @@ jobs:
 
       - name: Fichiers du serveur, secrets et Caddy (comme sur le VPS)
         run: |
-          sudo IMAGE_REPO="$REPO" KEMDIA_GROUP=docker bash deploy/bin/setup-server.sh --fichiers-seulement
+          sudo GITHUB_ACTIONS=true IMAGE_REPO="$REPO" KEMDIA_GROUP=docker bash deploy/bin/setup-server.sh --fichiers-seulement
           sudo KEMDIA_SECRETS_GROUP=docker /opt/kemdia/bin/init-secrets.sh production localhost
           # Un second passage ne remplace RIEN (une clé perdue rend des données illisibles)
           before=$(sudo sha256sum /opt/kemdia/secrets/production.api.env)

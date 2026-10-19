@@ -4,8 +4,9 @@
 #   Variables d'interpolation : /opt/kemdia/state/<env>.env, écrit par deploy.sh (environnement, images, version).
 #   Secrets : /opt/kemdia/secrets/<env>.{db,api,web}.env, écrits UNE fois par init-secrets.sh (jamais dans Git).
 #
-# Réseaux (aucun port publié : seul Caddy, sur « edge », reçoit Internet) :
-#   edge     Caddy ↔ site                       (partagé, externe)
+# Réseaux (aucun port publié : seul Caddy reçoit Internet) :
+#   edge     Caddy ↔ site — un réseau PAR environnement (kemdia-edge-<env>, créé par setup-server.sh) : un site de
+#            préproduction compromis ne peut pas joindre directement le site de production (relecture S7-T04)
 #   app      site ↔ API ; sortie Internet de l'API (Brevo, plus tard Mobile Money)
 #   private  API ↔ PostgreSQL, SANS sortie (internal) : le site ne voit jamais la base
 # Les réseaux « app » et « private » sont propres à chaque environnement (préfixe kemdia-<env>_) :
@@ -23,7 +24,8 @@ x-durci: &durci
 services:
   db:
     <<: *durci
-    image: postgres:18-alpine
+    # Épinglée par digest (mise à jour par Dependabot, écosystème docker-compose)
+    image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
     container_name: kemdia-${KEMDIA_ENV}-db
     env_file: /opt/kemdia/secrets/${KEMDIA_ENV}.db.env
     environment:
@@ -33,8 +35,8 @@ services:
       POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
     volumes:
       - db_data:/var/lib/postgresql
-    # Lecture seule hors des données ; seuls les droits dont l'entrée de PostgreSQL a besoin (propriétaire des
-    # fichiers, puis passage à l'utilisateur postgres)
+    # Lecture seule hors des données ; seuls les droits dont l'entrée de PostgreSQL a besoin : créer et attribuer le
+    # dossier des données à postgres (CHOWN, FOWNER, DAC_OVERRIDE), puis passer à cet utilisateur (SETUID, SETGID)
     read_only: true
     tmpfs:
       - /tmp
@@ -123,6 +125,7 @@ volumes:
 networks:
   edge:
     external: true
+    name: kemdia-edge-${KEMDIA_ENV}
   app: {}
   private:
     internal: true
