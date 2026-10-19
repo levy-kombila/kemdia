@@ -26,8 +26,14 @@ export async function GET(request: Request) {
   const headers = { "Cache-Control": "no-store" };
   if (!new URL(request.url).searchParams.has("complet")) return Response.json(base, { headers });
 
-  deepHealth ??= createDeepHealth({ url: catalogSource().url });
-  const deep = await deepHealth();
+  let deep: Awaited<ReturnType<NonNullable<typeof deepHealth>>>;
+  try {
+    deepHealth ??= createDeepHealth({ url: catalogSource().url });
+    deep = await deepHealth();
+  } catch {
+    // Adresse de l'API absente ou invalide : le site ne peut pas joindre l'API (détail dans le journal de démarrage)
+    deep = { status: "degrade", checks: { api: "indisponible", database: "inconnue" } };
+  }
   return Response.json(
     { ...base, status: deep.status, checks: deep.checks },
     { status: deep.status === "ok" ? 200 : 503, headers },
