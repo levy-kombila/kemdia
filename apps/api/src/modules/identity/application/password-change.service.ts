@@ -87,12 +87,13 @@ export class PasswordChangeService {
 
     const account = await this.accounts.findById(accountId);
     if (!account || !account.isActive()) throw invalidSession();
-    // Mot de passe trop long : forcément faux, inutile de le hacher (comme la connexion)
-    const currentOk =
-      input.currentPassword.length > 0 &&
-      input.currentPassword.length <= PASSWORD_MAX_LENGTH &&
-      (await this.hasher.verify(account.passwordHash, input.currentPassword));
-    if (!currentOk) return this.fail(input, now, guard.attempts);
+    // Vide ou trop long : forcément faux, inutile de le hacher (comme la connexion) — c'est un essai perdu
+    const length = input.currentPassword.length;
+    if (length === 0 || length > PASSWORD_MAX_LENGTH) return this.fail(input, now, guard.attempts);
+    // La décision ne dépend QUE de la vérification Argon2id (CodeQL js/user-controlled-bypass, S7-T07)
+    if (!(await this.hasher.verify(account.passwordHash, input.currentPassword))) {
+      return this.fail(input, now, guard.attempts);
+    }
 
     await this.guards.reset(guardKey(accountId), now);
     const expectedVersion = account.passwordVersion;
