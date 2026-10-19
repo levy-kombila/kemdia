@@ -37,6 +37,8 @@ jobs:
     outputs:
       image: ${{ steps.ref.outputs.image }}
       digest: ${{ steps.ref.outputs.digest }}
+      api-image: ${{ steps.ref.outputs.api_image }}
+      api-digest: ${{ steps.ref.outputs.api_digest }}
       version: ${{ steps.ref.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -56,6 +58,7 @@ jobs:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
           image="ghcr.io/${GITHUB_REPOSITORY,,}/web"
+          api="ghcr.io/${GITHUB_REPOSITORY,,}/api"
           if [ "$GITHUB_EVENT_NAME" = "push" ]; then
             version="$GITHUB_REF_NAME"
             [[ $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Tag invalide : $version"; exit 1; }
@@ -70,7 +73,6 @@ jobs:
             done
             docker buildx imagetools create -t "$image:$version" -t "$image:latest" "$src"
             # Image de l'API (S3-T06), construite et vérifiée par la même CI : même version pour les deux
-            api="ghcr.io/${GITHUB_REPOSITORY,,}/api"
             docker buildx imagetools inspect "$api:sha-$GITHUB_SHA" >/dev/null 2>&1 \
               || { echo "::error::Image de l'API introuvable pour ce commit : la CI de main a-t-elle réussi ?"; exit 1; }
             docker buildx imagetools create -t "$api:$version" -t "$api:latest" "$api:sha-$GITHUB_SHA"
@@ -80,8 +82,11 @@ jobs:
           fi
           digest=$(docker buildx imagetools inspect "$image:$version" --format '{{json .Manifest}}' | jq -r .digest)
           [[ $digest =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "::error::Digest introuvable pour $version"; exit 1; }
-          { echo "image=$image"; echo "digest=$digest"; echo "version=$version"; } >> "$GITHUB_OUTPUT"
-          echo "Image promue : $image:$version ($digest)"
+          # S7-T04 : l'API est déployée avec le site (même version)
+          api_digest=$(docker buildx imagetools inspect "$api:$version" --format '{{json .Manifest}}' | jq -r .digest)
+          [[ $api_digest =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "::error::Digest de l'API introuvable pour $version"; exit 1; }
+          { echo "image=$image"; echo "digest=$digest"; echo "api_image=$api"; echo "api_digest=$api_digest"; echo "version=$version"; } >> "$GITHUB_OUTPUT"
+          echo "Images promues : $image:$version ($digest), $api:$version ($api_digest)"
 
       - name: Créer la Release GitHub
         if: github.event_name == 'push'
@@ -99,6 +104,7 @@ jobs:
     with:
       environment: production
       image: ${{ needs.promote.outputs.image }}@${{ needs.promote.outputs.digest }}
+      api-image: ${{ needs.promote.outputs.api-image }}@${{ needs.promote.outputs.api-digest }}
       version: ${{ needs.promote.outputs.version }}
       url: ${{ vars.PRODUCTION_URL }}
     secrets: inherit

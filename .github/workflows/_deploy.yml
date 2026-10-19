@@ -1,5 +1,5 @@
 # =============================================================================
-# Workflow réutilisable : déploie une image (par digest) sur un environnement,
+# Workflow réutilisable : déploie le site et l'API (par digest) sur un environnement (S7-T04 : les deux),
 # vérifie qu'elle répond (test de fumée) et revient en arrière automatiquement sinon.
 # =============================================================================
 name: Déploiement (réutilisable)
@@ -8,7 +8,8 @@ on:
   workflow_call:
     inputs:
       environment: { type: string, required: true, description: "staging ou production" }
-      image: { type: string, required: true, description: "ghcr.io/...@sha256:..." }
+      image: { type: string, required: true, description: "site : ghcr.io/.../web@sha256:..." }
+      api-image: { type: string, required: true, description: "API : ghcr.io/.../api@sha256:..." }
       version: { type: string, required: true, description: "sha-<commit> ou vX.Y.Z" }
       url: { type: string, required: false, description: "URL publique à tester" }
 
@@ -26,6 +27,7 @@ jobs:
       SSH_USER: ${{ secrets.DEPLOY_SSH_USER || 'deploy' }}
       TARGET_ENV: ${{ inputs.environment }}
       IMAGE: ${{ inputs.image }}
+      API_IMAGE: ${{ inputs.api-image }}
       VERSION: ${{ inputs.version }}
       URL: ${{ inputs.url }}
     steps:
@@ -58,7 +60,7 @@ jobs:
           # Le jeton (éphémère, lecture seule) passe par l'entrée standard : jamais dans les logs ni sur le disque du serveur
           printf '%s\n%s\n' "${{ github.actor }}" "$REG_TOKEN" | \
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
-              "$SSH_USER@$SSH_HOST" "$TARGET_ENV $IMAGE $VERSION"
+              "$SSH_USER@$SSH_HOST" "$TARGET_ENV $IMAGE $API_IMAGE $VERSION"
 
       - name: Test de fumée
         if: steps.check.outputs.ready == 'true' && inputs.url != ''
@@ -82,7 +84,7 @@ jobs:
       - name: Retour arrière automatique
         if: failure() && steps.deploy.outcome == 'success'
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "$TARGET_ENV rollback -" < /dev/null
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "$TARGET_ENV rollback" < /dev/null
           echo "::warning::Le test de fumée a échoué : la version précédente a été rétablie sur $TARGET_ENV."
 
       - name: Résumé
@@ -92,7 +94,8 @@ jobs:
             echo "### Déploiement $TARGET_ENV"
             echo "| | |"; echo "|---|---|"
             echo "| Version | \`$VERSION\` |"
-            echo "| Image | \`$IMAGE\` |"
+            echo "| Site | \`$IMAGE\` |"
+            echo "| API | \`$API_IMAGE\` |"
             echo "| URL | ${URL:-—} |"
             echo "| Résultat | ${{ job.status }} |"
           } >> "$GITHUB_STEP_SUMMARY"

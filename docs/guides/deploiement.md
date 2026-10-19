@@ -30,13 +30,20 @@ flowchart LR
 | `.github/workflows/_deploy.yml`  | Déploiement réutilisable : SSH, test de fumée, retour arrière         |
 | `.github/workflows/security.yml` | Gitleaks, pnpm audit, Semgrep, ShellCheck (+ CodeQL si dépôt public)  |
 | `deploy/bin/setup-server.sh`     | Prépare et durcit un serveur neuf (une fois)                          |
+| `deploy/bin/init-secrets.sh`     | Tire les secrets d'un environnement sur le serveur (une fois, S7-T04) |
 | `deploy/bin/deploy.sh`           | Seule commande que la CI peut lancer sur le serveur                   |
-| `deploy/app/compose.yml`         | Conteneur Kemdia (lecture seule, sans privilèges)                     |
+| `deploy/app/compose.yml`         | Site + API + PostgreSQL (lecture seule, sans privilèges, S7-T04)      |
 | `deploy/proxy/`                  | Caddy : HTTPS Let's Encrypt, staging protégé par mot de passe         |
 
-> **API (S3-T06)** : son image (`ghcr.io/<compte>/kemdia/api`) est construite, vérifiée et publiée par la même CI,
-> puis re-étiquetée avec le site à chaque release. Elle **n'est pas encore déployée** sur le serveur (base de production au S7) :
-> le serveur ne fait tourner que le site. Voir [§3.8 du cahier](../architecture/cahier-architecture.md#38-image-docker-de-lapi-s3-t06).
+> **S7-T04 (ADR-0043)** : le serveur fait tourner, par environnement (staging, production), le **site**, l'**API** et
+> **PostgreSQL 18**, chacun dans son conteneur durci. Les deux images (site et API) sont déployées ensemble, par digest,
+> avec les migrations de la base **avant** la bascule. Chaque environnement a sa base et ses réseaux : la préproduction ne
+> peut pas toucher les données réelles. La CI monte toute cette pile à chaque PR (job « Pile serveur »).
+
+```
+Internet ─► Caddy (80/443) ─► site ──(réseau app)──► API ──(réseau private, sans Internet)──► PostgreSQL
+                              aucun port publié en dehors de Caddy ; le site ne voit jamais la base
+```
 
 ## 2. Ce qu'il vous faut
 
@@ -76,13 +83,32 @@ Puis, **sur le serveur** (remplacez les clés par le contenu de `kemdia_admin.pu
 ADMIN_USER=levy \
 ADMIN_PUBKEY="ssh-ed25519 AAAA... levy-admin" \
 CI_PUBKEY="ssh-ed25519 AAAA... github-actions-kemdia" \
+IMAGE_REPO=ghcr.io/levy-kombila/kemdia \
   bash /root/kemdia-deploy/bin/setup-server.sh
 passwd levy   # mot de passe pour sudo
 ```
 
+Puis, **une fois par environnement**, les secrets (tirés au hasard sur le serveur, jamais affichés, jamais dans Git
+ni dans GitHub) :
+
+```bash
+sudo /opt/kemdia/bin/init-secrets.sh production kemdia.ga
+sudo /opt/kemdia/bin/init-secrets.sh staging staging.kemdia.ga
+```
+
+Ils sont écrits dans `/opt/kemdia/secrets/<env>.{db,api,web}.env` (0640, root et le groupe `deploy`). Le site ne reçoit
+que la clé interne et son adresse ; seule l'API a les clés de chiffrement et l'adresse de la base. **Copie
+`TOTP_ENCRYPTION_KEY` et `KYC_ENCRYPTION_KEY` dans ton gestionnaire de mots de passe** : perdues, les doubles
+authentifications et les dossiers des vendeurs deviennent illisibles. Le script refuse de remplacer un fichier existant.
+
+**E-mails** : `EMAIL_TRANSPORT=none` au départ. Pour envoyer avec Brevo, ouvre `sudo nano /opt/kemdia/secrets/<env>.api.env`,
+mets `EMAIL_TRANSPORT=brevo`, `BREVO_API_KEY=…` et `EMAIL_FROM=…` (adresse vérifiée dans Brevo), puis redéploie.
+
 Le script : met à jour le système (et active les mises à jour de sécurité automatiques), installe Docker,
 crée l'administrateur `levy` et l'utilisateur `deploy` (clé CI restreinte à `deploy.sh`),
-interdit la connexion root et par mot de passe, ouvre uniquement les ports 22/80/443, active Fail2ban.
+interdit la connexion root et par mot de passe, ouvre uniquement les ports 22/80/443, active Fail2ban,
+redémarre la nuit (03:30) seulement quand un correctif l'exige, pose des réglages réseau prudents du noyau, et
+déclare le **seul dépôt d'images** que `deploy.sh` acceptera (`/opt/kemdia/deploy.conf`, propriété de root).
 
 ⚠️ **Avant de fermer la session root**, vérifiez dans un autre terminal : `ssh -i $HOME\.ssh\kemdia_admin levy@IP`.
 
@@ -140,9 +166,11 @@ Tant que `DEPLOY_SSH_HOST` n'est pas défini, l'étape de déploiement est simpl
 Fusionnez une PR dans `main` (ou _Actions → CI/CD → Run workflow_ sur `main`). Le pipeline :
 
 1. vérifie le code (format, lint, types, 37 tests, build) ;
-2. construit l'image, la scanne avec Trivy, la publie sur `ghcr.io/levy-kombila/kemdia/web:sha-<commit>` ;
-3. se connecte au serveur avec la clé restreinte, déploie **par digest** ;
-4. attend que le conteneur soit sain, vérifie `/api/health` (bonne version), la page d'accueil et les en-têtes de sécurité ;
+2. construit les images du site et de l'API, les scanne avec Trivy, les publie sur
+   `ghcr.io/levy-kombila/kemdia/{web,api}:sha-<commit>` ;
+3. se connecte au serveur avec la clé restreinte, déploie les deux **par digest** : base démarrée, **migrations** avec la
+   nouvelle API, puis bascule de l'API et du site ;
+4. attend que tout soit sain, vérifie `/api/health` (bonne version), la page d'accueil et les en-têtes de sécurité ;
 5. en cas d'échec : revient automatiquement à la version précédente.
 
 Ouvrez <https://staging.kemdia.ga> (identifiants de l'étape 5) et testez.
@@ -162,8 +190,9 @@ Le workflow **Release** vérifie que le tag est sur `main`, réutilise **exactem
 (site et API, re-étiquetées `v0.1.0`, sans reconstruction), crée la Release GitHub avec les notes de version,
 déploie en production et lance le test de fumée.
 
-> ⚠️ Depuis le S3-T05, le site refuse de démarrer en production sans `API_URL`. **Ne pas publier de version**
-> tant que l'API n'est pas installée sur le serveur (S7) : le retour arrière automatique remettrait l'ancienne version.
+> Depuis le S7-T04, l'API et la base sont déployées avec le site : la réserve « ne pas publier de version tant que l'API
+> n'est pas sur le serveur » est levée. Avant la vraie ouverture : sauvegardes chiffrées testées (S7-T05) et
+> surveillance (S7-T06).
 
 > Seul le propriétaire du dépôt peut déclencher la production.
 > Avec GitHub Pro/Team, on peut en plus exiger une approbation manuelle via un _Environment_ « production » (voir §11).
@@ -172,7 +201,9 @@ déploie en production et lance le test de fumée.
 
 - **Automatique** : si le conteneur n'est pas sain ou si le test de fumée échoue.
 - **Manuel** : _Actions → Release → Run workflow_ → version `v0.1.0` (une version déjà publiée).
-- **En urgence sur le serveur** : `sudo -u deploy /opt/kemdia/bin/deploy.sh production rollback - </dev/null`
+- **En urgence sur le serveur** : `sudo -u deploy /opt/kemdia/bin/deploy.sh production rollback </dev/null`
+- Le retour arrière remet le site et l'API d'avant ; il ne défait **pas** les migrations : elles n'ajoutent que ce que
+  l'ancienne version ignore (règle du projet). Une migration refusée arrête le déploiement avant toute bascule.
 
 Historique des déploiements : `/opt/kemdia/deploy.log`.
 
@@ -181,11 +212,12 @@ Historique des déploiements : `/opt/kemdia/deploy.log`.
 | Besoin           | Commande / action                                                                                                                   |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Voir l'état      | `docker ps` · `curl -s https://kemdia.ga/api/health`                                                                                |
-| Logs applicatifs | `docker logs kemdia-production-web --since 1h`                                                                                      |
+| Logs applicatifs | `docker logs kemdia-production-web --since 1h` · `docker logs kemdia-production-api --since 1h`                                     |
+| Base de données  | `sudo docker exec -it kemdia-production-db psql -U kemdia` (aucun port ouvert : seulement depuis le serveur)                        |
 | Logs HTTP        | `docker logs kemdia-caddy --since 1h`                                                                                               |
 | Surveillance     | Service externe gratuit (ex. UptimeRobot) qui appelle `https://kemdia.ga/api/health` toutes les 5 min et vous alerte par e-mail/SMS |
 | Mises à jour OS  | Automatiques (unattended-upgrades) ; redémarrage mensuel planifié conseillé                                                         |
-| Sauvegardes (S1) | `/opt/kemdia/proxy/.env` uniquement. À partir du S3 : sauvegarde chiffrée quotidienne de PostgreSQL, testée                         |
+| Sauvegardes      | `/opt/kemdia/proxy/.env` et `/opt/kemdia/secrets/` (hors serveur, chiffrés) ; PostgreSQL : sauvegarde chiffrée et testée au S7-T05  |
 
 ### Adresse des visiteurs en production (S4-T07, ADR-0021)
 

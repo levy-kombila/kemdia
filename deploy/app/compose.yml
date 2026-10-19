@@ -1,32 +1,128 @@
-# Stack applicative Kemdia — une instance par environnement (staging, production).
-# Les variables viennent de /opt/kemdia/state/<env>.env, écrit par deploy.sh.
+# Pile applicative Kemdia — une instance par environnement (staging, production), sur le même serveur.
+# S7-T04 (ADR-0043) : site + API + PostgreSQL 18, chacun dans son conteneur durci.
+#
+#   Variables d'interpolation : /opt/kemdia/state/<env>.env, écrit par deploy.sh (environnement, images, version).
+#   Secrets : /opt/kemdia/secrets/<env>.{db,api,web}.env, écrits UNE fois par init-secrets.sh (jamais dans Git).
+#
+# Réseaux (aucun port publié : seul Caddy, sur « edge », reçoit Internet) :
+#   edge     Caddy ↔ site                       (partagé, externe)
+#   app      site ↔ API ; sortie Internet de l'API (Brevo, plus tard Mobile Money)
+#   private  API ↔ PostgreSQL, SANS sortie (internal) : le site ne voit jamais la base
+# Les réseaux « app » et « private » sont propres à chaque environnement (préfixe kemdia-<env>_) :
+# la préproduction ne peut pas joindre la base de production.
 name: kemdia-${KEMDIA_ENV:?}
 
+x-durci: &durci
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
 services:
-  web:
-    image: ${KEMDIA_IMAGE:?}
-    container_name: kemdia-${KEMDIA_ENV}-web
-    restart: unless-stopped
+  db:
+    <<: *durci
+    image: postgres:18-alpine
+    container_name: kemdia-${KEMDIA_ENV}-db
+    env_file: /opt/kemdia/secrets/${KEMDIA_ENV}.db.env
+    environment:
+      POSTGRES_USER: kemdia
+      POSTGRES_DB: kemdia
+      # Mots de passe vérifiés en SCRAM-SHA-256 (jamais md5)
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    volumes:
+      - db_data:/var/lib/postgresql
+    # Lecture seule hors des données ; seuls les droits dont l'entrée de PostgreSQL a besoin (propriétaire des
+    # fichiers, puis passage à l'utilisateur postgres)
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    shm_size: 128m
+    mem_limit: 768m
+    pids_limit: 200
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kemdia -d kemdia"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [private]
+
+  # Migrations de la base : lancées par deploy.sh AVANT la bascule, avec la NOUVELLE image de l'API
+  # (`docker compose run --rm migrate`). Jamais démarrées par `up` (profil).
+  migrate:
+    image: ${KEMDIA_API_IMAGE:?}
+    profiles: [migrations]
+    command: ["node", "dist/database/migrate.js"]
+    env_file: /opt/kemdia/secrets/${KEMDIA_ENV}.api.env
     environment:
       NODE_ENV: production
       APP_ENV: ${KEMDIA_ENV}
-      APP_VERSION: ${APP_VERSION:-inconnue}
+      APP_VERSION: ${APP_VERSION:?}
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [private]
+
+  api:
+    <<: *durci
+    image: ${KEMDIA_API_IMAGE:?}
+    container_name: kemdia-${KEMDIA_ENV}-api
+    env_file: /opt/kemdia/secrets/${KEMDIA_ENV}.api.env
+    environment:
+      NODE_ENV: production
+      APP_ENV: ${KEMDIA_ENV}
+      APP_VERSION: ${APP_VERSION:?}
+      # Seul le site parle à l'API (réseau « app ») : aucun relais devant elle
+      TRUST_PROXY: "0"
+      API_DOCS: "false"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    mem_limit: 512m
+    pids_limit: 200
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [app, private]
+
+  web:
+    <<: *durci
+    image: ${KEMDIA_IMAGE:?}
+    container_name: kemdia-${KEMDIA_ENV}-web
+    env_file: /opt/kemdia/secrets/${KEMDIA_ENV}.web.env
+    environment:
+      NODE_ENV: production
+      APP_ENV: ${KEMDIA_ENV}
+      APP_VERSION: ${APP_VERSION:?}
+      API_URL: http://api:4000
+      # Caddy seul devant le site : la DERNIÈRE adresse de X-Forwarded-For est celle de la connexion (ADR-0021)
+      CLIENT_IP_HEADER: x-forwarded-for
     # Durcissement : système de fichiers en lecture seule, aucun privilège Linux
     read_only: true
     tmpfs:
       - /tmp
       - /app/apps/web/.next/cache
     cap_drop: [ALL]
-    security_opt:
-      - no-new-privileges:true
     mem_limit: 512m
     pids_limit: 200
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "5" }
-    # Aucun port publié : seul le reverse proxy (Caddy) joint l'application via le réseau « edge »
-    networks: [edge]
+    depends_on:
+      api: { condition: service_healthy }
+    networks: [edge, app]
+
+volumes:
+  db_data:
 
 networks:
   edge:
     external: true
+  app: {}
+  private:
+    internal: true
