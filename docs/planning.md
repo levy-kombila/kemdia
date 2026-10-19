@@ -18,7 +18,8 @@ Mobile Money (Moov, Airtel) et paiement à la livraison, lancement visé **fin 2
 | **S4**    | Module `identity` : comptes par e-mail ou téléphone (OTP), sécurité de connexion                        | ✅ Terminé  |
 | **S5**    | Modules `orders` + `payments` : commande, Mobile Money, paiement à la livraison                         | ✅ Terminé  |
 | **S6**    | Module `vendors` + back-office : boutiques, KYC, modération, commissions                                | ✅ Terminé  |
-| **S7**    | Module `shipping` (transporteur) + préproduction (serveur, surveillance, sauvegardes, test d'intrusion) | 🚧 En cours |
+| **S7**    | Module `shipping` (transporteur) + préproduction (serveur, surveillance, sauvegardes, test d'intrusion) | ✅ Terminé  |
+| **S7.5**  | Sprint correctif : CI plus rapide, écrans d'administration reportés, remarques du propriétaire          | 🚧 En cours |
 | **S8**    | Bêta fermée (vendeurs partenaires + testeurs) puis lancement Gabon 🇬🇦                                   | ⏳          |
 | Après MVP | Affiliation, application mobile, suivi GPS, Kemdia Pay v2                                               | —           |
 
@@ -32,6 +33,7 @@ Mobile Money (Moov, Airtel) et paiement à la livraison, lancement visé **fin 2
 | v0.4.0 | Comptes clients sécurisés : inscription par code, sessions, rôles, journal d'audit, CSRF/CSP/limites | ✅ S4                      |
 | v0.5.0 | Premier achat de bout en bout en environnement de test (Mobile Money _sandbox_)                      | ✅ S5                      |
 | v0.7.0 | Vendeurs partenaires opérationnels                                                                   | ✅ S6                      |
+| v0.8.0 | Préproduction prête : livraisons, serveur, sauvegardes, surveillance, test d'intrusion, APDPVP       | ✅ S7                      |
 | v1.0.0 | Lancement public                                                                                     | S8 (fin 2027 au plus tard) |
 
 ### Actions hors code (équipe Kemdia) — à lancer tôt
@@ -182,9 +184,9 @@ Choix du 2026-10-17 (S6-T08) : photos des pièces **dans PostgreSQL, chiffrées*
 
 Clôture (2026-10-17) : [rapport](rapports/2026-10-17_S6_cloture.md), version **v0.7.0**. **Reporté** : commissions et versements (BR-020, question ouverte n° 3), modération des avis (FR-020, quand les avis existeront), écrans d'administration des factures, encaissements et remboursements, rôles et journal d'audit à l'écran.
 
-## S7 — Module `shipping` + préproduction ⏳
+## S7 — Module `shipping` + préproduction ✅
 
-Décisions : [ADR-0040](architecture/adr/0040-livraisons-module-shipping.md) (livraisons, module `shipping`), [ADR-0041](architecture/adr/0041-livraisons-ecrans.md) (livraisons à l'écran), [ADR-0042](architecture/adr/0042-accueil-blocage.md) (accueil sous 300 ms), [ADR-0043](architecture/adr/0043-serveur-pile-complete.md) (serveur), [ADR-0044](architecture/adr/0044-sauvegardes-restic.md) (sauvegardes), [ADR-0045](architecture/adr/0045-surveillance-alertes.md) (surveillance), [ADR-0046](architecture/adr/0046-test-intrusion-zap-asvs.md) (test d'intrusion).
+Décisions : [ADR-0040](architecture/adr/0040-livraisons-module-shipping.md) (livraisons, module `shipping`), [ADR-0041](architecture/adr/0041-livraisons-ecrans.md) (livraisons à l'écran), [ADR-0042](architecture/adr/0042-accueil-blocage.md) (accueil sous 300 ms), [ADR-0043](architecture/adr/0043-serveur-pile-complete.md) (serveur), [ADR-0044](architecture/adr/0044-sauvegardes-restic.md) (sauvegardes), [ADR-0045](architecture/adr/0045-surveillance-alertes.md) (surveillance), [ADR-0046](architecture/adr/0046-test-intrusion-zap-asvs.md) (test d'intrusion), [ADR-0047](architecture/adr/0047-donnees-personnelles-apdpvp.md) (données personnelles).
 Choix du 2026-10-17 (découpage) : transporteur pas encore choisi (question ouverte n° 5) → **port neutre + suivi manuel** ; barème de livraison **en base, réglable** par un administrateur ; préproduction **tout préparée sans louer de serveur** (location à discuter avec le client) ; test d'intrusion **gratuit : OWASP ZAP dans la CI + revue ASVS niveau 1** (pentest externe payant proposé au client avant le lancement).
 Choix du 2026-10-17 (S7-T01) : part de Kemdia (BR-021) **arrondie à l'entier inférieur** ; statuts changés par un **administrateur seul** ; échec de livraison = **nouvelle tentative ou annulation** (stock rendu, remboursement « à faire ») ; **API seule** (écrans au S7-T02).
 Choix du 2026-10-18 (S7-T02) : barème du site **lu une fois, gardé 5 minutes** (secours : contrat) ; e-mails au client **« en route » et « livrée »** ; le client voit **l'état de la livraison** (sans motif) ; vendeur en **lecture seule** ; site : menu et tableau de bord de l'équipe, commande du client, commandes du vendeur, page « Livraison ».
@@ -205,7 +207,19 @@ Choix du 2026-10-19 (S7-T08) : suppression du compte **par effacement après mot
 | S7-T06 | Surveillance : `monitor.sh` toutes les 5 min (conteneurs, parcours https complet, certificats, disque, mémoire, sauvegardes) vers Healthchecks.io ; `/api/health?complet=1` pour UptimeRobot ; journaux JSON du site ; pannes simulées en CI — ADR-0045                                                                                                                                                              | ✅     |
 | S7-T07 | Test d'intrusion : OWASP ZAP 2.17.0 dans la CI (site + API, 4 rôles ; passif à chaque PR, actif chaque dimanche ; moyen ou élevé = rouge) ; revue ASVS 5.0 niveau 1 (70 exigences, 5 écarts corrigés : changement du mot de passe, 10 000 mots de passe courants, sans règle de composition, politique des dépendances) — ADR-0046                                                                                   | ✅     |
 | S7-T08 | Conformité APDPVP (loi n°001/2011 modifiée par la loi n°025/2023) : module `privacy` — copie JSON et suppression du compte dans « Mon compte » (mot de passe, refusée si commande ou boutique en cours, factures gardées 10 ans, reste anonymisé), comptes inactifs effacés après 3 ans (avis 30 j avant), case « 18 ans ou plus », pages légales « à compléter », registre des traitements et procédures — ADR-0047 | ✅     |
-| S7-T09 | (si le temps le permet) Écrans d'administration reportés du S6 : factures, encaissements à la livraison, remboursements, journal d'audit                                                                                                                                                                                                                                                                             | ⏳     |
+| S7-T09 | Écrans d'administration reportés du S6 : factures, encaissements à la livraison, remboursements, journal d'audit — **reporté au S7.5** (S7.5-T02)                                                                                                                                                                                                                                                                    | ➡️     |
+
+Clôture (2026-10-19) : [rapport](rapports/2026-10-19_S7_cloture.md), version **v0.8.0**. **Reporté** : S7-T09 (écrans d'administration) au S7.5 ; accueil « durablement sous 300 ms » (S7-T03 partiel, médiane CI 289 ms) ; vrai transporteur (question n° 5), informations légales (question n° 10), location du serveur et pentest externe (à discuter avec le client).
+
+## S7.5 — Sprint correctif 🚧
+
+Choix du 2026-10-19 (ouverture) : **S7 clôturé sans S7-T09**, repris au S7.5 ; CI : l'image Docker n'attend plus les tests de bout en bout, **seul le déploiement** attend que tout soit vert.
+
+| ID       | Tâche                                                                                                              | Statut |
+| -------- | ------------------------------------------------------------------------------------------------------------------ | ------ |
+| S7.5-T01 | CI plus rapide : jobs lancés en parallèle, image Docker construite sans attendre les tests de bout en bout         | ⏳     |
+| S7.5-T02 | Écrans d'administration reportés du S6 (ex-S7-T09) : factures, encaissements à la livraison, remboursements, audit | ⏳     |
+| S7.5-T03 | Remarques du propriétaire (liste à fournir)                                                                        | ⏳     |
 
 ## S5 à S8 — grandes lignes
 
