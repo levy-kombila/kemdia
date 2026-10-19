@@ -64,7 +64,9 @@ for role in anonyme client vendeur equipe; do
 
   report="$OUT/kemdia-$CIBLE-$role.json"
   if [[ ! -s $report ]]; then
-    echo "::error::ZAP n'a produit aucun rapport ($CIBLE, $role) : voir zap-$CIBLE-$role.log dans les rapports"
+    # Dernières lignes du journal de ZAP dans l'annotation (lisible sans télécharger les rapports)
+    last=$(grep -v '^\s*$' "$OUT/zap-$CIBLE-$role.log" | tail -n 4 | tr '\n' ' ' | cut -c1-400)
+    echo "::error::ZAP n'a produit aucun rapport ($CIBLE, $role) : $last"
     status=1
     continue
   fi

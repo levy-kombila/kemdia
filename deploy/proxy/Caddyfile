@@ -1,6 +1,9 @@
 # Variables définies dans /opt/kemdia/proxy/.env (voir .env.example)
 {
 	email {$ACME_EMAIL}
+	# Client sans nom de serveur (SNI) — vieux logiciels, certaines sondes, Java pour « localhost » (S7-T07) : on lui
+	# présente le certificat de la production au lieu de couper la connexion
+	default_sni {$PROD_DOMAIN}
 }
 
 # --- Production ---------------------------------------------------------
