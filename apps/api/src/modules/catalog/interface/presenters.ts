@@ -6,7 +6,7 @@ import type {
 } from "@kemdia/contracts";
 import type { AvailabilityResult } from "../application/catalog.service.js";
 import type { Category, CategoryNode } from "../domain/category.js";
-import type { Product } from "../domain/product.js";
+import type { ListingOffers } from "../domain/listing.js";
 
 /** Transforme les objets du domaine en JSON public : seuls les champs prévus sortent (rien d'interne). */
 
@@ -25,40 +25,62 @@ export function presentCategoryNode(node: CategoryNode): CategoryNodeDto {
   return { ...presentCategory(node), children: node.children.map(presentCategoryNode) };
 }
 
-export function presentProduct(product: Product, path: Category[]): ProductDetail {
+/**
+ * Fiche commune et ses offres (S7.5-T02). Les champs d'avant (prix, variantes…) sont ceux de l'offre MISE EN AVANT :
+ * le site ajoute au panier la variante de cette offre. `offers` liste toutes les offres visibles, la mise en avant
+ * d'abord.
+ */
+export function presentProduct(view: ListingOffers, path: Category[]): ProductDetail {
   const category = path.at(-1) ?? null;
+  const { content, main } = view;
+  const available = (stock: number) => stock > 0;
   return {
-    id: product.id,
-    slug: product.slug,
-    title: product.title,
-    description: product.description,
-    brand: product.brand,
+    id: content.id,
+    slug: content.slug,
+    title: content.title,
+    description: content.description,
+    brand: content.brand,
     category: category ? presentCategory(category) : null,
     path: path.map(presentCategory),
-    images: [...product.images],
-    price: product.price,
-    compareAtPrice: product.compareAtPrice,
-    inStock: product.isAvailable,
-    totalStock: product.totalStock,
-    variantId: product.mainVariant.id,
-    rating: product.rating,
-    reviewCount: product.reviewCount,
-    isFeatured: product.isFeatured,
-    isBestseller: product.isBestseller,
-    isNew: product.isNew,
-    // Les variantes désactivées ne sont pas montrées au client
-    variants: product.variants
-      .filter((v) => v.isActive)
-      .map((v) => ({
-        id: v.id,
-        sku: v.sku,
-        name: v.name,
-        attributes: { ...v.attributes },
-        price: v.price,
-        compareAtPrice: v.compareAtPrice,
-        stock: v.stock,
-        available: product.checkOrderable(v.id, 1).ok,
-      })),
+    images: [...content.images],
+    price: main.variant.price,
+    compareAtPrice: main.variant.compareAtPrice,
+    inStock: view.inStock,
+    totalStock: view.totalStock,
+    variantId: main.variant.id,
+    rating: content.rating,
+    reviewCount: content.reviewCount,
+    isFeatured: content.isFeatured,
+    isBestseller: content.isBestseller,
+    isNew: content.isNew,
+    // Une variante par déclinaison proposée : celle de l'offre mise en avant pour cette déclinaison
+    variants: view.choices.map(({ listingVariant, best }) => ({
+      id: best.variant.id,
+      sku: best.variant.sku,
+      name: listingVariant.name,
+      attributes: { ...listingVariant.attributes },
+      price: best.variant.price,
+      compareAtPrice: best.variant.compareAtPrice,
+      stock: best.variant.stock,
+      available: available(best.variant.stock),
+    })),
+    offerCount: view.offers.length,
+    offers: view.offers.map(({ offer, seller }) => ({
+      offerId: offer.id,
+      seller: seller ? { name: seller.name, slug: seller.slug, city: seller.city } : null,
+      isMain: offer.id === main.offer.id,
+      variants: offer.variants
+        .filter((v) => v.isActive)
+        .map((v) => ({
+          variantId: v.id,
+          listingVariantId: v.listingVariantId,
+          name: v.name,
+          price: v.price,
+          compareAtPrice: v.compareAtPrice,
+          stock: v.stock,
+          available: available(v.stock),
+        })),
+    })),
   };
 }
 

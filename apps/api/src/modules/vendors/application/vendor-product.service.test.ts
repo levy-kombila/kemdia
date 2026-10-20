@@ -45,8 +45,10 @@ const shopOf = (status: ShopStatus, owner = AWA): Shop => ({
   createdAt: NOW,
 });
 
+const OTHER_SHOP = "77777777-7777-4777-8777-777777777777";
 const VARIANT = {
   id: "66666666-6666-4666-8666-666666666666",
+  listingVariantId: "66666666-6666-4666-8666-666666666666",
   sku: "VAB12CD34-1",
   name: "Rouge",
   attributes: {},
@@ -59,6 +61,10 @@ const VARIANT = {
 const product = (status: VendorProductRecord["status"] = "PENDING"): VendorProductRecord => ({
   id: PRODUCT,
   shopId: SHOP,
+  listingId: PRODUCT,
+  listingSlug: "pagne-wax-ab12cd",
+  listingStatus: status,
+  listingOwnerShopId: SHOP,
   slug: "pagne-wax-ab12cd",
   title: "Pagne wax 6 yards",
   description: "Pagne wax 100 % coton, 6 yards, motifs variés.",
@@ -123,6 +129,19 @@ function setup(shop: Shop | null) {
     removeImage: () => Promise.resolve({ after: product("PUBLISHED"), sha256: "b".repeat(64) }),
     reorderImages: () => Promise.resolve(product("PUBLISHED")),
     ownImage: () => Promise.resolve(STORED),
+    searchListings: (shopId, q) => {
+      calls.push(`chercher « ${q} » pour ${shopId}`);
+      return Promise.resolve([]);
+    },
+    createOffer: (shopId, listingId) => {
+      calls.push(`offre de ${shopId} sur ${listingId}`);
+      return Promise.resolve({
+        ...product("PUBLISHED"),
+        listingId,
+        listingOwnerShopId: OTHER_SHOP,
+      });
+    },
+    addOfferVariant: () => Promise.resolve(product("PUBLISHED")),
   };
   const vendor = new VendorProductService(shops, tx, record, catalog);
   vendor.clock = () => NOW;
@@ -199,6 +218,65 @@ describe("VendorProductService (S6-T02)", () => {
       ["product.variant_updated", { sku: "VAB12CD34-1", stockFrom: 3, stockTo: 7 }],
       ["product.archived", { title: "Pagne wax 6 yards", from: "published" }],
     ]);
+  });
+});
+
+describe("VendorProductService — offres sur une fiche commune (S7.5-T02)", () => {
+  const LISTING = "88888888-8888-4888-8888-888888888888";
+
+  it("offre sur une fiche en ligne : pour SA boutique, tracée « offer.created » (sans modération)", async () => {
+    const { vendor, audit, calls } = setup(shopOf("active"));
+    await vendor.createOffer(
+      AWA,
+      LISTING,
+      [{ listingVariantId: VARIANT.id, price: 5_000, stock: 3 }],
+      CTX,
+    );
+    expect(calls).toEqual([`verrou partagé ${AWA}`, `offre de ${SHOP} sur ${LISTING}`]);
+    expect(audit).toEqual([
+      {
+        action: "offer.created",
+        actor: { type: "account", id: AWA },
+        target: { type: "product", id: PRODUCT },
+        details: { title: "Pagne wax 6 yards", listing: LISTING, lines: 1, priceFrom: 5_000 },
+        context: CTX,
+      },
+    ]);
+  });
+
+  it("recherche de fiches et nouvelle déclinaison : boutique active seulement ; déclinaison tracée", async () => {
+    const { vendor, audit, calls } = setup(shopOf("active"));
+    await vendor.searchListings(AWA, "iphone 15", 10);
+    expect(calls).toContain(`chercher « iphone 15 » pour ${SHOP}`);
+    await vendor.addOfferVariant(
+      AWA,
+      PRODUCT,
+      { listingVariantId: VARIANT.id, price: 5_000, stock: 3 },
+      CTX,
+    );
+    expect(audit.map((e) => e.action)).toEqual(["offer.variant_added"]);
+    for (const shop of [null, shopOf("suspended")]) {
+      const blocked = setup(shop);
+      expect(await codeOf(blocked.vendor.searchListings(AWA, "iphone", 10))).toBe(
+        "BOUTIQUE_INACTIVE",
+      );
+      expect(
+        await codeOf(
+          blocked.vendor.createOffer(
+            AWA,
+            LISTING,
+            [{ listingVariantId: VARIANT.id, price: 1, stock: 1 }],
+            CTX,
+          ),
+        ),
+      ).toBe("BOUTIQUE_INACTIVE");
+    }
+  });
+
+  it("remise en vente : en ligne tout de suite → « offer.restored » ; sinon envoi en modération", async () => {
+    const { vendor, audit } = setup(shopOf("active"));
+    await vendor.restore(AWA, PRODUCT, CTX);
+    expect(audit.at(-1)?.action).toBe("product.submitted");
   });
 });
 

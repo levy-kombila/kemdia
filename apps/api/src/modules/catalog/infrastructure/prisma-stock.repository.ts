@@ -42,11 +42,15 @@ export class PrismaStockRepository implements StockRepository {
       const rows = await db.$queryRaw<Row[]>`
         UPDATE "catalog"."product_variants" AS v
         SET "stock" = v."stock" - ${quantity}, "updated_at" = now()
-        FROM "catalog"."products" AS p
+        FROM "catalog"."products" AS p, "catalog"."listings" AS l
         WHERE v."id" = ${variantId}::uuid
           AND p."id" = v."product_id"
+          AND l."id" = p."listing_id"
           AND p."status" = 'PUBLISHED'
           AND NOT p."shop_suspended"
+          -- Fiche commune publiée (S7.5-T02) : une fiche retirée par l'équipe ne vend plus rien
+          AND l."status" = 'PUBLISHED'
+          AND l."merged_into_id" IS NULL
           AND v."is_active"
           AND v."stock" >= ${quantity}
         RETURNING v."id", v."product_id", p."shop_id", v."name", v."price", v."compare_at_price", p."title", p."images"[1] AS "image",

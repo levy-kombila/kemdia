@@ -1,10 +1,13 @@
 import { Injectable } from "@nestjs/common";
+import { KEMDIA_SHOP_ID } from "@kemdia/contracts/constants";
 import { PrismaService } from "../../../database/prisma.service.js";
 import type { Prisma } from "../../../generated/prisma/client.js";
+import { pickOffer, type OfferCandidate, type Seller } from "../domain/listing.js";
 import { Product } from "../domain/product.js";
 import type {
   Badge,
   Facets,
+  ListingSnapshot,
   Page,
   PriceRange,
   ProductCriteria,
@@ -13,7 +16,7 @@ import type {
   SortKey,
 } from "../application/ports.js";
 
-const ORDER: Record<SortKey, Prisma.ProductOrderByWithRelationInput[]> = {
+const ORDER: Record<SortKey, Prisma.ListingOrderByWithRelationInput[]> = {
   pertinence: [{ isFeatured: "desc" }, { reviewCount: "desc" }],
   nouveautes: [{ isNew: "desc" }, { createdAt: "desc" }],
   "prix-asc": [{ price: "asc" }],
@@ -23,7 +26,7 @@ const ORDER: Record<SortKey, Prisma.ProductOrderByWithRelationInput[]> = {
   ventes: [{ reviewCount: "desc" }, { rating: "desc" }],
 };
 
-const BADGE_FILTERS: Record<Badge, Prisma.ProductWhereInput> = {
+const BADGE_FILTERS: Record<Badge, Prisma.ListingWhereInput> = {
   featured: { isFeatured: true },
   new: { isNew: true },
   bestseller: { isBestseller: true },
@@ -34,8 +37,15 @@ const AVAILABLE_VARIANT = {
   stock: { gt: 0 },
 } satisfies Prisma.ProductVariantWhereInput;
 
+/** Offre visible : publiée, boutique non suspendue (la fiche publiée est vérifiée à part). */
+const VISIBLE_OFFER = {
+  status: "PUBLISHED",
+  shopSuspended: false,
+} satisfies Prisma.ProductWhereInput;
+
 const productWithVariants = {
   variants: { orderBy: [{ position: "asc" }, { price: "asc" }] },
+  listing: { select: { slug: true, status: true } },
 } satisfies Prisma.ProductInclude;
 
 type ProductRow = Prisma.ProductGetPayload<{ include: typeof productWithVariants }>;
@@ -44,12 +54,41 @@ type ProductRow = Prisma.ProductGetPayload<{ include: typeof productWithVariants
 export class PrismaProductRepository implements ProductRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findBySlug(slug: string): Promise<Product | null> {
-    const row = await this.prisma.product.findUnique({
+  async findListingBySlug(slug: string): Promise<ListingSnapshot | null> {
+    const row = await this.prisma.listing.findUnique({
       where: { slug },
-      include: productWithVariants,
+      include: {
+        variants: { orderBy: [{ position: "asc" }, { id: "asc" }] },
+        mergedInto: { select: { slug: true } },
+        offers: { include: productWithVariants, orderBy: { id: "asc" } },
+      },
     });
-    return row ? toDomain(row) : null;
+    if (!row) return null;
+    return {
+      content: {
+        id: row.id,
+        slug: row.slug,
+        title: row.title,
+        description: row.description,
+        brand: row.brand,
+        categoryId: row.categoryId,
+        images: row.images,
+        rating: row.rating,
+        reviewCount: row.reviewCount,
+        isFeatured: row.isFeatured,
+        isBestseller: row.isBestseller,
+        isNew: row.isNew,
+      },
+      status: row.status,
+      mergedIntoSlug: row.mergedInto?.slug ?? null,
+      variants: row.variants.map((v) => ({
+        id: v.id,
+        name: v.name,
+        attributes: isStringRecord(v.attributes) ? v.attributes : {},
+      })),
+      offers: row.offers.map(toDomain),
+      sellers: await this.sellers(row.offers.map((o) => o.shopId)),
+    };
   }
 
   async findByVariantIds(variantIds: readonly string[]): Promise<Product[]> {
@@ -65,14 +104,15 @@ export class PrismaProductRepository implements ProductRepository {
     sort: SortKey,
     page: number,
     pageSize: number,
+    city?: string | null,
   ): Promise<Page<ProductSummary>> {
     const where = whereOf(criteria);
-    const total = await this.prisma.product.count({ where });
+    const total = await this.prisma.listing.count({ where });
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const current = Math.min(page, totalPages);
-    const rows = await this.prisma.product.findMany({
+    const rows = await this.prisma.listing.findMany({
       where,
-      // L'identifiant départage les égalités : une même page renvoie toujours les mêmes produits
+      // L'identifiant départage les égalités : une même page renvoie toujours les mêmes fiches
       orderBy: [...ORDER[sort], { id: "asc" }],
       skip: (current - 1) * pageSize,
       take: pageSize,
@@ -83,71 +123,71 @@ export class PrismaProductRepository implements ProductRepository {
         brand: true,
         categoryId: true,
         images: true,
-        price: true,
-        compareAtPrice: true,
+        offerCount: true,
         rating: true,
         reviewCount: true,
         isFeatured: true,
         isBestseller: true,
         isNew: true,
-        // Variante par défaut : active la moins chère (même règle que Product.mainVariant)
-        variants: {
-          where: { isActive: true },
-          orderBy: [{ price: "asc" }, { position: "asc" }],
-          select: { id: true, stock: true },
-          take: 1,
-        },
-        _count: { select: { variants: { where: { isActive: true } } } },
       },
     });
-    const ids = rows.map((row) => row.id);
-    const inStock = new Set(
-      (
-        await this.prisma.productVariant.findMany({
-          where: { productId: { in: ids }, ...AVAILABLE_VARIANT },
-          select: { productId: true },
-          distinct: ["productId"],
+    // Offres visibles des fiches de la page, en une requête : l'offre mise en avant de chaque carte
+    const offers = rows.length
+      ? await this.prisma.product.findMany({
+          where: { listingId: { in: rows.map((r) => r.id) }, ...VISIBLE_OFFER },
+          include: {
+            ...productWithVariants,
+            variants: { where: { isActive: true }, orderBy: [{ position: "asc" }, { id: "asc" }] },
+          },
         })
-      ).map((v) => v.productId),
-    );
-    return {
-      items: rows.map(({ variants, images, _count, ...row }) => {
-        const main = variants[0];
-        // Un produit publié a toujours une variante active (règle du domaine, Product.create)
-        if (!main) throw new Error(`produit ${row.slug} : aucune variante active`);
-        return {
-          ...row,
-          image: images[0] ?? null,
-          inStock: inStock.has(row.id),
-          variantId: main.id,
-          stock: main.stock,
-          variantCount: _count.variants,
-        };
-      }),
-      page: current,
-      pageSize,
-      total,
-      totalPages,
-    };
+      : [];
+    const sellers = await this.sellers(offers.map((o) => o.shopId));
+    const byListing = new Map<string, OfferCandidate[]>();
+    for (const row of offers) {
+      const offer = toDomain(row);
+      for (const variant of offer.variants) {
+        const list = byListing.get(offer.listingId) ?? [];
+        list.push({ offer, variant, seller: sellers.get(offer.shopId) ?? null });
+        byListing.set(offer.listingId, list);
+      }
+    }
+    const items: ProductSummary[] = [];
+    for (const { images, ...row } of rows) {
+      const candidates = byListing.get(row.id) ?? [];
+      const main = pickOffer(candidates, city);
+      // Compteur de la base en retard d'une écriture (offre retirée à l'instant) : la carte attend le prochain appel
+      if (!main) continue;
+      items.push({
+        ...row,
+        image: images[0] ?? null,
+        price: main.variant.price,
+        compareAtPrice: main.variant.compareAtPrice,
+        inStock: main.variant.stock > 0,
+        variantId: main.variant.id,
+        stock: main.variant.stock,
+        variantCount: new Set(candidates.map((c) => c.variant.listingVariantId)).size,
+      });
+    }
+    return { items, page: current, pageSize, total, totalPages };
   }
 
   async facets(criteria: ProductCriteria, priceRanges: readonly PriceRange[]): Promise<Facets> {
     const where = whereOf(criteria);
-    const and = (extra: Prisma.ProductWhereInput): Prisma.ProductWhereInput => ({
+    const and = (extra: Prisma.ListingWhereInput): Prisma.ListingWhereInput => ({
       AND: [where, extra],
     });
     const [brands, inStock, deals, rating4, ...prices] = await this.prisma.$transaction([
-      this.prisma.product.groupBy({
+      this.prisma.listing.groupBy({
         by: ["brand"],
         where: and({ brand: { not: null } }),
         _count: { _all: true },
         orderBy: { brand: "asc" },
       }),
-      this.prisma.product.count({ where: and({ variants: { some: AVAILABLE_VARIANT } }) }),
-      this.prisma.product.count({ where: and({ compareAtPrice: { not: null } }) }),
-      this.prisma.product.count({ where: and({ rating: { gte: 4 } }) }),
+      this.prisma.listing.count({ where: and(IN_STOCK) }),
+      this.prisma.listing.count({ where: and({ compareAtPrice: { not: null } }) }),
+      this.prisma.listing.count({ where: and({ rating: { gte: 4 } }) }),
       ...priceRanges.map((range) =>
-        this.prisma.product.count({ where: and({ price: { gte: range.min, lte: range.max } }) }),
+        this.prisma.listing.count({ where: and({ price: { gte: range.min, lte: range.max } }) }),
       ),
     ]);
     return {
@@ -162,16 +202,14 @@ export class PrismaProductRepository implements ProductRepository {
   }
 
   async save(product: Product, searchText: string): Promise<void> {
-    const data = {
+    const shopId = product.shopId || KEMDIA_SHOP_ID;
+    const content = {
       slug: product.slug,
       title: product.title,
       description: product.description,
       brand: product.brand,
       categoryId: product.categoryId,
       images: [...product.images],
-      status: product.status,
-      price: product.price,
-      compareAtPrice: product.compareAtPrice,
       rating: product.rating,
       reviewCount: product.reviewCount,
       isFeatured: product.isFeatured,
@@ -181,10 +219,49 @@ export class PrismaProductRepository implements ProductRepository {
     };
     const variantIds = product.variants.map((v) => v.id);
     await this.prisma.$transaction(async (tx) => {
+      // La fiche d'abord (même identifiant) : l'offre et ses variantes copient son contenu (base, S7.5-T02).
+      // Une fiche déjà publiée le reste (d'autres boutiques peuvent y vendre).
+      const existing = await tx.listing.findUnique({
+        where: { id: product.id },
+        select: { status: true },
+      });
+      await tx.listing.upsert({
+        where: { id: product.id },
+        create: { id: product.id, ...content, status: product.status, createdByShopId: shopId },
+        update: {
+          ...content,
+          ...(existing?.status === "PUBLISHED" ? {} : { status: product.status }),
+        },
+      });
+      for (const [position, v] of product.variants.entries()) {
+        const declinaison = { name: v.name, attributes: { ...v.attributes }, position };
+        await tx.listingVariant.upsert({
+          where: { id: v.id },
+          create: { id: v.id, listingId: product.id, ...declinaison },
+          update: declinaison,
+        });
+      }
+      const offer = {
+        slug: product.slug,
+        title: product.title,
+        description: product.description,
+        brand: product.brand,
+        categoryId: product.categoryId,
+        images: [...product.images],
+        status: product.status,
+        price: product.price,
+        compareAtPrice: product.compareAtPrice,
+        rating: product.rating,
+        reviewCount: product.reviewCount,
+        isFeatured: product.isFeatured,
+        isBestseller: product.isBestseller,
+        isNew: product.isNew,
+        searchText,
+      };
       await tx.product.upsert({
         where: { id: product.id },
-        create: { id: product.id, ...data },
-        update: data,
+        create: { id: product.id, listingId: product.id, shopId, ...offer },
+        update: offer,
       });
       for (const [position, v] of product.variants.entries()) {
         const variant = {
@@ -199,7 +276,7 @@ export class PrismaProductRepository implements ProductRepository {
         };
         await tx.productVariant.upsert({
           where: { id: v.id },
-          create: { id: v.id, productId: product.id, ...variant },
+          create: { id: v.id, productId: product.id, listingVariantId: v.id, ...variant },
           update: variant,
         });
       }
@@ -210,13 +287,26 @@ export class PrismaProductRepository implements ProductRepository {
       });
     });
   }
+
+  /** Boutiques des offres (nom, adresse, ville), lues dans la copie du catalogue. */
+  private async sellers(shopIds: readonly string[]): Promise<Map<string, Seller>> {
+    const ids = [...new Set(shopIds)];
+    if (!ids.length) return new Map();
+    const rows = await this.prisma.seller.findMany({ where: { shopId: { in: ids } } });
+    return new Map(rows.map((r) => [r.shopId, { name: r.name, slug: r.slug, city: r.city }]));
+  }
 }
 
-function whereOf(c: ProductCriteria): Prisma.ProductWhereInput {
+const IN_STOCK = {
+  offers: { some: { ...VISIBLE_OFFER, variants: { some: AVAILABLE_VARIANT } } },
+} satisfies Prisma.ListingWhereInput;
+
+function whereOf(c: ProductCriteria): Prisma.ListingWhereInput {
   return {
-    // Même règle que Product.isVisible : publié ET boutique non suspendue (S6-T02)
+    // Fiche publiée, non fusionnée, avec au moins une offre visible (publiée, boutique non suspendue)
     status: "PUBLISHED",
-    shopSuspended: false,
+    mergedIntoId: null,
+    offerCount: { gt: 0 },
     ...(c.categoryIds ? { categoryId: { in: [...c.categoryIds] } } : {}),
     // Les mots ne contiennent que [a-z0-9] (searchable) : aucun joker SQL possible
     ...(c.terms.length ? { AND: c.terms.map((term) => ({ searchText: { contains: term } })) } : {}),
@@ -229,7 +319,7 @@ function whereOf(c: ProductCriteria): Prisma.ProductWhereInput {
         }
       : {}),
     ...(c.brands.length ? { brand: { in: [...c.brands] } } : {}),
-    ...(c.inStock ? { variants: { some: AVAILABLE_VARIANT } } : {}),
+    ...(c.inStock ? IN_STOCK : {}),
     // Le prix barré est toujours supérieur au prix (contrainte SQL) : « en promotion » = prix barré présent
     ...(c.onlyDeals ? { compareAtPrice: { not: null } } : {}),
     ...(c.minRating !== undefined ? { rating: { gte: c.minRating } } : {}),
@@ -253,8 +343,13 @@ function toDomain(row: ProductRow): Product {
     isBestseller: row.isBestseller,
     isNew: row.isNew,
     shopSuspended: row.shopSuspended,
+    shopId: row.shopId,
+    listingId: row.listingId,
+    listingSlug: row.listing.slug,
+    listingPublished: row.listing.status === "PUBLISHED",
     variants: row.variants.map((v) => ({
       id: v.id,
+      listingVariantId: v.listingVariantId,
       sku: v.sku,
       name: v.name,
       attributes: isStringRecord(v.attributes) ? v.attributes : {},

@@ -98,6 +98,10 @@ function setup(options: { roleError?: IdentityError } = {}) {
         listing.push(`${suspended ? "cacher" : "montrer"} ${shopId}`);
         return Promise.resolve(0);
       },
+      syncSeller: (shopId: string, seller: { name: string; city: string }) => {
+        listing.push(`vendeur ${shopId} ${seller.name} (${seller.city})`);
+        return Promise.resolve();
+      },
     },
   );
   service.clock = () => new Date("2026-10-15T20:00:00.000Z");
@@ -204,7 +208,16 @@ describe("ShopService : décisions de l'administration (S6-T01)", () => {
     await service.decide(admin, shop.id, "suspend", "Contrefaçons signalées", CTX);
     await service.decide(admin, shop.id, "approve", null, CTX);
     // S6-T02 : les produits de la boutique sont cachés à la suspension, montrés à la réactivation
-    expect(listing).toEqual([`montrer ${shop.id}`, `cacher ${shop.id}`, `montrer ${shop.id}`]);
+    // S7.5-T02 : nom et ville copiés pour le catalogue à chaque décision (validée, suspendue, réactivée)
+    const seller = `vendeur ${shop.id} Chez Ali (Libreville)`;
+    expect(listing).toEqual([
+      `montrer ${shop.id}`,
+      seller,
+      `cacher ${shop.id}`,
+      seller,
+      `montrer ${shop.id}`,
+      seller,
+    ]);
     expect(roleCalls).toEqual([
       `grant vendor ${AWA}`,
       `revoke vendor ${AWA}`,

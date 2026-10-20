@@ -58,6 +58,13 @@ const MESSAGES: Record<VendorErrorCode, string> = {
   KYC_INDISPONIBLE:
     "La vérification des vendeurs est momentanément indisponible. Réessayez plus tard.",
   DOCUMENT_INTROUVABLE: "Cette photo n'existe pas (ou plus).",
+  FICHE_INTROUVABLE: "Ce produit n'existe pas (ou plus) dans le catalogue.",
+  FICHE_PUBLIEE:
+    "La fiche de ce produit est en ligne : seule l'équipe Kemdia peut la modifier. Proposez-lui une correction.",
+  FICHE_NON_PUBLIEE: "Ce produit n'est pas en ligne : vous ne pouvez pas encore le vendre.",
+  DEJA_EN_VENTE: "Vous vendez déjà ce produit : modifiez votre offre existante.",
+  DECLINAISON_INTROUVABLE: "Cette déclinaison n'existe pas sur la fiche du produit.",
+  FUSION_IMPOSSIBLE: "Opération impossible.",
 };
 
 const isVendorCode = (code: string): code is VendorErrorCode =>

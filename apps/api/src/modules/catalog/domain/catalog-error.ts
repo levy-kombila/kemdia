@@ -26,7 +26,17 @@ export type CatalogErrorCode =
   | "IMAGE_TROP_GRANDE"
   | "IMAGE_TROP_PETITE"
   | "TROP_DE_PHOTOS"
-  | "PHOTO_INTROUVABLE";
+  | "PHOTO_INTROUVABLE"
+  // Fiches communes et offres (S7.5-T02)
+  | "FICHE_INTROUVABLE"
+  /** La fiche est publiée : son contenu (titre, photos…) ne change plus que par l'équipe. */
+  | "FICHE_PUBLIEE"
+  /** On ne vend pas sur une fiche qui n'est pas (ou plus) publiée. */
+  | "FICHE_NON_PUBLIEE"
+  /** La boutique a déjà une offre sur cette fiche. */
+  | "DEJA_EN_VENTE"
+  | "DECLINAISON_INTROUVABLE"
+  | "FUSION_IMPOSSIBLE";
 
 /** Une règle du catalogue n'est pas respectée. Le message est lisible par un humain, en français. */
 export class CatalogError extends Error {

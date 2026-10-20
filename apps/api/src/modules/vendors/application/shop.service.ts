@@ -156,8 +156,15 @@ export class ShopService {
       if (decision !== "reject") await this.changeVendorRole(actor, shop, decision, context);
       if (!(await this.shops.update(next, now))) throw nameTaken();
       // Suspendue : ses produits disparaissent du site ; validée ou réactivée : ils reviennent (S6-T02)
-      if (decision !== "reject")
+      if (decision !== "reject") {
         await this.listing.setShopSuspended(shop.id, decision === "suspend");
+        // Nom, adresse et ville à côté de ses offres (S7.5-T02) : ceux validés par l'équipe
+        await this.listing.syncSeller(shop.id, {
+          name: next.name,
+          slug: next.slug,
+          city: next.city,
+        });
+      }
       await this.audit.record({
         action: AUDIT_ACTION[decision],
         actor: { type: "account", id: actor.accountId },

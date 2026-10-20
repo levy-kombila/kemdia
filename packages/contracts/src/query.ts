@@ -20,6 +20,8 @@ export interface ProductQuery {
   /** « promotions » : liste ET compteurs limités aux produits en promotion (page Promotions). */
   scope?: "promotions";
   badge?: Badge;
+  /** Ville du client (S7.5-T02) : à prix égal, l'offre d'une boutique de cette ville est mise en avant. */
+  ville?: string;
 }
 
 /** Paramètres d'URL dans un ordre fixe (même requête → même adresse : utile pour le cache). */
@@ -41,6 +43,7 @@ export function productQueryParams(query: ProductQuery): URLSearchParams {
   set("minRating", query.minRating);
   set("scope", query.scope);
   set("badge", query.badge);
+  set("ville", query.ville?.trim());
   return params;
 }
 
@@ -98,5 +101,11 @@ export const PRODUCT_QUERY_PARAMETERS = [
     name: "badge",
     description: "Sélection : mis en avant, nouveautés ou meilleures ventes",
     schema: { type: "string", enum: ["featured", "new", "bestseller"] },
+  },
+  {
+    name: "ville",
+    description:
+      "Ville du client (S7.5-T02) : à prix égal, l'offre d'une boutique de cette ville est mise en avant (ne filtre rien)",
+    schema: { type: "string", maxLength: 60 },
   },
 ] as const;

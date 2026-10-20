@@ -53,10 +53,117 @@ describe("CatalogService", () => {
     expect(categories.calls).toBe(3);
   });
 
-  it("fiche produit : seulement les produits publiés", async () => {
-    expect((await service.getProduct("telephone-kemdia"))?.id).toBe(ids.product);
-    expect(await service.getProduct("brouillon")).toBeNull();
-    expect(await service.getProduct("../INVALIDE")).toBeNull();
+  it("fiche produit : seulement les fiches publiées avec une offre visible", async () => {
+    expect((await service.getListing("telephone-kemdia"))?.content.id).toBe(ids.product);
+    expect(await service.getListing("brouillon")).toBeNull();
+    expect(await service.getListing("../INVALIDE")).toBeNull();
+  });
+
+  describe("fiche commune et offres (S7.5-T02)", () => {
+    const shopA = "aaaaaaaa-0000-4000-8000-000000000001";
+    const shopB = "bbbbbbbb-0000-4000-8000-000000000002";
+    // Deux boutiques vendent la même déclinaison (ids.v1) de la fiche « telephone-kemdia »
+    const offer = (id: string, shopId: string, variant: Parameters<typeof variantProps>[0]) =>
+      Product.create(
+        productProps({
+          id,
+          slug: `offre-${id.slice(0, 4)}`,
+          shopId,
+          listingId: ids.product,
+          listingSlug: "telephone-kemdia",
+          variants: [variantProps({ listingVariantId: ids.v1, ...variant })],
+        }),
+      );
+
+    beforeEach(() => {
+      products.items = [
+        offer("c1000000-0000-4000-8000-000000000001", shopA, {
+          id: "c1000000-0000-4000-8000-0000000000a1",
+          sku: "A-1",
+          price: 140_000,
+          stock: 0,
+        }),
+        offer("c2000000-0000-4000-8000-000000000002", shopB, {
+          id: "c2000000-0000-4000-8000-0000000000b1",
+          sku: "B-1",
+          price: 150_000,
+          stock: 3,
+        }),
+      ];
+      products.sellers.set(shopA, { name: "Boutique A", slug: "boutique-a", city: "Libreville" });
+      products.sellers.set(shopB, { name: "Boutique B", slug: "boutique-b", city: "Port-Gentil" });
+    });
+
+    it("une seule fiche, toutes les offres ; mise en avant : en stock d'abord, même plus chère", async () => {
+      const view = await service.getListing("telephone-kemdia");
+      expect(view?.offers.map((o) => o.seller?.name)).toEqual(["Boutique B", "Boutique A"]);
+      expect(view?.main.variant.sku).toBe("B-1");
+      expect(view?.choices).toHaveLength(1);
+      expect(view?.totalStock).toBe(3);
+    });
+
+    it("à prix égal et en stock : la boutique de la ville du client", async () => {
+      products.items = products.items.map((p) =>
+        Product.create({
+          ...productProps(),
+          id: p.id,
+          slug: p.slug,
+          shopId: p.shopId,
+          listingId: p.listingId,
+          listingSlug: p.listingSlug,
+          variants: p.variants.map((v) => ({ ...v, price: 150_000, stock: 2 })),
+        }),
+      );
+      expect((await service.getListing("telephone-kemdia", "port-gentil"))?.main.seller?.name).toBe(
+        "Boutique B",
+      );
+      expect((await service.getListing("telephone-kemdia", "Libreville"))?.main.seller?.name).toBe(
+        "Boutique A",
+      );
+      // Ville illisible : ignorée (identifiant de l'offre pour départager)
+      expect((await service.getListing("telephone-kemdia", "<script>"))?.main.seller?.name).toBe(
+        "Boutique A",
+      );
+    });
+
+    it("une offre cachée (boutique suspendue, fiche retirée) n'est jamais montrée", async () => {
+      products.items = products.items.map((p) =>
+        p.shopId === shopB
+          ? Product.create({
+              ...productProps(),
+              ...p,
+              variants: [...p.variants],
+              shopSuspended: true,
+            })
+          : p,
+      );
+      const view = await service.getListing("telephone-kemdia");
+      expect(view?.offers.map((o) => o.seller?.name)).toEqual(["Boutique A"]);
+      products.items = products.items.map((p) =>
+        Product.create({
+          ...productProps(),
+          ...p,
+          variants: [...p.variants],
+          listingPublished: false,
+        }),
+      );
+      expect(await service.getListing("telephone-kemdia")).toBeNull();
+    });
+
+    it("doublon fusionné : son adresse mène à la fiche qui le remplace", async () => {
+      products.items.push(
+        Product.create(
+          productProps({
+            id: "d1000000-0000-4000-8000-000000000001",
+            slug: "doublon",
+            listingPublished: false,
+            variants: [variantProps({ id: "d1000000-0000-4000-8000-0000000000d1", sku: "D-1" })],
+          }),
+        ),
+      );
+      products.mergedInto.set("doublon", "telephone-kemdia");
+      expect((await service.getListing("doublon"))?.content.slug).toBe("telephone-kemdia");
+    });
   });
 
   it("recherche dans une catégorie : inclut ses sous-catégories", async () => {

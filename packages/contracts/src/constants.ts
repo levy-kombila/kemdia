@@ -201,6 +201,14 @@ export const AUDIT_ACTIONS = [
   "shipment.failed",
   "shipment.retried",
   "shipment.cancelled",
+  // Fiches communes et offres (S7.5-T02)
+  "offer.created",
+  "offer.variant_added",
+  "offer.restored",
+  "offer.withdrawn",
+  "listing.updated",
+  "listing.image_removed",
+  "listing.merged",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** Lignes par page du journal d'audit. */
@@ -587,6 +595,15 @@ export const VENDOR_ERROR_CODES = [
   "STATUT_KYC_INCOMPATIBLE",
   "KYC_INDISPONIBLE",
   "DOCUMENT_INTROUVABLE",
+  // Fiches communes et offres (S7.5-T02)
+  "FICHE_INTROUVABLE",
+  // La fiche est en ligne : seule l'équipe la modifie (le vendeur propose une correction)
+  "FICHE_PUBLIEE",
+  "FICHE_NON_PUBLIEE",
+  // La boutique vend déjà ce produit : modifier l'offre existante
+  "DEJA_EN_VENTE",
+  "DECLINAISON_INTROUVABLE",
+  "FUSION_IMPOSSIBLE",
 ] as const;
 export type VendorErrorCode = (typeof VENDOR_ERROR_CODES)[number];
 

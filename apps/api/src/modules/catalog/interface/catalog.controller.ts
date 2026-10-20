@@ -44,6 +44,7 @@ function searchInput(query: Record<string, unknown>): ProductSearchInput {
     minRating: first(query.minRating),
     scope: first(query.scope),
     badge: first(query.badge),
+    city: first(query.ville),
   };
 }
 
@@ -91,10 +92,10 @@ export class CatalogController {
 
   @Get("products/:slug")
   @Header("Cache-Control", CACHE_PUBLIC)
-  async product(@Param("slug") slug: string) {
-    const product = await this.catalog.getProduct(slug);
-    if (!product) throw new NotFoundException();
-    return presentProduct(product, await this.catalog.categoryPath(product.categoryId));
+  async product(@Param("slug") slug: string, @Query("ville") city?: unknown) {
+    const view = await this.catalog.getListing(slug, first(city));
+    if (!view) throw new NotFoundException();
+    return presentProduct(view, await this.catalog.categoryPath(view.content.categoryId));
   }
 
   /** BR-001 : chaque ligne est-elle commandable ? (le stock change : jamais mis en cache) */

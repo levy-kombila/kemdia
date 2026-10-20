@@ -3,6 +3,13 @@ import { Inject, Injectable } from "@nestjs/common";
 import { KEMDIA_SHOP_ID, MAX_PENDING_PRODUCTS_PER_SHOP } from "@kemdia/contracts/constants";
 import { CatalogError } from "../domain/catalog-error.js";
 import { CategoryTree } from "../domain/category.js";
+import {
+  onOfferArchive,
+  onOfferCreate,
+  onOfferRestore,
+  onOfferWithdraw,
+  type Seller,
+} from "../domain/listing.js";
 import { Product, type ProductStatus } from "../domain/product.js";
 import {
   assertRoomForImage,
@@ -23,6 +30,7 @@ import {
   onCreate,
   onRestore,
   validateContent,
+  validateReason,
   variantAttributes,
   variantName,
   vendorSlug,
@@ -35,9 +43,16 @@ import {
   CATALOG_RANDOM,
   CATEGORY_REPOSITORY,
   IMAGE_PROCESSOR,
+  LISTING_REPOSITORY,
   PRODUCT_IMAGE_STORE,
+  SELLER_DIRECTORY,
   VENDOR_PRODUCT_REPOSITORY,
   type CatalogRandom,
+  type ListingCursor,
+  type ListingRecord,
+  type ListingRepository,
+  type ListingVariantRecord,
+  type SellerDirectory,
   type CategoryRepository,
   type ImageProcessor,
   type ProductImageStore,
@@ -61,6 +76,29 @@ export interface VendorProductInput extends VendorContentInput {
   variants: readonly VendorVariantInput[];
 }
 
+/** Ligne d'une offre sur une fiche existante (S7.5-T02) : une déclinaison de la fiche, un prix, un stock. */
+export interface OfferLineInput {
+  listingVariantId: string;
+  price: number;
+  compareAtPrice?: number | null | undefined;
+  stock: number;
+}
+
+/** Correction d'une fiche par l'équipe : contenu et déclinaisons (renommées ou ajoutées, jamais retirées). */
+export interface ListingEditInput {
+  title?: string | undefined;
+  description?: string | undefined;
+  brand?: string | null | undefined;
+  categoryId?: string | undefined;
+  variants?:
+    | readonly {
+        id?: string | undefined;
+        name: string;
+        attributes?: Readonly<Record<string, string>> | undefined;
+      }[]
+    | undefined;
+}
+
 /** Changement libre d'une variante (sans nouvelle modération). */
 export interface VendorVariantPatch {
   price?: number | undefined;
@@ -77,6 +115,8 @@ type Page = { items: VendorProductRecord[]; next: VendorProductCursor | null };
 const SLUG_ATTEMPTS = 3;
 
 const notFound = () => new CatalogError("PRODUIT_INTROUVABLE", "produit introuvable");
+const listingNotFound = () => new CatalogError("FICHE_INTROUVABLE", "fiche introuvable");
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Produits des vendeurs dans le catalogue (S6-T02, ADR-0033). Ce service ne décide d'AUCUN droit : il reçoit la
@@ -94,6 +134,8 @@ export class VendorCatalog {
     @Inject(CATALOG_RANDOM) private readonly random: CatalogRandom,
     @Inject(IMAGE_PROCESSOR) private readonly processor: ImageProcessor,
     @Inject(PRODUCT_IMAGE_STORE) private readonly images: ProductImageStore,
+    @Inject(LISTING_REPOSITORY) private readonly listings: ListingRepository,
+    @Inject(SELLER_DIRECTORY) private readonly sellers: SellerDirectory,
   ) {}
 
   async create(shopId: string, input: VendorProductInput, now: Date): Promise<VendorProductRecord> {
@@ -108,25 +150,38 @@ export class VendorCatalog {
       );
     }
     const prefix = this.random.skuPrefix();
-    const variants: VendorVariantRecord[] = input.variants.map((v, index) => ({
-      id: this.random.uuid(),
-      sku: `V${prefix}-${index + 1}`,
-      name: variantName(v.name),
-      attributes: variantAttributes(v.attributes ?? {}),
-      price: v.price,
-      compareAtPrice: v.compareAtPrice ?? null,
-      stock: v.stock,
-      isActive: true,
-    }));
+    const variants: VendorVariantRecord[] = input.variants.map((v, index) => {
+      const id = this.random.uuid();
+      // Nouvelle fiche : une déclinaison par variante, même identifiant (S7.5-T02)
+      return {
+        id,
+        listingVariantId: id,
+        sku: `V${prefix}-${index + 1}`,
+        name: variantName(v.name),
+        attributes: variantAttributes(v.attributes ?? {}),
+        price: v.price,
+        compareAtPrice: v.compareAtPrice ?? null,
+        stock: v.stock,
+        isActive: true,
+      };
+    });
     assertDistinctNames(variants);
     for (let attempt = 0; attempt < SLUG_ATTEMPTS; attempt += 1) {
+      const id = this.random.uuid();
+      const slug = vendorSlug(searchable(content.title), this.random.slugSuffix(6));
+      const moderation = onCreate(now);
       const record: VendorProductRecord = {
-        id: this.random.uuid(),
+        id,
         shopId,
-        slug: vendorSlug(searchable(content.title), this.random.slugSuffix(6)),
+        // Fiche créée avec l'offre : même identifiant, même adresse ; elle suit l'offre jusqu'à sa publication
+        listingId: id,
+        listingSlug: slug,
+        listingStatus: moderation.status,
+        listingOwnerShopId: shopId,
+        slug,
         ...content,
         images: [],
-        ...onCreate(now),
+        ...moderation,
         shopSuspended: false,
         createdAt: now,
         updatedAt: now,
@@ -163,6 +218,7 @@ export class VendorCatalog {
   ): Promise<{ before: VendorProductRecord; after: VendorProductRecord }> {
     const content = validateContent(input);
     const before = await this.lockOwned(shopId, productId);
+    assertWritesListing(before);
     const tree = await this.tree();
     const categoryName = this.requireCategory(tree, content.categoryId);
     if (before.status !== "PENDING") await this.assertQueueRoom(shopId);
@@ -225,15 +281,24 @@ export class VendorCatalog {
     now: Date,
   ): Promise<{ before: VendorProductRecord; after: VendorProductRecord }> {
     const before = await this.lockOwned(shopId, productId);
-    const after = await this.write({ ...before, ...onArchive(state(before)), updatedAt: now });
+    // Offre sur une fiche publiée : une offre retirée par l'équipe ne s'archive pas (S7.5-T02)
+    const next = onPublishedListing(before)
+      ? onOfferArchive(state(before))
+      : onArchive(state(before));
+    const after = await this.write({ ...before, ...next, updatedAt: now });
     return { before, after };
   }
 
-  /** Remise en vente d'un produit archivé : nouvelle modération. */
+  /**
+   * Remise en vente : nouvelle modération pour une fiche pas encore publiée ; sur une fiche publiée, l'offre archivée
+   * revient en ligne tout de suite, l'offre retirée par l'équipe repasse par la modération (S7.5-T02).
+   */
   async restore(shopId: string, productId: string, now: Date): Promise<VendorProductRecord> {
     const before = await this.lockOwned(shopId, productId);
-    const next = onRestore(state(before), now);
-    await this.assertQueueRoom(shopId);
+    const next = onPublishedListing(before)
+      ? onOfferRestore(state(before), now)
+      : onRestore(state(before), now);
+    if (next.status === "PENDING") await this.assertQueueRoom(shopId);
     return this.write({ ...before, ...next, updatedAt: now });
   }
 
@@ -254,6 +319,7 @@ export class VendorCatalog {
    */
   async checkImageRoom(shopId: string, productId: string, now: Date): Promise<void> {
     const product = await this.get(shopId, productId);
+    assertWritesListing(product);
     onContentChange(state(product), now);
     assertRoomForImage(product.images);
   }
@@ -266,6 +332,7 @@ export class VendorCatalog {
     now: Date,
   ): Promise<{ before: VendorProductRecord; after: VendorProductRecord; imageId: string }> {
     const before = await this.lockOwned(shopId, productId);
+    assertWritesListing(before);
     const imageId = this.random.uuid();
     const images = withAddedImage(before.images, imageId);
     const next = onContentChange(state(before), now);
@@ -283,6 +350,7 @@ export class VendorCatalog {
     now: Date,
   ): Promise<{ after: VendorProductRecord; sha256: string | null }> {
     const before = await this.lockOwned(shopId, productId);
+    assertWritesListing(before);
     const images = withoutImage(before.images, imageId);
     const id = imageId.toLowerCase();
     // Empreinte gardée au journal : une photo illicite retirée laisse une trace (relecture S6-T04)
@@ -300,6 +368,7 @@ export class VendorCatalog {
     now: Date,
   ): Promise<VendorProductRecord> {
     const before = await this.lockOwned(shopId, productId);
+    assertWritesListing(before);
     const images = reordered(before.images, imageIds);
     return this.write({ ...before, images, updatedAt: now });
   }
@@ -325,10 +394,15 @@ export class VendorCatalog {
     // Produit vérifié AVANT de lire les octets : une photo non publique ne coûte qu'une petite lecture
     const owner = await this.images.describe(id);
     if (!owner) throw photoNotFound();
+    // Photo de la FICHE (S7.5-T02) : rangée avec l'offre de la boutique qui l'a créée ; servie tant que la fiche est
+    // publiée et visible (au moins une offre visible), même si cette offre-là n'est plus en vente
     const product = await this.products.findById(owner.productId);
-    if (!product || product.status !== "PUBLISHED" || product.shopSuspended) throw photoNotFound();
+    if (!product) throw photoNotFound();
+    const listing = await this.listings.findById(product.listingId);
+    if (!listing || listing.status !== "PUBLISHED" || listing.offerCount < 1) throw photoNotFound();
+    if (listing.id !== product.id) throw photoNotFound();
     // Retirée de la liste (en cours d'effacement) : plus servie
-    if (!product.images.some((path) => vendorImageId(path) === id)) throw photoNotFound();
+    if (!listing.images.some((path) => vendorImageId(path) === id)) throw photoNotFound();
     const stored = await this.images.read(id, size);
     if (!stored || stored.productId !== product.id) throw photoNotFound();
     return stored;
@@ -377,6 +451,341 @@ export class VendorCatalog {
     return this.products.setShopSuspended(shopId, suspended);
   }
 
+  /** Nom, adresse et ville de la boutique, montrés à côté de ses offres (module vendors, S7.5-T02). */
+  syncSeller(shopId: string, seller: Seller): Promise<void> {
+    return this.sellers.save(shopId, seller);
+  }
+
+  // --- Fiches communes et offres (S7.5-T02, ADR-0049) ---
+
+  /**
+   * Fiches publiées qui correspondent à la recherche du vendeur (avant de créer une nouvelle fiche), avec l'offre de sa
+   * boutique s'il en a déjà une.
+   */
+  async searchListings(
+    shopId: string,
+    q: string,
+    limit: number,
+  ): Promise<{ listing: ListingRecord; myOfferId: string | null }[]> {
+    const terms = [...new Set(searchable(q.slice(0, 100)).split(" ").filter(Boolean))].slice(0, 8);
+    if (!terms.length) return [];
+    const listings = await this.listings.searchPublished(terms, limit);
+    const result: { listing: ListingRecord; myOfferId: string | null }[] = [];
+    for (const listing of listings) {
+      result.push({
+        listing,
+        myOfferId: (await this.products.findOffer(listing.id, shopId))?.id ?? null,
+      });
+    }
+    return result;
+  }
+
+  /**
+   * Offre de la boutique sur une fiche publiée : en ligne tout de suite (choix du 2026-10-20). Une boutique a au plus
+   * une offre par fiche ; chaque ligne désigne une déclinaison de la fiche.
+   */
+  async createOffer(
+    shopId: string,
+    listingId: string,
+    lines: readonly OfferLineInput[],
+    now: Date,
+  ): Promise<VendorProductRecord> {
+    if (!UUID.test(listingId)) throw listingNotFound();
+    const listing = await this.listings.findById(listingId.toLowerCase());
+    if (!listing || listing.mergedIntoId) throw listingNotFound();
+    if (listing.status !== "PUBLISHED") {
+      throw new CatalogError("FICHE_NON_PUBLIEE", "cette fiche n'est pas en ligne");
+    }
+    const existing = await this.products.findOffer(listing.id, shopId);
+    if (existing) {
+      throw new CatalogError(
+        "DEJA_EN_VENTE",
+        "votre boutique vend déjà ce produit : modifiez votre offre existante",
+      );
+    }
+    if (lines.length < 1 || lines.length > VENDOR_PRODUCT_RULES.variantsMax) {
+      throw new CatalogError(
+        "PRODUIT_INVALIDE",
+        `entre 1 et ${VENDOR_PRODUCT_RULES.variantsMax} déclinaisons`,
+      );
+    }
+    const prefix = this.random.skuPrefix();
+    const variants = lines.map((line, index) =>
+      this.offerVariant(listing, line, `V${prefix}-${index + 1}`),
+    );
+    if (new Set(variants.map((v) => v.listingVariantId)).size !== variants.length) {
+      throw new CatalogError("VARIANTE_INVALIDE", "deux lignes désignent la même déclinaison");
+    }
+    const categoryName = (await this.tree()).byIdOrNull(listing.categoryId)?.name ?? "";
+    for (let attempt = 0; attempt < SLUG_ATTEMPTS; attempt += 1) {
+      const slug = vendorSlug(searchable(listing.title), this.random.slugSuffix(6));
+      const record: VendorProductRecord = {
+        id: this.random.uuid(),
+        shopId,
+        listingId: listing.id,
+        listingSlug: listing.slug,
+        listingStatus: listing.status,
+        listingOwnerShopId: listing.createdByShopId,
+        slug,
+        title: listing.title,
+        description: listing.description,
+        brand: listing.brand,
+        categoryId: listing.categoryId,
+        images: [...listing.images],
+        ...onOfferCreate(),
+        shopSuspended: false,
+        createdAt: now,
+        updatedAt: now,
+        variants,
+      };
+      if (await this.products.insert(record, derive(record, categoryName))) return record;
+    }
+    throw new Error("adresse d'offre introuvable après plusieurs essais");
+  }
+
+  /** Ajoute à l'offre une déclinaison de sa fiche qu'elle ne proposait pas encore. */
+  async addOfferVariant(
+    shopId: string,
+    productId: string,
+    line: OfferLineInput,
+    now: Date,
+  ): Promise<VendorProductRecord> {
+    const before = await this.lockOwned(shopId, productId);
+    if (before.status === "ARCHIVED") {
+      throw new CatalogError("STATUT_PRODUIT_INCOMPATIBLE", "remettez d'abord l'offre en vente");
+    }
+    if (before.variants.length >= VENDOR_PRODUCT_RULES.variantsMax) {
+      throw new CatalogError(
+        "PRODUIT_INVALIDE",
+        `${VENDOR_PRODUCT_RULES.variantsMax} déclinaisons au plus`,
+      );
+    }
+    const listing = await this.listings.findById(before.listingId);
+    if (!listing) throw listingNotFound();
+    const variant = this.offerVariant(
+      listing,
+      line,
+      `V${this.random.skuPrefix()}-${before.variants.length + 1}`,
+    );
+    if (before.variants.some((v) => v.listingVariantId === variant.listingVariantId)) {
+      throw new CatalogError("VARIANTE_INVALIDE", "votre offre propose déjà cette déclinaison");
+    }
+    const after: VendorProductRecord = {
+      ...before,
+      updatedAt: now,
+      variants: [...before.variants, variant],
+    };
+    // Règles du domaine vérifiées AVANT d'écrire (prix, prix barré, stock)
+    const derived = derive(after, (await this.tree()).byIdOrNull(after.categoryId)?.name ?? "");
+    await this.products.insertVariant(before.id, variant, before.variants.length);
+    await this.products.update(after, derived);
+    return after;
+  }
+
+  // --- Fiches communes : l'équipe (S7.5-T02) ---
+
+  listListings(query: {
+    q?: string | undefined;
+    status?: ProductStatus | undefined;
+    limit: number;
+    after?: ListingCursor | undefined;
+  }): Promise<{ items: ListingRecord[]; next: ListingCursor | null }> {
+    const terms = [
+      ...new Set(
+        searchable((query.q ?? "").slice(0, 100))
+          .split(" ")
+          .filter(Boolean),
+      ),
+    ].slice(0, 8);
+    return this.listings.list({
+      terms,
+      status: query.status,
+      limit: query.limit,
+      after: query.after,
+    });
+  }
+
+  /** Fiche et toutes ses offres (tous statuts), pour l'équipe. */
+  async listingWithOffers(
+    listingId: string,
+  ): Promise<{ listing: ListingRecord; offers: VendorProductRecord[] }> {
+    if (!UUID.test(listingId)) throw listingNotFound();
+    const listing = await this.listings.findById(listingId.toLowerCase());
+    if (!listing) throw listingNotFound();
+    return { listing, offers: await this.products.listForListing(listing.id) };
+  }
+
+  /**
+   * Correction d'une fiche par l'équipe : contenu (vérifié comme celui d'un vendeur) et déclinaisons (renommées ou
+   * ajoutées). Recopié sur toutes les offres par la base. Sans nouvelle modération : c'est l'équipe qui écrit.
+   */
+  async editListing(
+    listingId: string,
+    input: ListingEditInput,
+    now: Date,
+  ): Promise<{ before: ListingRecord; after: ListingRecord }> {
+    const before = await this.lockListing(listingId);
+    if (before.mergedIntoId) {
+      throw new CatalogError(
+        "FICHE_INTROUVABLE",
+        "fiche fusionnée : corrigez la fiche qui la remplace",
+      );
+    }
+    const content = validateContent({
+      title: input.title ?? before.title,
+      description: input.description ?? before.description,
+      brand: input.brand === undefined ? before.brand : input.brand,
+      categoryId: input.categoryId ?? before.categoryId,
+    });
+    const tree = await this.tree();
+    const categoryName = this.requireCategory(tree, content.categoryId);
+    let variants: ListingVariantRecord[] = [...before.variants];
+    for (const change of input.variants ?? []) {
+      const name = variantName(change.name);
+      const attributes = variantAttributes(change.attributes ?? {});
+      if (change.id === undefined) {
+        variants.push({ id: this.random.uuid(), name, attributes, position: variants.length });
+        continue;
+      }
+      const id = change.id.toLowerCase();
+      if (!variants.some((v) => v.id === id)) {
+        throw new CatalogError(
+          "DECLINAISON_INTROUVABLE",
+          "déclinaison introuvable sur cette fiche",
+        );
+      }
+      variants = variants.map((v) => (v.id === id ? { ...v, name, attributes } : v));
+    }
+    if (variants.length > 50) throw new CatalogError("PRODUIT_INVALIDE", "50 déclinaisons au plus");
+    const names = variants.map((v) => v.name.toLowerCase());
+    if (new Set(names).size !== names.length) {
+      throw new CatalogError("VARIANTE_INVALIDE", "deux déclinaisons portent le même nom");
+    }
+    const after: ListingRecord = { ...before, ...content, variants, updatedAt: now };
+    for (const variant of variants) {
+      const old = before.variants.find((v) => v.id === variant.id);
+      if (
+        !old ||
+        old.name !== variant.name ||
+        !sameAttributes(old.attributes, variant.attributes)
+      ) {
+        await this.listings.saveVariant(before.id, variant, now);
+      }
+    }
+    await this.listings.updateContent(after, listingSearchText(after, categoryName), now);
+    return { before, after };
+  }
+
+  /** Retire une photo d'une fiche (équipe) : plus jamais servie, effacée. Empreinte rendue pour le journal. */
+  async removeListingImage(
+    listingId: string,
+    imageId: string,
+    now: Date,
+  ): Promise<{ after: ListingRecord; sha256: string | null }> {
+    const before = await this.lockListing(listingId);
+    const images = withoutImage(before.images, imageId);
+    const id = imageId.toLowerCase();
+    const sha256 = (await this.images.describe(id))?.sha256 ?? null;
+    const after: ListingRecord = { ...before, images, updatedAt: now };
+    const categoryName = (await this.tree()).byIdOrNull(after.categoryId)?.name ?? "";
+    await this.listings.updateContent(after, listingSearchText(after, categoryName), now);
+    // Rangée avec l'offre de la boutique qui a créé la fiche (même identifiant que la fiche)
+    await this.images.delete(id, before.id);
+    return { after, sha256 };
+  }
+
+  /**
+   * Fusion d'un doublon dans une fiche publiée (équipe). Chaque déclinaison du doublon utilisée par une offre doit être
+   * associée à une déclinaison de la cible ; une boutique qui vend déjà sur la cible bloque la fusion (une offre par
+   * boutique et par fiche). Les paniers et les commandes ne changent pas (mêmes variantes d'offre).
+   */
+  async mergeListings(
+    sourceId: string,
+    targetId: string,
+    variantMap: Readonly<Record<string, string>>,
+    now: Date,
+  ): Promise<{ source: ListingRecord; target: ListingRecord; moved: number }> {
+    if (!UUID.test(sourceId) || !UUID.test(targetId)) throw listingNotFound();
+    const from = sourceId.toLowerCase();
+    const to = targetId.toLowerCase();
+    if (from === to)
+      throw new CatalogError("FUSION_IMPOSSIBLE", "une fiche ne se fusionne pas avec elle-même");
+    // Verrous dans l'ordre des identifiants : deux fusions croisées ne s'interbloquent pas
+    const [first, second] = from < to ? [from, to] : [to, from];
+    const locked = new Map<string, ListingRecord>();
+    for (const id of [first, second]) locked.set(id, await this.lockListing(id));
+    const source = locked.get(from)!;
+    const target = locked.get(to)!;
+    if (source.mergedIntoId || target.mergedIntoId) {
+      throw new CatalogError("FUSION_IMPOSSIBLE", "l'une des fiches a déjà été fusionnée");
+    }
+    if (target.status !== "PUBLISHED") {
+      throw new CatalogError("FUSION_IMPOSSIBLE", "la fiche cible doit être en ligne");
+    }
+    const [sourceOffers, targetOffers] = [
+      await this.products.listForListing(source.id),
+      await this.products.listForListing(target.id),
+    ];
+    const targetShops = new Set(targetOffers.map((o) => o.shopId));
+    if (sourceOffers.some((o) => targetShops.has(o.shopId))) {
+      throw new CatalogError(
+        "FUSION_IMPOSSIBLE",
+        "une boutique vend sur les deux fiches : demandez-lui d'archiver l'une de ses offres",
+      );
+    }
+    const map = new Map<string, string>();
+    for (const [key, value] of Object.entries(variantMap)) {
+      const k = key.toLowerCase();
+      const v = value.toLowerCase();
+      if (!source.variants.some((x) => x.id === k) || !target.variants.some((x) => x.id === v)) {
+        throw new CatalogError(
+          "DECLINAISON_INTROUVABLE",
+          "déclinaison inconnue dans la correspondance",
+        );
+      }
+      map.set(k, v);
+    }
+    for (const offer of sourceOffers) {
+      const targets = offer.variants.map((variant) => map.get(variant.listingVariantId));
+      if (targets.some((t) => t === undefined)) {
+        throw new CatalogError(
+          "FUSION_IMPOSSIBLE",
+          "chaque déclinaison vendue doit correspondre à une déclinaison de la fiche cible",
+        );
+      }
+      if (new Set(targets).size !== targets.length) {
+        throw new CatalogError(
+          "FUSION_IMPOSSIBLE",
+          "deux variantes d'une même offre iraient sur la même déclinaison",
+        );
+      }
+    }
+    await this.listings.merge(source.id, target.id, map, now);
+    return { source, target, moved: sourceOffers.length };
+  }
+
+  /** Verrouille une offre pour son retrait par l'équipe. */
+  async lockOffer(productId: string): Promise<VendorProductRecord> {
+    if (!UUID.test(productId)) throw notFound();
+    const record = await this.products.lockById(productId.toLowerCase());
+    if (!record) throw notFound();
+    return record;
+  }
+
+  /** Retrait d'une offre par l'équipe (prix abusif, contrefaçon…) : motif montré au vendeur, au journal. */
+  async withdrawOffer(
+    record: VendorProductRecord,
+    by: { moderatorId: string; reason: string; now: Date },
+  ): Promise<VendorProductRecord> {
+    const next = onOfferWithdraw(state(record), {
+      moderatorId: by.moderatorId,
+      reason: validateReason(by.reason),
+      now: by.now,
+      kemdia: record.shopId === KEMDIA_SHOP_ID,
+    });
+    return this.write({ ...record, ...next, updatedAt: by.now });
+  }
+
   /**
    * File de modération bornée par boutique (relecture S6-T02). Limite souple : deux envois simultanés du même vendeur
    * peuvent la dépasser d'une unité, sans conséquence.
@@ -403,6 +812,36 @@ export class VendorCatalog {
     return stored;
   }
 
+  private async lockListing(listingId: string): Promise<ListingRecord> {
+    if (!UUID.test(listingId)) throw listingNotFound();
+    const listing = await this.listings.lockById(listingId.toLowerCase());
+    if (!listing) throw listingNotFound();
+    return listing;
+  }
+
+  /** Variante d'une offre sur une déclinaison existante de la fiche (nom et caractéristiques de la déclinaison). */
+  private offerVariant(
+    listing: ListingRecord,
+    line: OfferLineInput,
+    sku: string,
+  ): VendorVariantRecord {
+    const declinaison = listing.variants.find((v) => v.id === line.listingVariantId.toLowerCase());
+    if (!declinaison) {
+      throw new CatalogError("DECLINAISON_INTROUVABLE", "déclinaison introuvable sur cette fiche");
+    }
+    return {
+      id: this.random.uuid(),
+      listingVariantId: declinaison.id,
+      sku,
+      name: declinaison.name,
+      attributes: { ...declinaison.attributes },
+      price: line.price,
+      compareAtPrice: line.compareAtPrice ?? null,
+      stock: line.stock,
+      isActive: true,
+    };
+  }
+
   private async lockOwned(shopId: string, productId: string): Promise<VendorProductRecord> {
     const record = await this.products.lockById(productId);
     if (!record || record.shopId !== shopId) throw notFound();
@@ -412,7 +851,10 @@ export class VendorCatalog {
   private async write(record: VendorProductRecord): Promise<VendorProductRecord> {
     const categoryName = (await this.tree()).byIdOrNull(record.categoryId)?.name ?? "";
     await this.products.update(record, derive(record, categoryName));
-    return record;
+    // Même règle que la base (déclencheur) : avant sa publication, la fiche suit l'offre de la boutique qui l'a créée
+    const follows =
+      record.listingOwnerShopId === record.shopId && record.listingStatus !== "PUBLISHED";
+    return follows ? { ...record, listingStatus: record.status } : record;
   }
 
   private async tree(): Promise<CategoryTree> {
@@ -434,6 +876,40 @@ function state(record: VendorProductRecord): ModerationState {
     reviewedBy: record.reviewedBy,
     reviewedAt: record.reviewedAt,
   };
+}
+
+/** L'offre est-elle posée sur une fiche déjà publiée (statut de l'offre indépendant de la fiche) ? */
+function onPublishedListing(record: VendorProductRecord): boolean {
+  return record.listingStatus === "PUBLISHED";
+}
+
+/**
+ * Le vendeur n'écrit le contenu (titre, description, photos…) que d'une fiche qu'il a créée et qui n'est pas encore
+ * publiée (choix du 2026-10-20) ; ensuite, c'est l'équipe qui la corrige.
+ */
+function assertWritesListing(record: VendorProductRecord): void {
+  if (record.listingOwnerShopId !== record.shopId || record.listingStatus === "PUBLISHED") {
+    throw new CatalogError(
+      "FICHE_PUBLIEE",
+      "la fiche de ce produit est en ligne : seule l'équipe Kemdia peut la modifier (proposez-lui une correction)",
+    );
+  }
+}
+
+function sameAttributes(
+  a: Readonly<Record<string, string>>,
+  b: Readonly<Record<string, string>>,
+): boolean {
+  const ka = Object.keys(a);
+  return ka.length === Object.keys(b).length && ka.every((k) => a[k] === b[k]);
+}
+
+/** Texte de recherche d'une fiche : titre, marque, catégorie, caractéristiques des déclinaisons (sans accents). */
+function listingSearchText(listing: ListingRecord, categoryName: string): string {
+  const attributes = listing.variants.flatMap((v) => Object.values(v.attributes));
+  return searchable(
+    [listing.title, listing.brand ?? "", categoryName, ...new Set(attributes)].join(" "),
+  );
 }
 
 function assertDistinctNames(variants: readonly VendorVariantRecord[]): void {
@@ -463,7 +939,7 @@ function derive(record: VendorProductRecord, categoryName: string): DerivedField
     isBestseller: false,
     isNew: false,
     shopSuspended: record.shopSuspended,
-    variants: record.variants,
+    variants: record.variants.map((v) => ({ ...v })),
   });
   return {
     price: product.price,

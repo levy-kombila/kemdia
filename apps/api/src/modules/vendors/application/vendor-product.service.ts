@@ -5,6 +5,8 @@ import {
   type ImageSize,
   type StoredImage,
   type VendorProductCursor,
+  type ListingRecord,
+  type OfferLineInput,
   type VendorProductInput,
   type VendorProductRecord,
   type VendorVariantPatch,
@@ -36,6 +38,9 @@ export type VendorCatalogPort = Pick<
   | "reorderImages"
   | "ownImage"
   | "checkImageRoom"
+  | "searchListings"
+  | "createOffer"
+  | "addOfferVariant"
 >;
 
 const inactive = () =>
@@ -183,9 +188,83 @@ export class VendorProductService {
     context: AuditContext,
   ): Promise<VendorProductRecord> {
     return this.inShop(accountId, async (shop) => {
+      const before = await this.catalog.get(shop.id, productId);
       const product = await this.catalog.restore(shop.id, productId, this.clock());
-      await this.submitted(accountId, product, "remise_en_vente", context, "ARCHIVED");
+      if (product.status === "PUBLISHED") {
+        // Offre sur une fiche publiée : de nouveau en ligne sans modération (S7.5-T02)
+        await this.audit.record({
+          action: "offer.restored",
+          actor: { type: "account", id: accountId },
+          target: { type: "product", id: product.id },
+          details: { title: shortText(product.title) },
+          context,
+        });
+      } else {
+        await this.submitted(accountId, product, "remise_en_vente", context, before.status);
+      }
       return product;
+    });
+  }
+
+  // --- Fiches communes et offres (S7.5-T02, ADR-0049) ---
+
+  /** Fiches en ligne qui correspondent à la recherche : vendre un produit existant plutôt que créer un doublon. */
+  searchListings(
+    accountId: string,
+    q: string,
+    limit: number,
+  ): Promise<{ listing: ListingRecord; myOfferId: string | null }[]> {
+    return this.inShop(accountId, (shop) => this.catalog.searchListings(shop.id, q, limit));
+  }
+
+  /** Offre de la boutique sur une fiche en ligne : en ligne tout de suite (prix et stock seulement), tracée. */
+  createOffer(
+    accountId: string,
+    listingId: string,
+    lines: readonly OfferLineInput[],
+    context: AuditContext,
+  ): Promise<VendorProductRecord> {
+    return this.inShop(accountId, async (shop) => {
+      const offer = await this.catalog.createOffer(shop.id, listingId, lines, this.clock());
+      await this.audit.record({
+        action: "offer.created",
+        actor: { type: "account", id: accountId },
+        target: { type: "product", id: offer.id },
+        details: {
+          title: shortText(offer.title),
+          listing: offer.listingId,
+          lines: offer.variants.length,
+          priceFrom: Math.min(...offer.variants.map((v) => v.price)),
+        },
+        context,
+      });
+      return offer;
+    });
+  }
+
+  /** Nouvelle déclinaison de la fiche proposée par l'offre : sans modération, tracée (prix, stock). */
+  addOfferVariant(
+    accountId: string,
+    productId: string,
+    line: OfferLineInput,
+    context: AuditContext,
+  ): Promise<VendorProductRecord> {
+    return this.inShop(accountId, async (shop) => {
+      const after = await this.catalog.addOfferVariant(shop.id, productId, line, this.clock());
+      const added = after.variants.at(-1)!;
+      await this.audit.record({
+        action: "offer.variant_added",
+        actor: { type: "account", id: accountId },
+        target: { type: "product", id: after.id },
+        details: {
+          sku: added.sku,
+          listingVariant: added.listingVariantId,
+          price: added.price,
+          stock: added.stock,
+        },
+        context,
+      });
+      return after;
     });
   }
 

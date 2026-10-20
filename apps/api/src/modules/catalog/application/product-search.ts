@@ -36,6 +36,8 @@ export interface ProductSearchInput {
   scope?: unknown;
   /** Sélection éditoriale : « featured », « new » ou « bestseller ». */
   badge?: unknown;
+  /** Ville du client (S7.5-T02) : à prix égal, l'offre d'une boutique de cette ville est mise en avant. */
+  city?: unknown;
 }
 
 export interface ProductSearch {
@@ -52,6 +54,7 @@ export interface ProductSearch {
   minRating?: number;
   promotionsOnly: boolean;
   badge?: Badge;
+  city?: string;
 }
 
 const integer = (value: unknown): number | undefined => {
@@ -82,6 +85,7 @@ export function parseProductSearch(input: ProductSearchInput): ProductSearch {
   const priceMin = integer(input.priceMin);
   const priceMax = integer(input.priceMax);
   const minRating = integer(input.minRating);
+  const city = parseCity(input.city);
   const slug =
     typeof input.categorySlug === "string" && /^[a-z0-9-]{1,120}$/.test(input.categorySlug)
       ? input.categorySlug
@@ -103,5 +107,13 @@ export function parseProductSearch(input: ProductSearchInput): ProductSearch {
     ...(minRating !== undefined && minRating >= 1 && minRating <= 5 ? { minRating } : {}),
     promotionsOnly: input.scope === "promotions",
     ...(BADGES.includes(input.badge as Badge) ? { badge: input.badge as Badge } : {}),
+    ...(city ? { city } : {}),
   };
+}
+
+/** Ville du client : 2 à 60 caractères, lettres, espaces, tirets et apostrophes (ne sert qu'à départager deux offres). */
+export function parseCity(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const city = value.trim();
+  return /^[\p{L}][\p{L} '’-]{1,59}$/u.test(city) ? city : undefined;
 }

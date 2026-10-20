@@ -25,15 +25,20 @@ export { StockService, StockUnavailableError } from "./application/stock.service
 // Produits des vendeurs et modération (S6-T02)
 export {
   VendorCatalog,
+  type ListingEditInput,
+  type OfferLineInput,
   type VendorProductInput,
   type VendorVariantInput,
   type VendorVariantPatch,
 } from "./application/vendor-catalog.service.js";
 export type {
+  ListingCursor,
+  ListingRecord,
   VendorProductCursor,
   VendorProductRecord,
   VendorVariantRecord,
 } from "./application/ports.js";
+export type { Seller } from "./domain/listing.js";
 export { CatalogError, type CatalogErrorCode } from "./domain/catalog-error.js";
 export { VENDOR_PRODUCT_RULES, type ModerationDecision } from "./domain/vendor-product.js";
 // Photos (S6-T04)

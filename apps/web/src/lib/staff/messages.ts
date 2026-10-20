@@ -74,6 +74,12 @@ const VENDOR_MESSAGES: Record<VendorErrorCode, string> = {
   IMAGE_TROP_PETITE: "Photo trop petite.",
   TROP_DE_PHOTOS: "Trop de photos pour ce produit.",
   PHOTO_INTROUVABLE: "Photo introuvable.",
+  FICHE_INTROUVABLE: "Fiche introuvable.",
+  FICHE_PUBLIEE: "Cette fiche est en ligne : seule l'équipe peut la modifier.",
+  FICHE_NON_PUBLIEE: "Cette fiche n'est pas en ligne.",
+  DEJA_EN_VENTE: "Cette boutique vend déjà ce produit.",
+  DECLINAISON_INTROUVABLE: "Déclinaison introuvable sur cette fiche.",
+  FUSION_IMPOSSIBLE: "Fusion impossible : vérifiez les boutiques et les déclinaisons.",
 };
 
 const isIdentityCode = (value: string): value is IdentityErrorCode =>

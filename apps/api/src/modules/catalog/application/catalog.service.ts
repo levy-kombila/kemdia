@@ -1,7 +1,8 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { MAX_AVAILABILITY_LINES } from "@kemdia/contracts/constants";
 import { CategoryTree, type Category, type CategoryNode } from "../domain/category.js";
-import type { Orderability, Product } from "../domain/product.js";
+import { ListingOffers } from "../domain/listing.js";
+import type { Orderability } from "../domain/product.js";
 import {
   CATEGORY_REPOSITORY,
   DEFAULT_PRICE_RANGES,
@@ -15,6 +16,7 @@ import {
   type ProductSummary,
 } from "./ports.js";
 import {
+  parseCity,
   parseProductSearch,
   type ProductSearch,
   type ProductSearchInput,
@@ -102,13 +104,17 @@ export class CatalogService {
   }
 
   /**
-   * Fiche produit : seuls les produits visibles (publiés, boutique non suspendue) ; brouillons, produits en modération,
-   * refusés, archivés → introuvable.
+   * Fiche produit (S7.5-T02) : la fiche publiée et ses offres VISIBLES (publiées, boutique non suspendue), avec l'offre
+   * mise en avant (`city` : ville du client, qui départage deux offres au même prix). Fiche en modération, refusée,
+   * archivée ou sans offre visible → introuvable. Un doublon fusionné mène à la fiche qui le remplace (une fois).
    */
-  async getProduct(slug: string): Promise<Product | null> {
+  async getListing(slug: string, city?: unknown): Promise<ListingOffers | null> {
     if (!/^[a-z0-9-]{1,120}$/.test(slug)) return null;
-    const product = await this.products.findBySlug(slug);
-    return product?.isVisible ? product : null;
+    let snapshot = await this.products.findListingBySlug(slug);
+    if (snapshot?.mergedIntoSlug)
+      snapshot = await this.products.findListingBySlug(snapshot.mergedIntoSlug);
+    if (!snapshot || snapshot.status !== "PUBLISHED" || snapshot.mergedIntoSlug) return null;
+    return ListingOffers.build({ ...snapshot, city: parseCity(city) ?? null });
   }
 
   /** Liste paginée : catégorie (et sous-catégories), recherche, filtres, tri. Catégorie inconnue → liste vide. */
@@ -119,7 +125,13 @@ export class CatalogService {
     const criteria = await this.criteria(search);
     if (!criteria)
       return { items: [], page: 1, pageSize: search.pageSize, total: 0, totalPages: 1, search };
-    const page = await this.products.search(criteria, search.sort, search.page, search.pageSize);
+    const page = await this.products.search(
+      criteria,
+      search.sort,
+      search.page,
+      search.pageSize,
+      search.city ?? null,
+    );
     return { ...page, search };
   }
 
@@ -200,7 +212,8 @@ export class CatalogService {
         variant: {
           variantId: variant.id,
           productId: product.id,
-          slug: product.slug,
+          // Lien vers la fiche commune (S7.5-T02), pas vers l'offre
+          slug: product.listingSlug,
           title: product.isVisible ? product.title : "Produit indisponible",
           variantName:
             product.isVisible && product.variants.filter((v) => v.isActive).length > 1

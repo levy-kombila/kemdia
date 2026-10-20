@@ -219,7 +219,7 @@ const pageParams = (statuses: string[], description: string) => [
 const VENDOR_RULES = [
   "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.",
   "Un produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.",
-  "Pas encore de photos (tâche suivante) : le site affiche une image neutre.",
+  "Fiche commune (S7.5-T02, ADR-0049) : le titre, la description, la marque, la catégorie et les photos sont ceux de la **fiche**. Le vendeur ne les modifie que sur une fiche qu'il a créée et qui n'est **pas encore en ligne** (`listing.editable`) ; ensuite, seule l'équipe la corrige (`FICHE_PUBLIEE`, 409). Sur une fiche en ligne, une offre archivée revient en ligne tout de suite ; une offre retirée par l'équipe repasse par la modération.",
 ].join("\n\n");
 const vendorErrors = {
   ...sessionErrors,
@@ -241,6 +241,19 @@ const moderationErrors = {
   ),
   "429": problem("Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)"),
 };
+
+const listingIdParam = {
+  name: "listingId",
+  in: "path",
+  required: true,
+  description: "Identifiant de la fiche commune",
+  schema: { type: "string", format: "uuid" },
+};
+const LISTING_RULES = [
+  MODERATION_RULES.split("\n\n")[0],
+  "Fiches communes (S7.5-T02, ADR-0049) : une correction est recopiée sur **toutes** les offres de la fiche. Personne n'agit sur une fiche créée par sa propre boutique ni sur sa propre offre (`PRODUIT_SUR_SOI_INTERDIT`).",
+].join("\n\n");
+const adminListing = (description: string) => json("AdminListing", description);
 
 export const vendorProductPaths = {
   "/api/v1/vendors/products": {
@@ -381,6 +394,83 @@ export const vendorProductPaths = {
       },
     },
   },
+  "/api/v1/vendors/products/{productId}/variants": {
+    post: {
+      tags: ["Produits des vendeurs"],
+      summary: "Ajouter à son offre une déclinaison de la fiche (sans modération)",
+      description: `${VENDOR_RULES}\n\nS7.5-T02 : la déclinaison doit exister sur la fiche (sinon l'équipe l'ajoute) ; son nom et ses caractéristiques sont ceux de la fiche. Inscrit au journal d'audit.`,
+      operationId: "addOfferVariant",
+      security: bearer,
+      parameters: [productIdParam],
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("OfferLine") } },
+      },
+      responses: {
+        "201": vendorProduct("L'offre avec sa nouvelle variante"),
+        "400": problem("Corps invalide"),
+        ...vendorErrors,
+        "404": problem("`PRODUIT_INTROUVABLE`"),
+        "409": problem("`STATUT_PRODUIT_INCOMPATIBLE` (offre archivée) ou `BOUTIQUE_OCCUPEE`"),
+        "422": problem(
+          "`DECLINAISON_INTROUVABLE` (pas sur cette fiche) ou `PRODUIT_INVALIDE` (déjà proposée, prix…)",
+        ),
+      },
+    },
+  },
+  "/api/v1/vendors/listings": {
+    get: {
+      tags: ["Produits des vendeurs"],
+      summary: "Chercher une fiche en ligne (vendre un produit existant)",
+      description: `${VENDOR_RULES}\n\nS7.5-T02 : avant de créer un produit, le vendeur cherche s'il existe déjà ; \`myOfferId\` indique s'il le vend déjà. Les fiches les plus vendues d'abord.`,
+      operationId: "searchVendorListings",
+      security: bearer,
+      parameters: [
+        {
+          name: "q",
+          in: "query",
+          required: true,
+          description: "Mots cherchés (2 à 100 caractères)",
+          schema: { type: "string", minLength: 2, maxLength: 100 },
+        },
+        {
+          name: "limit",
+          in: "query",
+          description: "Fiches renvoyées (10 par défaut, 20 au plus)",
+          schema: { type: "integer", minimum: 1, maximum: 20, default: 10 },
+        },
+      ],
+      responses: {
+        "200": json("VendorListingPage", "Fiches en ligne correspondantes"),
+        "400": problem("Paramètres invalides"),
+        ...vendorErrors,
+      },
+    },
+  },
+  "/api/v1/vendors/listings/{listingId}/offer": {
+    post: {
+      tags: ["Produits des vendeurs"],
+      summary: "Vendre ce produit : offre sur une fiche en ligne (en ligne tout de suite)",
+      description: `${VENDOR_RULES}\n\nS7.5-T02 (choix du 2026-10-20) : une offre n'a ni texte ni photo à vérifier ; elle est en ligne tout de suite et inscrite au journal d'audit. Une seule offre par boutique et par fiche. Chaque ligne désigne une déclinaison de la fiche.`,
+      operationId: "createOffer",
+      security: bearer,
+      parameters: [listingIdParam],
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("OfferCreateRequest") } },
+      },
+      responses: {
+        "201": vendorProduct("L'offre créée (statut « published »)"),
+        "400": problem("Corps invalide"),
+        ...vendorErrors,
+        "404": problem("`FICHE_INTROUVABLE`"),
+        "409": problem(
+          "`DEJA_EN_VENTE` (modifier l'offre existante), `FICHE_NON_PUBLIEE` ou `BOUTIQUE_OCCUPEE`",
+        ),
+        "422": problem("`DECLINAISON_INTROUVABLE` ou `PRODUIT_INVALIDE` (prix, stock, doublon)"),
+      },
+    },
+  },
   "/api/v1/moderation/products": {
     get: {
       tags: ["Modération"],
@@ -459,6 +549,139 @@ export const vendorProductPaths = {
           "`STATUT_PRODUIT_INCOMPATIBLE` (pas en attente), `PRODUIT_MODIFIE` (le vendeur l'a renvoyé depuis votre lecture : relire) ou `BOUTIQUE_OCCUPEE`",
         ),
         "422": problem("`PRODUIT_INVALIDE` : motif trop court ou trop long"),
+      },
+    },
+  },
+  "/api/v1/moderation/listings": {
+    get: {
+      tags: ["Modération"],
+      summary: "Fiches communes (équipe)",
+      description: LISTING_RULES,
+      operationId: "listAdminListings",
+      security: bearer,
+      parameters: [
+        {
+          name: "q",
+          in: "query",
+          description: "Mots cherchés (titre, marque, catégorie)",
+          schema: { type: "string", maxLength: 100 },
+        },
+        ...pageParams(
+          ["draft", "pending", "published", "rejected", "archived"],
+          "Statut de la fiche (toutes par défaut)",
+        ),
+      ],
+      responses: {
+        "200": json("AdminListingPage", "Fiches, de la plus récente à la plus ancienne"),
+        "400": problem("Paramètres invalides"),
+        ...moderationErrors,
+      },
+    },
+  },
+  "/api/v1/moderation/listings/{listingId}": {
+    get: {
+      tags: ["Modération"],
+      summary: "Une fiche et toutes ses offres",
+      description: LISTING_RULES,
+      operationId: "getAdminListing",
+      security: bearer,
+      parameters: [listingIdParam],
+      responses: {
+        "200": json("AdminListingDetail", "La fiche et ses offres, tous statuts"),
+        "400": problem("Identifiant invalide"),
+        ...moderationErrors,
+        "404": problem("`FICHE_INTROUVABLE`"),
+      },
+    },
+    patch: {
+      tags: ["Modération"],
+      summary: "Corriger une fiche (contenu, déclinaisons renommées ou ajoutées)",
+      description: `${LISTING_RULES}\n\nRègles du contenu : celles d'un produit de vendeur. Une déclinaison n'est jamais retirée (elle peut figurer dans des commandes). Inscrit au journal d'audit (« listing.updated »).`,
+      operationId: "updateAdminListing",
+      security: bearer,
+      parameters: [listingIdParam],
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("ListingUpdateRequest") } },
+      },
+      responses: {
+        "200": adminListing("La fiche corrigée"),
+        "400": problem("Corps invalide"),
+        ...moderationErrors,
+        "404": problem("`FICHE_INTROUVABLE` (ou fusionnée)"),
+        "409": problem("`BOUTIQUE_OCCUPEE`"),
+        "422": problem("`PRODUIT_INVALIDE`, `CATEGORIE_INCONNUE` ou `DECLINAISON_INTROUVABLE`"),
+      },
+    },
+  },
+  "/api/v1/moderation/listings/{listingId}/images/{imageId}": {
+    delete: {
+      tags: ["Modération"],
+      summary: "Retirer une photo d'une fiche (effacée)",
+      description: `${LISTING_RULES}\n\nLa photo n'est plus jamais servie ; son empreinte reste au journal d'audit (« listing.image_removed »).`,
+      operationId: "removeAdminListingImage",
+      security: bearer,
+      parameters: [
+        listingIdParam,
+        {
+          name: "imageId",
+          in: "path",
+          required: true,
+          description: "Identifiant de la photo",
+          schema: { type: "string", format: "uuid" },
+        },
+      ],
+      responses: {
+        "200": adminListing("La fiche sans la photo"),
+        "400": problem("Identifiant invalide"),
+        ...moderationErrors,
+        "404": problem("`FICHE_INTROUVABLE` ou `PHOTO_INTROUVABLE`"),
+      },
+    },
+  },
+  "/api/v1/moderation/listings/{listingId}/merge": {
+    post: {
+      tags: ["Modération"],
+      summary: "Fusionner un doublon dans une fiche en ligne",
+      description: `${LISTING_RULES}\n\nLes offres du doublon passent sur la fiche cible ; chaque déclinaison vendue doit correspondre à une déclinaison de la cible. Une boutique qui vend sur les deux fiches bloque la fusion. L'adresse du doublon mène ensuite à la cible. Paniers et commandes ne changent pas. Inscrit au journal d'audit (« listing.merged »).`,
+      operationId: "mergeAdminListing",
+      security: bearer,
+      parameters: [listingIdParam],
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("ListingMergeRequest") } },
+      },
+      responses: {
+        "200": json("ListingMergeResult", "La fiche cible et le nombre d'offres déplacées"),
+        "400": problem("Corps invalide"),
+        ...moderationErrors,
+        "404": problem("`FICHE_INTROUVABLE`"),
+        "409": problem("`FUSION_IMPOSSIBLE` ou `BOUTIQUE_OCCUPEE`"),
+        "422": problem("`DECLINAISON_INTROUVABLE`"),
+      },
+    },
+  },
+  "/api/v1/moderation/offers/{productId}/withdraw": {
+    post: {
+      tags: ["Modération"],
+      summary: "Retirer une offre (motif montré au vendeur)",
+      description: `${LISTING_RULES}\n\nPrix abusif, contrefaçon… L'offre est refusée avec un motif ; pour revenir, elle repasse par la modération. Une offre de la boutique Kemdia est archivée. Inscrit au journal d'audit (« offer.withdrawn »).`,
+      operationId: "withdrawOffer",
+      security: bearer,
+      parameters: [productIdParam],
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("OfferWithdrawRequest") } },
+      },
+      responses: {
+        "200": json("ModerationProduct", "L'offre retirée"),
+        "400": problem("Corps invalide"),
+        ...moderationErrors,
+        "404": problem("`PRODUIT_INTROUVABLE`"),
+        "409": problem(
+          "`STATUT_PRODUIT_INCOMPATIBLE` (déjà retirée ou archivée) ou `BOUTIQUE_OCCUPEE`",
+        ),
+        "422": problem("`PRODUIT_INVALIDE` (motif de 5 à 300 caractères)"),
       },
     },
   },

@@ -64,6 +64,16 @@ const CATALOG: Record<CatalogErrorCode, { code: string; status: number }> = {
   IMAGE_TROP_PETITE: { code: "IMAGE_TROP_PETITE", status: HttpStatus.UNPROCESSABLE_ENTITY },
   TROP_DE_PHOTOS: { code: "TROP_DE_PHOTOS", status: HttpStatus.CONFLICT },
   PHOTO_INTROUVABLE: { code: "PHOTO_INTROUVABLE", status: HttpStatus.NOT_FOUND },
+  // Fiches communes et offres (S7.5-T02)
+  FICHE_INTROUVABLE: { code: "FICHE_INTROUVABLE", status: HttpStatus.NOT_FOUND },
+  FICHE_PUBLIEE: { code: "FICHE_PUBLIEE", status: HttpStatus.CONFLICT },
+  FICHE_NON_PUBLIEE: { code: "FICHE_NON_PUBLIEE", status: HttpStatus.CONFLICT },
+  DEJA_EN_VENTE: { code: "DEJA_EN_VENTE", status: HttpStatus.CONFLICT },
+  DECLINAISON_INTROUVABLE: {
+    code: "DECLINAISON_INTROUVABLE",
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+  },
+  FUSION_IMPOSSIBLE: { code: "FUSION_IMPOSSIBLE", status: HttpStatus.CONFLICT },
 };
 
 const capitalize = (message: string) => message.charAt(0).toUpperCase() + message.slice(1);

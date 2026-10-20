@@ -1,6 +1,7 @@
 import type {
   CategoryRepository,
   Facets,
+  ListingSnapshot,
   Page,
   PriceRange,
   ProductCriteria,
@@ -9,6 +10,7 @@ import type {
   SortKey,
 } from "../../src/modules/catalog/application/ports.js";
 import type { Category } from "../../src/modules/catalog/domain/category.js";
+import type { Seller } from "../../src/modules/catalog/domain/listing.js";
 import type { Product } from "../../src/modules/catalog/domain/product.js";
 
 /** Dépôts en mémoire : testent l'application sans base de données (le vrai SQL est testé en intégration). */
@@ -25,11 +27,51 @@ export class InMemoryCategories implements CategoryRepository {
   }
 }
 
+/**
+ * Offres en mémoire, regroupées par fiche (`listingId`) : la fiche reprend le contenu de sa première offre (comme les
+ * données d'avant le S7.5, une fiche par produit). `sellers` : boutiques connues ; `mergedInto` : doublons fusionnés.
+ */
 export class InMemoryProducts implements ProductRepository {
   lastCriteria: ProductCriteria | undefined;
+  sellers = new Map<string, Seller>();
+  mergedInto = new Map<string, string>();
   constructor(public items: Product[] = []) {}
-  findBySlug(slug: string): Promise<Product | null> {
-    return Promise.resolve(this.items.find((p) => p.slug === slug) ?? null);
+  findListingBySlug(slug: string): Promise<ListingSnapshot | null> {
+    const first = this.items.find((p) => p.listingSlug === slug);
+    if (!first) return Promise.resolve(null);
+    const offers = this.items.filter((p) => p.listingId === first.listingId);
+    const variants = new Map(
+      offers.flatMap((o) =>
+        o.variants.map(
+          (v) =>
+            [
+              v.listingVariantId,
+              { id: v.listingVariantId, name: v.name, attributes: v.attributes },
+            ] as const,
+        ),
+      ),
+    );
+    return Promise.resolve({
+      content: {
+        id: first.listingId,
+        slug: first.listingSlug,
+        title: first.title,
+        description: first.description,
+        brand: first.brand,
+        categoryId: first.categoryId,
+        images: first.images,
+        rating: first.rating,
+        reviewCount: first.reviewCount,
+        isFeatured: first.isFeatured,
+        isBestseller: first.isBestseller,
+        isNew: first.isNew,
+      },
+      status: first.listingPublished ? "PUBLISHED" : "ARCHIVED",
+      mergedIntoSlug: this.mergedInto.get(slug) ?? null,
+      variants: [...variants.values()],
+      offers,
+      sellers: this.sellers,
+    });
   }
   findByVariantIds(variantIds: readonly string[]): Promise<Product[]> {
     return Promise.resolve(
