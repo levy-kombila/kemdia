@@ -25,6 +25,7 @@
 | **4.14** | 2026-10-19 | S7     | Données personnelles, APDPVP (ADR-0047) : §3.23 (nouvelle) module `privacy`, copie JSON, suppression du compte, comptes inactifs (3 ans, avis 30 jours avant), anonymisation des commandes et paiements, contrat 1.23.0 ; §5.1 « Mes données », pages légales ; §6 consentement « 18 ans ou plus », registre des traitements |
 | **4.15** | 2026-10-19 | S7     | Clôture du Sprint 7 (v0.8.0) : aucun changement d'architecture ; versions des paquets 0.8.0, contrat de l'API 1.23.0 inchangé                                                                                                                                                                                                |
 | **4.16** | 2026-10-19 | S7.5   | CI plus rapide (ADR-0048) : §7 jobs en parallèle, déploiements, production et étiquettes `main`/`latest` conditionnés aux tests verts ; ZAP plus robuste (code de sortie, mémoire, jetons retirés des artefacts) ; CI/CD 13 → 6 min                                                                                          |
+| **4.17** | 2026-10-20 | S7.5   | Fiche commune et offres (ADR-0049) : §3.24 (nouvelle) fiches, déclinaisons, offres, offre mise en avant, déclencheurs de la base, routes des vendeurs et de l'équipe ; §3.6 lecture publique par fiche ; §3.12 réservation limitée aux fiches en ligne ; contrat 1.24.0                                                      |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                         |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                               |
 | **3.7**  | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                                                                  |
@@ -1018,6 +1019,31 @@ Colonnes : `identity.accounts` (`terms_accepted_at`, `adult_confirmed_at`, `last
 `deleted_at`) ; `anonymized_at` sur commandes, paiements et remboursements. Les règles « figées » de la base n'acceptent
 qu'**une** anonymisation qui n'efface que les coordonnées. Inscription : case « J'ai 18 ans ou plus » distincte des
 conditions. Contrat de l'API : 1.23.0. Registre et procédures : `docs/conformite/`.
+
+### 3.24 Fiche commune et offres (S7.5-T02)
+
+Décision : [ADR-0049](adr/0049-fiches-communes-offres.md). Une **fiche** (`catalog.listings`, ses déclinaisons
+`listing_variants`) décrit le produit ; chaque boutique y pose son **offre** (`catalog.products`, une par boutique et par
+fiche) avec ses prix et ses stocks par variante (`product_variants.listing_variant_id`). Paniers, commandes et factures
+désignent toujours des variantes d'offre : rien n'a changé pour eux.
+
+```
+Fiche (listings)  ──1..n──  Déclinaisons (listing_variants)
+   │ contenu copié (base)          │ nom copié (base)
+   └──1..n── Offres (products, boutique) ──1..n── Variantes d'offre (prix, stock) ◄── panier, commande
+Agrégats de la fiche (base) : prix « à partir de », nombre d'offres visibles
+Fiche pas encore en ligne : suit le statut de l'offre de la boutique qui l'a créée (modération)
+```
+
+| Qui          | Routes (`/api/v1`)                                                                                                          | Règle                                                              |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Client       | `GET /products` (une carte par fiche), `GET /products/{slug}?ville=` (offres, offre mise en avant)                          | en stock → moins chère → ville du client → identifiant             |
+| Vendeur      | `GET /vendors/listings?q=`, `POST /vendors/listings/{id}/offer`, `POST /vendors/products/{id}/variants`                     | offre en ligne tout de suite ; contenu seulement avant publication |
+| Équipe (2FA) | `GET/PATCH /moderation/listings/{id}`, `DELETE …/images/{imageId}`, `POST …/merge`, `POST /moderation/offers/{id}/withdraw` | journal d'audit ; jamais sur sa propre boutique                    |
+
+Journal d'audit : `offer.created`, `offer.variant_added`, `offer.restored`, `offer.withdrawn`, `listing.updated`,
+`listing.image_removed`, `listing.merged` (cible `listing` ajoutée). Boutiques vues du catalogue : `catalog.sellers`,
+tenue par `vendors` à chaque décision. Contrat de l'API : 1.24.0.
 
 ## 4. Choix technologiques
 
