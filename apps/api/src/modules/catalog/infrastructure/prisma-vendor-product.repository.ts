@@ -13,7 +13,14 @@ import type { ProductStatus } from "../domain/product.js";
 
 const withVariants = {
   variants: { orderBy: [{ position: "asc" }, { id: "asc" }] },
-  listing: { select: { slug: true, status: true, createdByShopId: true } },
+  listing: {
+    select: {
+      slug: true,
+      status: true,
+      createdByShopId: true,
+      variants: { orderBy: [{ position: "asc" }, { id: "asc" }] },
+    },
+  },
 } satisfies Prisma.ProductInclude;
 
 type Row = Prisma.ProductGetPayload<{ include: typeof withVariants }>;
@@ -26,6 +33,11 @@ function toRecord(row: Row): VendorProductRecord {
     listingSlug: row.listing.slug,
     listingStatus: row.listing.status,
     listingOwnerShopId: row.listing.createdByShopId,
+    listingVariants: row.listing.variants.map((v) => ({
+      id: v.id,
+      name: v.name,
+      attributes: isStringRecord(v.attributes) ? v.attributes : {},
+    })),
     slug: row.slug,
     title: row.title,
     description: row.description,

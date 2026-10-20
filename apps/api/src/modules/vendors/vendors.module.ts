@@ -37,7 +37,11 @@ import { PrismaShopRepository } from "./infrastructure/prisma-shop.repository.js
 import { VendorsTransactionRunner } from "./infrastructure/vendors-transaction.js";
 import { AdminShopController } from "./interface/admin-shop.controller.js";
 import { ModerationController } from "./interface/moderation.controller.js";
-import { ListingAdminController, VendorListingController } from "./interface/listing.controller.js";
+import {
+  ListingAdminController,
+  VendorCorrectionController,
+  VendorListingController,
+} from "./interface/listing.controller.js";
 import { ModerationImageController } from "./interface/moderation-image.controller.js";
 import { VendorProductImageController } from "./interface/vendor-product-image.controller.js";
 import { VendorProductController } from "./interface/vendor-product.controller.js";
@@ -63,6 +67,7 @@ const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
     // Fiches communes et offres (S7.5-T02)
     VendorListingController,
     ListingAdminController,
+    VendorCorrectionController,
     VendorProductImageController,
     ModerationImageController,
     VendorOrderController,

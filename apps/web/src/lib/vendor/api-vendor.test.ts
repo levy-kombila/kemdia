@@ -11,7 +11,7 @@ const NOW = "2026-10-16T18:00:00.000Z";
 const PRODUCT_VIEW = {
   id: PRODUCT,
   slug: "chemise-pagne",
-  listing: { id: PRODUCT, slug: "chemise-pagne", status: "pending", editable: true },
+  listing: { id: PRODUCT, slug: "chemise-pagne", status: "pending", editable: true, variants: [] },
   title: "Chemise en pagne",
   description: "Chemise homme en pagne wax.",
   brand: null,

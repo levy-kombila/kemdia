@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   API_ERROR_CODES,
+  LISTING_CORRECTION_LIMITS,
   PRIVACY_ERROR_CODES,
   AVAILABILITY_REASONS,
   ADMIN_ASSIGNABLE_ROLES,
@@ -1460,6 +1461,11 @@ const vendorProductFields = {
         .describe(
           "La boutique peut modifier le contenu (titre, photos…) : fiche créée par elle et pas encore en ligne",
         ),
+      variants: z
+        .array(
+          z.object({ id: uuid, name: z.string(), attributes: z.record(z.string(), z.string()) }),
+        )
+        .describe("Déclinaisons de la fiche (S7.5-T03 : celles que l'offre peut ajouter)"),
     })
     .describe("Fiche commune sur laquelle la boutique vend (S7.5-T02)"),
   title: z.string(),
@@ -1688,6 +1694,68 @@ export const ListingImageParamsSchema = z.strictObject({
   listingId: uuidInput,
   imageId: uuidInput,
 });
+
+// --- Propositions de correction (S7.5-T03) ---
+
+const C = LISTING_CORRECTION_LIMITS;
+export const CORRECTION_CURSOR_PATTERN = /^[A-Za-z0-9_-]{20,120}$/;
+
+export const CorrectionCreateRequestSchema = z
+  .strictObject({
+    message: loose(C.messageMax).describe(
+      `Ce qu'il faut corriger sur la fiche (${C.messageMin} à ${C.messageMax} caractères)`,
+    ),
+  })
+  .meta({ id: "CorrectionCreateRequest", description: "Correction proposée à l'équipe" });
+export type CorrectionCreateRequest = z.infer<typeof CorrectionCreateRequestSchema>;
+
+export const ListingCorrectionSchema = z
+  .object({
+    id: uuid,
+    listing: z.object({ id: uuid, slug, title: z.string() }),
+    shop: z.object({ id: uuid, name: z.string() }).nullable(),
+    message: z.string(),
+    createdAt: z.iso.datetime(),
+    closedAt: z.iso.datetime().nullable(),
+    note: z.string().nullable().describe("Réponse de l'équipe à la clôture"),
+  })
+  .meta({
+    id: "ListingCorrection",
+    description: "Proposition de correction d'une fiche (S7.5-T03)",
+  });
+export type ListingCorrection = z.infer<typeof ListingCorrectionSchema>;
+
+export const ListingCorrectionListParamsSchema = z.strictObject({
+  status: z.enum(["open", "closed"]).default("open"),
+  listingId: uuidInput.optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  after: z.string().regex(CORRECTION_CURSOR_PATTERN).optional(),
+});
+export type ListingCorrectionListParams = z.infer<typeof ListingCorrectionListParamsSchema>;
+
+export const ListingCorrectionPageSchema = z
+  .object({
+    items: z.array(ListingCorrectionSchema),
+    nextCursor: z.string().regex(CORRECTION_CURSOR_PATTERN).nullable(),
+  })
+  .meta({
+    id: "ListingCorrectionPage",
+    description: "Ouvertes : de la plus ancienne à la plus récente ; closes : l'inverse",
+  });
+export type ListingCorrectionPage = z.infer<typeof ListingCorrectionPageSchema>;
+
+export const CorrectionIdParamsSchema = z.strictObject({ correctionId: uuidInput });
+
+export const CorrectionCloseRequestSchema = z
+  .strictObject({
+    note: z
+      .string()
+      .max(C.noteMax * 2)
+      .optional()
+      .describe(`Réponse montrée au vendeur (${C.noteMax} caractères au plus)`),
+  })
+  .meta({ id: "CorrectionCloseRequest", description: "Clôture d'une proposition de correction" });
+export type CorrectionCloseRequest = z.infer<typeof CorrectionCloseRequestSchema>;
 
 export const OfferWithdrawRequestSchema = z
   .strictObject({

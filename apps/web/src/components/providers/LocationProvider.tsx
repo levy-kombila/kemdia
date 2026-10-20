@@ -4,6 +4,20 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { getCity, type City } from "@/lib/delivery";
 
 const STORAGE_KEY = "kemdia.location.v1";
+/**
+ * Ville choisie, aussi en cookie (S7.5-T03, choix du 2026-10-20) : le serveur la lit pour mettre en avant, à prix
+ * égal, l'offre d'une boutique de cette ville. La ville seule (identifiant connu), jamais le quartier.
+ */
+export const CITY_COOKIE = "kemdia_ville";
+
+function writeCityCookie(cityId: string): void {
+  try {
+    const secure = window.location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `${CITY_COOKIE}=${encodeURIComponent(cityId)}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+  } catch {
+    /* cookies indisponibles */
+  }
+}
 
 export type DeliveryLocation = { cityId: string; neighborhood: string | null };
 
@@ -41,8 +55,11 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
+      const stored = parseStored(window.localStorage.getItem(STORAGE_KEY));
+      // Ville choisie avant le S7.5 : le cookie est posé au premier passage
+      if (stored && !document.cookie.includes(`${CITY_COOKIE}=`)) writeCityCookie(stored.cityId);
       // eslint-disable-next-line react-hooks/set-state-in-effect -- lecture unique du stockage navigateur après montage (évite un écart SSR/client)
-      setLoc(parseStored(window.localStorage.getItem(STORAGE_KEY)));
+      setLoc(stored);
     } catch {
       /* stockage indisponible */
     }
@@ -50,6 +67,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
 
   const setLocation = useCallback((loc: DeliveryLocation) => {
     setLoc(loc);
+    if (getCity(loc.cityId)) writeCityCookie(loc.cityId);
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(loc));
     } catch {

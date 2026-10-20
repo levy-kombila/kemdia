@@ -45,35 +45,36 @@ model Category {
 /// parmi les offres visibles, nombre d'offres visibles.
 model Listing {
   /// Une fiche créée avec une offre reprend l'identifiant et l'adresse de cette offre (données d'avant le S7.5 comprises)
-  id              String           @id @db.Uuid
-  slug            String           @unique @db.VarChar(120)
-  title           String           @db.VarChar(120)
-  description     String           @default("")
-  brand           String?          @db.VarChar(60)
-  categoryId      String           @map("category_id") @db.Uuid
-  category        Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  images          String[]         @default([])
+  id              String              @id @db.Uuid
+  slug            String              @unique @db.VarChar(120)
+  title           String              @db.VarChar(120)
+  description     String              @default("")
+  brand           String?             @db.VarChar(60)
+  categoryId      String              @map("category_id") @db.Uuid
+  category        Category            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  images          String[]            @default([])
   /// PUBLISHED : visible (si au moins une offre est visible) ; avant publication, suit l'offre de la boutique qui l'a créée
-  status          ProductStatus    @default(DRAFT)
+  status          ProductStatus       @default(DRAFT)
   /// Boutique qui a créé la fiche (vendors, UUID) ; ses photos sont rangées avec l'offre de cette boutique
-  createdByShopId String           @map("created_by_shop_id") @db.Uuid
+  createdByShopId String              @map("created_by_shop_id") @db.Uuid
   /// Doublon fusionné par l'équipe : l'ancienne adresse mène à cette fiche
-  mergedIntoId    String?          @map("merged_into_id") @db.Uuid
-  mergedInto      Listing?         @relation("ListingMerge", fields: [mergedIntoId], references: [id], onDelete: Restrict)
-  mergedFrom      Listing[]        @relation("ListingMerge")
-  price           Int              @default(0)
-  compareAtPrice  Int?             @map("compare_at_price")
-  offerCount      Int              @default(0) @map("offer_count")
-  rating          Float            @default(0)
-  reviewCount     Int              @default(0) @map("review_count")
-  isFeatured      Boolean          @default(false) @map("is_featured")
-  isBestseller    Boolean          @default(false) @map("is_bestseller")
-  isNew           Boolean          @default(false) @map("is_new")
-  searchText      String           @default("") @map("search_text")
+  mergedIntoId    String?             @map("merged_into_id") @db.Uuid
+  mergedInto      Listing?            @relation("ListingMerge", fields: [mergedIntoId], references: [id], onDelete: Restrict)
+  mergedFrom      Listing[]           @relation("ListingMerge")
+  price           Int                 @default(0)
+  compareAtPrice  Int?                @map("compare_at_price")
+  offerCount      Int                 @default(0) @map("offer_count")
+  rating          Float               @default(0)
+  reviewCount     Int                 @default(0) @map("review_count")
+  isFeatured      Boolean             @default(false) @map("is_featured")
+  isBestseller    Boolean             @default(false) @map("is_bestseller")
+  isNew           Boolean             @default(false) @map("is_new")
+  searchText      String              @default("") @map("search_text")
   variants        ListingVariant[]
   offers          Product[]
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  corrections     ListingCorrection[]
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@index([categoryId])
   @@index([status, offerCount, price])
@@ -96,6 +97,28 @@ model ListingVariant {
 
   @@index([listingId])
   @@map("listing_variants")
+  @@schema("catalog")
+}
+
+/// Correction d'une fiche en ligne proposée par une boutique qui la vend (S7.5-T03) : message libre lu par l'équipe,
+/// qui corrige la fiche puis clôt la proposition. Aucune donnée personnelle : la boutique, jamais le compte.
+model ListingCorrection {
+  id        String    @id @db.Uuid
+  listingId String    @map("listing_id") @db.Uuid
+  listing   Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  /// Boutique qui propose (vendors, UUID)
+  shopId    String    @map("shop_id") @db.Uuid
+  message   String    @db.VarChar(500)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// Clôture par l'équipe : qui, quand, avec quelle réponse
+  closedBy  String?   @map("closed_by") @db.Uuid
+  closedAt  DateTime? @map("closed_at") @db.Timestamptz(3)
+  note      String?   @db.VarChar(300)
+
+  @@index([closedAt, createdAt, id])
+  @@index([listingId])
+  @@index([shopId])
+  @@map("listing_corrections")
   @@schema("catalog")
 }
 

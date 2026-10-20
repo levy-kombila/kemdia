@@ -42,6 +42,11 @@ const api = vi.hoisted(() => ({
   decideKyc: vi.fn(),
   shipmentStep: vi.fn(),
   updateTariffs: vi.fn(),
+  updateListing: vi.fn(),
+  removeListingImage: vi.fn(),
+  mergeListing: vi.fn(),
+  withdrawOffer: vi.fn(),
+  closeCorrection: vi.fn(),
 }));
 vi.mock("./api-staff", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api-staff")>()),
@@ -398,5 +403,82 @@ describe("livraisons (S7-T02)", () => {
       );
     }
     expect(api.updateTariffs).not.toHaveBeenCalled();
+  });
+});
+
+describe("fiches produits (S7.5-T03)", () => {
+  const LISTING = "77777777-7777-4777-8777-777777777777";
+  const TARGET = "88888888-8888-4888-8888-888888888888";
+  const LV = "99999999-9999-4999-8999-999999999999";
+  const TV = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const PAGE = `/equipe/fiches/${LISTING}`;
+
+  it("correction : seuls les champs changés partent ; marque vide = sans marque", async () => {
+    api.updateListing.mockResolvedValue({ ok: true, data: {} });
+    const f = form({
+      listingId: LISTING,
+      title: " Téléphone X ",
+      brand: "",
+      [`variant-${LV}`]: "Noir 128 Go",
+      [`variant-before-${LV}`]: "Noir 128 Go",
+      newVariant: "Vert",
+    });
+    f.append("variantIds", LV);
+    expect(await redirectOf(actions.updateListingAction(f))).toBe(`${PAGE}?ok=fiche-corrigee`);
+    expect(api.updateListing).toHaveBeenCalledWith(TOKEN, LISTING, {
+      title: "Téléphone X",
+      brand: null,
+      variants: [{ name: "Vert" }],
+    });
+    expect(await redirectOf(actions.updateListingAction(form({ listingId: "x" })))).toBe(
+      "/equipe/fiches",
+    );
+  });
+
+  it("fusion : correspondance des déclinaisons ; un refus revient sur l'étape de la cible", async () => {
+    api.mergeListing.mockResolvedValueOnce({ ok: false, code: "FUSION_IMPOSSIBLE" });
+    const f = form({ listingId: LISTING, into: TARGET, [`map-${LV}`]: TV });
+    f.append("sourceVariantIds", LV);
+    expect(await redirectOf(actions.mergeListingAction(f))).toBe(
+      `${PAGE}?fusion=${TARGET}&erreur=FUSION_IMPOSSIBLE`,
+    );
+    expect(api.mergeListing).toHaveBeenCalledWith(TOKEN, LISTING, TARGET, { [LV]: TV });
+    api.mergeListing.mockResolvedValueOnce({ ok: true, data: {} });
+    expect(await redirectOf(actions.mergeListingAction(f))).toBe(
+      `/equipe/fiches/${TARGET}?ok=fiche-fusionnee`,
+    );
+  });
+
+  it("retrait d'une offre : motif obligatoire", async () => {
+    expect(
+      await redirectOf(
+        actions.withdrawOfferAction(form({ listingId: LISTING, productId: PRODUCT, reason: "x" })),
+      ),
+    ).toBe(`${PAGE}?erreur=PRODUIT_INVALIDE`);
+    api.withdrawOffer.mockResolvedValue({ ok: true, data: {} });
+    expect(
+      await redirectOf(
+        actions.withdrawOfferAction(
+          form({ listingId: LISTING, productId: PRODUCT, reason: "Prix abusif" }),
+        ),
+      ),
+    ).toBe(`${PAGE}?ok=offre-retiree`);
+    expect(api.withdrawOffer).toHaveBeenCalledWith(TOKEN, PRODUCT, "Prix abusif");
+  });
+
+  it("clôture d'une proposition : retour validé (jamais vers un autre site)", async () => {
+    api.closeCorrection.mockResolvedValue({ ok: true, data: {} });
+    const id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    expect(
+      await redirectOf(
+        actions.closeCorrectionAction(form({ correctionId: id, back: PAGE, note: " Merci " })),
+      ),
+    ).toBe(`${PAGE}?ok=correction-close`);
+    expect(api.closeCorrection).toHaveBeenCalledWith(TOKEN, id, "Merci");
+    expect(
+      await redirectOf(
+        actions.closeCorrectionAction(form({ correctionId: id, back: "https://pirate.test/x" })),
+      ),
+    ).toBe("/equipe/fiches?ok=correction-close");
   });
 });

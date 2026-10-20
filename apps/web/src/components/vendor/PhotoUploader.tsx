@@ -60,6 +60,22 @@ export async function reduce(file: File): Promise<Reduced> {
   return blob.size <= MAX_UPLOAD_BYTES ? { blob } : { error: "Photo trop lourde (5 Mo au plus)." };
 }
 
+/** Résultat de l'envoi d'une photo au relais du site. */
+export type SentPhoto = { ok: true } | { ok: false; message: string; signedOut?: boolean };
+
+/** Envoie une photo (déjà réduite) au relais du site, qui la transmet à l'API (`POST /vendeur/produits/{id}/photos`). */
+export async function sendPhoto(productId: string, blob: Blob): Promise<SentPhoto> {
+  const response = await fetch(`/vendeur/produits/${productId}/photos`, {
+    method: "POST",
+    headers: { "content-type": blob.type || "application/octet-stream" },
+    body: blob,
+  }).catch(() => null);
+  const body = (await response?.json().catch(() => null)) as SentPhoto | null;
+  return (
+    body ?? { ok: false, message: "service momentanément indisponible, réessayez dans un instant." }
+  );
+}
+
 /**
  * Ajout de photos à un produit (S6-T06) : choix d'une ou plusieurs photos, réduction, envoi une par une au relais du
  * site (`POST /vendeur/produits/{id}/photos`). Chaque photo ajoutée renvoie le produit en modération.
@@ -93,22 +109,14 @@ export function PhotoUploader({ productId, remaining }: { productId: string; rem
         continue;
       }
       setStatus(`${label} : envoi…`);
-      const response = await fetch(`/vendeur/produits/${productId}/photos`, {
-        method: "POST",
-        headers: { "content-type": reduced.blob.type || "application/octet-stream" },
-        body: reduced.blob,
-      }).catch(() => null);
-      const body = (await response?.json().catch(() => null)) as
-        { ok: true } | { ok: false; message: string; signedOut?: boolean } | null;
-      if (body?.ok) {
+      const body = await sendPhoto(productId, reduced.blob);
+      if (body.ok) {
         sent += 1;
         continue;
       }
-      issues.push(
-        `${label} : ${body?.message ?? "service momentanément indisponible, réessayez dans un instant."}`,
-      );
+      issues.push(`${label} : ${body.message}`);
       // Session perdue : inutile d'envoyer les suivantes
-      if (body && !body.ok && body.signedOut) break;
+      if (body.signedOut) break;
     }
     setStatus(null);
     if (sent > 0 && issues.length === 0) {

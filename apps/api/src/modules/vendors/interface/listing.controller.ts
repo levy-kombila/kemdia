@@ -15,6 +15,16 @@ import {
 import { Throttle } from "@nestjs/throttler";
 import type { Request } from "express";
 import {
+  CorrectionCloseRequestSchema,
+  CorrectionCreateRequestSchema,
+  CorrectionIdParamsSchema,
+  ListingCorrectionListParamsSchema,
+  type CorrectionCloseRequest,
+  type CorrectionCreateRequest,
+  type ListingCorrection,
+  type ListingCorrectionListParams,
+  type ListingCorrectionPage,
+  type VendorListing,
   AdminListingListParamsSchema,
   ListingIdParamsSchema,
   ListingImageParamsSchema,
@@ -51,6 +61,7 @@ import {
   decodeProductCursor,
   encodeProductCursor,
   presentAdminListing,
+  presentCorrection,
   presentModerationProduct,
   presentVendorListing,
   presentVendorProduct,
@@ -80,6 +91,19 @@ export class VendorListingController {
     return {
       items: found.map(({ listing, myOfferId }) => presentVendorListing(listing, myOfferId)),
     };
+  }
+
+  /** Une fiche en ligne, avec l'offre de la boutique s'il y en a une (page « Vendre ce produit »). */
+  @Get(":listingId")
+  @Header("Cache-Control", "no-store")
+  async get(
+    @CurrentSession() session: AuthenticatedSession,
+    @Param({ schema: ListingIdParamsSchema }) params: { listingId: string },
+  ): Promise<VendorListing> {
+    const { listing, myOfferId } = await withVendorsErrors(() =>
+      this.products.publishedListing(session.account.id, params.listingId),
+    );
+    return presentVendorListing(listing, myOfferId);
   }
 
   /** Offre de la boutique sur une fiche en ligne (201) : en ligne tout de suite. */
@@ -202,6 +226,47 @@ export class ListingAdminController {
     return { listing: presentAdminListing(target), moved };
   }
 
+  /** Propositions de correction des vendeurs : ouvertes (par défaut) ou closes, d'une fiche ou de toutes. */
+  @Get("listing-corrections")
+  @Header("Cache-Control", "no-store")
+  async corrections(
+    @Query({ schema: ListingCorrectionListParamsSchema }) query: ListingCorrectionListParams,
+  ): Promise<ListingCorrectionPage> {
+    const page = await withVendorsErrors(() =>
+      this.listings.corrections({
+        open: query.status === "open",
+        listingId: query.listingId,
+        limit: query.limit,
+        after: query.after ? decodeProductCursor(query.after) : undefined,
+      }),
+    );
+    return {
+      items: page.items.map(({ correction, shop }) => presentCorrection(correction, shop)),
+      nextCursor: page.next ? encodeProductCursor(page.next) : null,
+    };
+  }
+
+  /** Clôture d'une proposition, avec une réponse facultative montrée au vendeur. */
+  @Post("listing-corrections/:correctionId/close")
+  @HttpCode(HttpStatus.OK)
+  @Header("Cache-Control", "no-store")
+  async closeCorrection(
+    @CurrentSession() session: AuthenticatedSession,
+    @Param({ schema: CorrectionIdParamsSchema }) params: { correctionId: string },
+    @Body({ schema: CorrectionCloseRequestSchema }) body: CorrectionCloseRequest,
+    @Req() req: Request,
+  ): Promise<ListingCorrection> {
+    const { correction, shop } = await withVendorsErrors(() =>
+      this.listings.closeCorrection(
+        actorOf(session),
+        params.correctionId,
+        body.note ?? null,
+        auditContextOf(req),
+      ),
+    );
+    return presentCorrection(correction, shop);
+  }
+
   /** Retrait d'une offre (prix abusif, contrefaçon…), avec un motif montré au vendeur. */
   @Post("offers/:productId/withdraw")
   @HttpCode(HttpStatus.OK)
@@ -222,6 +287,36 @@ export class ListingAdminController {
         ),
       ),
     );
+  }
+}
+
+/**
+ * Proposition de correction de la fiche d'une offre de la boutique (`/api/v1/vendors/products/{id}/corrections`,
+ * S7.5-T03) : rôle « vendeur » ET boutique active ; tracée.
+ */
+@Controller("vendors/products")
+@Authorize("vendor")
+@AccountRateLimit(20)
+export class VendorCorrectionController {
+  constructor(private readonly products: VendorProductService) {}
+
+  @Post(":productId/corrections")
+  @Header("Cache-Control", "no-store")
+  async propose(
+    @CurrentSession() session: AuthenticatedSession,
+    @Param({ schema: VendorProductIdParamsSchema }) params: { productId: string },
+    @Body({ schema: CorrectionCreateRequestSchema }) body: CorrectionCreateRequest,
+    @Req() req: Request,
+  ): Promise<ListingCorrection> {
+    const correction = await withVendorsErrors(() =>
+      this.products.proposeCorrection(
+        session.account.id,
+        params.productId,
+        body.message,
+        auditContextOf(req),
+      ),
+    );
+    return presentCorrection(correction, null);
   }
 }
 

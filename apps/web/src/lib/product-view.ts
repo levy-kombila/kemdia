@@ -65,3 +65,52 @@ export function detailFavorite(product: ProductDetail): Omit<Favorite, "addedAt"
     inStock: product.inStock,
   };
 }
+
+// --- Offres des boutiques (S7.5-T03, ADR-0049) ---
+
+export type OfferView = ProductDetail["offers"][number];
+
+/** Boutique qui vend la variante affichée (celle du bouton d'achat). */
+export function currentOffer(product: ProductDetail, variant: Variant): OfferView | undefined {
+  return product.offers.find((o) => o.variants.some((v) => v.variantId === variant.id));
+}
+
+/**
+ * Autres boutiques qui vendent la MÊME déclinaison que la variante affichée, avec leur ligne de panier : en stock
+ * d'abord, puis la moins chère (l'ordre de l'API, qui met aussi la ville du client en avant à prix égal).
+ */
+export function otherOffers(
+  product: ProductDetail,
+  variant: Variant,
+): { offer: OfferView; line: Omit<CartLine, "quantity">; compareAtPrice: number | null }[] {
+  const current = currentOffer(product, variant);
+  const declinaison = current?.variants.find((v) => v.variantId === variant.id)?.listingVariantId;
+  if (!declinaison) return [];
+  return product.offers
+    .filter((o) => o.offerId !== current?.offerId)
+    .flatMap((offer) => {
+      const own = offer.variants.find((v) => v.listingVariantId === declinaison);
+      if (!own) return [];
+      return [
+        {
+          offer,
+          compareAtPrice: own.compareAtPrice,
+          line: {
+            variantId: own.variantId,
+            productId: product.id,
+            slug: product.slug,
+            title: product.title,
+            variantName: product.variants.length > 1 ? own.name : "",
+            price: own.price,
+            image: product.images[0] ?? null,
+            maxQuantity: own.available ? own.stock : 0,
+          },
+        },
+      ];
+    })
+    .sort(
+      (a, b) =>
+        Number(b.line.maxQuantity > 0) - Number(a.line.maxQuantity > 0) ||
+        a.line.price - b.line.price,
+    );
+}

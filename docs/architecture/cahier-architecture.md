@@ -26,6 +26,7 @@
 | **4.15** | 2026-10-19 | S7     | Clôture du Sprint 7 (v0.8.0) : aucun changement d'architecture ; versions des paquets 0.8.0, contrat de l'API 1.23.0 inchangé                                                                                                                                                                                                |
 | **4.16** | 2026-10-19 | S7.5   | CI plus rapide (ADR-0048) : §7 jobs en parallèle, déploiements, production et étiquettes `main`/`latest` conditionnés aux tests verts ; ZAP plus robuste (code de sortie, mémoire, jetons retirés des artefacts) ; CI/CD 13 → 6 min                                                                                          |
 | **4.17** | 2026-10-20 | S7.5   | Fiche commune et offres (ADR-0049) : §3.24 (nouvelle) fiches, déclinaisons, offres, offre mise en avant, déclencheurs de la base, routes des vendeurs et de l'équipe ; §3.6 lecture publique par fiche ; §3.12 réservation limitée aux fiches en ligne ; contrat 1.24.0                                                      |
+| **4.18** | 2026-10-20 | S7.5   | Écrans de la fiche commune (ADR-0050) : §3.24 page produit « Autres vendeurs » et cookie `kemdia_ville`, « Vendre ce produit » (chercher d'abord, photos d'abord), espace de l'équipe « Fiches produits », propositions de correction (`catalog.listing_corrections`, 3 routes, 2 actions d'audit) ; contrat 1.25.0          |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                         |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                               |
 | **3.7**  | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                                                                  |
@@ -1044,6 +1045,24 @@ Fiche pas encore en ligne : suit le statut de l'offre de la boutique qui l'a cr�
 Journal d'audit : `offer.created`, `offer.variant_added`, `offer.restored`, `offer.withdrawn`, `listing.updated`,
 `listing.image_removed`, `listing.merged` (cible `listing` ajoutée). Boutiques vues du catalogue : `catalog.sellers`,
 tenue par `vendors` à chaque décision. Contrat de l'API : 1.24.0.
+
+**Écrans et propositions de correction (S7.5-T03, [ADR-0050](adr/0050-ecrans-fiches-offres.md)).**
+
+- Page produit : le cookie `kemdia_ville` (ville choisie) part en `?ville=`. « Vendu par » montre l'offre mise en avant ;
+  « Autres vendeurs » liste les autres offres de la même déclinaison, chacune avec son ajout au panier.
+- Vendeur : « Ajouter un produit » cherche d'abord une fiche en ligne (`/vendeur/fiches/{id}` pour y vendre). Sinon il
+  crée la fiche, photos d'abord.
+- Une boutique propose une correction d'une fiche en ligne où elle vend : `catalog.listing_corrections`, 10 à 500
+  caractères, 10 ouvertes au plus par boutique (verrou consultatif par boutique). L'équipe la clôt avec une réponse
+  facultative (300 caractères au plus).
+
+| Qui          | Routes (`/api/v1`)                                                                                | Règle                                       |
+| ------------ | ------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Vendeur      | `GET /vendors/listings/{id}`, `POST /vendors/products/{id}/corrections`                           | fiche en ligne ; offre de sa boutique       |
+| Équipe (2FA) | `GET /moderation/listing-corrections?status=&listingId=`, `POST …/listing-corrections/{id}/close` | jamais la proposition de sa propre boutique |
+
+Journal d'audit : `listing.correction_proposed`, `listing.correction_closed`. Espace de l'équipe : section « Fiches
+produits » (`/equipe/fiches`, `/equipe/fiches/{id}`). Contrat de l'API : 1.25.0.
 
 ## 4. Choix technologiques
 

@@ -21,7 +21,8 @@ export interface CatalogPort {
   products(query: ProductQuery): Promise<ProductPage>;
   facets(query: ProductQuery): Promise<Facets>;
   /** `null` si le produit n'existe pas ou n'est pas publié. */
-  product(slug: string): Promise<ProductDetail | null>;
+  /** `city` : nom de la ville du client (S7.5-T03), qui départage deux offres au même prix. */
+  product(slug: string, city?: string): Promise<ProductDetail | null>;
 }
 
 /** L'API ne répond pas, répond une erreur ou une réponse non conforme au contrat. */

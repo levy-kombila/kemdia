@@ -286,3 +286,111 @@ export async function updateTariffsAction(form: FormData): Promise<never> {
   if (!result.ok) return afterFailure(token, result, page);
   redirect(`${page}?ok=bareme-enregistre`);
 }
+
+// --- Fiches communes (S7.5-T03) ---
+
+/** Page d'une fiche, après vérification de son identifiant ; le jeton de session ou la page de connexion. */
+async function listingPage(form: FormData): Promise<{ token: string; id: string; page: string }> {
+  const id = field(form, "listingId", 36);
+  if (!id || !UUID.test(id)) redirect("/equipe/fiches");
+  const page = `/equipe/fiches/${id.toLowerCase()}`;
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(page)}`);
+  return { token, id: id.toLowerCase(), page };
+}
+
+/**
+ * Correction de la fiche : titre, description, marque, catégorie, noms des déclinaisons (et une nouvelle déclinaison).
+ * Seuls les champs remplis partent ; l'API vérifie tout (mêmes règles que la fiche d'un vendeur).
+ */
+export async function updateListingAction(form: FormData): Promise<never> {
+  const { token, id, page } = await listingPage(form);
+  const L = VENDOR_PRODUCT_LIMITS;
+  const title = field(form, "title", L.titleMax * 2)?.trim();
+  const description = field(form, "description", L.descriptionMax * 2)?.trim();
+  const brand = field(form, "brand", L.brandMax * 2)?.trim();
+  const categoryId = field(form, "categoryId", 36);
+  const variants: { id?: string; name: string }[] = [];
+  for (const variantId of form.getAll("variantIds").slice(0, 50)) {
+    if (typeof variantId !== "string" || !UUID.test(variantId)) continue;
+    const name = field(form, `variant-${variantId}`, L.variantNameMax * 2)?.trim();
+    const before = field(form, `variant-before-${variantId}`, L.variantNameMax * 2);
+    if (name && name !== before) variants.push({ id: variantId.toLowerCase(), name });
+  }
+  const added = field(form, "newVariant", L.variantNameMax * 2)?.trim();
+  if (added) variants.push({ name: added });
+  if (categoryId && !UUID.test(categoryId)) redirect(`${page}?erreur=CATEGORIE_INCONNUE`);
+  const result = await staffApi().updateListing(token, id, {
+    ...(title ? { title } : {}),
+    ...(description ? { description } : {}),
+    // Marque vide : « sans marque »
+    ...(brand !== undefined && form.has("brand") ? { brand: brand || null } : {}),
+    ...(categoryId ? { categoryId } : {}),
+    ...(variants.length ? { variants } : {}),
+  });
+  if (!result.ok) return afterFailure(token, result, page);
+  redirect(`${page}?ok=fiche-corrigee`);
+}
+
+export async function removeListingImageAction(form: FormData): Promise<never> {
+  const { token, id, page } = await listingPage(form);
+  const imageId = field(form, "imageId", 36);
+  if (!imageId || !UUID.test(imageId)) redirect(`${page}?erreur=PHOTO_INTROUVABLE`);
+  const result = await staffApi().removeListingImage(token, id, imageId);
+  if (!result.ok) return afterFailure(token, result, page);
+  redirect(`${page}?ok=photo-fiche-retiree`);
+}
+
+/**
+ * Fusion d'un doublon dans une fiche en ligne : en deux temps (la fiche cible est choisie, puis chaque déclinaison
+ * vendue du doublon reçoit sa déclinaison cible). Retour à la fiche CIBLE.
+ */
+export async function mergeListingAction(form: FormData): Promise<never> {
+  const { token, id, page } = await listingPage(form);
+  const into = field(form, "into", 36);
+  if (!into || !UUID.test(into)) redirect(`${page}?erreur=FICHE_INTROUVABLE`);
+  const variants: Record<string, string> = {};
+  for (const from of form.getAll("sourceVariantIds").slice(0, 50)) {
+    if (typeof from !== "string" || !UUID.test(from)) continue;
+    const to = field(form, `map-${from}`, 36);
+    if (to && UUID.test(to)) variants[from.toLowerCase()] = to.toLowerCase();
+  }
+  const result = await staffApi().mergeListing(token, id, into, variants);
+  if (!result.ok) {
+    if (
+      ["DEUX_FACTEURS_REQUIS", "DEUX_FACTEURS_A_ACTIVER", "SESSION_INVALIDE"].includes(result.code)
+    )
+      return afterFailure(token, result, page);
+    redirect(`${page}?fusion=${into.toLowerCase()}&erreur=${result.code}`);
+  }
+  redirect(`/equipe/fiches/${into.toLowerCase()}?ok=fiche-fusionnee`);
+}
+
+export async function withdrawOfferAction(form: FormData): Promise<never> {
+  const { token, page } = await listingPage(form);
+  const productId = field(form, "productId", 36);
+  const reason = field(form, "reason", VENDOR_PRODUCT_LIMITS.reasonMax * 2)?.trim();
+  const L = VENDOR_PRODUCT_LIMITS;
+  if (!productId || !UUID.test(productId)) redirect(`${page}?erreur=PRODUIT_INTROUVABLE`);
+  if (!reason || reason.length < L.reasonMin || reason.length > L.reasonMax)
+    redirect(`${page}?erreur=PRODUIT_INVALIDE`);
+  const result = await staffApi().withdrawOffer(token, productId, reason);
+  if (!result.ok) return afterFailure(token, result, page);
+  redirect(`${page}?ok=offre-retiree`);
+}
+
+/** Clôture d'une proposition de correction ; retour à la page d'où elle a été close (fiche ou liste). */
+export async function closeCorrectionAction(form: FormData): Promise<never> {
+  const correctionId = field(form, "correctionId", 36);
+  const back = field(form, "back", 80);
+  const page =
+    back && /^\/equipe\/fiches(?:\/[0-9a-f-]{36})?$/.test(back) ? back : "/equipe/fiches";
+  if (!correctionId || !UUID.test(correctionId)) redirect(page);
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(page)}`);
+  const note = field(form, "note", 600)?.trim() || undefined;
+  if (note && [...note].length > 300) redirect(`${page}?erreur=PRODUIT_INVALIDE`);
+  const result = await staffApi().closeCorrection(token, correctionId, note);
+  if (!result.ok) return afterFailure(token, result, page);
+  redirect(`${page}?ok=correction-close`);
+}

@@ -10,6 +10,8 @@ import {
   AdminListingDetailSchema,
   AdminListingSchema,
   AvailabilityResponseSchema,
+  ListingCorrectionPageSchema,
+  ListingCorrectionSchema,
   ListingMergeResultSchema,
   ModerationProductSchema,
   ProblemDetailsSchema,
@@ -17,6 +19,7 @@ import {
   ProductPageSchema,
   ShopSchema,
   VendorListingPageSchema,
+  VendorListingSchema,
   VendorProductSchema,
   type VendorProduct,
 } from "@kemdia/contracts";
@@ -717,6 +720,256 @@ describe("Fiches communes et offres (PostgreSQL, HTTP)", () => {
         .expect(403),
     ])
       expect(codeOf(res.body)).toBe("PRODUIT_SUR_SOI_INTERDIT");
+  });
+
+  it("propositions de correction : le vendeur écrit, l'équipe lit et clôt ; tracé (S7.5-T03)", async () => {
+    const owner = await openVendor();
+    const seller = await openVendor("Oyem");
+    const product = await publishedListing(owner);
+    const mine = (
+      await offer(seller, product.listing.id, [
+        { listingVariantId: product.variants[0]!.listingVariantId, price: 290_000, stock: 1 },
+      ])
+    ).body as VendorProduct;
+    // Page « Vendre ce produit » : la fiche, et l'offre de la boutique quand elle existe
+    const page = matches(
+      VendorListingSchema,
+      (
+        await call(
+          "get",
+          `/api/v1/vendors/listings/${product.listing.id}`,
+          seller.session.token,
+        ).expect(200)
+      ).body,
+    );
+    expect(page.myOfferId).toBe(mine.id);
+    expect(matches(VendorProductSchema, mine).listing.variants).toHaveLength(2);
+
+    const url = `/api/v1/vendors/products/${mine.id}/corrections`;
+    const sent = matches(
+      ListingCorrectionSchema,
+      (
+        await call("post", url, seller.session.token)
+          .send({ message: "  La batterie fait 5 000 mAh, pas 4 000.  " })
+          .expect(201)
+      ).body,
+    );
+    expect(sent).toMatchObject({
+      listing: { id: product.listing.id },
+      message: "La batterie fait 5 000 mAh, pas 4 000.",
+      closedAt: null,
+    });
+    // Trop court ; offre d'une autre boutique ; sans rôle vendeur
+    expect(
+      codeOf(
+        (await call("post", url, seller.session.token).send({ message: "court" }).expect(422)).body,
+      ),
+    ).toBe("PRODUIT_INVALIDE");
+    // Relecture : 5 émojis = 5 caractères (pas 10) → refus propre, jamais une erreur 500
+    expect(
+      codeOf(
+        (await call("post", url, seller.session.token).send({ message: "😀😀😀😀😀" }).expect(422))
+          .body,
+      ),
+    ).toBe("PRODUIT_INVALIDE");
+    await call("post", url, owner.session.token)
+      .send({ message: "Je corrige l'offre d'un autre vendeur." })
+      .expect(404);
+    await call("post", url, moderator.token)
+      .send({ message: "Je ne suis pas vendeur du tout." })
+      .expect(403);
+
+    // L'équipe : la file des propositions ouvertes, filtrée par fiche
+    const open = matches(
+      ListingCorrectionPageSchema,
+      (
+        await call(
+          "get",
+          `/api/v1/moderation/listing-corrections?listingId=${product.listing.id}`,
+          moderator.token,
+        ).expect(200)
+      ).body,
+    );
+    expect(open.items.map((c) => c.id)).toEqual([sent.id]);
+    expect(open.items[0]!.shop?.id).toBe(seller.shopId);
+    await call("get", "/api/v1/moderation/listing-corrections", seller.session.token).expect(403);
+
+    const closeUrl = `/api/v1/moderation/listing-corrections/${sent.id}/close`;
+    const closed = matches(
+      ListingCorrectionSchema,
+      (await call("post", closeUrl, moderator.token).send({ note: "Corrigé, merci." }).expect(200))
+        .body,
+    );
+    expect(closed).toMatchObject({ note: "Corrigé, merci." });
+    expect(closed.closedAt).not.toBeNull();
+    expect(codeOf((await call("post", closeUrl, moderator.token).send({}).expect(409)).body)).toBe(
+      "STATUT_PRODUIT_INCOMPATIBLE",
+    );
+    expect(
+      codeOf(
+        (
+          await call(
+            "post",
+            `/api/v1/moderation/listing-corrections/${randomUUID()}/close`,
+            moderator.token,
+          )
+            .send({})
+            .expect(404)
+        ).body,
+      ),
+    ).toBe("CORRECTION_INTROUVABLE");
+    const closedPage = matches(
+      ListingCorrectionPageSchema,
+      (
+        await call(
+          "get",
+          `/api/v1/moderation/listing-corrections?status=closed&listingId=${product.listing.id}`,
+          moderator.token,
+        ).expect(200)
+      ).body,
+    );
+    expect(closedPage.items.map((c) => c.id)).toEqual([sent.id]);
+
+    const audit = await prisma.auditEvent.findMany({
+      where: { targetId: product.listing.id, action: { startsWith: "listing.correction" } },
+      orderBy: { occurredAt: "asc" },
+    });
+    expect(audit.map((a) => a.action)).toEqual([
+      "listing.correction_proposed",
+      "listing.correction_closed",
+    ]);
+  });
+
+  it("propositions : 10 ouvertes au plus par boutique, même envoyées en même temps ; fiche pas en ligne refusée", async () => {
+    const owner = await openVendor();
+    const product = await publishedListing(owner);
+    const url = `/api/v1/vendors/products/${product.id}/corrections`;
+    const results = await Promise.all(
+      Array.from({ length: 12 }, (_, i) =>
+        call("post", url, owner.session.token).send({ message: `Proposition numéro ${i + 1}.` }),
+      ),
+    );
+    expect(results.filter((r) => r.status === 201)).toHaveLength(10);
+    for (const r of results.filter((r) => r.status !== 201)) {
+      expect(r.status).toBe(409);
+      expect(codeOf(r.body)).toBe("TROP_DE_CORRECTIONS");
+    }
+    // Sur sa fiche pas encore en ligne, le vendeur la modifie lui-même
+    const draft = matches(
+      VendorProductSchema,
+      (
+        await call("post", "/api/v1/vendors/products", owner.session.token)
+          .send({
+            title: `Tablette ${randomBytes(3).toString("hex")}`,
+            description: "Tablette neuve, écran 10 pouces, garantie un an.",
+            categoryId,
+            variants: [{ name: "Gris", attributes: {}, price: 150_000, stock: 1 }],
+          })
+          .expect(201)
+      ).body,
+    );
+    expect(
+      codeOf(
+        (
+          await call(
+            "post",
+            `/api/v1/vendors/products/${draft.id}/corrections`,
+            owner.session.token,
+          )
+            .send({ message: "Une proposition sur ma propre fiche." })
+            .expect(409)
+        ).body,
+      ),
+    ).toBe("STATUT_PRODUIT_INCOMPATIBLE");
+  });
+
+  it("propositions (relecture S7.5-T03) : offre retirée refusée ; pas de clôture sur une fiche où l'on vend ; suivent une fusion", async () => {
+    const owner = await openVendor();
+    const seller = await openVendor();
+    const product = await publishedListing(owner);
+    const mine = (
+      await offer(seller, product.listing.id, [
+        { listingVariantId: product.variants[0]!.listingVariantId, price: 280_000, stock: 1 },
+      ])
+    ).body as VendorProduct;
+    const propose = (id: string, token: string) =>
+      call("post", `/api/v1/vendors/products/${id}/corrections`, token).send({
+        message: "Le poids indiqué est faux : 180 g.",
+      });
+    const sent = matches(
+      ListingCorrectionSchema,
+      (await propose(mine.id, seller.session.token).expect(201)).body,
+    );
+
+    // Le modérateur vend sur la fiche : il ne clôt pas la proposition d'un concurrent
+    const staffShop = matches(
+      ShopSchema,
+      (
+        await call("post", "/api/v1/vendors/shop", moderator.token)
+          .send({
+            name: `Boutique ${randomBytes(4).toString("hex")}`,
+            city: "Libreville",
+            phone: "066 12 34 58",
+            description: "Boutique d'un membre de l'équipe, pour le test.",
+          })
+          .expect(201)
+      ).body,
+    );
+    await call("post", `/api/v1/admin/shops/${staffShop.id}/approve`, admin.token)
+      .send({})
+      .expect(200);
+    await offer(
+      { session: moderator, shopId: staffShop.id, city: "Libreville" },
+      product.listing.id,
+      [{ listingVariantId: product.variants[0]!.listingVariantId, price: 1_000, stock: 1 }],
+    );
+    expect(
+      codeOf(
+        (
+          await call(
+            "post",
+            `/api/v1/moderation/listing-corrections/${sent.id}/close`,
+            moderator.token,
+          )
+            .send({ note: "Sans suite." })
+            .expect(403)
+        ).body,
+      ),
+    ).toBe("PRODUIT_SUR_SOI_INTERDIT");
+
+    // Offre retirée par l'équipe : la boutique ne propose plus rien sur cette fiche
+    const other = await openSession("MODERATOR");
+    await call("post", `/api/v1/moderation/offers/${mine.id}/withdraw`, other.token)
+      .send({ reason: "Contrefaçon signalée" })
+      .expect(200);
+    expect(codeOf((await propose(mine.id, seller.session.token).expect(409)).body)).toBe(
+      "STATUT_PRODUIT_INCOMPATIBLE",
+    );
+
+    // Fusion du doublon : la proposition ouverte suit ses offres sur la fiche cible
+    const dup = await publishedListing(owner);
+    const dupOffer = (
+      await offer(seller, dup.listing.id, [
+        { listingVariantId: dup.variants[0]!.listingVariantId, price: 200_000, stock: 1 },
+      ])
+    ).body as VendorProduct;
+    const onDup = matches(
+      ListingCorrectionSchema,
+      (await propose(dupOffer.id, seller.session.token).expect(201)).body,
+    );
+    const target = await publishedListing(await openVendor());
+    await call("post", `/api/v1/moderation/listings/${dup.listing.id}/merge`, other.token)
+      .send({
+        into: target.listing.id,
+        variants: {
+          [dup.variants[0]!.listingVariantId]: target.variants[0]!.listingVariantId,
+          [dup.variants[1]!.listingVariantId]: target.variants[1]!.listingVariantId,
+        },
+      })
+      .expect(200);
+    expect(
+      (await prisma.listingCorrection.findUniqueOrThrow({ where: { id: onDup.id } })).listingId,
+    ).toBe(target.listing.id);
   });
 
   it("la base garde le contenu de la fiche sur les offres et les compteurs à jour, même sans le code", async () => {

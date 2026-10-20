@@ -107,6 +107,10 @@ export function PrivacyPolicy() {
           <code>kemdia.favorites.v1</code>) et ville de livraison choisie (
           <code>kemdia.location.v1</code>). Ils restent sur votre appareil.
         </li>
+        <li>
+          Cookie de la ville de livraison choisie (<code>kemdia_ville</code>, un an) : la ville
+          seule, jamais le quartier, pour montrer d&apos;abord les boutiques proches à prix égal.
+        </li>
       </ul>
 
       <h2 className="text-xl font-bold">Vos droits</h2>

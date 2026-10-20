@@ -1,10 +1,11 @@
 "use client";
 
 import { VENDOR_PRODUCT_LIMITS } from "@kemdia/contracts/constants";
-import { Plus, Trash2 } from "lucide-react";
+import { ImagePlus, Plus, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { reduce, sendPhoto } from "@/components/vendor/PhotoUploader";
 import { Field, FormAlert, SelectField, SubmitButton, TextAreaField } from "@/components/ui/Field";
 import { createProductAction, updateContentAction } from "@/lib/vendor/actions";
 import {
@@ -21,6 +22,10 @@ export type CategoryOption = { id: string; label: string; group: string };
 const L = VENDOR_PRODUCT_LIMITS;
 const EMPTY_VARIANT: VariantDraft = { name: "", price: "", compareAtPrice: "", stock: "" };
 const UNAVAILABLE = "Service momentanément indisponible. Réessayez dans quelques instants.";
+const MAX_PHOTOS = 10;
+
+/** Photo choisie avant la création (S7.5-T03, « photo d'abord ») : déjà réduite, envoyée juste après la création. */
+type PendingPhoto = { blob: Blob; url: string };
 
 /**
  * Fiche d'un produit (S6-T06) : création (avec ses variantes) ou modification du texte et de la catégorie. Toute
@@ -42,8 +47,47 @@ export function ProductForm({
   const [errors, setErrors] = useState<ProductErrors>({});
   const [alert, setAlert] = useState<{ message: string; signedOut?: boolean } | null>(null);
   const [pending, setPending] = useState(false);
+  const [photos, setPhotos] = useState<PendingPhoto[]>([]);
+  const [photoStatus, setPhotoStatus] = useState<string | null>(null);
+  const [photoProblems, setPhotoProblems] = useState<string[]>([]);
+  const photoInputId = useId();
   const formRef = useRef<HTMLFormElement>(null);
   const create = mode.kind === "create";
+
+  // Aperçus libérés quand le formulaire disparaît
+  const urls = useRef<string[]>([]);
+  useEffect(() => {
+    urls.current = photos.map((p) => p.url);
+  }, [photos]);
+  useEffect(() => () => urls.current.forEach((u) => URL.revokeObjectURL(u)), []);
+
+  /** Photos choisies d'abord (S7.5-T03) : réduites tout de suite sur le téléphone, envoyées après la création. */
+  const choosePhotos = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = [...(event.target.files ?? [])];
+    event.target.value = "";
+    const room = MAX_PHOTOS - photos.length;
+    const issues: string[] = [];
+    if (files.length > room) issues.push(`${MAX_PHOTOS} photos au plus par produit.`);
+    const added: PendingPhoto[] = [];
+    for (const [index, file] of files.slice(0, Math.max(room, 0)).entries()) {
+      setPhotoStatus(`Photo ${index + 1} : préparation…`);
+      const reduced = await reduce(file);
+      if ("error" in reduced) {
+        issues.push(`${file.name.slice(0, 40)} : ${reduced.error}`);
+        continue;
+      }
+      added.push({ blob: reduced.blob, url: URL.createObjectURL(reduced.blob) });
+    }
+    setPhotoStatus(null);
+    setPhotoProblems(issues);
+    setPhotos((list) => [...list, ...added]);
+  };
+  const removePhoto = (index: number) =>
+    setPhotos((list) => {
+      const target = list[index];
+      if (target) URL.revokeObjectURL(target.url);
+      return list.filter((_, i) => i !== index);
+    });
 
   const set = (key: keyof ProductDraft) => (value: string) =>
     setDraft((d) => ({ ...d, [key]: value }));
@@ -72,7 +116,20 @@ export function ProductForm({
     if (create) {
       const result = await createProductAction({ ...draft, variants }).catch(() => null);
       if (result?.ok) {
-        router.push(`/vendeur/produits/${result.id}?ok=produit-cree`);
+        // Photos choisies d'abord : envoyées une par une au produit tout juste créé
+        let failed = 0;
+        for (const [index, photo] of photos.entries()) {
+          setPhotoStatus(`Envoi de la photo ${index + 1} sur ${photos.length}…`);
+          const sent = await sendPhoto(result.id, photo.blob);
+          if (!sent.ok) {
+            failed += 1;
+            if (sent.signedOut) break;
+          }
+        }
+        setPhotoStatus(null);
+        router.push(
+          `/vendeur/produits/${result.id}?ok=${failed > 0 ? "produit-cree-photos" : "produit-cree"}`,
+        );
         return;
       }
       setPending(false);
@@ -110,6 +167,68 @@ export function ProductForm({
         </FormAlert>
       )}
       {errors.form && <FormAlert>{errors.form}</FormAlert>}
+      {create && (
+        <fieldset className="space-y-3">
+          <legend className="text-lg font-extrabold">Photos du produit</legend>
+          <p className="text-ink-500 text-sm">
+            Commencez par les photos : elles aident à bien décrire le produit. La première est la
+            principale ({MAX_PHOTOS} au plus, réduites sur votre téléphone).
+          </p>
+          {photos.length > 0 && (
+            <ul className="grid grid-cols-3 gap-3 sm:grid-cols-5" aria-label="Photos choisies">
+              {photos.map((photo, index) => (
+                <li key={photo.url} className="relative">
+                  {/* Aperçu local (blob:) : jamais envoyé à l'optimiseur */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={photo.url}
+                    alt={`Photo ${index + 1}${index === 0 ? " (principale)" : ""}`}
+                    className="border-ink-100 bg-ink-50 aspect-square w-full rounded-lg border object-contain"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(index)}
+                    className="bg-ink-900/80 absolute right-1 top-1 rounded-full p-1 text-white"
+                  >
+                    <X className="size-4" aria-hidden />
+                    <span className="sr-only">Retirer la photo {index + 1}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {photos.length < MAX_PHOTOS && (
+            <label
+              htmlFor={photoInputId}
+              className="border-ink-200 hover:bg-ink-50 inline-flex cursor-pointer items-center gap-2 rounded-full border-2 px-5 py-2.5 text-sm font-semibold focus-within:ring-4"
+            >
+              <ImagePlus className="size-4" aria-hidden /> Choisir des photos
+              <input
+                id={photoInputId}
+                type="file"
+                // Types listés : un iPhone convertit alors ses photos HEIC en JPEG au moment du choix
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                disabled={pending}
+                onChange={choosePhotos}
+                className="sr-only"
+              />
+            </label>
+          )}
+          <p role="status" aria-live="polite" className="text-sm font-semibold">
+            {photoStatus}
+          </p>
+          {photoProblems.length > 0 && (
+            <FormAlert>
+              <ul className="list-disc space-y-1 pl-5">
+                {photoProblems.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            </FormAlert>
+          )}
+        </fieldset>
+      )}
       <Field
         label="Titre"
         name="title"
@@ -245,7 +364,7 @@ export function ProductForm({
       </SubmitButton>
       <p className="text-ink-500 text-sm">
         {create
-          ? "Le produit reste invisible des clients jusqu'à sa validation par l'équipe Kemdia. Vous ajouterez les photos à l'étape suivante."
+          ? "Le produit reste invisible des clients jusqu'à sa validation par l'équipe Kemdia. Vous pourrez encore ajouter ou changer des photos tant qu'il n'est pas en ligne."
           : "Modifier la fiche renvoie le produit en modération : il est caché des clients en attendant."}
       </p>
     </form>

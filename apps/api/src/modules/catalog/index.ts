@@ -32,6 +32,7 @@ export {
   type VendorVariantPatch,
 } from "./application/vendor-catalog.service.js";
 export type {
+  ListingCorrectionRecord,
   ListingCursor,
   ListingRecord,
   VendorProductCursor,

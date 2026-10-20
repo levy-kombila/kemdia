@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 import { SectionHeader } from "@/components/home/SectionHeader";
 import { BuyBox } from "@/components/product/BuyBox";
+import { OtherSellers } from "@/components/product/OtherSellers";
 import { FavoriteButton } from "@/components/product/FavoriteButton";
 import { ProductCard } from "@/components/product/ProductCard";
 import { ProductGallery } from "@/components/product/ProductGallery";
@@ -14,8 +16,15 @@ import { VariantPicker } from "@/components/product/VariantPicker";
 import { DiscountSticker, Price } from "@/components/ui/Price";
 import { Rating } from "@/components/ui/Rating";
 import { getProduct, getRelatedProducts } from "@/lib/catalog";
+import { getCity } from "@/lib/delivery";
 import { discountPercent, formatFCFA } from "@/lib/format";
-import { attributeRows, detailCartLine, detailFavorite, selectVariant } from "@/lib/product-view";
+import {
+  attributeRows,
+  currentOffer,
+  detailCartLine,
+  detailFavorite,
+  selectVariant,
+} from "@/lib/product-view";
 import { first } from "@/lib/search-params";
 import { SITE, siteUrl } from "@/lib/site";
 
@@ -58,8 +67,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ProductPage({ params, searchParams }: Props) {
-  const [{ slug }, sp] = await Promise.all([params, searchParams]);
-  const product = await getProduct(slug);
+  const [{ slug }, sp, jar] = await Promise.all([params, searchParams, cookies()]);
+  // Ville de livraison choisie (cookie posé par le site) : à prix égal, la boutique de cette ville d'abord (S7.5-T03)
+  const city = getCity(jar.get("kemdia_ville")?.value)?.name;
+  const product = await getProduct(slug, city);
   if (!product) notFound();
 
   const variant = selectVariant(product, first(sp.variante));
@@ -69,6 +80,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
   const line = detailCartLine(product, variant);
   const favorite = detailFavorite(product);
   const attributes = attributeRows(variant);
+  const seller = currentOffer(product, variant)?.seller ?? null;
   const base = siteUrl();
   const productUrl = `${base}/produit/${product.slug}`;
 
@@ -171,6 +183,14 @@ export default async function ProductPage({ params, searchParams }: Props) {
                 <dd className="font-medium">{value}</dd>
               </div>
             ))}
+            {seller && (
+              <>
+                <dt className="text-ink-500">Vendu par</dt>
+                <dd className="font-medium">
+                  {seller.name} ({seller.city})
+                </dd>
+              </>
+            )}
             <dt className="text-ink-500">Rayon</dt>
             <dd className="font-medium">{path.at(-1)?.name}</dd>
             <dt className="text-ink-500">Référence</dt>
@@ -190,6 +210,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
           <BuyBox line={line} />
         </aside>
       </div>
+
+      <OtherSellers product={product} variant={variant} />
 
       <nav
         aria-label="Sections de la fiche"

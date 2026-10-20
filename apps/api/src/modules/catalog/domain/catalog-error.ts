@@ -36,7 +36,11 @@ export type CatalogErrorCode =
   /** La boutique a déjà une offre sur cette fiche. */
   | "DEJA_EN_VENTE"
   | "DECLINAISON_INTROUVABLE"
-  | "FUSION_IMPOSSIBLE";
+  | "FUSION_IMPOSSIBLE"
+  // Propositions de correction (S7.5-T03)
+  | "CORRECTION_INTROUVABLE"
+  /** Trop de propositions de la boutique attendent déjà l'équipe. */
+  | "TROP_DE_CORRECTIONS";
 
 /** Une règle du catalogue n'est pas respectée. Le message est lisible par un humain, en français. */
 export class CatalogError extends Error {

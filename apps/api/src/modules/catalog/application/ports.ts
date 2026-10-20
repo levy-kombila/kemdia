@@ -200,6 +200,12 @@ export interface VendorProductRecord {
   listingStatus: ProductStatus;
   /** Boutique qui a créé la fiche */
   listingOwnerShopId: string;
+  /** Déclinaisons de la fiche (S7.5-T03 : celles que l'offre peut encore ajouter) */
+  listingVariants: readonly {
+    id: string;
+    name: string;
+    attributes: Readonly<Record<string, string>>;
+  }[];
   slug: string;
   title: string;
   description: string;
@@ -327,6 +333,39 @@ export interface ListingRepository {
     variantMap: ReadonlyMap<string, string>,
     now: Date,
   ): Promise<void>;
+}
+
+// --- Propositions de correction (S7.5-T03) ---
+
+export const LISTING_CORRECTION_REPOSITORY = Symbol("ListingCorrectionRepository");
+
+export interface ListingCorrectionRecord {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  listingSlug: string;
+  shopId: string;
+  message: string;
+  createdAt: Date;
+  closedBy: string | null;
+  closedAt: Date | null;
+  note: string | null;
+}
+
+export interface ListingCorrectionRepository {
+  insert(record: Omit<ListingCorrectionRecord, "listingTitle" | "listingSlug">): Promise<void>;
+  findById(id: string): Promise<ListingCorrectionRecord | null>;
+  /** Lit la proposition et la verrouille jusqu'à la fin de la transaction. */
+  lockById(id: string): Promise<ListingCorrectionRecord | null>;
+  countOpen(shopId: string): Promise<number>;
+  /** Ouvertes : de la plus ancienne à la plus récente ; closes : de la plus récente à la plus ancienne. */
+  list(query: {
+    open: boolean;
+    listingId?: string | undefined;
+    limit: number;
+    after?: ListingCursor | undefined;
+  }): Promise<{ items: ListingCorrectionRecord[]; next: ListingCursor | null }>;
+  close(id: string, by: string, note: string | null, now: Date): Promise<void>;
 }
 
 export const SELLER_DIRECTORY = Symbol("SellerDirectory");

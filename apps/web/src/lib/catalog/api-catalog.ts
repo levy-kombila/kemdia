@@ -135,9 +135,10 @@ export function createApiCatalog(options: ApiCatalogOptions): CatalogPort {
     facets(query) {
       return required(withQuery("/products/facets", productQueryParams(query)), FacetsSchema);
     },
-    product(slug) {
+    product(slug, city) {
       if (!SLUG_PATTERN.test(slug) || slug.length > 120) return Promise.resolve(null);
-      return get(`/products/${slug}`, ProductDetailSchema);
+      const ville = city ? `?${new URLSearchParams({ ville: city.slice(0, 60) }).toString()}` : "";
+      return get(`/products/${slug}${ville}`, ProductDetailSchema);
     },
   };
 }
