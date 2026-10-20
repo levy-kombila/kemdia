@@ -160,7 +160,12 @@ describe("Statut d'une offre sur une fiche publiée (S7.5-T02)", () => {
     expect(() => onOfferArchive(withdrawn)).toThrow(
       expect.objectContaining({ code: "STATUT_PRODUIT_INCOMPATIBLE" }),
     );
-    expect(onOfferRestore(withdrawn, now)).toMatchObject({ status: "PENDING", submittedAt: now });
+    const pending = onOfferRestore(withdrawn, now);
+    expect(pending).toMatchObject({ status: "PENDING", submittedAt: now });
+    // Relecture S7.5-T02 : en attente, elle ne s'archive pas non plus (archivée, elle reviendrait sans modération)
+    expect(() => onOfferArchive(pending)).toThrow(
+      expect.objectContaining({ code: "STATUT_PRODUIT_INCOMPATIBLE" }),
+    );
   });
 
   it("archivée par son vendeur : de nouveau en ligne tout de suite", () => {

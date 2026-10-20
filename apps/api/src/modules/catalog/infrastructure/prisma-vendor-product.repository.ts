@@ -132,14 +132,25 @@ export class PrismaVendorProductRepository implements VendorProductRepository {
   }
 
   async lockById(id: string): Promise<VendorProductRecord | null> {
-    // Le produit PUIS ses variantes, dans cet ordre partout : une réservation de stock (commande) verrouille la
-    // variante seule ; elle attend la fin de la modification du vendeur, ou l'inverse, sans interblocage.
-    const rows = await this.tx.db.$queryRaw<{ id: string }[]>`
-      SELECT "id" FROM "catalog"."products" WHERE "id" = ${id}::uuid FOR UPDATE`;
-    if (!rows[0]) return null;
-    await this.tx.db.$executeRaw`
-      SELECT 1 FROM "catalog"."product_variants" WHERE "product_id" = ${id}::uuid ORDER BY "id" FOR UPDATE`;
-    return this.findById(id);
+    // La FICHE, puis l'offre, puis ses variantes, dans cet ordre partout (relecture S7.5-T02) : l'équipe verrouille
+    // aussi la fiche avant ses offres (correction, fusion), et l'écriture de l'offre met à jour la fiche (déclencheur).
+    // Une réservation de stock verrouille la variante seule ; elle attend la fin de la modification, ou l'inverse.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const offer = await this.tx.db.$queryRaw<{ listing_id: string }[]>`
+        SELECT "listing_id" FROM "catalog"."products" WHERE "id" = ${id}::uuid`;
+      if (!offer[0]) return null;
+      await this.tx.db.$executeRaw`
+        SELECT 1 FROM "catalog"."listings" WHERE "id" = ${offer[0].listing_id}::uuid FOR UPDATE`;
+      const rows = await this.tx.db.$queryRaw<{ listing_id: string }[]>`
+        SELECT "listing_id" FROM "catalog"."products" WHERE "id" = ${id}::uuid FOR UPDATE`;
+      if (!rows[0]) return null;
+      // Déplacée par une fusion entre les deux lectures : recommencer avec sa nouvelle fiche
+      if (rows[0].listing_id !== offer[0].listing_id) continue;
+      await this.tx.db.$executeRaw`
+        SELECT 1 FROM "catalog"."product_variants" WHERE "product_id" = ${id}::uuid ORDER BY "id" FOR UPDATE`;
+      return this.findById(id);
+    }
+    throw new Error("offre déplacée pendant son verrouillage");
   }
 
   async insert(record: VendorProductRecord, derived: DerivedFields): Promise<boolean> {
@@ -332,7 +343,12 @@ export class PrismaVendorProductRepository implements VendorProductRepository {
 
   async setShopSuspended(shopId: string, suspended: boolean): Promise<number> {
     if (shopId === KEMDIA_SHOP_ID) return 0;
-    // Verrous dans l'ordre des identifiants, comme la réservation de stock : pas d'interblocage avec une commande
+    // Les fiches de ses offres d'abord (S7.5-T02 : même ordre que l'équipe et les vendeurs), puis les offres, dans
+    // l'ordre des identifiants comme la réservation de stock : pas d'interblocage
+    await this.tx.db.$executeRaw`
+      SELECT 1 FROM "catalog"."listings"
+      WHERE "id" IN (SELECT "listing_id" FROM "catalog"."products" WHERE "shop_id" = ${shopId}::uuid)
+      ORDER BY "id" FOR UPDATE`;
     await this.tx.db.$executeRaw`
       SELECT 1 FROM "catalog"."products" WHERE "shop_id" = ${shopId}::uuid ORDER BY "id" FOR UPDATE`;
     const { count } = await this.tx.db.product.updateMany({

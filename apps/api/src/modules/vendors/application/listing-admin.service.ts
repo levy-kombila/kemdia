@@ -70,8 +70,7 @@ export class ListingAdminService {
   ): Promise<ListingRecord> {
     assertModerator(actor);
     return this.tx.run(async () => {
-      const { listing } = await this.catalog.listingWithOffers(listingId);
-      await this.assertNotOwnShop(actor, listing.createdByShopId, "une fiche de votre boutique");
+      await this.assertNotInvolved(actor, [listingId]);
       const { before, after } = await this.catalog.editListing(listingId, input, this.clock());
       const fields: string[] = (["title", "description", "brand", "categoryId"] as const).filter(
         (key) => before[key] !== after[key],
@@ -81,7 +80,12 @@ export class ListingAdminService {
         action: "listing.updated",
         actor: { type: "account", id: actor.accountId },
         target: { type: "listing", id: after.id },
-        details: { title: shortText(after.title), fields: fields.join(",") || "aucun" },
+        details: {
+          title: shortText(after.title),
+          // Ancien titre gardé : une enquête retrouve ce que les clients voyaient avant (relecture S7.5-T02)
+          ...(before.title !== after.title ? { from: shortText(before.title) } : {}),
+          fields: fields.join(",") || "aucun",
+        },
         context,
       });
       return after;
@@ -96,6 +100,7 @@ export class ListingAdminService {
   ): Promise<ListingRecord> {
     assertModerator(actor);
     return this.tx.run(async () => {
+      await this.assertNotInvolved(actor, [listingId]);
       const { after, sha256 } = await this.catalog.removeListingImage(
         listingId,
         imageId,
@@ -126,13 +131,13 @@ export class ListingAdminService {
   ): Promise<{ target: ListingRecord; moved: number }> {
     assertModerator(actor);
     return this.tx.run(async () => {
-      const { listing } = await this.catalog.listingWithOffers(sourceId);
-      await this.assertNotOwnShop(actor, listing.createdByShopId, "une fiche de votre boutique");
+      await this.assertNotInvolved(actor, [sourceId, targetId]);
       const { source, moved } = await this.catalog.mergeListings(
         sourceId,
         targetId,
         variants,
         this.clock(),
+        actor.accountId,
       );
       const { listing: target } = await this.catalog.listingWithOffers(targetId);
       await this.audit.record({
@@ -177,6 +182,27 @@ export class ListingAdminService {
         shop: shop ? { id: shop.id, name: shop.name, status: shop.status } : null,
       };
     });
+  }
+
+  /**
+   * Personne ne touche une fiche que sa boutique a créée ou sur laquelle elle vend (relecture S7.5-T02 : la
+   * correction, la photo et la fusion — source ET cible — profiteraient à sa propre boutique).
+   */
+  private async assertNotInvolved(
+    actor: ModerationActor,
+    listingIds: readonly string[],
+  ): Promise<void> {
+    const mine = await this.shops.findByOwner(actor.accountId);
+    if (!mine) return;
+    for (const id of listingIds) {
+      const { listing, offers } = await this.catalog.listingWithOffers(id);
+      if (listing.createdByShopId === mine.id || offers.some((o) => o.shopId === mine.id)) {
+        throw new VendorsError(
+          "PRODUIT_SUR_SOI_INTERDIT",
+          "vous ne pouvez pas modifier une fiche sur laquelle votre boutique vend",
+        );
+      }
+    }
   }
 
   /** Personne ne décide pour sa propre boutique (comme la modération, S6-T02). Renvoie la boutique lue. */

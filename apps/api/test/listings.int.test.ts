@@ -505,6 +505,16 @@ describe("Fiches communes et offres (PostgreSQL, HTTP)", () => {
       ).body,
     );
     expect(back.status).toBe("pending");
+    // Relecture S7.5-T02 (faille critique) : en attente, elle ne s'archive pas pour revenir en ligne sans modération
+    const sneaky = await call(
+      "post",
+      `/api/v1/vendors/products/${created.id}/archive`,
+      other.session.token,
+    ).expect(409);
+    expect(codeOf(sneaky.body)).toBe("STATUT_PRODUIT_INCOMPATIBLE");
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: created.id } })).status).toBe(
+      "PENDING",
+    );
     // Offre archivée par son vendeur : revient en ligne tout de suite
     await call(
       "post",
@@ -617,6 +627,96 @@ describe("Fiches communes et offres (PostgreSQL, HTTP)", () => {
         where: { targetId: source.listing.id, action: "listing.merged" },
       }),
     ).toBe(1);
+  });
+
+  it("fusion : une offre déplacée qui n'était pas en ligne repasse par la modération (relecture S7.5-T02)", async () => {
+    const owner = await openVendor();
+    const dup = await openVendor();
+    const target = await publishedListing(owner, `Casque ${randomBytes(3).toString("hex")}`);
+    // Doublon jamais validé : refusé puis archivé par son vendeur
+    const pending = matches(
+      VendorProductSchema,
+      (
+        await call("post", "/api/v1/vendors/products", dup.session.token)
+          .send({
+            title: `Kasque ${randomBytes(3).toString("hex")}`,
+            description: "Casque sans fil, réduction de bruit, autonomie trente heures.",
+            categoryId,
+            variants: [{ name: "Noir", price: 50_000, stock: 2 }],
+          })
+          .expect(201)
+      ).body,
+    );
+    const row = await prisma.product.findUniqueOrThrow({ where: { id: pending.id } });
+    await call("post", `/api/v1/moderation/products/${pending.id}/reject`, moderator.token)
+      .send({ reason: "Photos manquantes", submittedAt: row.submittedAt!.toISOString() })
+      .expect(200);
+    await call("post", `/api/v1/vendors/products/${pending.id}/archive`, dup.session.token).expect(
+      200,
+    );
+    await call("post", `/api/v1/moderation/listings/${pending.listing.id}/merge`, moderator.token)
+      .send({
+        into: target.listing.id,
+        variants: { [pending.variants[0]!.listingVariantId]: target.variants[0]!.listingVariantId },
+      })
+      .expect(200);
+    const moved = await prisma.product.findUniqueOrThrow({ where: { id: pending.id } });
+    expect(moved).toMatchObject({ status: "REJECTED", listingId: target.listing.id });
+    const back = matches(
+      VendorProductSchema,
+      (
+        await call(
+          "post",
+          `/api/v1/vendors/products/${pending.id}/restore`,
+          dup.session.token,
+        ).expect(200)
+      ).body,
+    );
+    expect(back.status).toBe("pending");
+  });
+
+  it("un modérateur qui vend sur une fiche ne la corrige ni ne la fusionne (relecture S7.5-T02)", async () => {
+    const owner = await openVendor();
+    const target = await publishedListing(owner);
+    // Le modérateur ouvre sa propre boutique et vend sur la fiche cible
+    const staffShop = matches(
+      ShopSchema,
+      (
+        await call("post", "/api/v1/vendors/shop", moderator.token)
+          .send({
+            name: `Boutique ${randomBytes(4).toString("hex")}`,
+            city: "Libreville",
+            phone: "066 12 34 57",
+            description: "Boutique d'un membre de l'équipe, pour le test.",
+          })
+          .expect(201)
+      ).body,
+    );
+    await call("post", `/api/v1/admin/shops/${staffShop.id}/approve`, admin.token)
+      .send({})
+      .expect(200);
+    await offer(
+      { session: moderator, shopId: staffShop.id, city: "Libreville" },
+      target.listing.id,
+      [{ listingVariantId: target.variants[0]!.listingVariantId, price: 1_000, stock: 1 }],
+    );
+    const other = await openVendor();
+    const source = await publishedListing(other);
+    for (const res of [
+      await call("patch", `/api/v1/moderation/listings/${target.listing.id}`, moderator.token)
+        .send({ title: "Titre à mon avantage" })
+        .expect(403),
+      await call("post", `/api/v1/moderation/listings/${source.listing.id}/merge`, moderator.token)
+        .send({
+          into: target.listing.id,
+          variants: {
+            [source.variants[0]!.listingVariantId]: target.variants[0]!.listingVariantId,
+            [source.variants[1]!.listingVariantId]: target.variants[1]!.listingVariantId,
+          },
+        })
+        .expect(403),
+    ])
+      expect(codeOf(res.body)).toBe("PRODUIT_SUR_SOI_INTERDIT");
   });
 
   it("la base garde le contenu de la fiche sur les offres et les compteurs à jour, même sans le code", async () => {

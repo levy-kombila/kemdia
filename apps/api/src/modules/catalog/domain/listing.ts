@@ -203,9 +203,13 @@ export function onOfferRestore(state: ModerationState, now: Date): ModerationSta
   throw incompatible(state.status, "remise en vente");
 }
 
-/** Archivage par le vendeur d'une offre sur une fiche publiée : pas pour une offre retirée par l'équipe. */
+/**
+ * Archivage par le vendeur d'une offre sur une fiche publiée : seulement une offre EN LIGNE. Une offre retirée par
+ * l'équipe, ou en attente de modération après ce retrait, ne s'archive pas : archivée, elle reviendrait en ligne sans
+ * modération (relecture de sécurité S7.5-T02).
+ */
 export function onOfferArchive(state: ModerationState): ModerationState {
-  if (state.status === "ARCHIVED" || state.status === "REJECTED") {
+  if (state.status !== "PUBLISHED") {
     throw incompatible(state.status, "archivage");
   }
   return { ...state, status: "ARCHIVED", moderationReason: null };

@@ -116,6 +116,11 @@ const SLUG_ATTEMPTS = 3;
 
 const notFound = () => new CatalogError("PRODUIT_INTROUVABLE", "produit introuvable");
 const listingNotFound = () => new CatalogError("FICHE_INTROUVABLE", "fiche introuvable");
+const alreadySelling = () =>
+  new CatalogError(
+    "DEJA_EN_VENTE",
+    "votre boutique vend déjà ce produit : modifiez votre offre existante",
+  );
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -490,19 +495,14 @@ export class VendorCatalog {
     lines: readonly OfferLineInput[],
     now: Date,
   ): Promise<VendorProductRecord> {
-    if (!UUID.test(listingId)) throw listingNotFound();
-    const listing = await this.listings.findById(listingId.toLowerCase());
-    if (!listing || listing.mergedIntoId) throw listingNotFound();
+    // Fiche verrouillée (relecture S7.5-T02) : une fusion ou une correction en cours finit d'abord, et deux offres
+    // simultanées de la même boutique passent l'une après l'autre
+    const listing = await this.lockListing(listingId);
+    if (listing.mergedIntoId) throw listingNotFound();
     if (listing.status !== "PUBLISHED") {
       throw new CatalogError("FICHE_NON_PUBLIEE", "cette fiche n'est pas en ligne");
     }
-    const existing = await this.products.findOffer(listing.id, shopId);
-    if (existing) {
-      throw new CatalogError(
-        "DEJA_EN_VENTE",
-        "votre boutique vend déjà ce produit : modifiez votre offre existante",
-      );
-    }
+    if (await this.products.findOffer(listing.id, shopId)) throw alreadySelling();
     if (lines.length < 1 || lines.length > VENDOR_PRODUCT_RULES.variantsMax) {
       throw new CatalogError(
         "PRODUIT_INVALIDE",
@@ -539,6 +539,8 @@ export class VendorCatalog {
         variants,
       };
       if (await this.products.insert(record, derive(record, categoryName))) return record;
+      // Refus d'unicité : l'adresse… ou une offre de la boutique arrivée entre-temps (relecture S7.5-T02)
+      if (await this.products.findOffer(listing.id, shopId)) throw alreadySelling();
     }
     throw new Error("adresse d'offre introuvable après plusieurs essais");
   }
@@ -683,6 +685,12 @@ export class VendorCatalog {
     now: Date,
   ): Promise<{ after: ListingRecord; sha256: string | null }> {
     const before = await this.lockListing(listingId);
+    if (before.mergedIntoId) {
+      throw new CatalogError(
+        "FICHE_INTROUVABLE",
+        "fiche fusionnée : corrigez la fiche qui la remplace",
+      );
+    }
     const images = withoutImage(before.images, imageId);
     const id = imageId.toLowerCase();
     const sha256 = (await this.images.describe(id))?.sha256 ?? null;
@@ -704,6 +712,7 @@ export class VendorCatalog {
     targetId: string,
     variantMap: Readonly<Record<string, string>>,
     now: Date,
+    moderatorId: string,
   ): Promise<{ source: ListingRecord; target: ListingRecord; moved: number }> {
     if (!UUID.test(sourceId) || !UUID.test(targetId)) throw listingNotFound();
     const from = sourceId.toLowerCase();
@@ -761,6 +770,24 @@ export class VendorCatalog {
       }
     }
     await this.listings.merge(source.id, target.id, map, now);
+    // Relecture S7.5-T02 : une offre déplacée qui n'est pas en ligne (refusée, archivée, en attente) ne doit pas
+    // revenir en ligne sans modération sur la fiche cible (où la remise en vente serait immédiate)
+    for (const offer of sourceOffers.filter((o) => o.status !== "PUBLISHED")) {
+      const moved = await this.products.lockById(offer.id);
+      if (!moved) continue;
+      const next =
+        moved.shopId === KEMDIA_SHOP_ID
+          ? { ...state(moved), status: "ARCHIVED" as const, moderationReason: null }
+          : {
+              status: "REJECTED" as const,
+              moderationReason:
+                "Fiche fusionnée : votre offre repasse par la modération avant de revenir en vente",
+              submittedAt: moved.submittedAt,
+              reviewedBy: moderatorId,
+              reviewedAt: now,
+            };
+      await this.write({ ...moved, ...next, updatedAt: now });
+    }
     return { source, target, moved: sourceOffers.length };
   }
 

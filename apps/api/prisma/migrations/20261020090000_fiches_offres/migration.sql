@@ -82,7 +82,9 @@ UPDATE "catalog"."product_variants" SET "listing_variant_id" = "id";
 
 -- Boutiques telles que le catalogue les montre (tenues ensuite par le module vendors)
 INSERT INTO "catalog"."sellers" ("shop_id", "name", "slug", "city", "updated_at")
-SELECT "id", "name", "slug", "city", CURRENT_TIMESTAMP FROM "vendors"."shops";
+SELECT "id", "name", "slug", "city", CURRENT_TIMESTAMP FROM "vendors"."shops"
+-- Seulement les boutiques validées (actives ou suspendues) : une demande en attente ou refusée n'a pas d'offre
+WHERE "status" IN ('ACTIVE', 'SUSPENDED');
 
 ALTER TABLE "catalog"."products" ALTER COLUMN "listing_id" SET NOT NULL;
 ALTER TABLE "catalog"."product_variants" ALTER COLUMN "listing_variant_id" SET NOT NULL;
@@ -144,7 +146,7 @@ ALTER TABLE "catalog"."sellers"
 -- 1. Une offre COPIE le contenu de sa fiche (titre, description, marque, catégorie, photos, texte de recherche) : ce
 --    que le panier, les commandes et l'espace vendeur lisent sur l'offre est toujours celui de la fiche.
 CREATE FUNCTION "catalog"."offer_from_listing"() RETURNS trigger
-    LANGUAGE plpgsql AS $$
+    LANGUAGE plpgsql SET search_path = pg_catalog, catalog AS $$
 BEGIN
     SELECT l."title", l."description", l."brand", l."category_id", COALESCE(l."images", ARRAY[]::TEXT[]), l."search_text"
     INTO NEW."title", NEW."description", NEW."brand", NEW."category_id", NEW."images", NEW."search_text"
@@ -164,7 +166,7 @@ CREATE TRIGGER "products_from_listing"
 
 -- 2. Contenu de la fiche modifié : recopié sur toutes ses offres.
 CREATE FUNCTION "catalog"."listing_to_offers"() RETURNS trigger
-    LANGUAGE plpgsql AS $$
+    LANGUAGE plpgsql SET search_path = pg_catalog, catalog AS $$
 BEGIN
     UPDATE "catalog"."products"
     SET "title" = NEW."title", "description" = NEW."description", "brand" = NEW."brand",
@@ -182,7 +184,7 @@ CREATE TRIGGER "listings_to_offers"
 -- 3. Prix « à partir de » et nombre d'offres visibles d'une fiche (offre publiée, boutique non suspendue). Sans offre
 --    visible, le prix reste celui de la dernière offre connue (la fiche est alors cachée).
 CREATE FUNCTION "catalog"."refresh_listing"(listing UUID) RETURNS void
-    LANGUAGE plpgsql AS $$
+    LANGUAGE plpgsql SET search_path = pg_catalog, catalog AS $$
 DECLARE
     n INTEGER;
     best_price INTEGER;
@@ -213,7 +215,7 @@ $$;
 --    fiche n'est pas publiée, elle suit le statut de l'offre de la boutique qui l'a créée (modération, archivage) ;
 --    une fois publiée, seule l'équipe change son statut.
 CREATE FUNCTION "catalog"."offer_changed"() RETURNS trigger
-    LANGUAGE plpgsql AS $$
+    LANGUAGE plpgsql SET search_path = pg_catalog, catalog AS $$
 BEGIN
     IF TG_OP <> 'DELETE' THEN
         UPDATE "catalog"."listings" AS l
@@ -237,7 +239,7 @@ CREATE TRIGGER "products_offer_changed"
 -- 5. Une variante d'offre copie le nom et les caractéristiques de sa déclinaison, qui doit appartenir à la fiche de
 --    l'offre.
 CREATE FUNCTION "catalog"."offer_variant_from_listing"() RETURNS trigger
-    LANGUAGE plpgsql AS $$
+    LANGUAGE plpgsql SET search_path = pg_catalog, catalog AS $$
 DECLARE
     variant_listing UUID;
     offer_listing UUID;
@@ -259,7 +261,7 @@ CREATE TRIGGER "product_variants_from_listing"
 
 -- 6. Déclinaison renommée : recopiée sur les variantes des offres.
 CREATE FUNCTION "catalog"."listing_variant_to_offers"() RETURNS trigger
-    LANGUAGE plpgsql AS $$
+    LANGUAGE plpgsql SET search_path = pg_catalog, catalog AS $$
 BEGIN
     UPDATE "catalog"."product_variants"
     SET "name" = NEW."name", "attributes" = NEW."attributes"
