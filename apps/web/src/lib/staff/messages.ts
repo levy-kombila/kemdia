@@ -80,6 +80,8 @@ const VENDOR_MESSAGES: Record<VendorErrorCode, string> = {
   DEJA_EN_VENTE: "Cette boutique vend déjà ce produit.",
   DECLINAISON_INTROUVABLE: "Déclinaison introuvable sur cette fiche.",
   FUSION_IMPOSSIBLE: "Fusion impossible : vérifiez les boutiques et les déclinaisons.",
+  CORRECTION_INTROUVABLE: "Proposition introuvable.",
+  TROP_DE_CORRECTIONS: "Trop de propositions en attente pour cette boutique.",
 };
 
 const isIdentityCode = (value: string): value is IdentityErrorCode =>
@@ -121,6 +123,13 @@ export const STAFF_NOTICES = {
   "livraison-annulee":
     "Commande annulée : stock et coupon rendus ; un paiement Mobile Money est à rembourser (liste des remboursements).",
   "bareme-enregistre": "Barème enregistré : le site l'affiche dans 5 minutes au plus.",
+  // Fiches communes (S7.5-T03)
+  "fiche-corrigee": "Fiche corrigée : toutes les boutiques qui la vendent la montrent déjà.",
+  "photo-fiche-retiree": "Photo retirée de la fiche et effacée.",
+  "fiche-fusionnee":
+    "Doublon fusionné : ses offres sont sur cette fiche, son ancienne adresse y mène.",
+  "offre-retiree": "Offre retirée : le vendeur voit votre motif.",
+  "correction-close": "Proposition close.",
 } as const;
 export type StaffNotice = keyof typeof STAFF_NOTICES;
 

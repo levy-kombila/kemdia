@@ -1,6 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
 // Boutique Kemdia (S6-T01) : ses produits ne passent jamais par la modération
-import { KEMDIA_SHOP_ID, MAX_PENDING_PRODUCTS_PER_SHOP } from "@kemdia/contracts/constants";
+import {
+  KEMDIA_SHOP_ID,
+  LISTING_CORRECTION_LIMITS,
+  MAX_PENDING_PRODUCTS_PER_SHOP,
+} from "@kemdia/contracts/constants";
 import { CatalogError } from "../domain/catalog-error.js";
 import { CategoryTree } from "../domain/category.js";
 import {
@@ -29,6 +33,7 @@ import {
   onContentChange,
   onCreate,
   onRestore,
+  cleanText,
   validateContent,
   validateReason,
   variantAttributes,
@@ -43,11 +48,14 @@ import {
   CATALOG_RANDOM,
   CATEGORY_REPOSITORY,
   IMAGE_PROCESSOR,
+  LISTING_CORRECTION_REPOSITORY,
   LISTING_REPOSITORY,
   PRODUCT_IMAGE_STORE,
   SELLER_DIRECTORY,
   VENDOR_PRODUCT_REPOSITORY,
   type CatalogRandom,
+  type ListingCorrectionRecord,
+  type ListingCorrectionRepository,
   type ListingCursor,
   type ListingRecord,
   type ListingRepository,
@@ -141,6 +149,8 @@ export class VendorCatalog {
     @Inject(PRODUCT_IMAGE_STORE) private readonly images: ProductImageStore,
     @Inject(LISTING_REPOSITORY) private readonly listings: ListingRepository,
     @Inject(SELLER_DIRECTORY) private readonly sellers: SellerDirectory,
+    @Inject(LISTING_CORRECTION_REPOSITORY)
+    private readonly corrections: ListingCorrectionRepository,
   ) {}
 
   async create(shopId: string, input: VendorProductInput, now: Date): Promise<VendorProductRecord> {
@@ -183,6 +193,11 @@ export class VendorCatalog {
         listingSlug: slug,
         listingStatus: moderation.status,
         listingOwnerShopId: shopId,
+        listingVariants: variants.map((v) => ({
+          id: v.listingVariantId,
+          name: v.name,
+          attributes: v.attributes,
+        })),
         slug,
         ...content,
         images: [],
@@ -526,6 +541,11 @@ export class VendorCatalog {
         listingSlug: listing.slug,
         listingStatus: listing.status,
         listingOwnerShopId: listing.createdByShopId,
+        listingVariants: listing.variants.map(({ id, name, attributes }) => ({
+          id,
+          name,
+          attributes,
+        })),
         slug,
         title: listing.title,
         description: listing.description,
@@ -582,6 +602,114 @@ export class VendorCatalog {
     await this.products.insertVariant(before.id, variant, before.variants.length);
     await this.products.update(after, derived);
     return after;
+  }
+
+  /** Une fiche en ligne (non fusionnée), avec l'offre de la boutique s'il y en a une (page « Vendre ce produit »). */
+  async publishedListing(
+    shopId: string,
+    listingId: string,
+  ): Promise<{ listing: ListingRecord; myOfferId: string | null }> {
+    if (!UUID.test(listingId)) throw listingNotFound();
+    const listing = await this.listings.findById(listingId.toLowerCase());
+    if (!listing || listing.mergedIntoId || listing.status !== "PUBLISHED") throw listingNotFound();
+    return {
+      listing,
+      myOfferId: (await this.products.findOffer(listing.id, shopId))?.id ?? null,
+    };
+  }
+
+  // --- Propositions de correction (S7.5-T03) ---
+
+  /**
+   * Correction proposée par une boutique qui vend sur une fiche EN LIGNE (sur sa fiche pas encore en ligne, elle la
+   * modifie elle-même). Message libre, 10 propositions ouvertes au plus par boutique.
+   */
+  async proposeCorrection(
+    shopId: string,
+    productId: string,
+    message: string,
+    now: Date,
+  ): Promise<ListingCorrectionRecord> {
+    const offer = await this.get(shopId, productId);
+    if (offer.listingStatus !== "PUBLISHED") {
+      throw new CatalogError(
+        "STATUT_PRODUIT_INCOMPATIBLE",
+        "votre fiche n'est pas encore en ligne : modifiez-la directement",
+      );
+    }
+    // Relecture S7.5-T03 : seule une boutique qui VEND sur la fiche propose (pas une offre retirée ou archivée)
+    if (offer.status !== "PUBLISHED") {
+      throw new CatalogError(
+        "STATUT_PRODUIT_INCOMPATIBLE",
+        "remettez d'abord votre offre en vente pour proposer une correction",
+      );
+    }
+    const C = LISTING_CORRECTION_LIMITS;
+    const text = cleanText(message);
+    // Caractères réels (comme la base, `char_length`) : un émoji compte pour un (relecture S7.5-T03)
+    const length = [...text].length;
+    if (length < C.messageMin || length > C.messageMax) {
+      throw new CatalogError(
+        "PRODUIT_INVALIDE",
+        `la proposition : ${C.messageMin} à ${C.messageMax} caractères`,
+      );
+    }
+    if ((await this.corrections.countOpen(shopId)) >= C.openPerShop) {
+      throw new CatalogError(
+        "TROP_DE_CORRECTIONS",
+        `${C.openPerShop} propositions attendent déjà l'équipe : patientez avant d'en envoyer d'autres`,
+      );
+    }
+    const record = {
+      id: this.random.uuid(),
+      listingId: offer.listingId,
+      shopId,
+      message: text,
+      createdAt: now,
+      closedBy: null,
+      closedAt: null,
+      note: null,
+    };
+    await this.corrections.insert(record);
+    return { ...record, listingTitle: offer.title, listingSlug: offer.listingSlug };
+  }
+
+  listCorrections(query: {
+    open: boolean;
+    listingId?: string | undefined;
+    limit: number;
+    after?: ListingCursor | undefined;
+  }): Promise<{ items: ListingCorrectionRecord[]; next: ListingCursor | null }> {
+    const listingId =
+      query.listingId && UUID.test(query.listingId) ? query.listingId.toLowerCase() : undefined;
+    if (query.listingId && !listingId) return Promise.resolve({ items: [], next: null });
+    return this.corrections.list({ ...query, listingId });
+  }
+
+  /** Verrouille une proposition pour sa clôture (l'appelant vérifie qui la clôt). */
+  async lockCorrection(correctionId: string): Promise<ListingCorrectionRecord> {
+    const record = UUID.test(correctionId)
+      ? await this.corrections.lockById(correctionId.toLowerCase())
+      : null;
+    if (!record) throw new CatalogError("CORRECTION_INTROUVABLE", "proposition introuvable");
+    return record;
+  }
+
+  /** Clôture par l'équipe, avec une réponse facultative montrée au vendeur. */
+  async closeCorrection(
+    record: ListingCorrectionRecord,
+    by: { moderatorId: string; note: string | null; now: Date },
+  ): Promise<ListingCorrectionRecord> {
+    if (record.closedAt) {
+      throw new CatalogError("STATUT_PRODUIT_INCOMPATIBLE", "proposition déjà close");
+    }
+    const C = LISTING_CORRECTION_LIMITS;
+    const note = by.note === null ? null : cleanText(by.note) || null;
+    if (note !== null && [...note].length > C.noteMax) {
+      throw new CatalogError("PRODUIT_INVALIDE", `la réponse : ${C.noteMax} caractères au plus`);
+    }
+    await this.corrections.close(record.id, by.moderatorId, note, by.now);
+    return { ...record, closedBy: by.moderatorId, closedAt: by.now, note };
   }
 
   // --- Fiches communes : l'équipe (S7.5-T02) ---

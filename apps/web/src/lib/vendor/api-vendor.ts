@@ -10,7 +10,10 @@ import {
   SESSION_TOKEN_PATTERN,
   ShopSchema,
   VENDOR_ERROR_CODES,
+  ListingCorrectionSchema,
   VendorKycSchema,
+  VendorListingPageSchema,
+  VendorListingSchema,
   VendorOrderPageSchema,
   VendorOrderSchema,
   VendorProductPageSchema,
@@ -21,8 +24,12 @@ import {
   type OrderErrorCode,
   type Shop,
   type ShopApplicationRequest,
+  type ListingCorrection,
+  type OfferLine,
   type VendorErrorCode,
   type VendorKyc,
+  type VendorListing,
+  type VendorListingPage,
   type VendorOrder,
   type VendorOrderPage,
   type VendorOrderStatus,
@@ -257,6 +264,58 @@ export function createVendorApi(options: VendorApiOptions) {
     restore: (token: string, productId: string): Promise<VendorResult<VendorProduct>> => {
       const path = productPath(productId);
       return path ? call("POST", `${path}/restore`, token, VendorProductSchema) : missing();
+    },
+
+    // --- Fiches communes et offres (S7.5-T02, S7.5-T03) ---
+    searchListings: (token: string, q: string): Promise<VendorResult<VendorListingPage>> => {
+      const text = q.trim().slice(0, 100);
+      if (text.length < 2) return Promise.resolve({ ok: true, data: { items: [] } });
+      return call(
+        "GET",
+        `/vendors/listings?${new URLSearchParams({ q: text, limit: "10" }).toString()}`,
+        token,
+        VendorListingPageSchema,
+      );
+    },
+    listing: (token: string, listingId: string): Promise<VendorResult<VendorListing>> =>
+      isUuid(listingId)
+        ? call("GET", `/vendors/listings/${listingId.toLowerCase()}`, token, VendorListingSchema)
+        : Promise.resolve({ ok: false, code: "FICHE_INTROUVABLE" }),
+    createOffer: (
+      token: string,
+      listingId: string,
+      variants: OfferLine[],
+    ): Promise<VendorResult<VendorProduct>> =>
+      isUuid(listingId)
+        ? call(
+            "POST",
+            `/vendors/listings/${listingId.toLowerCase()}/offer`,
+            token,
+            VendorProductSchema,
+            {
+              json: { variants },
+            },
+          )
+        : Promise.resolve({ ok: false, code: "FICHE_INTROUVABLE" }),
+    addOfferVariant: (
+      token: string,
+      productId: string,
+      line: OfferLine,
+    ): Promise<VendorResult<VendorProduct>> => {
+      const path = productPath(productId);
+      return path
+        ? call("POST", `${path}/variants`, token, VendorProductSchema, { json: line })
+        : missing();
+    },
+    proposeCorrection: (
+      token: string,
+      productId: string,
+      message: string,
+    ): Promise<VendorResult<ListingCorrection>> => {
+      const path = productPath(productId);
+      return path
+        ? call("POST", `${path}/corrections`, token, ListingCorrectionSchema, { json: { message } })
+        : missing();
     },
 
     // --- Photos (S6-T04) ---

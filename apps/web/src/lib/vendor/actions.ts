@@ -171,6 +171,96 @@ export async function updateVariantAction(form: FormData): Promise<never> {
   return after(token, page, result, "variante-modifiee");
 }
 
+// --- Fiches communes et offres (S7.5-T03) ---
+
+/** Lignes « je vends cette déclinaison » d'un formulaire d'offre (au plus 20, montants vérifiés). */
+/** Prix, prix barré et stock d'une ligne (`price<suffixe>`…), vérifiés ; `null` si l'un est faux. */
+function amounts(
+  form: FormData,
+  suffix: string,
+): { price: number; compareAtPrice: number | null; stock: number } | null {
+  const price = parseAmount(field(form, `price${suffix}`, 20));
+  const compareAtPrice = parseAmount(field(form, `compareAtPrice${suffix}`, 20));
+  const stock = parseAmount(field(form, `stock${suffix}`, 20), STOCK_MAX);
+  if (
+    price === null ||
+    Number.isNaN(price) ||
+    price <= 0 ||
+    Number.isNaN(compareAtPrice) ||
+    (compareAtPrice !== null && compareAtPrice <= price) ||
+    stock === null ||
+    Number.isNaN(stock)
+  )
+    return null;
+  return { price, compareAtPrice, stock };
+}
+
+/** Lignes cochées « je vends cette déclinaison » d'un formulaire d'offre (au plus 20) ; `null` si un montant est faux. */
+function offerLines(form: FormData, ids: readonly string[]) {
+  const lines: {
+    listingVariantId: string;
+    price: number;
+    compareAtPrice: number | null;
+    stock: number;
+  }[] = [];
+  for (const id of ids.slice(0, 20)) {
+    if (!isUuid(id) || form.get(`sell-${id}`) !== "on") continue;
+    const line = amounts(form, `-${id}`);
+    if (!line) return null;
+    lines.push({ listingVariantId: id.toLowerCase(), ...line });
+  }
+  return lines;
+}
+
+/** « Vendre ce produit » : offre de la boutique sur une fiche en ligne, en ligne tout de suite. */
+export async function createOfferAction(form: FormData): Promise<never> {
+  const listingId = field(form, "listingId");
+  if (!listingId || !isUuid(listingId)) redirect("/vendeur/produits/nouveau");
+  const page = `/vendeur/fiches/${listingId.toLowerCase()}`;
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(page)}`);
+  const ids = form.getAll("variantIds").filter((v): v is string => typeof v === "string");
+  const lines = offerLines(form, ids);
+  if (!lines) redirect(`${page}?erreur=PRODUIT_INVALIDE`);
+  if (lines.length === 0) redirect(`${page}?erreur=DECLINAISON_INTROUVABLE`);
+  const result = await vendorApi().createOffer(token, listingId, lines);
+  if (!result.ok) return after(token, page, result, "offre-creee");
+  redirect(`/vendeur/produits/${result.data.id}?ok=offre-creee`);
+}
+
+/** Nouvelle déclinaison de la fiche dans l'offre (sans modération). */
+export async function addOfferVariantAction(form: FormData): Promise<never> {
+  const { token, id, page } = await productPage(form);
+  const listingVariantId = field(form, "listingVariantId");
+  if (!listingVariantId || !isUuid(listingVariantId))
+    redirect(`${page}?erreur=DECLINAISON_INTROUVABLE`);
+  const line = amounts(form, "");
+  if (!line) redirect(`${page}?erreur=PRODUIT_INVALIDE`);
+  return after(
+    token,
+    page,
+    await vendorApi().addOfferVariant(token, id, {
+      listingVariantId: listingVariantId.toLowerCase(),
+      ...line,
+    }),
+    "declinaison-ajoutee",
+  );
+}
+
+/** Correction proposée à l'équipe pour la fiche en ligne (message libre, vérifié par l'API). */
+export async function proposeCorrectionAction(form: FormData): Promise<never> {
+  const { token, id, page } = await productPage(form);
+  const message = field(form, "message", 1_000)?.trim() ?? "";
+  const length = [...message].length;
+  if (length < 10 || length > 500) redirect(`${page}?erreur=PRODUIT_INVALIDE`);
+  return after(
+    token,
+    page,
+    await vendorApi().proposeCorrection(token, id, message),
+    "correction-envoyee",
+  );
+}
+
 export async function archiveProductAction(form: FormData): Promise<never> {
   const { token, id, page } = await productPage(form);
   return after(token, page, await vendorApi().archive(token, id), "produit-archive");
@@ -178,7 +268,14 @@ export async function archiveProductAction(form: FormData): Promise<never> {
 
 export async function restoreProductAction(form: FormData): Promise<never> {
   const { token, id, page } = await productPage(form);
-  return after(token, page, await vendorApi().restore(token, id), "produit-remis");
+  const result = await vendorApi().restore(token, id);
+  // Offre sur une fiche en ligne : de nouveau en ligne tout de suite (S7.5-T02)
+  return after(
+    token,
+    page,
+    result,
+    result.ok && result.data.status === "published" ? "offre-remise" : "produit-remis",
+  );
 }
 
 /** Photo principale : l'ordre est relu dans l'API (jamais reçu du navigateur), la photo choisie passe en premier. */

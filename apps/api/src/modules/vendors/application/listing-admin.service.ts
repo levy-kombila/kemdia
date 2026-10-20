@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { AuditLog, type AuditContext } from "../../audit/index.js";
 import {
   VendorCatalog,
+  type ListingCorrectionRecord,
   type ListingCursor,
   type ListingEditInput,
   type ListingRecord,
@@ -28,7 +29,16 @@ export type ListingCatalogPort = Pick<
   | "mergeListings"
   | "lockOffer"
   | "withdrawOffer"
+  | "listCorrections"
+  | "lockCorrection"
+  | "closeCorrection"
 >;
+
+/** Proposition de correction avec le nom de la boutique qui l'a envoyée. */
+export interface CorrectionWithShop {
+  correction: ListingCorrectionRecord;
+  shop: { id: string; name: string } | null;
+}
 
 /**
  * Fiches communes, côté équipe (S7.5-T02, ADR-0049) : correction d'une fiche en ligne, retrait d'une photo, fusion des
@@ -181,6 +191,60 @@ export class ListingAdminService {
         product: after,
         shop: shop ? { id: shop.id, name: shop.name, status: shop.status } : null,
       };
+    });
+  }
+
+  // --- Propositions de correction (S7.5-T03) ---
+
+  async corrections(query: {
+    open: boolean;
+    listingId?: string | undefined;
+    limit: number;
+    after?: ListingCursor | undefined;
+  }): Promise<{ items: CorrectionWithShop[]; next: ListingCursor | null }> {
+    const page = await this.tx.run(() => this.catalog.listCorrections(query));
+    const shops = new Map<string, Shop | null>();
+    for (const c of page.items) {
+      if (!shops.has(c.shopId)) shops.set(c.shopId, await this.shops.findById(c.shopId));
+    }
+    return {
+      items: page.items.map((correction) => {
+        const shop = shops.get(correction.shopId) ?? null;
+        return { correction, shop: shop ? { id: shop.id, name: shop.name } : null };
+      }),
+      next: page.next,
+    };
+  }
+
+  /** Clôture d'une proposition (après correction de la fiche, ou sans suite), avec une réponse facultative. */
+  closeCorrection(
+    actor: ModerationActor,
+    correctionId: string,
+    note: string | null,
+    context: AuditContext,
+  ): Promise<CorrectionWithShop> {
+    assertModerator(actor);
+    return this.tx.run(async () => {
+      const locked = await this.catalog.lockCorrection(correctionId);
+      const shop = await this.assertNotOwnShop(actor, locked.shopId, "votre propre proposition");
+      // Relecture S7.5-T03 : pas non plus sur une fiche où sa boutique vend (clore la demande d'un concurrent)
+      await this.assertNotInvolved(actor, [locked.listingId]);
+      const closed = await this.catalog.closeCorrection(locked, {
+        moderatorId: actor.accountId,
+        note,
+        now: this.clock(),
+      });
+      await this.audit.record({
+        action: "listing.correction_closed",
+        actor: { type: "account", id: actor.accountId },
+        target: { type: "listing", id: closed.listingId },
+        details: {
+          correction: closed.id,
+          ...(closed.note ? { note: shortText(closed.note) } : {}),
+        },
+        context,
+      });
+      return { correction: closed, shop: shop ? { id: shop.id, name: shop.name } : null };
     });
   }
 

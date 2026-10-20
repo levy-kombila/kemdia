@@ -1,12 +1,14 @@
 import { BadRequestException } from "@nestjs/common";
 import type {
   AdminListing,
+  ListingCorrection,
   ModerationProduct,
   VendorListing,
   VendorProduct,
   VendorProductStatus,
 } from "@kemdia/contracts";
 import type {
+  ListingCorrectionRecord,
   ListingRecord,
   VendorProductCursor,
   VendorProductRecord,
@@ -43,6 +45,11 @@ export function presentVendorProduct(record: VendorProductRecord): VendorProduct
       slug: record.listingSlug,
       status: STATUS_TO_API[record.listingStatus],
       editable: record.listingOwnerShopId === record.shopId && record.listingStatus !== "PUBLISHED",
+      variants: record.listingVariants.map((v) => ({
+        id: v.id,
+        name: v.name,
+        attributes: { ...v.attributes },
+      })),
     },
     title: record.title,
     description: record.description,
@@ -135,5 +142,25 @@ export function presentAdminListing(listing: ListingRecord): AdminListing {
       name: v.name,
       attributes: { ...v.attributes },
     })),
+  };
+}
+
+/** Proposition de correction (S7.5-T03) : jamais qui l'a close (le vendeur voit la réponse, pas le modérateur). */
+export function presentCorrection(
+  correction: ListingCorrectionRecord,
+  shop: { id: string; name: string } | null,
+): ListingCorrection {
+  return {
+    id: correction.id,
+    listing: {
+      id: correction.listingId,
+      slug: correction.listingSlug,
+      title: correction.listingTitle,
+    },
+    shop,
+    message: correction.message,
+    createdAt: correction.createdAt.toISOString(),
+    closedAt: correction.closedAt?.toISOString() ?? null,
+    note: correction.note,
   };
 }

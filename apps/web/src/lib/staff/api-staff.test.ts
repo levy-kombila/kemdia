@@ -288,3 +288,59 @@ describe("photo à modérer (relais de l'équipe)", () => {
     ).toEqual({ status: 503 });
   });
 });
+
+describe("fiches communes et propositions (S7.5-T03)", () => {
+  const LISTING = "77777777-7777-4777-8777-777777777777";
+  const CORRECTION = "88888888-8888-4888-8888-888888888888";
+  const CORRECTION_VIEW = {
+    id: CORRECTION,
+    listing: { id: LISTING, slug: "sac-raphia", title: "Sac en raphia" },
+    shop: { id: SHOP, name: "Atelier Nzé" },
+    message: "La couleur est beige, pas marron.",
+    createdAt: NOW,
+    closedAt: NOW,
+    note: "Corrigé",
+  };
+
+  it("propositions : filtres dans l'adresse, réponse vérifiée par le contrat", async () => {
+    const { fetch, staff } = api(json(200, { items: [CORRECTION_VIEW], nextCursor: null }));
+    const result = await staff.corrections(TOKEN, { status: "open", listingId: LISTING });
+    expect(result).toMatchObject({ ok: true, data: { items: [{ id: CORRECTION }] } });
+    expect(sent(fetch).url).toBe(
+      `http://serveur.test:4000/api/v1/moderation/listing-corrections?status=open&listingId=${LISTING}`,
+    );
+    // Identifiant de fiche fabriqué : jamais mis dans l'adresse
+    const other = api(json(200, { items: [], nextCursor: null }));
+    await other.staff.corrections(TOKEN, { listingId: "x&status=closed" });
+    expect(sent(other.fetch).url).toBe(
+      "http://serveur.test:4000/api/v1/moderation/listing-corrections",
+    );
+  });
+
+  it("clôture : réponse dans le corps ; sans réponse, corps vide", async () => {
+    const { fetch, staff } = api(json(200, CORRECTION_VIEW));
+    expect(await staff.closeCorrection(TOKEN, CORRECTION, "Corrigé")).toMatchObject({ ok: true });
+    expect(sent(fetch)).toMatchObject({ method: "POST", body: { note: "Corrigé" } });
+    const empty = api(json(200, CORRECTION_VIEW));
+    await empty.staff.closeCorrection(TOKEN, CORRECTION);
+    expect(sent(empty.fetch).body).toEqual({});
+  });
+
+  it("identifiants qui ne sont pas des UUID : rien n'est demandé", async () => {
+    const { fetch, staff } = api(json(200, {}));
+    expect(await staff.listing(TOKEN, "../x")).toEqual({ ok: false, code: "FICHE_INTROUVABLE" });
+    expect(await staff.mergeListing(TOKEN, LISTING, "x", {})).toEqual({
+      ok: false,
+      code: "FICHE_INTROUVABLE",
+    });
+    expect(await staff.withdrawOffer(TOKEN, "x", "Motif")).toEqual({
+      ok: false,
+      code: "PRODUIT_INTROUVABLE",
+    });
+    expect(await staff.closeCorrection(TOKEN, "x")).toEqual({
+      ok: false,
+      code: "CORRECTION_INTROUVABLE",
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});

@@ -74,8 +74,8 @@ export async function getCategory(slug: string): Promise<CategoryView | null> {
   return (await catalog()).category(slug);
 }
 
-export async function getProduct(slug: string): Promise<ProductDetail | null> {
-  return (await catalog()).product(slug);
+export async function getProduct(slug: string, city?: string): Promise<ProductDetail | null> {
+  return (await catalog()).product(slug, city);
 }
 
 export async function listProducts(query: ProductQuery): Promise<ProductPage> {

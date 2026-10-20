@@ -125,6 +125,10 @@ export const AUDIT_ACTIONS = [
   "listing.image_removed",
   /** Doublon fusionné dans une autre fiche (détails : title, into, offers) — S7.5-T02 */
   "listing.merged",
+  /** Correction d'une fiche proposée par une boutique qui la vend (détails : correction, title) — S7.5-T03 */
+  "listing.correction_proposed",
+  /** Proposition de correction close par l'équipe (détails : correction, note) — S7.5-T03 */
+  "listing.correction_closed",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

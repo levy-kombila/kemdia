@@ -11,8 +11,10 @@ import { getCategoryTree } from "@/lib/catalog";
 import { formatDateTime, formatFCFA } from "@/lib/format";
 import { first } from "@/lib/search-params";
 import {
+  addOfferVariantAction,
   archiveProductAction,
   mainPhotoAction,
+  proposeCorrectionAction,
   removePhotoAction,
   restoreProductAction,
   updateVariantAction,
@@ -63,6 +65,14 @@ export default async function VendorProductPage({
   const product = result.data;
   const status = PRODUCT_STATUS[product.status];
   const archived = product.status === "archived";
+  // S7.5-T02 : la boutique écrit le contenu seulement sur SA fiche pas encore en ligne ; ensuite, l'équipe la corrige
+  const editable = product.listing.editable;
+  const listingOnline = product.listing.status === "published";
+  // Offre retirée par l'équipe sur une fiche en ligne : elle revient seulement après modération
+  const withdrawn = listingOnline && product.status === "rejected";
+  const missingVariants = product.listing.variants.filter(
+    (v) => !product.variants.some((own) => own.listingVariantId === v.id),
+  );
   const hidden = <input type="hidden" name="productId" value={product.id} />;
   const photos = product.images
     .map((path) => ({ id: photoIdOf(path), src: vendorPhotoSrc(product.id, path) }))
@@ -93,13 +103,22 @@ export default async function VendorProductPage({
         )}
         {product.status === "rejected" && product.moderationReason && (
           <FormAlert>
-            <strong>Motif du refus :</strong> {product.moderationReason}. Corrigez la fiche ou les
-            photos : le produit repartira en modération.
+            <strong>{withdrawn ? "Offre retirée par l'équipe" : "Motif du refus"} :</strong>{" "}
+            {product.moderationReason}.{" "}
+            {withdrawn
+              ? "Demandez sa remise en vente : l'équipe la vérifiera."
+              : "Corrigez la fiche ou les photos : le produit repartira en modération."}
           </FormAlert>
+        )}
+        {!editable && listingOnline && (
+          <p className="text-ink-700 text-sm">
+            Fiche commune en ligne : le titre, la description et les photos sont les mêmes pour
+            toutes les boutiques qui vendent ce produit. Seule l&apos;équipe Kemdia les modifie.
+          </p>
         )}
         {product.visible && (
           <Link
-            href={`/produit/${product.slug}`}
+            href={`/produit/${product.listing.slug}`}
             className="text-brand-700 inline-flex items-center gap-1 text-sm font-semibold underline"
           >
             Voir la page du produit <ExternalLink className="size-4" aria-hidden />
@@ -107,67 +126,95 @@ export default async function VendorProductPage({
         )}
       </section>
 
-      <section aria-labelledby="photos" className="space-y-4 rounded-xl bg-white p-5">
-        <h2 id="photos" className="text-lg font-extrabold">
-          Photos ({photos.length}/{MAX_PHOTOS})
-        </h2>
-        {photos.length === 0 ? (
-          <p className="text-ink-500 text-sm">
-            Aucune photo : un produit avec de bonnes photos se vend bien mieux.
-          </p>
-        ) : (
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {photos.map((photo, index) => (
-              <li key={photo.id} className="space-y-2">
-                {/* Relais de l'espace vendeur (photo peut-être pas encore validée), jamais l'optimiseur (ADR-0035) */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={photo.src}
-                  alt={`Photo ${index + 1}${index === 0 ? " (principale)" : ""}`}
-                  loading="lazy"
-                  className="border-ink-100 bg-ink-50 aspect-square w-full rounded-lg border object-contain"
-                />
-                {index === 0 ? (
-                  <p className="text-forest-700 flex items-center gap-1 text-xs font-bold">
-                    <Star className="size-4" aria-hidden /> Photo principale
-                  </p>
-                ) : (
-                  <form action={mainPhotoAction}>
-                    {hidden}
-                    <input type="hidden" name="imageId" value={photo.id} />
-                    <button type="submit" className={secondaryButton}>
-                      <Star className="size-4" aria-hidden /> Principale
-                      <span className="sr-only"> : photo {index + 1}</span>
-                    </button>
-                  </form>
-                )}
-                {/* Retrait définitif : replié, comme le retrait de la vente (pas de clic distrait) */}
-                <details>
-                  <summary className="text-brand-700 flex cursor-pointer items-center gap-1 text-sm font-semibold">
-                    <Trash2 className="size-4" aria-hidden /> Retirer…
-                    <span className="sr-only"> la photo {index + 1}</span>
-                  </summary>
-                  <form action={removePhotoAction} className="mt-2">
-                    {hidden}
-                    <input type="hidden" name="imageId" value={photo.id} />
-                    <button type="submit" className={`${secondaryButton} text-brand-700`}>
-                      Retirer définitivement
+      {!editable && (
+        <section aria-labelledby="photos" className="space-y-4 rounded-xl bg-white p-5">
+          <h2 id="photos" className="text-lg font-extrabold">
+            Photos de la fiche ({product.images.length})
+          </h2>
+          {product.images.length === 0 ? (
+            <p className="text-ink-500 text-sm">Aucune photo sur cette fiche.</p>
+          ) : (
+            <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+              {product.images.map((src, index) => (
+                <li key={src}>
+                  {/* Photos d'une fiche en ligne : publiques, servies par le relais du site (ADR-0035) */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={src}
+                    alt={`Photo ${index + 1}${index === 0 ? " (principale)" : ""}`}
+                    loading="lazy"
+                    className="border-ink-100 bg-ink-50 aspect-square w-full rounded-lg border object-contain"
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {editable && (
+        <section aria-labelledby="photos" className="space-y-4 rounded-xl bg-white p-5">
+          <h2 id="photos" className="text-lg font-extrabold">
+            Photos ({photos.length}/{MAX_PHOTOS})
+          </h2>
+          {photos.length === 0 ? (
+            <p className="text-ink-500 text-sm">
+              Aucune photo : un produit avec de bonnes photos se vend bien mieux.
+            </p>
+          ) : (
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {photos.map((photo, index) => (
+                <li key={photo.id} className="space-y-2">
+                  {/* Relais de l'espace vendeur (photo peut-être pas encore validée), jamais l'optimiseur (ADR-0035) */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={photo.src}
+                    alt={`Photo ${index + 1}${index === 0 ? " (principale)" : ""}`}
+                    loading="lazy"
+                    className="border-ink-100 bg-ink-50 aspect-square w-full rounded-lg border object-contain"
+                  />
+                  {index === 0 ? (
+                    <p className="text-forest-700 flex items-center gap-1 text-xs font-bold">
+                      <Star className="size-4" aria-hidden /> Photo principale
+                    </p>
+                  ) : (
+                    <form action={mainPhotoAction}>
+                      {hidden}
+                      <input type="hidden" name="imageId" value={photo.id} />
+                      <button type="submit" className={secondaryButton}>
+                        <Star className="size-4" aria-hidden /> Principale
+                        <span className="sr-only"> : photo {index + 1}</span>
+                      </button>
+                    </form>
+                  )}
+                  {/* Retrait définitif : replié, comme le retrait de la vente (pas de clic distrait) */}
+                  <details>
+                    <summary className="text-brand-700 flex cursor-pointer items-center gap-1 text-sm font-semibold">
+                      <Trash2 className="size-4" aria-hidden /> Retirer…
                       <span className="sr-only"> la photo {index + 1}</span>
-                    </button>
-                  </form>
-                </details>
-              </li>
-            ))}
-          </ul>
-        )}
-        {!archived && (
-          <PhotoUploader productId={product.id} remaining={MAX_PHOTOS - photos.length} />
-        )}
-        <p className="text-ink-500 text-sm">
-          Ajouter une photo renvoie le produit en modération. Changer la photo principale ou en
-          retirer une : sans modération.
-        </p>
-      </section>
+                    </summary>
+                    <form action={removePhotoAction} className="mt-2">
+                      {hidden}
+                      <input type="hidden" name="imageId" value={photo.id} />
+                      <button type="submit" className={`${secondaryButton} text-brand-700`}>
+                        Retirer définitivement
+                        <span className="sr-only"> la photo {index + 1}</span>
+                      </button>
+                    </form>
+                  </details>
+                </li>
+              ))}
+            </ul>
+          )}
+          {!archived && (
+            <PhotoUploader productId={product.id} remaining={MAX_PHOTOS - photos.length} />
+          )}
+          <p className="text-ink-500 text-sm">
+            Ajouter une photo renvoie le produit en modération. Changer la photo principale ou en
+            retirer une : sans modération.
+          </p>
+        </section>
+      )}
 
       <section aria-labelledby="variantes" className="space-y-4 rounded-xl bg-white p-5">
         <h2 id="variantes" className="text-lg font-extrabold">
@@ -244,9 +291,97 @@ export default async function VendorProductPage({
             </p>
           </form>
         ))}
+        {listingOnline && !archived && !withdrawn && missingVariants.length > 0 && (
+          <details className="border-ink-200 rounded-xl border p-4">
+            <summary className="cursor-pointer font-semibold">
+              Vendre une autre déclinaison de ce produit
+            </summary>
+            <form action={addOfferVariantAction} className="mt-3 space-y-3">
+              {hidden}
+              <label className="block text-sm font-semibold">
+                Déclinaison
+                <select name="listingVariantId" required className={`${inputClass} mt-1`}>
+                  {missingVariants.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="block text-sm font-semibold">
+                  Prix (FCFA)
+                  <input
+                    name="price"
+                    inputMode="numeric"
+                    required
+                    maxLength={12}
+                    className={`${inputClass} mt-1`}
+                  />
+                </label>
+                <label className="block text-sm font-semibold">
+                  Prix barré (facultatif)
+                  <input
+                    name="compareAtPrice"
+                    inputMode="numeric"
+                    maxLength={12}
+                    className={`${inputClass} mt-1`}
+                  />
+                </label>
+                <label className="block text-sm font-semibold">
+                  Stock
+                  <input
+                    name="stock"
+                    inputMode="numeric"
+                    required
+                    maxLength={8}
+                    className={`${inputClass} mt-1`}
+                  />
+                </label>
+              </div>
+              <button
+                type="submit"
+                className="bg-ink-900 hover:bg-ink-800 rounded-full px-5 py-2 text-sm font-semibold text-white"
+              >
+                Ajouter à mon offre
+              </button>
+            </form>
+          </details>
+        )}
       </section>
 
-      {!archived && (
+      {!editable && listingOnline && product.status === "published" && (
+        <details className="rounded-xl bg-white">
+          <summary className="cursor-pointer px-5 py-4 text-lg font-extrabold">
+            Proposer une correction de la fiche
+          </summary>
+          <form action={proposeCorrectionAction} className="space-y-3 px-5 pb-5">
+            {hidden}
+            <label className="block text-sm font-semibold">
+              Ce qu&apos;il faut corriger (titre, description, photo, déclinaison manquante…)
+              <textarea
+                name="message"
+                required
+                minLength={10}
+                maxLength={500}
+                rows={4}
+                className={`${inputClass} mt-1`}
+              />
+            </label>
+            <button
+              type="submit"
+              className="bg-ink-900 hover:bg-ink-800 rounded-full px-5 py-2 text-sm font-semibold text-white"
+            >
+              Envoyer à l&apos;équipe Kemdia
+            </button>
+            <p className="text-ink-500 text-xs">
+              10 à 500 caractères. L&apos;équipe corrige la fiche pour toutes les boutiques.
+            </p>
+          </form>
+        </details>
+      )}
+
+      {!archived && editable && (
         <details className="group rounded-xl bg-white">
           <summary className="cursor-pointer px-5 py-4 text-lg font-extrabold">
             Modifier la fiche (titre, description, catégorie)
@@ -279,19 +414,27 @@ export default async function VendorProductPage({
       )}
 
       <section aria-label="Vente" className="rounded-xl bg-white p-5">
-        {archived ? (
+        {archived || withdrawn ? (
           <form action={restoreProductAction} className="space-y-2">
             {hidden}
             <p className="text-ink-700 text-sm">
-              Remettre en vente renvoie le produit en modération.
+              {withdrawn
+                ? "Votre offre repassera par la vérification de l'équipe Kemdia."
+                : listingOnline
+                  ? "Votre offre revient en ligne tout de suite."
+                  : "Remettre en vente renvoie le produit en modération."}
             </p>
             <button
               type="submit"
               className="bg-brand-600 hover:bg-brand-700 rounded-full px-5 py-2.5 font-semibold text-white"
             >
-              Remettre en vente
+              {withdrawn ? "Demander la remise en vente" : "Remettre en vente"}
             </button>
           </form>
+        ) : listingOnline && product.status !== "published" ? (
+          <p className="text-ink-500 text-sm">
+            Offre en cours de vérification par l&apos;équipe Kemdia.
+          </p>
         ) : (
           <details>
             <summary className="text-brand-700 cursor-pointer font-semibold">

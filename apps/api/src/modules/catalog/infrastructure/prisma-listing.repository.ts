@@ -166,7 +166,12 @@ export class PrismaListingRepository implements ListingRepository, SellerDirecto
         data: { listingVariantId: to, updatedAt: now },
       });
     }
-    // 3. Le doublon est archivé ; son adresse mène à la cible
+    // 3. Les propositions de correction encore ouvertes suivent leurs offres (relecture S7.5-T03)
+    await db.listingCorrection.updateMany({
+      where: { listingId: sourceId, closedAt: null },
+      data: { listingId: targetId },
+    });
+    // 4. Le doublon est archivé ; son adresse mène à la cible
     await db.listing.update({
       where: { id: sourceId },
       data: { status: "ARCHIVED", mergedIntoId: targetId, offerCount: 0, updatedAt: now },

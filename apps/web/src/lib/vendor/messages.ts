@@ -65,6 +65,9 @@ const MESSAGES: Record<VendorErrorCode, string> = {
   DEJA_EN_VENTE: "Vous vendez déjà ce produit : modifiez votre offre existante.",
   DECLINAISON_INTROUVABLE: "Cette déclinaison n'existe pas sur la fiche du produit.",
   FUSION_IMPOSSIBLE: "Opération impossible.",
+  CORRECTION_INTROUVABLE: "Cette proposition n'existe pas (ou plus).",
+  TROP_DE_CORRECTIONS:
+    "10 propositions de correction attendent déjà l'équipe : patientez avant d'en envoyer d'autres.",
 };
 
 const isVendorCode = (code: string): code is VendorErrorCode =>
@@ -114,6 +117,13 @@ export const VENDOR_NOTICES = {
   "photo-retiree": "Photo retirée.",
   "produit-archive": "Produit retiré de la vente.",
   "produit-remis": "Produit remis en vente : il repasse en modération.",
+  "offre-remise": "Offre remise en vente : de nouveau en ligne.",
+  "offre-creee": "C'est en vente ! Votre offre est en ligne sur la fiche du produit.",
+  "declinaison-ajoutee": "Déclinaison ajoutée à votre offre, en ligne tout de suite.",
+  "correction-envoyee":
+    "Proposition envoyée : l'équipe Kemdia corrigera la fiche si nécessaire (toutes les boutiques en profitent).",
+  "produit-cree-photos":
+    "Produit créé : il attend la modération. Certaines photos n'ont pas pu être envoyées : ajoutez-les ci-dessous.",
   "kyc-enregistre": "Dossier enregistré. Ajoutez les photos demandées, puis envoyez-le.",
   "photo-kyc": "Photo reçue (chiffrée, visible seulement par l'équipe Kemdia).",
   "kyc-envoye": "Dossier envoyé : l'équipe Kemdia le vérifie. Vous serez prévenu ici.",

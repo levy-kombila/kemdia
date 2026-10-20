@@ -65,6 +65,7 @@ const product = (status: VendorProductRecord["status"] = "PENDING"): VendorProdu
   listingSlug: "pagne-wax-ab12cd",
   listingStatus: status,
   listingOwnerShopId: SHOP,
+  listingVariants: [],
   slug: "pagne-wax-ab12cd",
   title: "Pagne wax 6 yards",
   description: "Pagne wax 100 % coton, 6 yards, motifs variés.",
@@ -142,6 +143,22 @@ function setup(shop: Shop | null) {
       });
     },
     addOfferVariant: () => Promise.resolve(product("PUBLISHED")),
+    publishedListing: () => Promise.resolve({ listing: {} as never, myOfferId: null }),
+    proposeCorrection: (shopId, productId, message) => {
+      calls.push(`correction de ${shopId} sur ${productId}`);
+      return Promise.resolve({
+        id: "99999999-9999-4999-8999-999999999999",
+        listingId: PRODUCT,
+        listingTitle: "Pagne wax 6 yards",
+        listingSlug: "pagne-wax-ab12cd",
+        shopId,
+        message,
+        createdAt: NOW,
+        closedBy: null,
+        closedAt: null,
+        note: null,
+      });
+    },
   };
   const vendor = new VendorProductService(shops, tx, record, catalog);
   vendor.clock = () => NOW;
@@ -271,6 +288,23 @@ describe("VendorProductService — offres sur une fiche commune (S7.5-T02)", () 
         ),
       ).toBe("BOUTIQUE_INACTIVE");
     }
+  });
+
+  it("proposition de correction (S7.5-T03) : pour SA boutique, tracée sur la fiche", async () => {
+    const { vendor, audit, calls } = setup(shopOf("active"));
+    await vendor.proposeCorrection(AWA, PRODUCT, "La couleur est rouge, pas bordeaux.", CTX);
+    expect(calls).toContain(`correction de ${SHOP} sur ${PRODUCT}`);
+    expect(audit).toEqual([
+      expect.objectContaining({
+        action: "listing.correction_proposed",
+        target: { type: "listing", id: PRODUCT },
+        details: { correction: "99999999-9999-4999-8999-999999999999", title: "Pagne wax 6 yards" },
+      }),
+    ]);
+    const blocked = setup(shopOf("suspended"));
+    expect(
+      await codeOf(blocked.vendor.proposeCorrection(AWA, PRODUCT, "texte assez long", CTX)),
+    ).toBe("BOUTIQUE_INACTIVE");
   });
 
   it("remise en vente : en ligne tout de suite → « offer.restored » ; sinon envoi en modération", async () => {

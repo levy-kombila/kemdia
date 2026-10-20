@@ -105,6 +105,13 @@ test.describe("espace vendeur : parcours", () => {
     // --- Nouveau produit, deux variantes ---
     await page.getByRole("link", { name: "Ajouter un produit" }).first().click();
     await expect(page).toHaveURL(/\/vendeur\/produits\/nouveau$/);
+    // Chercher d'abord (S7.5-T03) : rien d'approchant en ligne, le vendeur crée une nouvelle fiche
+    await page.getByLabel("Nom du produit").fill("Chemise en pagne E2E");
+    await page.getByRole("button", { name: "Chercher", exact: true }).click();
+    await expect(page.getByText(/Aucun produit trouvé/)).toBeVisible();
+    await expectAccessible(page);
+    await page.getByRole("link", { name: "Créer une nouvelle fiche" }).click();
+    await expect(page).toHaveURL(/\/vendeur\/produits\/nouveau\?creer=1$/);
     await page.getByRole("button", { name: /Créer le produit/ }).click();
     await expect(page.getByLabel("Titre")).toHaveAttribute("aria-invalid", "true");
 

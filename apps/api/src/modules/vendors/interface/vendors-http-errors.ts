@@ -74,6 +74,9 @@ const CATALOG: Record<CatalogErrorCode, { code: string; status: number }> = {
     status: HttpStatus.UNPROCESSABLE_ENTITY,
   },
   FUSION_IMPOSSIBLE: { code: "FUSION_IMPOSSIBLE", status: HttpStatus.CONFLICT },
+  // Propositions de correction (S7.5-T03)
+  CORRECTION_INTROUVABLE: { code: "CORRECTION_INTROUVABLE", status: HttpStatus.NOT_FOUND },
+  TROP_DE_CORRECTIONS: { code: "TROP_DE_CORRECTIONS", status: HttpStatus.CONFLICT },
 };
 
 const capitalize = (message: string) => message.charAt(0).toUpperCase() + message.slice(1);

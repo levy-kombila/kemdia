@@ -1,4 +1,4 @@
-import { IdCard, LayoutDashboard, ShieldCheck, Store, Tags, Truck } from "lucide-react";
+import { IdCard, LayoutDashboard, Layers, ShieldCheck, Store, Tags, Truck } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Breadcrumbs, type Crumb } from "@/components/catalog/Breadcrumbs";
@@ -6,7 +6,7 @@ import { FormAlert } from "@/components/ui/Field";
 import { cn } from "@/lib/cn";
 
 export type StaffSection =
-  "accueil" | "boutiques" | "verifications" | "livraisons" | "moderation" | "securite";
+  "accueil" | "boutiques" | "verifications" | "livraisons" | "moderation" | "fiches" | "securite";
 
 const LINKS: { id: StaffSection; label: string; href: string; icon: typeof Store; admin?: true }[] =
   [
@@ -22,6 +22,8 @@ const LINKS: { id: StaffSection; label: string; href: string; icon: typeof Store
     // Livraisons (S7-T02) : administrateurs seulement, comme dans l'API
     { id: "livraisons", label: "Livraisons", href: "/equipe/livraisons", icon: Truck, admin: true },
     { id: "moderation", label: "Modération", href: "/equipe/moderation", icon: Tags },
+    // Fiches communes (S7.5-T03) : corrections, fusions, retraits d'offres
+    { id: "fiches", label: "Fiches produits", href: "/equipe/fiches", icon: Layers },
     { id: "securite", label: "Sécurité", href: "/equipe/securite", icon: ShieldCheck },
   ];
 

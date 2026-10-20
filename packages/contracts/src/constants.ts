@@ -209,6 +209,9 @@ export const AUDIT_ACTIONS = [
   "listing.updated",
   "listing.image_removed",
   "listing.merged",
+  // Propositions de correction (S7.5-T03)
+  "listing.correction_proposed",
+  "listing.correction_closed",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** Lignes par page du journal d'audit. */
@@ -438,6 +441,14 @@ export const SHOP_KINDS = ["kemdia", "partner"] as const;
 export type ShopKind = (typeof SHOP_KINDS)[number];
 /** Identifiant fixe de la boutique Kemdia (« kemdia » en hexadécimal) : les produits existants lui appartiennent. */
 export const KEMDIA_SHOP_ID = "6b656d64-6961-4000-8000-000000000001";
+
+/** Propositions de correction d'une fiche (S7.5-T03) : longueurs et file par boutique. */
+export const LISTING_CORRECTION_LIMITS = {
+  messageMin: 10,
+  messageMax: 500,
+  noteMax: 300,
+  openPerShop: 10,
+} as const;
 /** Longueurs des champs d'une demande de boutique (mêmes valeurs dans la migration SQL). */
 export const SHOP_LIMITS = {
   nameMin: 3,
@@ -604,6 +615,9 @@ export const VENDOR_ERROR_CODES = [
   "DEJA_EN_VENTE",
   "DECLINAISON_INTROUVABLE",
   "FUSION_IMPOSSIBLE",
+  // Propositions de correction (S7.5-T03)
+  "CORRECTION_INTROUVABLE",
+  "TROP_DE_CORRECTIONS",
 ] as const;
 export type VendorErrorCode = (typeof VENDOR_ERROR_CODES)[number];
 

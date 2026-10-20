@@ -1,5 +1,18 @@
 import "server-only";
 import {
+  AdminListingDetailSchema,
+  AdminListingPageSchema,
+  AdminListingSchema,
+  ListingCorrectionPageSchema,
+  ListingCorrectionSchema,
+  ListingMergeResultSchema,
+  type AdminListing,
+  type AdminListingDetail,
+  type AdminListingPage,
+  type ListingCorrection,
+  type ListingCorrectionPage,
+  type ListingMergeResult,
+  type ListingUpdateRequest,
   AdminKycPageSchema,
   AdminKycSchema,
   AdminShopPageSchema,
@@ -116,7 +129,7 @@ export function createStaffApi(options: StaffApiOptions) {
   }
 
   async function call<T>(
-    method: "GET" | "POST" | "PUT",
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
     path: string,
     token: string,
     schema: z.ZodType<T>,
@@ -271,6 +284,116 @@ export function createStaffApi(options: StaffApiOptions) {
         AdminShopSchema,
         decision === "approve" ? undefined : { reason: reason ?? "" },
       );
+    },
+
+    // --- Fiches communes (S7.5-T02, S7.5-T03 ; modérateurs et administrateurs) ---
+    listings: (
+      token: string,
+      params: { q?: string; status?: string; after?: string },
+    ): Promise<StaffResult<AdminListingPage>> => {
+      const query = new URLSearchParams();
+      if (params.q) query.set("q", params.q.slice(0, 100));
+      if (params.status) query.set("status", params.status);
+      if (params.after) query.set("after", params.after);
+      const text = query.toString();
+      return call(
+        "GET",
+        `/moderation/listings${text ? `?${text}` : ""}`,
+        token,
+        AdminListingPageSchema,
+      );
+    },
+    listing: (token: string, listingId: string): Promise<StaffResult<AdminListingDetail>> => {
+      const listing = id(listingId);
+      return listing
+        ? call("GET", `/moderation/listings/${listing}`, token, AdminListingDetailSchema)
+        : Promise.resolve(notFound("FICHE_INTROUVABLE"));
+    },
+    updateListing: (
+      token: string,
+      listingId: string,
+      request: ListingUpdateRequest,
+    ): Promise<StaffResult<AdminListing>> => {
+      const listing = id(listingId);
+      return listing
+        ? call("PATCH", `/moderation/listings/${listing}`, token, AdminListingSchema, request)
+        : Promise.resolve(notFound("FICHE_INTROUVABLE"));
+    },
+    removeListingImage: (
+      token: string,
+      listingId: string,
+      imageId: string,
+    ): Promise<StaffResult<AdminListing>> => {
+      const listing = id(listingId);
+      const image = id(imageId);
+      return listing && image
+        ? call(
+            "DELETE",
+            `/moderation/listings/${listing}/images/${image}`,
+            token,
+            AdminListingSchema,
+          )
+        : Promise.resolve(notFound("PHOTO_INTROUVABLE"));
+    },
+    mergeListing: (
+      token: string,
+      listingId: string,
+      into: string,
+      variants: Record<string, string>,
+    ): Promise<StaffResult<ListingMergeResult>> => {
+      const listing = id(listingId);
+      const target = id(into);
+      return listing && target
+        ? call("POST", `/moderation/listings/${listing}/merge`, token, ListingMergeResultSchema, {
+            into: target,
+            variants,
+          })
+        : Promise.resolve(notFound("FICHE_INTROUVABLE"));
+    },
+    withdrawOffer: (
+      token: string,
+      productId: string,
+      reason: string,
+    ): Promise<StaffResult<ModerationProduct>> => {
+      const product = id(productId);
+      return product
+        ? call("POST", `/moderation/offers/${product}/withdraw`, token, ModerationProductSchema, {
+            reason,
+          })
+        : Promise.resolve(notFound("PRODUIT_INTROUVABLE"));
+    },
+    corrections: (
+      token: string,
+      params: { status?: "open" | "closed"; listingId?: string; after?: string },
+    ): Promise<StaffResult<ListingCorrectionPage>> => {
+      const query = new URLSearchParams();
+      if (params.status) query.set("status", params.status);
+      if (params.listingId && id(params.listingId))
+        query.set("listingId", params.listingId.toLowerCase());
+      if (params.after) query.set("after", params.after);
+      const text = query.toString();
+      return call(
+        "GET",
+        `/moderation/listing-corrections${text ? `?${text}` : ""}`,
+        token,
+        ListingCorrectionPageSchema,
+      );
+    },
+    closeCorrection: (
+      token: string,
+      correctionId: string,
+      note?: string,
+    ): Promise<StaffResult<ListingCorrection>> => {
+      const correction = id(correctionId);
+      return correction
+        ? call(
+            "POST",
+            `/moderation/listing-corrections/${correction}/close`,
+            token,
+            ListingCorrectionSchema,
+            note ? { note } : {},
+          )
+        : Promise.resolve(notFound("CORRECTION_INTROUVABLE"));
     },
 
     // --- Modération des produits (S6-T02, modérateurs et administrateurs) ---

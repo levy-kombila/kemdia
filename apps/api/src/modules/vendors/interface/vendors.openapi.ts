@@ -447,6 +447,46 @@ export const vendorProductPaths = {
       },
     },
   },
+  "/api/v1/vendors/listings/{listingId}": {
+    get: {
+      tags: ["Produits des vendeurs"],
+      summary: "Une fiche en ligne (page « Vendre ce produit »)",
+      description: `${VENDOR_RULES}\n\nS7.5-T03 : déclinaisons de la fiche et \`myOfferId\` (offre de la boutique, s'il y en a une).`,
+      operationId: "getVendorListing",
+      security: bearer,
+      parameters: [listingIdParam],
+      responses: {
+        "200": json("VendorListing", "La fiche en ligne"),
+        "400": problem("Identifiant invalide"),
+        ...vendorErrors,
+        "404": problem("`FICHE_INTROUVABLE` (inconnue, pas en ligne ou fusionnée)"),
+      },
+    },
+  },
+  "/api/v1/vendors/products/{productId}/corrections": {
+    post: {
+      tags: ["Produits des vendeurs"],
+      summary: "Proposer une correction de la fiche à l'équipe",
+      description: `${VENDOR_RULES}\n\nS7.5-T03 : seulement pour une fiche **en ligne** sur laquelle la boutique vend (avant la publication, elle modifie sa fiche elle-même). Message libre de 10 à 500 caractères ; 10 propositions ouvertes au plus par boutique. Inscrit au journal d'audit (« listing.correction_proposed »).`,
+      operationId: "proposeListingCorrection",
+      security: bearer,
+      parameters: [productIdParam],
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("CorrectionCreateRequest") } },
+      },
+      responses: {
+        "201": json("ListingCorrection", "La proposition envoyée"),
+        "400": problem("Corps invalide"),
+        ...vendorErrors,
+        "404": problem("`PRODUIT_INTROUVABLE`"),
+        "409": problem(
+          "`STATUT_PRODUIT_INCOMPATIBLE` (fiche pas encore en ligne), `TROP_DE_CORRECTIONS` ou `BOUTIQUE_OCCUPEE`",
+        ),
+        "422": problem("`PRODUIT_INVALIDE` (longueur du message)"),
+      },
+    },
+  },
   "/api/v1/vendors/listings/{listingId}/offer": {
     post: {
       tags: ["Produits des vendeurs"],
@@ -658,6 +698,76 @@ export const vendorProductPaths = {
         "404": problem("`FICHE_INTROUVABLE`"),
         "409": problem("`FUSION_IMPOSSIBLE` ou `BOUTIQUE_OCCUPEE`"),
         "422": problem("`DECLINAISON_INTROUVABLE`"),
+      },
+    },
+  },
+  "/api/v1/moderation/listing-corrections": {
+    get: {
+      tags: ["Modération"],
+      summary: "Propositions de correction des vendeurs",
+      description: `${LISTING_RULES}\n\nS7.5-T03 : ouvertes (par défaut, de la plus ancienne à la plus récente) ou closes ; d'une fiche (\`listingId\`) ou de toutes.`,
+      operationId: "listListingCorrections",
+      security: bearer,
+      parameters: [
+        {
+          name: "status",
+          in: "query",
+          description: "Ouvertes ou closes",
+          schema: { type: "string", enum: ["open", "closed"], default: "open" },
+        },
+        {
+          name: "listingId",
+          in: "query",
+          description: "Seulement celles de cette fiche",
+          schema: { type: "string", format: "uuid" },
+        },
+        {
+          name: "limit",
+          in: "query",
+          description: "Propositions par page (50 par défaut, 100 au plus)",
+          schema: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+        },
+        {
+          name: "after",
+          in: "query",
+          description: "`nextCursor` de la page précédente",
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": json("ListingCorrectionPage", "Propositions"),
+        "400": problem("Paramètres invalides"),
+        ...moderationErrors,
+      },
+    },
+  },
+  "/api/v1/moderation/listing-corrections/{correctionId}/close": {
+    post: {
+      tags: ["Modération"],
+      summary: "Clore une proposition de correction",
+      description: `${LISTING_RULES}\n\nAprès avoir corrigé la fiche (ou sans suite), avec une réponse facultative montrée au vendeur. Inscrit au journal d'audit (« listing.correction_closed »).`,
+      operationId: "closeListingCorrection",
+      security: bearer,
+      parameters: [
+        {
+          name: "correctionId",
+          in: "path",
+          required: true,
+          description: "Identifiant de la proposition",
+          schema: { type: "string", format: "uuid" },
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("CorrectionCloseRequest") } },
+      },
+      responses: {
+        "200": json("ListingCorrection", "La proposition close"),
+        "400": problem("Corps invalide"),
+        ...moderationErrors,
+        "404": problem("`CORRECTION_INTROUVABLE`"),
+        "409": problem("`STATUT_PRODUIT_INCOMPATIBLE` (déjà close) ou `BOUTIQUE_OCCUPEE`"),
+        "422": problem("`PRODUIT_INVALIDE` (réponse trop longue)"),
       },
     },
   },

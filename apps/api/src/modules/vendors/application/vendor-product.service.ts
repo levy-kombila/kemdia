@@ -5,6 +5,7 @@ import {
   type ImageSize,
   type StoredImage,
   type VendorProductCursor,
+  type ListingCorrectionRecord,
   type ListingRecord,
   type OfferLineInput,
   type VendorProductInput,
@@ -41,6 +42,8 @@ export type VendorCatalogPort = Pick<
   | "searchListings"
   | "createOffer"
   | "addOfferVariant"
+  | "publishedListing"
+  | "proposeCorrection"
 >;
 
 const inactive = () =>
@@ -215,6 +218,39 @@ export class VendorProductService {
     limit: number,
   ): Promise<{ listing: ListingRecord; myOfferId: string | null }[]> {
     return this.inShop(accountId, (shop) => this.catalog.searchListings(shop.id, q, limit));
+  }
+
+  /** Une fiche en ligne et l'offre de la boutique s'il y en a une (page « Vendre ce produit », S7.5-T03). */
+  publishedListing(
+    accountId: string,
+    listingId: string,
+  ): Promise<{ listing: ListingRecord; myOfferId: string | null }> {
+    return this.inShop(accountId, (shop) => this.catalog.publishedListing(shop.id, listingId));
+  }
+
+  /** Correction proposée à l'équipe pour la fiche d'une offre de la boutique (S7.5-T03), tracée. */
+  proposeCorrection(
+    accountId: string,
+    productId: string,
+    message: string,
+    context: AuditContext,
+  ): Promise<ListingCorrectionRecord> {
+    return this.inShop(accountId, async (shop) => {
+      const correction = await this.catalog.proposeCorrection(
+        shop.id,
+        productId,
+        message,
+        this.clock(),
+      );
+      await this.audit.record({
+        action: "listing.correction_proposed",
+        actor: { type: "account", id: accountId },
+        target: { type: "listing", id: correction.listingId },
+        details: { correction: correction.id, title: shortText(correction.listingTitle) },
+        context,
+      });
+      return correction;
+    });
   }
 
   /** Offre de la boutique sur une fiche en ligne : en ligne tout de suite (prix et stock seulement), tracée. */

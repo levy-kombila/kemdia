@@ -45,6 +45,9 @@ const api = vi.hoisted(() => ({
   refuseOrder: vi.fn(),
   saveKyc: vi.fn(),
   submitKyc: vi.fn(),
+  createOffer: vi.fn(),
+  addOfferVariant: vi.fn(),
+  proposeCorrection: vi.fn(),
 }));
 vi.mock("./api-vendor", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api-vendor")>()),
@@ -348,5 +351,94 @@ describe("vérification (S6-T08)", () => {
     );
     api.submitKyc.mockResolvedValue({ ok: true, data: {} });
     expect(await redirectOf(actions.submitKycAction())).toBe("/vendeur/verification?ok=kyc-envoye");
+  });
+});
+
+describe("fiches et offres (S7.5-T03)", () => {
+  const LISTING = "77777777-7777-4777-8777-777777777777";
+  const LV1 = "88888888-8888-4888-8888-888888888888";
+  const LV2 = "99999999-9999-4999-8999-999999999999";
+
+  it("vendre ce produit : seules les déclinaisons cochées, montants revérifiés", async () => {
+    api.createOffer.mockResolvedValue({ ok: true, data: { id: PRODUCT } });
+    const f = form({
+      listingId: LISTING,
+      [`sell-${LV1}`]: "on",
+      [`price-${LV1}`]: "250 000",
+      [`compareAtPrice-${LV1}`]: "",
+      [`stock-${LV1}`]: "3",
+      [`price-${LV2}`]: "1",
+    });
+    f.append("variantIds", LV1);
+    f.append("variantIds", LV2);
+    expect(await redirectOf(actions.createOfferAction(f))).toBe(`${PAGE}?ok=offre-creee`);
+    expect(api.createOffer).toHaveBeenCalledWith(TOKEN, LISTING, [
+      { listingVariantId: LV1, price: 250_000, compareAtPrice: null, stock: 3 },
+    ]);
+  });
+
+  it("vendre ce produit : rien de coché, prix barré trop bas, identifiant faux", async () => {
+    const page = `/vendeur/fiches/${LISTING}`;
+    const none = form({ listingId: LISTING });
+    none.append("variantIds", LV1);
+    expect(await redirectOf(actions.createOfferAction(none))).toBe(
+      `${page}?erreur=DECLINAISON_INTROUVABLE`,
+    );
+    const bad = form({
+      listingId: LISTING,
+      [`sell-${LV1}`]: "on",
+      [`price-${LV1}`]: "1000",
+      [`compareAtPrice-${LV1}`]: "900",
+      [`stock-${LV1}`]: "1",
+    });
+    bad.append("variantIds", LV1);
+    expect(await redirectOf(actions.createOfferAction(bad))).toBe(
+      `${page}?erreur=PRODUIT_INVALIDE`,
+    );
+    expect(await redirectOf(actions.createOfferAction(form({ listingId: "../x" })))).toBe(
+      "/vendeur/produits/nouveau",
+    );
+    expect(api.createOffer).not.toHaveBeenCalled();
+  });
+
+  it("autre déclinaison et proposition de correction", async () => {
+    api.addOfferVariant.mockResolvedValue({ ok: true, data: {} });
+    expect(
+      await redirectOf(
+        actions.addOfferVariantAction(
+          form({
+            productId: PRODUCT,
+            listingVariantId: LV2,
+            price: "1000",
+            compareAtPrice: "",
+            stock: "1",
+          }),
+        ),
+      ),
+    ).toBe(`${PAGE}?ok=declinaison-ajoutee`);
+    expect(api.addOfferVariant).toHaveBeenCalledWith(TOKEN, PRODUCT, {
+      listingVariantId: LV2,
+      price: 1000,
+      compareAtPrice: null,
+      stock: 1,
+    });
+    expect(
+      await redirectOf(
+        actions.proposeCorrectionAction(form({ productId: PRODUCT, message: "court" })),
+      ),
+    ).toBe(`${PAGE}?erreur=PRODUIT_INVALIDE`);
+    api.proposeCorrection.mockResolvedValue({ ok: false, code: "TROP_DE_CORRECTIONS" });
+    expect(
+      await redirectOf(
+        actions.proposeCorrectionAction(
+          form({ productId: PRODUCT, message: "  La batterie fait 5 000 mAh.  " }),
+        ),
+      ),
+    ).toBe(`${PAGE}?erreur=TROP_DE_CORRECTIONS`);
+    expect(api.proposeCorrection).toHaveBeenCalledWith(
+      TOKEN,
+      PRODUCT,
+      "La batterie fait 5 000 mAh.",
+    );
   });
 });

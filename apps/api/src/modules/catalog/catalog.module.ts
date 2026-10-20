@@ -10,11 +10,13 @@ import {
   STOCK_REPOSITORY,
   VENDOR_PRODUCT_REPOSITORY,
   LISTING_REPOSITORY,
+  LISTING_CORRECTION_REPOSITORY,
   SELLER_DIRECTORY,
 } from "./application/ports.js";
 import { VendorCatalog } from "./application/vendor-catalog.service.js";
 import { PrismaVendorProductRepository } from "./infrastructure/prisma-vendor-product.repository.js";
 import { PrismaListingRepository } from "./infrastructure/prisma-listing.repository.js";
+import { PrismaListingCorrectionRepository } from "./infrastructure/prisma-listing-correction.repository.js";
 import { PrismaProductImageStore } from "./infrastructure/prisma-product-image.store.js";
 import { SharpImageProcessor } from "./infrastructure/sharp-image-processor.js";
 import { StockService } from "./application/stock.service.js";
@@ -52,6 +54,7 @@ function pick(alphabet: string, size: number): string {
     PrismaListingRepository,
     { provide: LISTING_REPOSITORY, useExisting: PrismaListingRepository },
     { provide: SELLER_DIRECTORY, useExisting: PrismaListingRepository },
+    { provide: LISTING_CORRECTION_REPOSITORY, useClass: PrismaListingCorrectionRepository },
     {
       provide: CATALOG_RANDOM,
       useValue: {
