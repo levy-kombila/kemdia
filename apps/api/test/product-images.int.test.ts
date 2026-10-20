@@ -216,13 +216,12 @@ describe("Photos des produits des vendeurs (PostgreSQL, HTTP)", () => {
 
   it("envoi → réencodée, produit en modération, photo cachée ; validée → publique, en cache court", async () => {
     const product = await create();
-    await moderate(product.id, "approve", 200);
     const res = await upload(product.id, jpeg).expect(201);
     const updated = matches(VendorProductSchema, res.body);
     expect(updated.status).toBe("pending");
     expect(updated.images).toHaveLength(1);
     const imageId = imageIdOf(updated.images[0]!);
-    // Produit repassé en modération : caché, photo comprise
+    // Produit en modération : caché, photo comprise
     expect(await publicStatus(product.slug)).toBe(404);
     expect((await publicImage(imageId)).status).toBe(404);
 
@@ -265,13 +264,16 @@ describe("Photos des produits des vendeurs (PostgreSQL, HTTP)", () => {
     const pub = await call("get", `/api/v1/products/${product.slug}`).expect(200);
     expect((pub.body as { images: string[] }).images).toEqual([`/images/v/${imageId}.webp`]);
 
+    // S7.5-T02 : fiche en ligne → le vendeur n'ajoute plus de photo (l'équipe corrige la fiche)
+    expect(codeOf((await upload(product.id, jpeg).expect(409)).body)).toBe("FICHE_PUBLIEE");
+
     const audit = await prisma.auditEvent.findMany({
       where: { targetId: product.id, action: "product.submitted" },
       orderBy: { occurredAt: "asc" },
     });
     expect(audit.at(-1)?.details).toMatchObject({
       reason: "photo",
-      from: "published",
+      from: "pending",
       image: imageId,
       sha256: (await prisma.productImage.findUniqueOrThrow({ where: { id: imageId } })).sha256,
     });
@@ -329,13 +331,13 @@ describe("Photos des produits des vendeurs (PostgreSQL, HTTP)", () => {
     );
     const [a, b] = second.images.map(imageIdOf);
     expect(imageIdOf(first.images[0]!)).toBe(a);
-    await moderate(product.id, "approve", 200);
 
+    // Avant la publication : le vendeur range ses photos (sans nouvelle demande de modération)
     const order = await call("put", `/api/v1/vendors/products/${product.id}/images`, vendor.token)
       .send({ images: [b, a] })
       .expect(200);
     const reorderedProduct = matches(VendorProductSchema, order.body);
-    expect(reorderedProduct.status).toBe("published");
+    expect(reorderedProduct.status).toBe("pending");
     expect(reorderedProduct.images.map(imageIdOf)).toEqual([b, a]);
     expect(
       codeOf(
@@ -347,21 +349,36 @@ describe("Photos des produits des vendeurs (PostgreSQL, HTTP)", () => {
       ),
     ).toBe("PRODUIT_INVALIDE");
 
+    await moderate(product.id, "approve", 200);
     await publicImage(a!).expect(200);
-    const removed = await call(
+    // S7.5-T02 : fiche en ligne → le vendeur ne retire plus de photo ; l'équipe, oui (effacée, tracée)
+    const refused = await call(
       "delete",
       `/api/v1/vendors/products/${product.id}/images/${a}`,
       vendor.token,
+    ).expect(409);
+    expect(codeOf(refused.body)).toBe("FICHE_PUBLIEE");
+    const removed = await call(
+      "delete",
+      `/api/v1/moderation/listings/${product.listing.id}/images/${a}`,
+      moderator.token,
     ).expect(200);
-    expect(matches(VendorProductSchema, removed.body).images.map(imageIdOf)).toEqual([b]);
-    expect(matches(VendorProductSchema, removed.body).status).toBe("published");
+    expect((removed.body as { images: string[] }).images.map(imageIdOf)).toEqual([b]);
+    const after = matches(
+      VendorProductSchema,
+      (await call("get", `/api/v1/vendors/products/${product.id}`, vendor.token).expect(200)).body,
+    );
+    expect(after).toMatchObject({ status: "published" });
+    expect(after.images.map(imageIdOf)).toEqual([b]);
     await publicImage(a!).expect(404);
     expect(await prisma.productImage.findUnique({ where: { id: a! } })).toBeNull();
-    await call("delete", `/api/v1/vendors/products/${product.id}/images/${a}`, vendor.token).expect(
-      404,
-    );
+    await call(
+      "delete",
+      `/api/v1/moderation/listings/${product.listing.id}/images/${a}`,
+      moderator.token,
+    ).expect(404);
     const trace = await prisma.auditEvent.findFirst({
-      where: { targetId: product.id, action: "product.image_removed" },
+      where: { targetId: product.listing.id, action: "listing.image_removed" },
     });
     expect(trace?.details).toMatchObject({
       image: a,

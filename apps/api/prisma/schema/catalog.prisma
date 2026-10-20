@@ -29,6 +29,7 @@ model Category {
   image     String?    @db.VarChar(200)
   position  Int        @default(0)
   products  Product[]
+  listings  Listing[]
   createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -37,10 +38,88 @@ model Category {
   @@schema("catalog")
 }
 
-/// Produit. `price` et `compareAtPrice` reprennent la variante active la moins chère (tri et filtres par prix).
+/// Fiche commune (S7.5-T02, ADR-0049) : ce que le client voit d'un produit (titre, description, marque, photos,
+/// déclinaisons), quelle que soit la boutique qui le vend. Chaque boutique y pose son OFFRE (`Product` : prix, stock).
+/// Créée par un vendeur (modérée) ou par Kemdia ; une fois publiée, seule l'équipe la modifie.
+/// `price`, `compareAtPrice` et `offerCount` sont tenus par la base (déclencheur sur les offres) : prix « à partir de »
+/// parmi les offres visibles, nombre d'offres visibles.
+model Listing {
+  /// Une fiche créée avec une offre reprend l'identifiant et l'adresse de cette offre (données d'avant le S7.5 comprises)
+  id              String           @id @db.Uuid
+  slug            String           @unique @db.VarChar(120)
+  title           String           @db.VarChar(120)
+  description     String           @default("")
+  brand           String?          @db.VarChar(60)
+  categoryId      String           @map("category_id") @db.Uuid
+  category        Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  images          String[]         @default([])
+  /// PUBLISHED : visible (si au moins une offre est visible) ; avant publication, suit l'offre de la boutique qui l'a créée
+  status          ProductStatus    @default(DRAFT)
+  /// Boutique qui a créé la fiche (vendors, UUID) ; ses photos sont rangées avec l'offre de cette boutique
+  createdByShopId String           @map("created_by_shop_id") @db.Uuid
+  /// Doublon fusionné par l'équipe : l'ancienne adresse mène à cette fiche
+  mergedIntoId    String?          @map("merged_into_id") @db.Uuid
+  mergedInto      Listing?         @relation("ListingMerge", fields: [mergedIntoId], references: [id], onDelete: Restrict)
+  mergedFrom      Listing[]        @relation("ListingMerge")
+  price           Int              @default(0)
+  compareAtPrice  Int?             @map("compare_at_price")
+  offerCount      Int              @default(0) @map("offer_count")
+  rating          Float            @default(0)
+  reviewCount     Int              @default(0) @map("review_count")
+  isFeatured      Boolean          @default(false) @map("is_featured")
+  isBestseller    Boolean          @default(false) @map("is_bestseller")
+  isNew           Boolean          @default(false) @map("is_new")
+  searchText      String           @default("") @map("search_text")
+  variants        ListingVariant[]
+  offers          Product[]
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([categoryId])
+  @@index([status, offerCount, price])
+  @@index([mergedIntoId])
+  @@map("listings")
+  @@schema("catalog")
+}
+
+/// Déclinaison commune d'une fiche (« Noir · 128 Go ») : les offres des boutiques s'y rattachent.
+model ListingVariant {
+  id         String           @id @db.Uuid
+  listingId  String           @map("listing_id") @db.Uuid
+  listing    Listing          @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  name       String           @db.VarChar(80)
+  attributes Json             @default("{}")
+  position   Int              @default(0)
+  offers     ProductVariant[]
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([listingId])
+  @@map("listing_variants")
+  @@schema("catalog")
+}
+
+/// Boutique telle que le catalogue l'affiche à côté d'une offre (S7.5-T02) : copie tenue par le module vendors
+/// (validation, suspension, réactivation), pour ne jamais lire ses tables.
+model Seller {
+  shopId    String   @id @map("shop_id") @db.Uuid
+  name      String   @db.VarChar(60)
+  slug      String   @db.VarChar(80)
+  city      String   @db.VarChar(60)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("sellers")
+  @@schema("catalog")
+}
+
+/// Offre d'une boutique sur une fiche (S7.5-T02 ; avant : « produit »). Titre, description, marque, catégorie et photos
+/// sont COPIÉS de la fiche par la base (lecture seule ici). `price` et `compareAtPrice` reprennent la variante active la
+/// moins chère de l'offre. Une boutique a au plus une offre par fiche.
 model Product {
   id               String           @id @db.Uuid
   slug             String           @unique @db.VarChar(120)
+  listingId        String           @map("listing_id") @db.Uuid
+  listing          Listing          @relation(fields: [listingId], references: [id], onDelete: Restrict)
   title            String           @db.VarChar(120)
   description      String           @default("")
   brand            String?          @db.VarChar(60)
@@ -74,6 +153,7 @@ model Product {
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  @@unique([listingId, shopId])
   @@index([categoryId])
   @@index([shopId])
   @@index([status, price])
@@ -82,24 +162,29 @@ model Product {
   @@schema("catalog")
 }
 
-/// Variante d'un produit (FR-013) : prix et stock propres.
+/// Variante d'une offre (FR-013) : prix et stock propres à la boutique, rattachée à une déclinaison de la fiche dont
+/// elle copie le nom et les caractéristiques (base).
 model ProductVariant {
-  id             String   @id @db.Uuid
-  productId      String   @map("product_id") @db.Uuid
-  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  sku            String   @unique @db.VarChar(40)
-  name           String   @db.VarChar(80)
+  id               String         @id @db.Uuid
+  productId        String         @map("product_id") @db.Uuid
+  product          Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  listingVariantId String         @map("listing_variant_id") @db.Uuid
+  listingVariant   ListingVariant @relation(fields: [listingVariantId], references: [id], onDelete: Restrict)
+  sku              String         @unique @db.VarChar(40)
+  name             String         @db.VarChar(80)
   /// Caractéristiques : { "couleur": "Noir", "taille": "M" }
-  attributes     Json     @default("{}")
-  price          Int
-  compareAtPrice Int?     @map("compare_at_price")
-  stock          Int      @default(0)
-  isActive       Boolean  @default(true) @map("is_active")
-  position       Int      @default(0)
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  attributes       Json           @default("{}")
+  price            Int
+  compareAtPrice   Int?           @map("compare_at_price")
+  stock            Int            @default(0)
+  isActive         Boolean        @default(true) @map("is_active")
+  position         Int            @default(0)
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  @@unique([productId, listingVariantId])
   @@index([productId])
+  @@index([listingVariantId])
   @@map("product_variants")
   @@schema("catalog")
 }

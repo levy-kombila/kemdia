@@ -166,17 +166,23 @@ export const ProductSummarySchema = z
     brand: z.string().nullable(),
     categoryId: uuid,
     image: z.string().nullable(),
-    price: fcfa.describe("Prix « à partir de » (variante active la moins chère)"),
+    price: fcfa.describe("Prix de l'offre mise en avant (en stock d'abord, puis la moins chère)"),
     compareAtPrice: fcfa.nullable().describe("Prix barré, toujours supérieur au prix"),
-    inStock: z.boolean().describe("Au moins une variante active a du stock"),
+    inStock: z.boolean().describe("L'offre mise en avant a du stock"),
     variantId: uuid.describe(
-      "Variante proposée par défaut (la moins chère) : celle ajoutée au panier depuis une liste",
+      "Variante de l'offre mise en avant : celle ajoutée au panier depuis une liste",
     ),
-    stock: z.int().nonnegative().describe("Stock de la variante par défaut"),
+    stock: z.int().nonnegative().describe("Stock de la variante proposée"),
     variantCount: z
       .int()
       .min(1)
-      .describe("Nombre de variantes actives (au-delà de 1 : choix sur la fiche)"),
+      .describe("Nombre de déclinaisons proposées (au-delà de 1 : choix sur la fiche)"),
+    offerCount: z
+      .int()
+      .min(1)
+      .describe(
+        "Nombre de boutiques qui vendent ce produit (S7.5-T02 : une carte par fiche commune)",
+      ),
     rating: z.number().min(0).max(5),
     reviewCount: z.int().nonnegative(),
     isFeatured: z.boolean(),
@@ -213,6 +219,39 @@ export const VariantSchema = z
   .meta({ id: "Variant", description: "Variante d'un produit, avec son propre stock (FR-013)" });
 export type Variant = z.infer<typeof VariantSchema>;
 
+export const SellerSchema = z
+  .object({
+    name: z.string(),
+    slug,
+    city: z.string(),
+  })
+  .meta({ id: "Seller", description: "Boutique qui vend une offre (S7.5-T02)" });
+export type Seller = z.infer<typeof SellerSchema>;
+
+export const OfferSchema = z
+  .object({
+    offerId: uuid,
+    seller: SellerSchema.nullable().describe(
+      "Boutique ; null si elle n'est pas encore connue du catalogue",
+    ),
+    isMain: z.boolean().describe("Offre mise en avant (bouton « Ajouter au panier »)"),
+    variants: z
+      .array(
+        z.object({
+          variantId: uuid.describe("Variante à ajouter au panier pour acheter chez cette boutique"),
+          listingVariantId: uuid.describe("Déclinaison de la fiche"),
+          name: z.string(),
+          price: fcfa,
+          compareAtPrice: fcfa.nullable(),
+          stock: z.int().nonnegative(),
+          available: z.boolean(),
+        }),
+      )
+      .min(1),
+  })
+  .meta({ id: "Offer", description: "Offre d'une boutique sur une fiche commune (S7.5-T02)" });
+export type Offer = z.infer<typeof OfferSchema>;
+
 export const ProductDetailSchema = z
   .object({
     id: uuid,
@@ -233,9 +272,17 @@ export const ProductDetailSchema = z
     isFeatured: z.boolean(),
     isBestseller: z.boolean(),
     isNew: z.boolean(),
-    variants: z.array(VariantSchema).min(1).describe("Variantes actives"),
+    variants: z
+      .array(VariantSchema)
+      .min(1)
+      .describe("Une variante par déclinaison proposée : celle de l'offre mise en avant"),
+    offerCount: z.int().min(1).describe("Nombre de boutiques qui vendent ce produit"),
+    offers: z
+      .array(OfferSchema)
+      .min(1)
+      .describe("Offres visibles, l'offre mise en avant d'abord (S7.5-T02)"),
   })
-  .meta({ id: "ProductDetail", description: "Fiche produit" });
+  .meta({ id: "ProductDetail", description: "Fiche produit commune et ses offres" });
 export type ProductDetail = z.infer<typeof ProductDetailSchema>;
 
 export const FacetsSchema = z
@@ -551,7 +598,7 @@ export const AuditEventSchema = z
     ]),
     target: z
       .object({
-        type: z.enum(["account", "coupon", "order", "refund", "shop", "product"]),
+        type: z.enum(["account", "coupon", "order", "refund", "shop", "product", "listing"]),
         id: uuid,
       })
       .nullable(),
@@ -1389,6 +1436,7 @@ export type VendorVariantUpdateRequest = z.infer<typeof VendorVariantUpdateReque
 export const VendorVariantSchema = z
   .object({
     id: uuid,
+    listingVariantId: uuid.describe("Déclinaison de la fiche commune (S7.5-T02)"),
     sku: z.string(),
     name: z.string(),
     attributes: z.record(z.string(), z.string()),
@@ -1402,6 +1450,18 @@ export const VendorVariantSchema = z
 const vendorProductFields = {
   id: uuid,
   slug,
+  listing: z
+    .object({
+      id: uuid,
+      slug: slug.describe("Adresse de la fiche sur le site"),
+      status: z.enum(VENDOR_PRODUCT_STATUSES),
+      editable: z
+        .boolean()
+        .describe(
+          "La boutique peut modifier le contenu (titre, photos…) : fiche créée par elle et pas encore en ligne",
+        ),
+    })
+    .describe("Fiche commune sur laquelle la boutique vend (S7.5-T02)"),
   title: z.string(),
   description: z.string(),
   brand: z.string().nullable(),
@@ -1481,6 +1541,163 @@ export const VendorVariantParamsSchema = z.strictObject({
   variantId: uuidInput,
 });
 
+// --- Fiches communes et offres (S7.5-T02, ADR-0049) ---
+
+export const ListingVariantSchema = z
+  .object({ id: uuid, name: z.string(), attributes: z.record(z.string(), z.string()) })
+  .meta({
+    id: "ListingVariant",
+    description: "Déclinaison d'une fiche commune (« Noir · 128 Go »)",
+  });
+
+export const VendorListingSearchParamsSchema = z.strictObject({
+  q: z.string().min(2).max(100).describe("Mots cherchés dans le titre, la marque, la catégorie"),
+  limit: z.coerce.number().int().min(1).max(20).default(10),
+});
+export type VendorListingSearchParams = z.infer<typeof VendorListingSearchParamsSchema>;
+
+export const VendorListingSchema = z
+  .object({
+    id: uuid,
+    slug,
+    title: z.string(),
+    brand: z.string().nullable(),
+    categoryId: uuid,
+    image: z.string().nullable(),
+    offerCount: z.int().nonnegative().describe("Boutiques qui le vendent déjà"),
+    price: fcfa.describe("Prix « à partir de » des offres en ligne"),
+    variants: z.array(ListingVariantSchema),
+    myOfferId: uuid
+      .nullable()
+      .describe("Offre de votre boutique sur cette fiche, s'il y en a une (sinon : la créer)"),
+  })
+  .meta({ id: "VendorListing", description: "Fiche en ligne trouvée par un vendeur" });
+export type VendorListing = z.infer<typeof VendorListingSchema>;
+
+export const VendorListingPageSchema = z.object({ items: z.array(VendorListingSchema) }).meta({
+  id: "VendorListingPage",
+  description: "Fiches en ligne qui correspondent à la recherche",
+});
+export type VendorListingPage = z.infer<typeof VendorListingPageSchema>;
+
+export const ListingIdParamsSchema = z.strictObject({ listingId: uuidInput });
+
+export const OfferLineSchema = z
+  .strictObject({
+    listingVariantId: uuid.describe("Déclinaison de la fiche"),
+    price: vendorPrice,
+    compareAtPrice: vendorPrice.nullable().optional().describe("Prix barré, supérieur au prix"),
+    stock: vendorStock,
+  })
+  .meta({ id: "OfferLine", description: "Prix et stock d'une déclinaison dans une offre" });
+export type OfferLine = z.infer<typeof OfferLineSchema>;
+
+export const OfferCreateRequestSchema = z
+  .strictObject({ variants: z.array(OfferLineSchema).min(1).max(L.variantsMax) })
+  .meta({
+    id: "OfferCreateRequest",
+    description:
+      "Offre de la boutique sur une fiche en ligne : en ligne tout de suite (prix et stock seulement)",
+  });
+export type OfferCreateRequest = z.infer<typeof OfferCreateRequestSchema>;
+
+export const ADMIN_LISTING_CURSOR_PATTERN = /^[A-Za-z0-9_-]{20,120}$/;
+
+export const AdminListingSchema = z
+  .object({
+    id: uuid,
+    slug,
+    title: z.string(),
+    description: z.string(),
+    brand: z.string().nullable(),
+    categoryId: uuid,
+    images: z.array(z.string()),
+    status: z.enum(VENDOR_PRODUCT_STATUSES),
+    createdByShopId: uuid.describe("Boutique qui a créé la fiche"),
+    mergedIntoId: uuid.nullable().describe("Fiche qui remplace ce doublon"),
+    offerCount: z.int().nonnegative().describe("Offres visibles"),
+    price: fcfa.describe("Prix « à partir de » des offres visibles"),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+    variants: z.array(ListingVariantSchema),
+  })
+  .meta({ id: "AdminListing", description: "Fiche commune vue par l'équipe (S7.5-T02)" });
+export type AdminListing = z.infer<typeof AdminListingSchema>;
+
+export const AdminListingListParamsSchema = z.strictObject({
+  q: z.string().max(100).optional().describe("Mots cherchés (titre, marque, catégorie)"),
+  status: z.enum(VENDOR_PRODUCT_STATUSES).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  after: z.string().regex(ADMIN_LISTING_CURSOR_PATTERN).optional(),
+});
+export type AdminListingListParams = z.infer<typeof AdminListingListParamsSchema>;
+
+export const AdminListingPageSchema = z
+  .object({
+    items: z.array(AdminListingSchema),
+    nextCursor: z.string().regex(ADMIN_LISTING_CURSOR_PATTERN).nullable(),
+  })
+  .meta({ id: "AdminListingPage", description: "Fiches, de la plus récente à la plus ancienne" });
+export type AdminListingPage = z.infer<typeof AdminListingPageSchema>;
+
+export const ListingUpdateRequestSchema = z
+  .strictObject({
+    title: productContentFields.title.optional(),
+    description: productContentFields.description.optional(),
+    brand: productContentFields.brand,
+    categoryId: productContentFields.categoryId.optional(),
+    variants: z
+      .array(
+        z.strictObject({
+          id: uuid.optional().describe("Déclinaison à renommer ; absent : nouvelle déclinaison"),
+          name: loose(L.variantNameMax),
+          attributes: z
+            .record(z.string().max(30), z.string().max(40))
+            .refine((value) => Object.keys(value).length <= 10, "10 caractéristiques au plus")
+            .optional(),
+        }),
+      )
+      .max(50)
+      .optional(),
+  })
+  .refine((body) => Object.values(body).some((v) => v !== undefined), {
+    message: "rien à modifier",
+  })
+  .meta({
+    id: "ListingUpdateRequest",
+    description:
+      "Correction d'une fiche par l'équipe (recopiée sur toutes ses offres) : contenu, déclinaisons renommées ou ajoutées",
+  });
+export type ListingUpdateRequest = z.infer<typeof ListingUpdateRequestSchema>;
+
+export const ListingMergeRequestSchema = z
+  .strictObject({
+    into: uuid.describe("Fiche en ligne qui remplace le doublon"),
+    variants: z
+      .record(uuid, uuid)
+      .refine((value) => Object.keys(value).length <= 50, "50 déclinaisons au plus")
+      .describe("Déclinaison du doublon → déclinaison de la fiche cible (toutes celles vendues)"),
+  })
+  .meta({
+    id: "ListingMergeRequest",
+    description: "Fusion d'un doublon : ses offres passent sur la fiche cible, son adresse y mène",
+  });
+export type ListingMergeRequest = z.infer<typeof ListingMergeRequestSchema>;
+
+export const ListingImageParamsSchema = z.strictObject({
+  listingId: uuidInput,
+  imageId: uuidInput,
+});
+
+export const OfferWithdrawRequestSchema = z
+  .strictObject({
+    reason: loose(L.reasonMax).describe(
+      `Motif montré au vendeur (${L.reasonMin} à ${L.reasonMax} caractères)`,
+    ),
+  })
+  .meta({ id: "OfferWithdrawRequest", description: "Retrait d'une offre par l'équipe" });
+export type OfferWithdrawRequest = z.infer<typeof OfferWithdrawRequestSchema>;
+
 export const ModerationProductSchema = z
   .object({
     ...vendorProductFields,
@@ -1492,6 +1709,24 @@ export const ModerationProductSchema = z
   })
   .meta({ id: "ModerationProduct", description: "Un produit de vendeur vu par la modération" });
 export type ModerationProduct = z.infer<typeof ModerationProductSchema>;
+
+export const AdminListingDetailSchema = z
+  .object({
+    listing: AdminListingSchema,
+    offers: z
+      .array(ModerationProductSchema)
+      .describe("Toutes les offres de la fiche, tous statuts"),
+  })
+  .meta({ id: "AdminListingDetail", description: "Fiche commune et toutes ses offres" });
+export type AdminListingDetail = z.infer<typeof AdminListingDetailSchema>;
+
+export const ListingMergeResultSchema = z
+  .object({
+    listing: AdminListingSchema.describe("Fiche cible, après la fusion"),
+    moved: z.int().nonnegative().describe("Offres déplacées"),
+  })
+  .meta({ id: "ListingMergeResult" });
+export type ListingMergeResult = z.infer<typeof ListingMergeResultSchema>;
 
 export const ModerationListParamsSchema = z.strictObject({
   status: z

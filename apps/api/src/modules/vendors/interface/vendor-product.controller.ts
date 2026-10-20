@@ -14,6 +14,8 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import {
+  OfferLineSchema,
+  type OfferLine,
   VendorProductContentRequestSchema,
   VendorProductCreateRequestSchema,
   VendorProductIdParamsSchema,
@@ -140,6 +142,28 @@ export class VendorProductController {
           session.account.id,
           params.productId,
           params.variantId,
+          body,
+          auditContextOf(req),
+        ),
+      ),
+    );
+  }
+
+  /** Ajoute à l'offre une déclinaison de sa fiche (201) : sans modération (S7.5-T02). */
+  @Post(":productId/variants")
+  @Header("Cache-Control", "no-store")
+  @AccountRateLimit(20)
+  async addVariant(
+    @CurrentSession() session: AuthenticatedSession,
+    @Param({ schema: VendorProductIdParamsSchema }) params: ProductParams,
+    @Body({ schema: OfferLineSchema }) body: OfferLine,
+    @Req() req: Request,
+  ): Promise<VendorProduct> {
+    return presentVendorProduct(
+      await withVendorsErrors(() =>
+        this.products.addOfferVariant(
+          session.account.id,
+          params.productId,
           body,
           auditContextOf(req),
         ),

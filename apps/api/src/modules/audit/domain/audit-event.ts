@@ -111,6 +111,20 @@ export const AUDIT_ACTIONS = [
   "shipment.retried",
   /** Livraison impossible : commande annulée (détails : reference, note, 100 caractères au plus) — S7-T01 */
   "shipment.cancelled",
+  /** Offre posée par une boutique sur une fiche publiée, en ligne tout de suite (détails : title, listing, lines) — S7.5-T02 */
+  "offer.created",
+  /** Déclinaison ajoutée à une offre (détails : sku, listingVariant, price, stock) — S7.5-T02 */
+  "offer.variant_added",
+  /** Offre archivée remise en ligne par son vendeur, sans modération (détails : title) — S7.5-T02 */
+  "offer.restored",
+  /** Offre retirée par l'équipe (détails : title, from, reason) — S7.5-T02 */
+  "offer.withdrawn",
+  /** Fiche corrigée par l'équipe (détails : title, fields) — S7.5-T02 */
+  "listing.updated",
+  /** Photo d'une fiche retirée par l'équipe, et effacée (détails : title, image, sha256) — S7.5-T02 */
+  "listing.image_removed",
+  /** Doublon fusionné dans une autre fiche (détails : title, into, offers) — S7.5-T02 */
+  "listing.merged",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -127,6 +141,8 @@ export const AUDIT_TARGET_TYPES = [
   "refund",
   "shop",
   "product",
+  /** Fiche commune (S7.5-T02) */
+  "listing",
 ] as const;
 export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];
 

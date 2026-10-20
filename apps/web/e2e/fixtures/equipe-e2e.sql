@@ -63,10 +63,41 @@ ON CONFLICT ("id") DO UPDATE SET
   "reviewed_at" = NULL, "submitted_at" = now(), "updated_at" = now();
 
 -- Deux produits de la boutique « Atelier E2E » à modérer : l'un avec une photo (à valider), l'autre sans (à refuser).
+-- Leurs fiches communes d'abord (S7.5-T02) : en attente elles aussi, remises en attente à chaque passage.
+INSERT INTO "catalog"."listings"
+  ("id", "slug", "title", "description", "category_id", "images", "status", "created_by_shop_id", "price",
+   "search_text", "updated_at")
+SELECT l.*
+FROM (
+  SELECT
+    '0e2e0000-0000-4000-8000-0000000000b3'::uuid, 'sac-raphia-moderation-e2e', 'Sac en raphia modération E2E',
+    'Produit de test : il attend la décision de la modération.', c."id",
+    ARRAY['/images/v/0e2e0000-0000-4000-8000-0000000000c3.webp'], 'PENDING'::catalog.product_status,
+    '0e2e0000-0000-4000-8000-0000000000a1'::uuid, 15000, 'sac en raphia moderation e2e', now()
+  FROM "catalog"."categories" c ORDER BY c."slug" LIMIT 1
+) l
+UNION ALL
+SELECT m.*
+FROM (
+  SELECT
+    '0e2e0000-0000-4000-8000-0000000000b4'::uuid, 'bracelet-refus-e2e', 'Bracelet à refuser E2E',
+    'Produit de test : la modération le refuse avec un motif.', c."id",
+    ARRAY[]::text[], 'PENDING'::catalog.product_status, '0e2e0000-0000-4000-8000-0000000000a1'::uuid, 3000,
+    'bracelet a refuser e2e', now()
+  FROM "catalog"."categories" c ORDER BY c."slug" LIMIT 1
+) m
+ON CONFLICT ("id") DO UPDATE SET "status" = 'PENDING', "updated_at" = now();
+
+INSERT INTO "catalog"."listing_variants" ("id", "listing_id", "name", "updated_at")
+VALUES
+  ('0e2e0000-0000-4000-8000-0000000000b5', '0e2e0000-0000-4000-8000-0000000000b3', 'Naturel', now()),
+  ('0e2e0000-0000-4000-8000-0000000000b6', '0e2e0000-0000-4000-8000-0000000000b4', 'Unique', now())
+ON CONFLICT ("id") DO NOTHING;
+
 INSERT INTO "catalog"."products"
   ("id", "slug", "title", "description", "category_id", "images", "status", "price", "search_text", "updated_at",
-   "shop_id", "submitted_at")
-SELECT p.*
+   "shop_id", "submitted_at", "listing_id")
+SELECT p.*, '0e2e0000-0000-4000-8000-0000000000b3'::uuid
 FROM (
   SELECT
     '0e2e0000-0000-4000-8000-0000000000b3'::uuid, 'sac-raphia-moderation-e2e', 'Sac en raphia modération E2E',
@@ -76,7 +107,7 @@ FROM (
   FROM "catalog"."categories" c ORDER BY c."slug" LIMIT 1
 ) p
 UNION ALL
-SELECT q.*
+SELECT q.*, '0e2e0000-0000-4000-8000-0000000000b4'::uuid
 FROM (
   SELECT
     '0e2e0000-0000-4000-8000-0000000000b4'::uuid, 'bracelet-refus-e2e', 'Bracelet à refuser E2E',
@@ -89,12 +120,13 @@ ON CONFLICT ("id") DO UPDATE SET
   "status" = 'PENDING', "moderation_reason" = NULL, "reviewed_by" = NULL, "reviewed_at" = NULL,
   "submitted_at" = now(), "updated_at" = now();
 
-INSERT INTO "catalog"."product_variants" ("id", "product_id", "sku", "name", "price", "stock", "updated_at")
+INSERT INTO "catalog"."product_variants"
+  ("id", "product_id", "listing_variant_id", "sku", "name", "price", "stock", "updated_at")
 VALUES
-  ('0e2e0000-0000-4000-8000-0000000000b5', '0e2e0000-0000-4000-8000-0000000000b3', 'VE2E0003-1', 'Naturel',
-   15000, 4, now()),
-  ('0e2e0000-0000-4000-8000-0000000000b6', '0e2e0000-0000-4000-8000-0000000000b4', 'VE2E0004-1', 'Unique',
-   3000, 10, now())
+  ('0e2e0000-0000-4000-8000-0000000000b5', '0e2e0000-0000-4000-8000-0000000000b3',
+   '0e2e0000-0000-4000-8000-0000000000b5', 'VE2E0003-1', 'Naturel', 15000, 4, now()),
+  ('0e2e0000-0000-4000-8000-0000000000b6', '0e2e0000-0000-4000-8000-0000000000b4',
+   '0e2e0000-0000-4000-8000-0000000000b6', 'VE2E0004-1', 'Unique', 3000, 10, now())
 ON CONFLICT ("id") DO NOTHING;
 
 -- Photo du produit à valider : copie de la photo de photos-vendeur-e2e.sql (une photo ne se modifie jamais).

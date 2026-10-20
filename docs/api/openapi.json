@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "1.23.0",
+    "version": "1.24.0",
     "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.\n- Factures (S5-T06) : établies au paiement reçu, avoir à l'annulation, numéros par année sans trou, PDF et e-mail.\n- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo.\n- Boutiques (S6-T01) : un client demande à ouvrir sa boutique ; un administrateur la valide (rôle vendeur accordé), la refuse ou la suspend.\n- Double authentification (S6-T03) : obligatoire pour les modérateurs et administrateurs sur les routes d'équipe (`DEUX_FACTEURS_A_ACTIVER`, `DEUX_FACTEURS_REQUIS`).\n- Produits des vendeurs (S6-T02) : invisibles jusqu'à leur validation par la modération (BR-003) ; cachés si la boutique est suspendue.\n- Photos des vendeurs (S6-T04) : fichier envoyé tel quel (JPEG, PNG, WebP, 5 Mo), réencodé en WebP sans métadonnées ; publiques seulement pour un produit visible.\n- Commandes des vendeurs (S6-T07) : chaque boutique accepte ou refuse sa part dans les 24 h (BR-013) ; un refus ou l'absence de réponse annule la commande entière.\n- Données personnelles (S7-T08) : copie JSON, suppression du compte par le titulaire, comptes effacés après 3 ans sans connexion (prévenus 30 jours avant)."
   },
   "servers": [
@@ -322,6 +322,16 @@
             },
             "in": "query",
             "required": false
+          },
+          {
+            "name": "ville",
+            "description": "Ville du client (S7.5-T02) : à prix égal, l'offre d'une boutique de cette ville est mise en avant (ne filtre rien)",
+            "schema": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "in": "query",
+            "required": false
           }
         ],
         "responses": {
@@ -486,6 +496,16 @@
             },
             "in": "query",
             "required": false
+          },
+          {
+            "name": "ville",
+            "description": "Ville du client (S7.5-T02) : à prix égal, l'offre d'une boutique de cette ville est mise en avant (ne filtre rien)",
+            "schema": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "in": "query",
+            "required": false
           }
         ],
         "responses": {
@@ -515,24 +535,35 @@
     "/api/v1/products/{slug}": {
       "get": {
         "tags": ["Catalogue"],
-        "summary": "Fiche produit, avec ses variantes et leur stock",
+        "summary": "Fiche produit commune, ses offres et l'offre mise en avant",
+        "description": "S7.5-T02, ADR-0049 : une fiche par produit, toutes les boutiques qui le vendent dans `offers`. Les champs de prix et `variants` sont ceux de l'offre MISE EN AVANT (en stock d'abord, puis la moins chère, puis, à prix égal, une boutique de la ville du client). L'adresse d'un doublon fusionné renvoie la fiche qui le remplace (avec sa propre adresse dans `slug`).",
         "operationId": "getProduct",
         "parameters": [
           {
             "name": "slug",
             "in": "path",
             "required": true,
-            "description": "Adresse du produit",
+            "description": "Adresse de la fiche",
             "schema": {
               "type": "string",
               "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
               "maxLength": 120
             }
+          },
+          {
+            "name": "ville",
+            "in": "query",
+            "required": false,
+            "description": "Ville du client : départage deux offres au même prix",
+            "schema": {
+              "type": "string",
+              "maxLength": 60
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Produit publié",
+            "description": "Fiche publiée avec au moins une offre visible",
             "content": {
               "application/json": {
                 "schema": {
@@ -542,7 +573,7 @@
             }
           },
           "404": {
-            "description": "Produit inconnu, en brouillon ou archivé",
+            "description": "Fiche inconnue, en modération, archivée, ou sans offre en vente",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5363,7 +5394,7 @@
       "post": {
         "tags": ["Produits des vendeurs"],
         "summary": "Créer un produit (envoyé en modération)",
-        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nPas encore de photos (tâche suivante) : le site affiche une image neutre.",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nFiche commune (S7.5-T02, ADR-0049) : le titre, la description, la marque, la catégorie et les photos sont ceux de la **fiche**. Le vendeur ne les modifie que sur une fiche qu'il a créée et qui n'est **pas encore en ligne** (`listing.editable`) ; ensuite, seule l'équipe la corrige (`FICHE_PUBLIEE`, 409). Sur une fiche en ligne, une offre archivée revient en ligne tout de suite ; une offre retirée par l'équipe repasse par la modération.",
         "operationId": "createVendorProduct",
         "security": [
           {
@@ -5456,7 +5487,7 @@
       "get": {
         "tags": ["Produits des vendeurs"],
         "summary": "Produits de ma boutique, du plus récent au plus ancien",
-        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nPas encore de photos (tâche suivante) : le site affiche une image neutre.",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nFiche commune (S7.5-T02, ADR-0049) : le titre, la description, la marque, la catégorie et les photos sont ceux de la **fiche**. Le vendeur ne les modifie que sur une fiche qu'il a créée et qui n'est **pas encore en ligne** (`listing.editable`) ; ensuite, seule l'équipe la corrige (`FICHE_PUBLIEE`, 409). Sur une fiche en ligne, une offre archivée revient en ligne tout de suite ; une offre retirée par l'équipe repasse par la modération.",
         "operationId": "listVendorProducts",
         "security": [
           {
@@ -5551,7 +5582,7 @@
       "get": {
         "tags": ["Produits des vendeurs"],
         "summary": "Un produit de ma boutique",
-        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nPas encore de photos (tâche suivante) : le site affiche une image neutre.",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nFiche commune (S7.5-T02, ADR-0049) : le titre, la description, la marque, la catégorie et les photos sont ceux de la **fiche**. Le vendeur ne les modifie que sur une fiche qu'il a créée et qui n'est **pas encore en ligne** (`listing.editable`) ; ensuite, seule l'équipe la corrige (`FICHE_PUBLIEE`, 409). Sur une fiche en ligne, une offre archivée revient en ligne tout de suite ; une offre retirée par l'équipe repasse par la modération.",
         "operationId": "getVendorProduct",
         "security": [
           {
@@ -5636,7 +5667,7 @@
       "put": {
         "tags": ["Produits des vendeurs"],
         "summary": "Modifier le contenu (repasse en modération)",
-        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nPas encore de photos (tâche suivante) : le site affiche une image neutre.",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nFiche commune (S7.5-T02, ADR-0049) : le titre, la description, la marque, la catégorie et les photos sont ceux de la **fiche**. Le vendeur ne les modifie que sur une fiche qu'il a créée et qui n'est **pas encore en ligne** (`listing.editable`) ; ensuite, seule l'équipe la corrige (`FICHE_PUBLIEE`, 409). Sur une fiche en ligne, une offre archivée revient en ligne tout de suite ; une offre retirée par l'équipe repasse par la modération.",
         "operationId": "updateVendorProductContent",
         "security": [
           {
@@ -5753,7 +5784,7 @@
       "patch": {
         "tags": ["Produits des vendeurs"],
         "summary": "Prix, stock ou activation d'une variante (sans modération)",
-        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nPas encore de photos (tâche suivante) : le site affiche une image neutre.\n\nLe **stock** est la quantité disponible, hors commandes en cours. Pour le changer, renvoyer aussi `previousStock` (la valeur lue) : si une commande l'a modifié entre-temps, la requête est refusée (`STOCK_MODIFIE`) au lieu d'écraser la réservation.",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nFiche commune (S7.5-T02, ADR-0049) : le titre, la description, la marque, la catégorie et les photos sont ceux de la **fiche**. Le vendeur ne les modifie que sur une fiche qu'il a créée et qui n'est **pas encore en ligne** (`listing.editable`) ; ensuite, seule l'équipe la corrige (`FICHE_PUBLIEE`, 409). Sur une fiche en ligne, une offre archivée revient en ligne tout de suite ; une offre retirée par l'équipe repasse par la modération.\n\nLe **stock** est la quantité disponible, hors commandes en cours. Pour le changer, renvoyer aussi `previousStock` (la valeur lue) : si une commande l'a modifié entre-temps, la requête est refusée (`STOCK_MODIFIE`) au lieu d'écraser la réservation.",
         "operationId": "updateVendorVariant",
         "security": [
           {
@@ -5880,7 +5911,7 @@
       "post": {
         "tags": ["Produits des vendeurs"],
         "summary": "Retirer de la vente (archiver)",
-        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nPas encore de photos (tâche suivante) : le site affiche une image neutre.\n\nUn produit n'est jamais supprimé : il peut figurer dans des commandes (BR-002).",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nFiche commune (S7.5-T02, ADR-0049) : le titre, la description, la marque, la catégorie et les photos sont ceux de la **fiche**. Le vendeur ne les modifie que sur une fiche qu'il a créée et qui n'est **pas encore en ligne** (`listing.editable`) ; ensuite, seule l'équipe la corrige (`FICHE_PUBLIEE`, 409). Sur une fiche en ligne, une offre archivée revient en ligne tout de suite ; une offre retirée par l'équipe repasse par la modération.\n\nUn produit n'est jamais supprimé : il peut figurer dans des commandes (BR-002).",
         "operationId": "archiveVendorProduct",
         "security": [
           {
@@ -5977,7 +6008,7 @@
       "post": {
         "tags": ["Produits des vendeurs"],
         "summary": "Remettre en vente (repasse en modération)",
-        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nPas encore de photos (tâche suivante) : le site affiche une image neutre.",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nFiche commune (S7.5-T02, ADR-0049) : le titre, la description, la marque, la catégorie et les photos sont ceux de la **fiche**. Le vendeur ne les modifie que sur une fiche qu'il a créée et qui n'est **pas encore en ligne** (`listing.editable`) ; ensuite, seule l'équipe la corrige (`FICHE_PUBLIEE`, 409). Sur une fiche en ligne, une offre archivée revient en ligne tout de suite ; une offre retirée par l'équipe repasse par la modération.",
         "operationId": "restoreVendorProduct",
         "security": [
           {
@@ -6049,6 +6080,329 @@
           },
           "409": {
             "description": "`STATUT_PRODUIT_INCOMPATIBLE` (pas archivé), `TROP_DE_PRODUITS_EN_ATTENTE` ou `BOUTIQUE_OCCUPEE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vendors/products/{productId}/variants": {
+      "post": {
+        "tags": ["Produits des vendeurs"],
+        "summary": "Ajouter à son offre une déclinaison de la fiche (sans modération)",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nFiche commune (S7.5-T02, ADR-0049) : le titre, la description, la marque, la catégorie et les photos sont ceux de la **fiche**. Le vendeur ne les modifie que sur une fiche qu'il a créée et qui n'est **pas encore en ligne** (`listing.editable`) ; ensuite, seule l'équipe la corrige (`FICHE_PUBLIEE`, 409). Sur une fiche en ligne, une offre archivée revient en ligne tout de suite ; une offre retirée par l'équipe repasse par la modération.\n\nS7.5-T02 : la déclinaison doit exister sur la fiche (sinon l'équipe l'ajoute) ; son nom et ses caractéristiques sont ceux de la fiche. Inscrit au journal d'audit.",
+        "operationId": "addOfferVariant",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant du produit",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferLine"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "L'offre avec sa nouvelle variante",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorProduct"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle vendeur requis) ou `BOUTIQUE_INACTIVE` (aucune boutique active pour ce compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`PRODUIT_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STATUT_PRODUIT_INCOMPATIBLE` (offre archivée) ou `BOUTIQUE_OCCUPEE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`DECLINAISON_INTROUVABLE` (pas sur cette fiche) ou `PRODUIT_INVALIDE` (déjà proposée, prix…)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vendors/listings": {
+      "get": {
+        "tags": ["Produits des vendeurs"],
+        "summary": "Chercher une fiche en ligne (vendre un produit existant)",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nFiche commune (S7.5-T02, ADR-0049) : le titre, la description, la marque, la catégorie et les photos sont ceux de la **fiche**. Le vendeur ne les modifie que sur une fiche qu'il a créée et qui n'est **pas encore en ligne** (`listing.editable`) ; ensuite, seule l'équipe la corrige (`FICHE_PUBLIEE`, 409). Sur une fiche en ligne, une offre archivée revient en ligne tout de suite ; une offre retirée par l'équipe repasse par la modération.\n\nS7.5-T02 : avant de créer un produit, le vendeur cherche s'il existe déjà ; `myOfferId` indique s'il le vend déjà. Les fiches les plus vendues d'abord.",
+        "operationId": "searchVendorListings",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "Mots cherchés (2 à 100 caractères)",
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Fiches renvoyées (10 par défaut, 20 au plus)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20,
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fiches en ligne correspondantes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorListingPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Paramètres invalides",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle vendeur requis) ou `BOUTIQUE_INACTIVE` (aucune boutique active pour ce compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes pour ce compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vendors/listings/{listingId}/offer": {
+      "post": {
+        "tags": ["Produits des vendeurs"],
+        "summary": "Vendre ce produit : offre sur une fiche en ligne (en ligne tout de suite)",
+        "description": "Rôle **vendeur** ET boutique **active** (vérifiée dans la transaction : une suspension attend la fin de l'écriture). Un produit d'une autre boutique est introuvable.\n\nUn produit créé, ou dont le titre, la description, la marque ou la catégorie change, part **en modération** et reste **invisible des clients** jusqu'à sa validation (BR-003) ; 50 produits en attente au plus par boutique. Le prix, le prix barré, le stock et l'activation d'une variante changent sans nouvelle modération, mais sont inscrits au journal d'audit.\n\nFiche commune (S7.5-T02, ADR-0049) : le titre, la description, la marque, la catégorie et les photos sont ceux de la **fiche**. Le vendeur ne les modifie que sur une fiche qu'il a créée et qui n'est **pas encore en ligne** (`listing.editable`) ; ensuite, seule l'équipe la corrige (`FICHE_PUBLIEE`, 409). Sur une fiche en ligne, une offre archivée revient en ligne tout de suite ; une offre retirée par l'équipe repasse par la modération.\n\nS7.5-T02 (choix du 2026-10-20) : une offre n'a ni texte ni photo à vérifier ; elle est en ligne tout de suite et inscrite au journal d'audit. Une seule offre par boutique et par fiche. Chaque ligne désigne une déclinaison de la fiche.",
+        "operationId": "createOffer",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "listingId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant de la fiche commune",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "L'offre créée (statut « published »)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VendorProduct"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle vendeur requis) ou `BOUTIQUE_INACTIVE` (aucune boutique active pour ce compte)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`FICHE_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`DEJA_EN_VENTE` (modifier l'offre existante), `FICHE_NON_PUBLIEE` ou `BOUTIQUE_OCCUPEE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`DECLINAISON_INTROUVABLE` ou `PRODUIT_INVALIDE` (prix, stock, doublon)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -6455,6 +6809,643 @@
           },
           "422": {
             "description": "`PRODUIT_INVALIDE` : motif trop court ou trop long",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/moderation/listings": {
+      "get": {
+        "tags": ["Modération"],
+        "summary": "Fiches communes (équipe)",
+        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.\n\nFiches communes (S7.5-T02, ADR-0049) : une correction est recopiée sur **toutes** les offres de la fiche. Personne n'agit sur une fiche créée par sa propre boutique ni sur sa propre offre (`PRODUIT_SUR_SOI_INTERDIT`).",
+        "operationId": "listAdminListings",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Mots cherchés (titre, marque, catégorie)",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Statut de la fiche (toutes par défaut)",
+            "schema": {
+              "type": "string",
+              "enum": ["draft", "pending", "published", "rejected", "archived"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Produits par page (50 par défaut, 100 au plus)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "`nextCursor` de la page précédente",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fiches, de la plus récente à la plus ancienne",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminListingPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Paramètres invalides",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle modérateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/moderation/listings/{listingId}": {
+      "get": {
+        "tags": ["Modération"],
+        "summary": "Une fiche et toutes ses offres",
+        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.\n\nFiches communes (S7.5-T02, ADR-0049) : une correction est recopiée sur **toutes** les offres de la fiche. Personne n'agit sur une fiche créée par sa propre boutique ni sur sa propre offre (`PRODUIT_SUR_SOI_INTERDIT`).",
+        "operationId": "getAdminListing",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "listingId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant de la fiche commune",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "La fiche et ses offres, tous statuts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminListingDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle modérateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`FICHE_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Modération"],
+        "summary": "Corriger une fiche (contenu, déclinaisons renommées ou ajoutées)",
+        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.\n\nFiches communes (S7.5-T02, ADR-0049) : une correction est recopiée sur **toutes** les offres de la fiche. Personne n'agit sur une fiche créée par sa propre boutique ni sur sa propre offre (`PRODUIT_SUR_SOI_INTERDIT`).\n\nRègles du contenu : celles d'un produit de vendeur. Une déclinaison n'est jamais retirée (elle peut figurer dans des commandes). Inscrit au journal d'audit (« listing.updated »).",
+        "operationId": "updateAdminListing",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "listingId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant de la fiche commune",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListingUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "La fiche corrigée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminListing"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle modérateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`FICHE_INTROUVABLE` (ou fusionnée)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`BOUTIQUE_OCCUPEE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`PRODUIT_INVALIDE`, `CATEGORIE_INCONNUE` ou `DECLINAISON_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/moderation/listings/{listingId}/images/{imageId}": {
+      "delete": {
+        "tags": ["Modération"],
+        "summary": "Retirer une photo d'une fiche (effacée)",
+        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.\n\nFiches communes (S7.5-T02, ADR-0049) : une correction est recopiée sur **toutes** les offres de la fiche. Personne n'agit sur une fiche créée par sa propre boutique ni sur sa propre offre (`PRODUIT_SUR_SOI_INTERDIT`).\n\nLa photo n'est plus jamais servie ; son empreinte reste au journal d'audit (« listing.image_removed »).",
+        "operationId": "removeAdminListingImage",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "listingId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant de la fiche commune",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "imageId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant de la photo",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "La fiche sans la photo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminListing"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle modérateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`FICHE_INTROUVABLE` ou `PHOTO_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/moderation/listings/{listingId}/merge": {
+      "post": {
+        "tags": ["Modération"],
+        "summary": "Fusionner un doublon dans une fiche en ligne",
+        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.\n\nFiches communes (S7.5-T02, ADR-0049) : une correction est recopiée sur **toutes** les offres de la fiche. Personne n'agit sur une fiche créée par sa propre boutique ni sur sa propre offre (`PRODUIT_SUR_SOI_INTERDIT`).\n\nLes offres du doublon passent sur la fiche cible ; chaque déclinaison vendue doit correspondre à une déclinaison de la cible. Une boutique qui vend sur les deux fiches bloque la fusion. L'adresse du doublon mène ensuite à la cible. Paniers et commandes ne changent pas. Inscrit au journal d'audit (« listing.merged »).",
+        "operationId": "mergeAdminListing",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "listingId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant de la fiche commune",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListingMergeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "La fiche cible et le nombre d'offres déplacées",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListingMergeResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle modérateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`FICHE_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`FUSION_IMPOSSIBLE` ou `BOUTIQUE_OCCUPEE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`DECLINAISON_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/moderation/offers/{productId}/withdraw": {
+      "post": {
+        "tags": ["Modération"],
+        "summary": "Retirer une offre (motif montré au vendeur)",
+        "description": "Réservé aux **modérateurs** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.\n\nFiches communes (S7.5-T02, ADR-0049) : une correction est recopiée sur **toutes** les offres de la fiche. Personne n'agit sur une fiche créée par sa propre boutique ni sur sa propre offre (`PRODUIT_SUR_SOI_INTERDIT`).\n\nPrix abusif, contrefaçon… L'offre est refusée avec un motif ; pour revenir, elle repasse par la modération. Une offre de la boutique Kemdia est archivée. Inscrit au journal d'audit (« offer.withdrawn »).",
+        "operationId": "withdrawOffer",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant du produit",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferWithdrawRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "L'offre retirée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModerationProduct"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle modérateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`PRODUIT_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`STATUT_PRODUIT_INCOMPATIBLE` (déjà retirée ou archivée) ou `BOUTIQUE_OCCUPEE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`PRODUIT_INVALIDE` (motif de 5 à 300 caractères)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -9922,6 +10913,157 @@
         "additionalProperties": false,
         "description": "Ligne de la file des dossiers de vérification"
       },
+      "AdminListing": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "description": "Adresse lisible (ex. « telephones-portables »)"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "brand": {
+            "type": ["string", "null"]
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "pending", "published", "rejected", "archived"]
+          },
+          "createdByShopId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Boutique qui a créé la fiche"
+          },
+          "mergedIntoId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Identifiant UUID (BR-042)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Fiche qui remplace ce doublon"
+          },
+          "offerCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Offres visibles"
+          },
+          "price": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Prix « à partir de » des offres visibles"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingVariant"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "description",
+          "brand",
+          "categoryId",
+          "images",
+          "status",
+          "createdByShopId",
+          "mergedIntoId",
+          "offerCount",
+          "price",
+          "createdAt",
+          "updatedAt",
+          "variants"
+        ],
+        "additionalProperties": false,
+        "description": "Fiche commune vue par l'équipe (S7.5-T02)"
+      },
+      "AdminListingDetail": {
+        "type": "object",
+        "properties": {
+          "listing": {
+            "$ref": "#/components/schemas/AdminListing"
+          },
+          "offers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModerationProduct"
+            },
+            "description": "Toutes les offres de la fiche, tous statuts"
+          }
+        },
+        "required": ["listing", "offers"],
+        "additionalProperties": false,
+        "description": "Fiche commune et toutes ses offres"
+      },
+      "AdminListingPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminListing"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{20,120}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["items", "nextCursor"],
+        "additionalProperties": false,
+        "description": "Fiches, de la plus récente à la plus ancienne"
+      },
       "AdminShop": {
         "type": "object",
         "properties": {
@@ -10126,7 +11268,14 @@
               "shipment.delivered",
               "shipment.failed",
               "shipment.retried",
-              "shipment.cancelled"
+              "shipment.cancelled",
+              "offer.created",
+              "offer.variant_added",
+              "offer.restored",
+              "offer.withdrawn",
+              "listing.updated",
+              "listing.image_removed",
+              "listing.merged"
             ]
           },
           "actor": {
@@ -10168,7 +11317,7 @@
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["account", "coupon", "order", "refund", "shop", "product"]
+                    "enum": ["account", "coupon", "order", "refund", "shop", "product", "listing"]
                   },
                   "id": {
                     "type": "string",
@@ -11689,6 +12838,146 @@
         "additionalProperties": false,
         "description": "Dossier de vérification du vendeur (modifiable tant qu'il n'est pas envoyé)"
       },
+      "ListingMergeRequest": {
+        "type": "object",
+        "properties": {
+          "into": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Fiche en ligne qui remplace le doublon"
+          },
+          "variants": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "Identifiant UUID (BR-042)"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "Identifiant UUID (BR-042)"
+            },
+            "description": "Déclinaison du doublon → déclinaison de la fiche cible (toutes celles vendues)"
+          }
+        },
+        "required": ["into", "variants"],
+        "additionalProperties": false,
+        "description": "Fusion d'un doublon : ses offres passent sur la fiche cible, son adresse y mène"
+      },
+      "ListingMergeResult": {
+        "type": "object",
+        "properties": {
+          "listing": {
+            "description": "Fiche cible, après la fusion",
+            "$ref": "#/components/schemas/AdminListing"
+          },
+          "moved": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Offres déplacées"
+          }
+        },
+        "required": ["listing", "moved"],
+        "additionalProperties": false
+      },
+      "ListingUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 240,
+            "description": "Titre (5 à 120 caractères)"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "description": "Description (30 à 5000 caractères)"
+          },
+          "brand": {
+            "description": "Marque (vide : sans marque)",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Catégorie du produit (casse ignorée)"
+          },
+          "variants": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "description": "Déclinaison à renommer ; absent : nouvelle déclinaison",
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "name": {
+                  "type": "string",
+                  "maxLength": 160
+                },
+                "attributes": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "maxLength": 30
+                  },
+                  "additionalProperties": {
+                    "type": "string",
+                    "maxLength": 40
+                  }
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false,
+        "description": "Correction d'une fiche par l'équipe (recopiée sur toutes ses offres) : contenu, déclinaisons renommées ou ajoutées"
+      },
+      "ListingVariant": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "name": {
+            "type": "string"
+          },
+          "attributes": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["id", "name", "attributes"],
+        "additionalProperties": false,
+        "description": "Déclinaison d'une fiche commune (« Noir · 128 Go »)"
+      },
       "LoginRequest": {
         "type": "object",
         "properties": {
@@ -11731,6 +13020,33 @@
             "type": "string",
             "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
             "description": "Adresse lisible (ex. « telephones-portables »)"
+          },
+          "listing": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Identifiant UUID (BR-042)"
+              },
+              "slug": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                "description": "Adresse de la fiche sur le site"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["draft", "pending", "published", "rejected", "archived"]
+              },
+              "editable": {
+                "type": "boolean",
+                "description": "La boutique peut modifier le contenu (titre, photos…) : fiche créée par elle et pas encore en ligne"
+              }
+            },
+            "required": ["id", "slug", "status", "editable"],
+            "additionalProperties": false,
+            "description": "Fiche commune sur laquelle la boutique vend (S7.5-T02)"
           },
           "title": {
             "type": "string"
@@ -11853,6 +13169,7 @@
         "required": [
           "id",
           "slug",
+          "listing",
           "title",
           "description",
           "brand",
@@ -11896,6 +13213,165 @@
         "required": ["items", "nextCursor"],
         "additionalProperties": false,
         "description": "Produits à modérer, de la demande la plus ancienne à la plus récente"
+      },
+      "Offer": {
+        "type": "object",
+        "properties": {
+          "offerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "seller": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Seller"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Boutique ; null si elle n'est pas encore connue du catalogue"
+          },
+          "isMain": {
+            "type": "boolean",
+            "description": "Offre mise en avant (bouton « Ajouter au panier »)"
+          },
+          "variants": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "variantId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "description": "Variante à ajouter au panier pour acheter chez cette boutique"
+                },
+                "listingVariantId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "description": "Déclinaison de la fiche"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "price": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "description": "Montant en FCFA, entier (BR-004)"
+                },
+                "compareAtPrice": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "Montant en FCFA, entier (BR-004)"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "stock": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "available": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "variantId",
+                "listingVariantId",
+                "name",
+                "price",
+                "compareAtPrice",
+                "stock",
+                "available"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["offerId", "seller", "isMain", "variants"],
+        "additionalProperties": false,
+        "description": "Offre d'une boutique sur une fiche commune (S7.5-T02)"
+      },
+      "OfferCreateRequest": {
+        "type": "object",
+        "properties": {
+          "variants": {
+            "minItems": 1,
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OfferLine"
+            }
+          }
+        },
+        "required": ["variants"],
+        "additionalProperties": false,
+        "description": "Offre de la boutique sur une fiche en ligne : en ligne tout de suite (prix et stock seulement)"
+      },
+      "OfferLine": {
+        "type": "object",
+        "properties": {
+          "listingVariantId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Déclinaison de la fiche"
+          },
+          "price": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 100000000,
+            "description": "Prix en FCFA, entier (BR-004)"
+          },
+          "compareAtPrice": {
+            "description": "Prix barré, supérieur au prix",
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 100000000,
+                "description": "Prix en FCFA, entier (BR-004)"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stock": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000,
+            "description": "Quantité disponible (hors commandes en cours)"
+          }
+        },
+        "required": ["listingVariantId", "price", "stock"],
+        "additionalProperties": false,
+        "description": "Prix et stock d'une déclinaison dans une offre"
+      },
+      "OfferWithdrawRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 600,
+            "description": "Motif montré au vendeur (5 à 300 caractères)"
+          }
+        },
+        "required": ["reason"],
+        "additionalProperties": false,
+        "description": "Retrait d'une offre par l'équipe"
       },
       "OpenedSession": {
         "type": "object",
@@ -12661,6 +14137,12 @@
               "STATUT_KYC_INCOMPATIBLE",
               "KYC_INDISPONIBLE",
               "DOCUMENT_INTROUVABLE",
+              "FICHE_INTROUVABLE",
+              "FICHE_PUBLIEE",
+              "FICHE_NON_PUBLIEE",
+              "DEJA_EN_VENTE",
+              "DECLINAISON_INTROUVABLE",
+              "FUSION_IMPOSSIBLE",
               "EXPEDITION_INTROUVABLE",
               "EXPEDITION_IMPOSSIBLE",
               "STATUT_EXPEDITION_INCOMPATIBLE",
@@ -12800,7 +14282,21 @@
             "items": {
               "$ref": "#/components/schemas/Variant"
             },
-            "description": "Variantes actives"
+            "description": "Une variante par déclinaison proposée : celle de l'offre mise en avant"
+          },
+          "offerCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Nombre de boutiques qui vendent ce produit"
+          },
+          "offers": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Offer"
+            },
+            "description": "Offres visibles, l'offre mise en avant d'abord (S7.5-T02)"
           }
         },
         "required": [
@@ -12822,10 +14318,12 @@
           "isFeatured",
           "isBestseller",
           "isNew",
-          "variants"
+          "variants",
+          "offerCount",
+          "offers"
         ],
         "additionalProperties": false,
-        "description": "Fiche produit"
+        "description": "Fiche produit commune et ses offres"
       },
       "ProductImageOrderRequest": {
         "type": "object",
@@ -12932,7 +14430,7 @@
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991,
-            "description": "Prix « à partir de » (variante active la moins chère)"
+            "description": "Prix de l'offre mise en avant (en stock d'abord, puis la moins chère)"
           },
           "compareAtPrice": {
             "anyOf": [
@@ -12950,25 +14448,31 @@
           },
           "inStock": {
             "type": "boolean",
-            "description": "Au moins une variante active a du stock"
+            "description": "L'offre mise en avant a du stock"
           },
           "variantId": {
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-            "description": "Variante proposée par défaut (la moins chère) : celle ajoutée au panier depuis une liste"
+            "description": "Variante de l'offre mise en avant : celle ajoutée au panier depuis une liste"
           },
           "stock": {
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991,
-            "description": "Stock de la variante par défaut"
+            "description": "Stock de la variante proposée"
           },
           "variantCount": {
             "type": "integer",
             "minimum": 1,
             "maximum": 9007199254740991,
-            "description": "Nombre de variantes actives (au-delà de 1 : choix sur la fiche)"
+            "description": "Nombre de déclinaisons proposées (au-delà de 1 : choix sur la fiche)"
+          },
+          "offerCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Nombre de boutiques qui vendent ce produit (S7.5-T02 : une carte par fiche commune)"
           },
           "rating": {
             "type": "number",
@@ -13003,6 +14507,7 @@
           "variantId",
           "stock",
           "variantCount",
+          "offerCount",
           "rating",
           "reviewCount",
           "isFeatured",
@@ -13472,6 +14977,25 @@
         "required": ["verifiedUntil", "recoveryCodesLeft"],
         "additionalProperties": false,
         "description": "Session confirmée pour 15 minutes"
+      },
+      "Seller": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "description": "Adresse lisible (ex. « telephones-portables »)"
+          },
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": ["name", "slug", "city"],
+        "additionalProperties": false,
+        "description": "Boutique qui vend une offre (S7.5-T02)"
       },
       "Shipment": {
         "type": "object",
@@ -14030,6 +15554,97 @@
         "additionalProperties": false,
         "description": "Le dossier de vérification du vendeur connecté (numéros masqués)"
       },
+      "VendorListing": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "description": "Adresse lisible (ex. « telephones-portables »)"
+          },
+          "title": {
+            "type": "string"
+          },
+          "brand": {
+            "type": ["string", "null"]
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "image": {
+            "type": ["string", "null"]
+          },
+          "offerCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Boutiques qui le vendent déjà"
+          },
+          "price": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Prix « à partir de » des offres en ligne"
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingVariant"
+            }
+          },
+          "myOfferId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Identifiant UUID (BR-042)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Offre de votre boutique sur cette fiche, s'il y en a une (sinon : la créer)"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "brand",
+          "categoryId",
+          "image",
+          "offerCount",
+          "price",
+          "variants",
+          "myOfferId"
+        ],
+        "additionalProperties": false,
+        "description": "Fiche en ligne trouvée par un vendeur"
+      },
+      "VendorListingPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VendorListing"
+            }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false,
+        "description": "Fiches en ligne qui correspondent à la recherche"
+      },
       "VendorOrder": {
         "type": "object",
         "properties": {
@@ -14315,6 +15930,33 @@
             "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
             "description": "Adresse lisible (ex. « telephones-portables »)"
           },
+          "listing": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Identifiant UUID (BR-042)"
+              },
+              "slug": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                "description": "Adresse de la fiche sur le site"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["draft", "pending", "published", "rejected", "archived"]
+              },
+              "editable": {
+                "type": "boolean",
+                "description": "La boutique peut modifier le contenu (titre, photos…) : fiche créée par elle et pas encore en ligne"
+              }
+            },
+            "required": ["id", "slug", "status", "editable"],
+            "additionalProperties": false,
+            "description": "Fiche commune sur laquelle la boutique vend (S7.5-T02)"
+          },
           "title": {
             "type": "string"
           },
@@ -14394,6 +16036,7 @@
         "required": [
           "id",
           "slug",
+          "listing",
           "title",
           "description",
           "brand",
@@ -14525,6 +16168,12 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
             "description": "Identifiant UUID (BR-042)"
           },
+          "listingVariantId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Déclinaison de la fiche commune (S7.5-T02)"
+          },
           "sku": {
             "type": "string"
           },
@@ -14570,6 +16219,7 @@
         },
         "required": [
           "id",
+          "listingVariantId",
           "sku",
           "name",
           "attributes",

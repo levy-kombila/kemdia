@@ -9,9 +9,12 @@ import {
   PRODUCT_REPOSITORY,
   STOCK_REPOSITORY,
   VENDOR_PRODUCT_REPOSITORY,
+  LISTING_REPOSITORY,
+  SELLER_DIRECTORY,
 } from "./application/ports.js";
 import { VendorCatalog } from "./application/vendor-catalog.service.js";
 import { PrismaVendorProductRepository } from "./infrastructure/prisma-vendor-product.repository.js";
+import { PrismaListingRepository } from "./infrastructure/prisma-listing.repository.js";
 import { PrismaProductImageStore } from "./infrastructure/prisma-product-image.store.js";
 import { SharpImageProcessor } from "./infrastructure/sharp-image-processor.js";
 import { StockService } from "./application/stock.service.js";
@@ -45,6 +48,10 @@ function pick(alphabet: string, size: number): string {
     { provide: IMAGE_PROCESSOR, useClass: SharpImageProcessor },
     { provide: PRODUCT_IMAGE_STORE, useClass: PrismaProductImageStore },
     { provide: VENDOR_PRODUCT_REPOSITORY, useClass: PrismaVendorProductRepository },
+    // Fiches communes et boutiques vues du catalogue (S7.5-T02) : une seule instance pour les deux ports
+    PrismaListingRepository,
+    { provide: LISTING_REPOSITORY, useExisting: PrismaListingRepository },
+    { provide: SELLER_DIRECTORY, useExisting: PrismaListingRepository },
     {
       provide: CATALOG_RANDOM,
       useValue: {

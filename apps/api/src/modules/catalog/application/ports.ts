@@ -1,5 +1,6 @@
 import { PRICE_RANGES, type Badge, type SortKey } from "@kemdia/contracts/constants";
 import type { Category } from "../domain/category.js";
+import type { ListingContent, ListingVariantInfo, Seller } from "../domain/listing.js";
 import type { ImageSize, ProcessedImage } from "../domain/product-image.js";
 import type { Product, ProductStatus } from "../domain/product.js";
 
@@ -35,7 +36,10 @@ export interface ProductCriteria {
   badge?: Badge;
 }
 
-/** Produit tel qu'affiché dans une liste (carte produit) : seulement les produits publiés. */
+/**
+ * Fiche telle qu'affichée dans une liste (carte produit) : une carte par fiche (S7.5-T02), quelle que soit le nombre de
+ * boutiques qui la vendent ; prix et variante de l'offre mise en avant.
+ */
 export interface ProductSummary {
   id: string;
   slug: string;
@@ -50,8 +54,10 @@ export interface ProductSummary {
   variantId: string;
   /** Stock de la variante par défaut. */
   stock: number;
-  /** Nombre de variantes actives. */
+  /** Nombre de déclinaisons proposées (au moins une offre active). */
   variantCount: number;
+  /** Nombre d'offres visibles (boutiques qui vendent ce produit). */
+  offerCount: number;
   rating: number;
   reviewCount: number;
   isFeatured: boolean;
@@ -87,18 +93,35 @@ export interface Facets {
   rating4: number;
 }
 
+/** Fiche lue pour le site : contenu, déclinaisons, offres (toutes, visibles ou non) et boutiques. */
+export interface ListingSnapshot {
+  content: ListingContent;
+  status: ProductStatus;
+  /** Doublon fusionné : adresse de la fiche qui le remplace. */
+  mergedIntoSlug: string | null;
+  variants: readonly ListingVariantInfo[];
+  offers: readonly Product[];
+  sellers: ReadonlyMap<string, Seller>;
+}
+
 export interface ProductRepository {
-  findBySlug(slug: string): Promise<Product | null>;
+  /** Fiche par son adresse (S7.5-T02). */
+  findListingBySlug(slug: string): Promise<ListingSnapshot | null>;
   /** Produits contenant ces variantes (vérification de disponibilité, BR-001). */
   findByVariantIds(variantIds: readonly string[]): Promise<Product[]>;
+  /** Une carte par fiche visible ; `city` départage les offres au même prix (offre mise en avant). */
   search(
     criteria: ProductCriteria,
     sort: SortKey,
     page: number,
     pageSize: number,
+    city?: string | null,
   ): Promise<Page<ProductSummary>>;
   facets(criteria: ProductCriteria, priceRanges: readonly PriceRange[]): Promise<Facets>;
-  /** Crée ou met à jour le produit ET ses variantes, en une seule transaction. */
+  /**
+   * Crée ou met à jour une fiche de la boutique qui l'a créée (catalogue Kemdia importé) ET son offre : même
+   * identifiant et même adresse, une déclinaison par variante. En une seule transaction.
+   */
   save(product: Product, searchText: string): Promise<void>;
 }
 
@@ -153,6 +176,8 @@ export interface CatalogRandom {
 
 export interface VendorVariantRecord {
   id: string;
+  /** Déclinaison de la fiche (S7.5-T02) */
+  listingVariantId: string;
   sku: string;
   name: string;
   attributes: Readonly<Record<string, string>>;
@@ -162,10 +187,19 @@ export interface VendorVariantRecord {
   isActive: boolean;
 }
 
-/** Produit d'une boutique, tel que le vendeur et la modération le voient (tous statuts). */
+/**
+ * Offre d'une boutique (« produit » pour le vendeur), telle que le vendeur et la modération la voient (tous statuts).
+ * Titre, description, marque, catégorie et photos sont ceux de sa FICHE (S7.5-T02) : le vendeur les écrit seulement
+ * sur une fiche qu'il a créée et qui n'est pas encore publiée.
+ */
 export interface VendorProductRecord {
   id: string;
   shopId: string;
+  listingId: string;
+  listingSlug: string;
+  listingStatus: ProductStatus;
+  /** Boutique qui a créé la fiche */
+  listingOwnerShopId: string;
   slug: string;
   title: string;
   description: string;
@@ -193,10 +227,23 @@ export interface VendorProductRepository {
   findById(id: string): Promise<VendorProductRecord | null>;
   /** Lit le produit et le verrouille (ainsi que ses variantes) jusqu'à la fin de la transaction. */
   lockById(id: string): Promise<VendorProductRecord | null>;
-  /** Crée le produit et ses variantes ; `false` si l'adresse lisible est déjà prise. */
+  /**
+   * Crée l'offre et ses variantes ; si `record.listingId === record.id`, crée aussi sa fiche (contenu, une déclinaison
+   * par variante, mêmes identifiants). `false` si l'adresse lisible est déjà prise.
+   */
   insert(record: VendorProductRecord, derived: DerivedFields): Promise<boolean>;
-  /** Écrit les champs modifiables et les variantes (prix, stock, activation). */
+  /**
+   * Écrit le statut, la modération, les prix, le stock et l'activation des variantes. Le contenu (titre, photos…) est
+   * écrit sur la fiche seulement si la boutique l'a créée et qu'elle n'est pas publiée (sinon la base garde celui de
+   * la fiche).
+   */
   update(record: VendorProductRecord, derived: DerivedFields): Promise<void>;
+  /** Ajoute une variante à une offre (déclinaison existante de sa fiche). */
+  insertVariant(productId: string, variant: VendorVariantRecord, position: number): Promise<void>;
+  /** Offre de la boutique sur cette fiche, s'il y en a une (tous statuts). */
+  findOffer(listingId: string, shopId: string): Promise<VendorProductRecord | null>;
+  /** Toutes les offres d'une fiche (équipe). */
+  listForListing(listingId: string): Promise<VendorProductRecord[]>;
   /** Produits d'une boutique, du plus récent au plus ancien. */
   listForShop(
     shopId: string,
@@ -216,6 +263,77 @@ export interface VendorProductRepository {
   countPending(shopId: string): Promise<number>;
   /** Cache (ou montre à nouveau) tous les produits d'une boutique. Renvoie le nombre de produits concernés. */
   setShopSuspended(shopId: string, suspended: boolean): Promise<number>;
+}
+
+// --- Fiches communes (S7.5-T02, ADR-0049) ---
+
+export const LISTING_REPOSITORY = Symbol("ListingRepository");
+
+export interface ListingVariantRecord {
+  id: string;
+  name: string;
+  attributes: Readonly<Record<string, string>>;
+  position: number;
+}
+
+/** Fiche telle que le vendeur (recherche) et l'équipe la voient, tous statuts. */
+export interface ListingRecord {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  brand: string | null;
+  categoryId: string;
+  images: readonly string[];
+  status: ProductStatus;
+  createdByShopId: string;
+  mergedIntoId: string | null;
+  offerCount: number;
+  price: number;
+  createdAt: Date;
+  updatedAt: Date;
+  variants: readonly ListingVariantRecord[];
+}
+
+export interface ListingCursor {
+  at: Date;
+  id: string;
+}
+
+export interface ListingRepository {
+  findById(id: string): Promise<ListingRecord | null>;
+  /** Lit la fiche et la verrouille jusqu'à la fin de la transaction. */
+  lockById(id: string): Promise<ListingRecord | null>;
+  /** Fiches publiées (non fusionnées) dont le texte de recherche contient tous les mots. */
+  searchPublished(terms: readonly string[], limit: number): Promise<ListingRecord[]>;
+  /** Liste de l'équipe : du plus récent au plus ancien, filtre de statut et de mots facultatif. */
+  list(query: {
+    terms: readonly string[];
+    status?: ProductStatus | undefined;
+    limit: number;
+    after?: ListingCursor | undefined;
+  }): Promise<{ items: ListingRecord[]; next: ListingCursor | null }>;
+  /** Contenu (titre, description, marque, catégorie, photos) et texte de recherche : recopiés sur les offres. */
+  updateContent(listing: ListingRecord, searchText: string, now: Date): Promise<void>;
+  /** Nouvelle déclinaison, ou déclinaison renommée (recopiée sur les variantes des offres). */
+  saveVariant(listingId: string, variant: ListingVariantRecord, now: Date): Promise<void>;
+  /**
+   * Fusion d'un doublon : ses offres passent sur `targetId` (chaque variante sur la déclinaison donnée par `variantMap`),
+   * puis la fiche est archivée et mène à la cible. Doit tourner DANS une transaction.
+   */
+  merge(
+    sourceId: string,
+    targetId: string,
+    variantMap: ReadonlyMap<string, string>,
+    now: Date,
+  ): Promise<void>;
+}
+
+export const SELLER_DIRECTORY = Symbol("SellerDirectory");
+
+/** Boutiques vues du catalogue (S7.5-T02) : copie tenue par le module vendors. */
+export interface SellerDirectory {
+  save(shopId: string, seller: Seller): Promise<void>;
 }
 
 /** Champs calculés à partir du domaine : prix « à partir de » et texte de recherche. */

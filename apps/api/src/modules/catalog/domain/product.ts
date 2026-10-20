@@ -37,9 +37,11 @@ export interface VariantProps {
   compareAtPrice: number | null;
   stock: number;
   isActive: boolean;
+  /** Déclinaison de la fiche commune (S7.5-T02) ; par défaut, l'identifiant de la variante (fiche d'une seule offre). */
+  listingVariantId?: string;
 }
 
-export type Variant = Readonly<VariantProps>;
+export type Variant = Readonly<VariantProps> & { readonly listingVariantId: string };
 
 export interface ProductProps {
   id: string;
@@ -58,6 +60,15 @@ export interface ProductProps {
   variants: readonly VariantProps[];
   /** Boutique suspendue (S6-T02) : le produit est caché, quel que soit son statut. Faux par défaut. */
   shopSuspended?: boolean;
+  /**
+   * Offre d'une boutique sur une fiche commune (S7.5-T02, ADR-0049) : la fiche, son adresse (liens du site) et son
+   * statut. Par défaut, la fiche porte l'identifiant et l'adresse de l'offre et elle est publiée.
+   */
+  listingId?: string;
+  listingSlug?: string;
+  listingPublished?: boolean;
+  /** Boutique qui vend (S6-T01) ; par défaut, inconnue (chaîne vide). */
+  shopId?: string;
 }
 
 /** Réponse à « puis-je commander N exemplaires de cette variante ? » (BR-001). */
@@ -97,8 +108,10 @@ function createVariant(props: VariantProps): Variant {
       throw variant(`${props.sku} : caractéristique « ${key.slice(0, 30)} » invalide`);
     }
   }
+  const id = assertUuid(props.id, "variante");
   return Object.freeze({
-    id: assertUuid(props.id, "variante"),
+    id,
+    listingVariantId: assertUuid(props.listingVariantId ?? id, "déclinaison"),
     sku: props.sku,
     name: requiredText(props.name, "nom de la variante", 80),
     attributes: Object.freeze(Object.fromEntries(attributes.map(([k, v]) => [k, v.trim()]))),
@@ -129,6 +142,10 @@ export class Product {
   readonly isNew: boolean;
   readonly variants: readonly Variant[];
   readonly shopSuspended: boolean;
+  readonly listingId: string;
+  readonly listingSlug: string;
+  readonly listingPublished: boolean;
+  readonly shopId: string;
 
   private constructor(props: ProductProps) {
     this.id = assertUuid(props.id, "produit");
@@ -152,6 +169,10 @@ export class Product {
     this.isBestseller = props.isBestseller;
     this.isNew = props.isNew;
     this.shopSuspended = props.shopSuspended ?? false;
+    this.listingId = assertUuid(props.listingId ?? this.id, "fiche");
+    this.listingSlug = props.listingSlug === undefined ? this.slug : assertSlug(props.listingSlug);
+    this.listingPublished = props.listingPublished ?? true;
+    this.shopId = props.shopId ?? "";
 
     if (props.variants.length === 0) throw invalid("au moins une variante");
     if (props.variants.length > MAX_VARIANTS) throw invalid(`${MAX_VARIANTS} variantes au plus`);
@@ -170,9 +191,12 @@ export class Product {
     return new Product(props);
   }
 
-  /** Visible des clients (fiche, listes, panier, commande) : publié ET boutique non suspendue. */
+  /**
+   * Visible des clients (fiche, listes, panier, commande) : offre publiée, boutique non suspendue ET fiche publiée
+   * (S7.5-T02 : une fiche retirée par l'équipe cache toutes ses offres).
+   */
   get isVisible(): boolean {
-    return this.status === "PUBLISHED" && !this.shopSuspended;
+    return this.status === "PUBLISHED" && !this.shopSuspended && this.listingPublished;
   }
 
   private get activeVariants(): readonly Variant[] {

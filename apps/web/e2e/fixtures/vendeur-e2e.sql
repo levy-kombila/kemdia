@@ -51,6 +51,13 @@ ON CONFLICT ("id") DO UPDATE SET
 DELETE FROM "catalog"."product_images"
 WHERE "product_id" IN (SELECT "id" FROM "catalog"."products" WHERE "shop_id" = '0e2e0000-0000-4000-8000-0000000000a3');
 DELETE FROM "catalog"."products" WHERE "shop_id" = '0e2e0000-0000-4000-8000-0000000000a3';
+-- Ses fiches communes (S7.5-T02), quand plus aucune boutique n'y vend
+DELETE FROM "catalog"."listings" l
+WHERE l."created_by_shop_id" = '0e2e0000-0000-4000-8000-0000000000a3'
+  AND NOT EXISTS (SELECT 1 FROM "catalog"."products" p WHERE p."listing_id" = l."id");
+INSERT INTO "catalog"."sellers" ("shop_id", "name", "slug", "city", "updated_at")
+VALUES ('0e2e0000-0000-4000-8000-0000000000a3', 'Boutique de Fatou E2E', 'boutique-de-fatou-e2e', 'Franceville', now())
+ON CONFLICT ("shop_id") DO NOTHING;
 -- Dossier de vérification (S6-T08) : repart de zéro à chaque passage
 DELETE FROM "vendors"."kyc_documents" WHERE "shop_id" = '0e2e0000-0000-4000-8000-0000000000a3';
 DELETE FROM "vendors"."kyc_files" WHERE "shop_id" = '0e2e0000-0000-4000-8000-0000000000a3';

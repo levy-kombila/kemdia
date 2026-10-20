@@ -30,12 +30,14 @@ import { VendorOrderEmailScheduler } from "./infrastructure/vendor-order-emails.
 import { MailVendorOrderMailer } from "./infrastructure/vendor-order-mailer.js";
 import { VendorOrderController } from "./interface/vendor-order.controller.js";
 import { ProductModerationService } from "./application/product-moderation.service.js";
+import { ListingAdminService } from "./application/listing-admin.service.js";
 import { VendorProductService } from "./application/vendor-product.service.js";
 import { ShopService } from "./application/shop.service.js";
 import { PrismaShopRepository } from "./infrastructure/prisma-shop.repository.js";
 import { VendorsTransactionRunner } from "./infrastructure/vendors-transaction.js";
 import { AdminShopController } from "./interface/admin-shop.controller.js";
 import { ModerationController } from "./interface/moderation.controller.js";
+import { ListingAdminController, VendorListingController } from "./interface/listing.controller.js";
 import { ModerationImageController } from "./interface/moderation-image.controller.js";
 import { VendorProductImageController } from "./interface/vendor-product-image.controller.js";
 import { VendorProductController } from "./interface/vendor-product.controller.js";
@@ -58,6 +60,9 @@ const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
     AdminShopController,
     VendorProductController,
     ModerationController,
+    // Fiches communes et offres (S7.5-T02)
+    VendorListingController,
+    ListingAdminController,
     VendorProductImageController,
     ModerationImageController,
     VendorOrderController,
@@ -70,6 +75,7 @@ const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
     ShopService,
     VendorProductService,
     ProductModerationService,
+    ListingAdminService,
     // Commandes des vendeurs (S6-T07) : décisions, e-mail « nouvelle commande »
     VendorOrderService,
     VendorOrderNotifier,

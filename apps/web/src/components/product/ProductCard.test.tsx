@@ -22,6 +22,7 @@ const product: ProductSummary = {
   variantId: VARIANT,
   stock: 3,
   variantCount: 1,
+  offerCount: 1,
   rating: 4.5,
   reviewCount: 12,
   isFeatured: true,

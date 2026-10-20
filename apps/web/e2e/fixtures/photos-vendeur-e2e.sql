@@ -12,12 +12,35 @@ VALUES (
 )
 ON CONFLICT ("id") DO NOTHING;
 
-INSERT INTO "catalog"."products"
-  ("id", "slug", "title", "description", "category_id", "images", "status", "price", "search_text", "updated_at",
-   "shop_id", "submitted_at")
+-- Boutique telle que le catalogue la montre à côté de ses offres (S7.5-T02)
+INSERT INTO "catalog"."sellers" ("shop_id", "name", "slug", "city", "updated_at")
+VALUES ('0e2e0000-0000-4000-8000-0000000000a1', 'Atelier E2E', 'atelier-e2e', 'Libreville', now())
+ON CONFLICT ("shop_id") DO NOTHING;
+
+-- Fiche commune (S7.5-T02) d'abord : l'offre et sa variante en copient le contenu (même identifiant, même adresse)
+INSERT INTO "catalog"."listings"
+  ("id", "slug", "title", "description", "category_id", "images", "status", "created_by_shop_id", "price",
+   "search_text", "updated_at")
 SELECT
   '0e2e0000-0000-4000-8000-0000000000b1', 'pagne-photo-vendeur-e2e', 'Pagne photo vendeur E2E',
   'Produit de test : sa photo est envoyée par le vendeur.', c."id",
+  ARRAY['/images/v/0e2e0000-0000-4000-8000-0000000000c1.webp'], 'PUBLISHED',
+  '0e2e0000-0000-4000-8000-0000000000a1', 12000, 'pagne photo vendeur e2e', now()
+FROM "catalog"."categories" c
+ORDER BY c."slug"
+LIMIT 1
+ON CONFLICT ("id") DO NOTHING;
+
+INSERT INTO "catalog"."listing_variants" ("id", "listing_id", "name", "updated_at")
+VALUES ('0e2e0000-0000-4000-8000-0000000000b2', '0e2e0000-0000-4000-8000-0000000000b1', 'Unique', now())
+ON CONFLICT ("id") DO NOTHING;
+
+INSERT INTO "catalog"."products"
+  ("id", "slug", "listing_id", "title", "description", "category_id", "images", "status", "price", "search_text",
+   "updated_at", "shop_id", "submitted_at")
+SELECT
+  '0e2e0000-0000-4000-8000-0000000000b1', 'pagne-photo-vendeur-e2e', '0e2e0000-0000-4000-8000-0000000000b1',
+  'Pagne photo vendeur E2E', 'Produit de test : sa photo est envoyée par le vendeur.', c."id",
   ARRAY['/images/v/0e2e0000-0000-4000-8000-0000000000c1.webp'], 'PUBLISHED', 12000,
   'pagne photo vendeur e2e', now(), '0e2e0000-0000-4000-8000-0000000000a1', now()
 FROM "catalog"."categories" c
@@ -25,10 +48,11 @@ ORDER BY c."slug"
 LIMIT 1
 ON CONFLICT ("id") DO NOTHING;
 
-INSERT INTO "catalog"."product_variants" ("id", "product_id", "sku", "name", "price", "stock", "updated_at")
+INSERT INTO "catalog"."product_variants"
+  ("id", "product_id", "listing_variant_id", "sku", "name", "price", "stock", "updated_at")
 VALUES (
-  '0e2e0000-0000-4000-8000-0000000000b2', '0e2e0000-0000-4000-8000-0000000000b1', 'VE2E0001-1', 'Unique', 12000, 5,
-  now()
+  '0e2e0000-0000-4000-8000-0000000000b2', '0e2e0000-0000-4000-8000-0000000000b1',
+  '0e2e0000-0000-4000-8000-0000000000b2', 'VE2E0001-1', 'Unique', 12000, 5, now()
 )
 ON CONFLICT ("id") DO NOTHING;
 

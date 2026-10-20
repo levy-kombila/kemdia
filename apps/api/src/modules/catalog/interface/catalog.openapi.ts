@@ -71,12 +71,23 @@ export const catalogPaths = {
   "/api/v1/products/{slug}": {
     get: {
       tags: ["Catalogue"],
-      summary: "Fiche produit, avec ses variantes et leur stock",
+      summary: "Fiche produit commune, ses offres et l'offre mise en avant",
+      description:
+        "S7.5-T02, ADR-0049 : une fiche par produit, toutes les boutiques qui le vendent dans `offers`. Les champs de prix et `variants` sont ceux de l'offre MISE EN AVANT (en stock d'abord, puis la moins chère, puis, à prix égal, une boutique de la ville du client). L'adresse d'un doublon fusionné renvoie la fiche qui le remplace (avec sa propre adresse dans `slug`).",
       operationId: "getProduct",
-      parameters: [slugParam("Adresse du produit")],
+      parameters: [
+        slugParam("Adresse de la fiche"),
+        {
+          name: "ville",
+          in: "query",
+          required: false,
+          description: "Ville du client : départage deux offres au même prix",
+          schema: { type: "string", maxLength: 60 },
+        },
+      ],
       responses: {
-        "200": json("ProductDetail", "Produit publié"),
-        "404": problem("Produit inconnu, en brouillon ou archivé"),
+        "200": json("ProductDetail", "Fiche publiée avec au moins une offre visible"),
+        "404": problem("Fiche inconnue, en modération, archivée, ou sans offre en vente"),
         "429": tooMany,
       },
     },

@@ -263,7 +263,7 @@ describe("Produits des vendeurs et modération (PostgreSQL, HTTP)", () => {
     expect(events[1]).toMatchObject({ actorId: moderator.accountId, targetType: "product" });
   });
 
-  it("prix et stock changent sans modération ; le contenu repasse en modération", async () => {
+  it("prix et stock changent sans modération ; le contenu d'une fiche en ligne est refusé (S7.5-T02)", async () => {
     const product = await create();
     await moderate(product.id, "approve", 200);
     const variant = product.variants[0]!;
@@ -293,22 +293,28 @@ describe("Produits des vendeurs et modération (PostgreSQL, HTTP)", () => {
       ),
     ).toBe("PRODUIT_INVALIDE");
 
-    const edited = matches(
+    // S7.5-T02 : la fiche est en ligne, seule l'équipe la corrige ; l'offre reste en vente
+    const refused = await call("put", `/api/v1/vendors/products/${product.id}`, vendor.token)
+      .send({
+        title: "Pagne wax premium",
+        description: product.description,
+        brand: null,
+        categoryId,
+      })
+      .expect(409);
+    expect(codeOf(refused.body)).toBe("FICHE_PUBLIEE");
+    const mine = matches(
       VendorProductSchema,
-      (
-        await call("put", `/api/v1/vendors/products/${product.id}`, vendor.token)
-          .send({
-            title: "Pagne wax premium",
-            description: product.description,
-            brand: null,
-            categoryId,
-          })
-          .expect(200)
-      ).body,
+      (await call("get", `/api/v1/vendors/products/${product.id}`, vendor.token).expect(200)).body,
     );
-    expect(edited).toMatchObject({ status: "pending", visible: false, brand: null });
-    expect(edited.variants[0]).toMatchObject({ price: 14_000, stock: 9 });
-    expect(await publicStatus(product.slug)).toBe(404);
+    expect(mine).toMatchObject({
+      status: "published",
+      visible: true,
+      title: product.title,
+      listing: { id: product.id, status: "published", editable: false },
+    });
+    expect(mine.variants[0]).toMatchObject({ price: 14_000, stock: 9 });
+    expect(await publicStatus(product.slug)).toBe(200);
   });
 
   it("refus avec motif ; archivage et remise en vente", async () => {
@@ -496,26 +502,44 @@ describe("Produits des vendeurs et modération (PostgreSQL, HTTP)", () => {
     await call("post", "/api/v1/cart/items", client.token)
       .send({ variantId: product.variants[0]!.id, quantity: 1 })
       .expect(200);
+    // S7.5-T02 : un titre non modéré ne peut plus être écrit sur une fiche en ligne (seule l'équipe la corrige)
     await call("put", `/api/v1/vendors/products/${product.id}`, vendor.token)
       .send({ title: "Titre jamais modéré", description: product.description, categoryId })
-      .expect(200);
+      .expect(409);
     const cart = matches(
       CartSchema,
       (await call("get", "/api/v1/cart", client.token).expect(200)).body,
     );
-    expect(cart.lines[0]).toMatchObject({ title: "Produit indisponible", image: null });
+    expect(cart.lines[0]).toMatchObject({ title: product.title });
+    // Retirée par l'équipe : le panier ne montre plus ni titre ni photo
+    await call("post", `/api/v1/moderation/offers/${product.id}/withdraw`, moderator.token)
+      .send({ reason: "Arnaque au paiement" })
+      .expect(200);
+    const after = matches(
+      CartSchema,
+      (await call("get", "/api/v1/cart", client.token).expect(200)).body,
+    );
+    expect(after.lines[0]).toMatchObject({ title: "Produit indisponible", image: null });
   });
 
   it("relecture S6-T02 : file de modération bornée à 50 produits en attente par boutique", async () => {
     const at = new Date();
+    const pending = Array.from({ length: MAX_PENDING_PRODUCTS_PER_SHOP }, (_, i) => ({
+      id: randomUUID(),
+      slug: `attente-${randomBytes(4).toString("hex")}-${i}`,
+      title: `Produit en attente ${i}`,
+      categoryId,
+      status: "PENDING" as const,
+    }));
+    // Fiche d'abord (S7.5-T02) : chaque offre en attente porte sa propre fiche
+    await prisma.listing.createMany({
+      data: pending.map((p) => ({ ...p, createdByShopId: shopId, updatedAt: at })),
+    });
     await prisma.product.createMany({
-      data: Array.from({ length: MAX_PENDING_PRODUCTS_PER_SHOP }, (_, i) => ({
-        id: randomUUID(),
+      data: pending.map((p) => ({
+        ...p,
         shopId,
-        slug: `attente-${randomBytes(4).toString("hex")}-${i}`,
-        title: `Produit en attente ${i}`,
-        categoryId,
-        status: "PENDING" as const,
+        listingId: p.id,
         submittedAt: at,
         price: 1_000,
       })),

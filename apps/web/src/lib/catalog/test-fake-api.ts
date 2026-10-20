@@ -49,6 +49,7 @@ const product = (
   variantId: id(200 + n),
   stock: 5,
   variantCount: 1,
+  offerCount: 1,
   rating: 4,
   reviewCount: 10 * n,
   isFeatured: false,
@@ -108,6 +109,24 @@ function detail(p: ProductSummary): ProductDetail {
         compareAtPrice: p.compareAtPrice,
         stock: p.stock,
         available: true,
+      },
+    ],
+    offers: [
+      {
+        offerId: p.id,
+        seller: { name: "Kemdia", slug: "kemdia", city: "Libreville" },
+        isMain: true,
+        variants: [
+          {
+            variantId: p.variantId,
+            listingVariantId: p.variantId,
+            name: "Standard",
+            price: p.price,
+            compareAtPrice: p.compareAtPrice,
+            stock: p.stock,
+            available: true,
+          },
+        ],
       },
     ],
   };

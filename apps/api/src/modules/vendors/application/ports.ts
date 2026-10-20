@@ -47,6 +47,8 @@ export interface ShopRepository {
 export const SHOP_LISTING = Symbol("SHOP_LISTING");
 export interface ShopListing {
   setShopSuspended(shopId: string, suspended: boolean): Promise<number>;
+  /** Nom, adresse et ville de la boutique montrés à côté de ses offres (S7.5-T02). */
+  syncSeller(shopId: string, seller: { name: string; slug: string; city: string }): Promise<void>;
 }
 
 /** Transaction de la base, partagée avec le module identity (rôle) et le journal d'audit. */

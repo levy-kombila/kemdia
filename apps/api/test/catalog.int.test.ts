@@ -29,6 +29,8 @@ const prisma = new PrismaService(config);
 const categories = new PrismaCategoryRepository(prisma);
 const products = new PrismaProductRepository(prisma);
 const service = new CatalogService(categories, products);
+/** Offre mise en avant d'une fiche visible (S7.5-T02 : une fiche par produit de démonstration, une offre chacune). */
+const getProduct = async (slug: string) => (await service.getListing(slug))?.main.offer ?? null;
 
 // --- Logique de référence (celle du site, apps/web/src/lib/catalog.ts) ---
 const legacyCategory = new Map(data.categories.map((c) => [c.id, c]));
@@ -178,9 +180,9 @@ describe("Catalogue (intégration PostgreSQL)", () => {
     expect(reviews).toEqual([...reviews].sort((a, b) => b - a));
   });
 
-  it("liste : variante par défaut (la moins chère active), son stock, nombre de variantes", async () => {
+  it("liste : variante proposée (en stock d'abord, puis la moins chère), son stock, nombre de déclinaisons", async () => {
     const source = data.products.find((p) => p.stock > 0);
-    const product = await service.getProduct(source?.slug ?? "");
+    const product = await getProduct(source?.slug ?? "");
     if (!product) throw new Error("produit de démonstration introuvable");
     // Deux variantes : une plus chère en stock, une moins chère sans stock
     const base = product.variants[0] as Variant;
@@ -206,14 +208,15 @@ describe("Catalogue (intégration PostgreSQL)", () => {
     const [summary] = (
       await service.searchProducts({ q: product.title, pageSize: 48 })
     ).items.filter((p) => p.id === product.id);
+    // S7.5-T02 (choix du 2026-10-20) : l'offre mise en avant est EN STOCK d'abord, même plus chère
     expect(summary).toMatchObject({
-      variantId: cheaperId,
-      stock: 0,
+      variantId: base.id,
+      stock: 4,
       variantCount: 2,
-      price: 1_000,
-      inStock: true, // l'autre variante a du stock
+      offerCount: 1,
+      price: base.price + 1_000,
+      inStock: true,
     });
-    expect(summary?.variantId).toBe(twoVariants.mainVariant.id);
   });
 
   it("page trop loin : dernière page", async () => {
@@ -244,10 +247,11 @@ describe("Catalogue (intégration PostgreSQL)", () => {
 
   it("fiche produit avec sa variante, son prix et son stock", async () => {
     const source = data.products[0];
-    const product = await service.getProduct(source?.slug ?? "");
-    expect(product?.id).toBe(uuidV5(`produit:${source?.slug}`));
-    expect(product?.price).toBe(source?.price);
-    expect(product?.totalStock).toBe(source?.stock);
+    const view = await service.getListing(source?.slug ?? "");
+    expect(view?.content.id).toBe(uuidV5(`produit:${source?.slug}`));
+    expect(view?.main.offer.id).toBe(uuidV5(`produit:${source?.slug}`));
+    expect(view?.main.variant.price).toBe(source?.price);
+    expect(view?.totalStock).toBe(source?.stock);
   });
 
   it("BR-001 : disponibilité vérifiée sur les stocks réels", async () => {
@@ -268,11 +272,11 @@ describe("Catalogue (intégration PostgreSQL)", () => {
 
   it("produit archivé : invisible, ni listé ni commandable", async () => {
     const source = data.products[1];
-    const product = await service.getProduct(source?.slug ?? "");
+    const product = await getProduct(source?.slug ?? "");
     if (!product) throw new Error("produit de démonstration introuvable");
     const archived = Product.create({ ...product, status: "ARCHIVED", variants: product.variants });
     await products.save(archived, archived.searchText(""));
-    expect(await service.getProduct(product.slug)).toBeNull();
+    expect(await getProduct(product.slug)).toBeNull();
     expect(
       (await service.searchProducts({ q: product.title, pageSize: 48 })).items.map((p) => p.slug),
     ).not.toContain(product.slug);
@@ -284,7 +288,7 @@ describe("Catalogue (intégration PostgreSQL)", () => {
 
   it("variante retirée d'un produit : désactivée, jamais supprimée (BR-002)", async () => {
     const source = data.products[2];
-    const product = await service.getProduct(source?.slug ?? "");
+    const product = await getProduct(source?.slug ?? "");
     if (!product) throw new Error("produit de démonstration introuvable");
     const newVariantId = "7c8d9e0f-1a2b-4c3d-8e4f-5a6b7c8d9e0f";
     const replaced = Product.create({
