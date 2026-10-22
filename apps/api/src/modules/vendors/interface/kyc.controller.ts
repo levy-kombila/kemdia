@@ -127,7 +127,7 @@ export class VendorKycController {
  * photo regardée sont inscrits au journal d'audit.
  */
 @Controller("admin/kyc")
-@Authorize("admin", { secondFactor: true })
+@Authorize("catalog", { secondFactor: true })
 @Throttle({ default: { limit: 30, ttl: 60_000 } })
 @AccountRateLimit(30)
 export class AdminKycController {

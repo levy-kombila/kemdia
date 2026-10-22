@@ -163,6 +163,22 @@ export const identityPaths = {
       },
     },
   },
+  "/api/v1/auth/devices/not-me": {
+    post: {
+      tags: ["Identité"],
+      summary: "« Ce n'est pas moi » : fermer toutes les sessions après un avis de nouvel appareil",
+      description:
+        "Le jeton vient du lien de l'avis « nouvelle connexion » (S7.5-T04). Sans session : le titulaire n'a peut-être plus accès à son compte. À usage unique, valable 7 jours ; l'appareil signalé est oublié. Changer ensuite le mot de passe (« Mot de passe oublié »).",
+      operationId: "deviceNotMe",
+      requestBody: body("DeviceNotMeRequest"),
+      responses: {
+        "200": json("DeviceNotMeResult", "Toutes les sessions du compte sont fermées"),
+        "400": invalidBody,
+        "410": problem("`ALERTE_INVALIDE` : lien inconnu, déjà utilisé ou expiré"),
+        "429": tooMany,
+      },
+    },
+  },
   "/api/v1/auth/password/forgot": {
     post: {
       tags: ["Identité"],

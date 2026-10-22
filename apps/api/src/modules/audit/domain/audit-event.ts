@@ -129,6 +129,18 @@ export const AUDIT_ACTIONS = [
   "listing.correction_proposed",
   /** Proposition de correction close par l'équipe (détails : correction, note) — S7.5-T03 */
   "listing.correction_closed",
+  /** Compte désactivé par un administrateur, sessions fermées (détails : reason, sessions) — S7.5-T04 */
+  "account.disabled",
+  /** Compte réactivé par un administrateur — S7.5-T04 */
+  "account.enabled",
+  /** Rôles de l'équipe retirés d'un coup, sessions fermées (départ ; détails : roles, sessions) — S7.5-T04 */
+  "staff.removed",
+  /** Compte consulté par le service client — S7.5-T04 */
+  "support.account_viewed",
+  /** Connexion depuis un appareil inconnu, avis envoyé (détails : device) — S7.5-T04 */
+  "device.new_login",
+  /** Lien « ce n'est pas moi » utilisé : toutes les sessions fermées (détails : sessions) — S7.5-T04 */
+  "device.not_me",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

@@ -35,6 +35,8 @@ import {
   ProductImageOrderRequestSchema,
   PublicProductImageParamsSchema,
   VENDOR_IMAGE_PATH_PATTERN,
+  hasRole,
+  isStaffRoles,
 } from "./index.js";
 import { demoCatalog, demoIds, uuidV5 } from "./demo/index.js";
 import {
@@ -280,11 +282,18 @@ describe("schémas", () => {
 describe("rôles et journal d'audit (S4-T06)", () => {
   const id = "0b9c2f5e-3c1a-4d2b-9e8f-1a2b3c4d5e6f";
 
-  it("seuls « vendor » et « moderator » sont attribuables par l'API (jamais « admin »)", () => {
-    expect(AdminRoleParamsSchema.safeParse({ accountId: id, role: "vendor" }).success).toBe(true);
+  it("rôles de l'équipe attribuables par l'API (jamais « admin ») ; un administrateur a tous les droits (S7.5-T04)", () => {
+    for (const role of ["vendor", "catalog", "logistics", "finance", "support"]) {
+      expect(AdminRoleParamsSchema.safeParse({ accountId: id, role }).success).toBe(true);
+    }
     expect(AdminRoleParamsSchema.safeParse({ accountId: id, role: "moderator" }).success).toBe(
-      true,
+      false,
     );
+    expect(hasRole(["client", "admin"], "finance")).toBe(true);
+    expect(hasRole(["client", "logistics"], "catalog")).toBe(false);
+    expect(hasRole(["client", "catalog"], "admin")).toBe(false);
+    expect(isStaffRoles(["client", "vendor"])).toBe(false);
+    expect(isStaffRoles(["client", "support"])).toBe(true);
     expect(AdminRoleParamsSchema.safeParse({ accountId: id, role: "admin" }).success).toBe(false);
     expect(AdminRoleParamsSchema.safeParse({ accountId: "42", role: "vendor" }).success).toBe(
       false,

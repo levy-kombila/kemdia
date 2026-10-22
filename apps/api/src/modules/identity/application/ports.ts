@@ -25,6 +25,8 @@ export const IDENTITY_CLOCK = Symbol("IDENTITY_CLOCK");
 export const IDENTITY_OPTIONS = Symbol("IDENTITY_OPTIONS");
 export const ROLE_REPOSITORY = Symbol("ROLE_REPOSITORY");
 export const TRANSACTION_RUNNER = Symbol("TRANSACTION_RUNNER");
+export const STAFF_DIRECTORY = Symbol("STAFF_DIRECTORY");
+export const KNOWN_DEVICE_REPOSITORY = Symbol("KNOWN_DEVICE_REPOSITORY");
 /** Facultatif : tirage du code et de l'identifiant du défi, remplacé dans les tests. */
 export const OTP_RANDOM = Symbol("OTP_RANDOM");
 
@@ -177,6 +179,8 @@ export type OtpMessage = {
   | { kind: "second-factor"; event: SecondFactorEvent }
   | { kind: "account-deleted" }
   | { kind: "inactivity-warning"; deleteOn: Date }
+  /** Connexion depuis un appareil inconnu (S7.5-T04) ; `link` : « ce n'est pas moi » (absent sans adresse du site) */
+  | { kind: "new-device"; device: string; at: Date; link: string | null }
 );
 
 /** Envoi des messages : console (développement), e-mail (S4-T02), SMS (quand le client aura choisi un fournisseur). */
@@ -205,6 +209,83 @@ export interface RoleRepository {
   revoke(accountId: string, role: StoredRole): Promise<boolean>;
 }
 
+/** Membre de l'équipe vu par l'écran Utilisateurs (S7.5-T04). */
+export interface StaffRecord {
+  account: Account;
+  secondFactorEnabled: boolean;
+  lastActiveAt: Date;
+}
+
+/** Position dans la liste de l'équipe : nom, prénom, identifiant de la dernière ligne lue. */
+export interface StaffCursor {
+  lastName: string;
+  firstName: string;
+  id: string;
+}
+
+/** Comptes de l'équipe et statut des comptes (S7.5-T04, ADR-0051), pour l'administration. */
+export interface StaffDirectory {
+  /** Comptes non effacés qui ont au moins un des rôles (tri : nom, prénom, identifiant). */
+  list(query: {
+    roles: readonly StoredRole[];
+    limit: number;
+    after?: StaffCursor | undefined;
+  }): Promise<{ items: StaffRecord[]; next: StaffCursor | null }>;
+  /**
+   * Verrouille le compte jusqu'à la fin de la transaction et le relit (rôles compris) ; `null` s'il n'existe pas.
+   * `deleted` : compte effacé (données personnelles) — jamais réactivé.
+   */
+  lock(accountId: string): Promise<{ account: Account; deleted: boolean } | null>;
+  /** Change le statut (actif ⇄ désactivé) d'un compte verrouillé. */
+  setStatus(accountId: string, status: "active" | "disabled", now: Date): Promise<void>;
+  /** Dernière activité et vérifications, pour le service client. */
+  activity(
+    accountId: string,
+  ): Promise<{ lastActiveAt: Date; emailVerified: boolean; phoneVerified: boolean } | null>;
+}
+
+/** Appareil déjà utilisé pour se connecter (S7.5-T04) : seulement des empreintes. */
+export interface KnownDeviceRecord {
+  id: string;
+  accountId: string;
+  deviceHash: string;
+  userAgent: string | null;
+  createdAt: Date;
+  lastSeenAt: Date;
+}
+
+/** Résultat de la reconnaissance d'un appareil à la connexion. */
+export type DeviceSighting =
+  /** Déjà vu : rien à faire */
+  | "known"
+  /** Premier appareil retenu du compte (inscription, ou première connexion depuis la mise en service) : sans avis */
+  | "first"
+  /** Appareil inconnu : enregistré, avis au titulaire avec ce jeton « ce n'est pas moi » */
+  | { alertToken: string };
+
+export interface KnownDeviceRepository {
+  /**
+   * Note l'appareil (une requête atomique, compte verrouillé) : déjà connu → date de visite ; sinon il est ajouté,
+   * avec l'empreinte du jeton d'avis s'il n'est pas le premier du compte. Au-delà de `max`, les moins récents sont
+   * oubliés.
+   */
+  sight(input: {
+    id: string;
+    accountId: string;
+    deviceHash: string;
+    userAgent: string | null;
+    alertTokenHash: string;
+    alertExpiresAt: Date;
+    now: Date;
+    max: number;
+  }): Promise<"known" | "first" | "new">;
+  /**
+   * Consomme le jeton « ce n'est pas moi » (usage unique, avant l'échéance) : l'appareil est oublié. Renvoie le
+   * compte concerné, ou `null` si le jeton est inconnu, déjà utilisé ou expiré.
+   */
+  consumeAlert(tokenHash: string, now: Date): Promise<{ accountId: string } | null>;
+}
+
 /**
  * Transaction partagée (ADR-0020) : tout ce que `work` écrit — dans ce module ET dans le journal d'audit —
  * est enregistré ensemble ou pas du tout. Un appel imbriqué rejoint la transaction en cours.
@@ -220,6 +301,8 @@ export interface Clock {
 export interface IdentityOptions {
   /** `SMS_ENABLED` : le SMS n'est proposé qu'une fois un fournisseur branché (ADR-0015). */
   smsEnabled: boolean;
+  /** Adresse publique du site, sans « / » final (lien « ce n'est pas moi », S7.5-T04) ; `null` : avis sans lien. */
+  siteUrl?: string | null;
 }
 
 // --- Double authentification de l'équipe (S6-T03, ADR-0034, MED-15) ---

@@ -33,11 +33,16 @@ enum OtpChannel {
 }
 
 /// Rôle accordé à un compte (S4-T06, ADR-0020). « client » n'est pas stocké : tout compte actif l'a.
-/// VENDOR (vendeur), MODERATOR (modération), ADMIN (administration ; jamais accordé par l'API).
+/// VENDOR (vendeur) ; équipe (S7.5-T04, ADR-0051) : CATALOG (produits, fiches, boutiques, vérifications),
+/// LOGISTICS (livraisons), FINANCE (paiements, factures, codes promo), SUPPORT (service client, lecture seule),
+/// ADMIN (administration ; jamais accordé par l'API).
 enum Role {
   VENDOR
-  MODERATOR
+  CATALOG
   ADMIN
+  LOGISTICS
+  FINANCE
+  SUPPORT
 
   @@map("role")
   @@schema("identity")
@@ -61,6 +66,7 @@ model Account {
   roles              AccountRole[]
   secondFactor       SecondFactor?
   recoveryCodes      RecoveryCode[]
+  knownDevices       KnownDevice[]
   createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
   /// Preuve du consentement (S7-T08, loi 001/2011 modifiée art. 72 et 74) : conditions acceptées, 18 ans ou plus
@@ -214,5 +220,25 @@ model RecoveryCode {
 
   @@index([accountId])
   @@map("recovery_codes")
+  @@schema("identity")
+}
+
+/// Appareil déjà utilisé pour se connecter (S7.5-T04, ADR-0051). Le cookie du site porte un identifiant aléatoire ; la
+/// base n'en garde que l'empreinte SHA-256. Connexion depuis un appareil inconnu → avis au titulaire, avec un lien
+/// « ce n'est pas moi » (empreinte du jeton, 7 jours, usage unique) qui ferme toutes les sessions.
+model KnownDevice {
+  id             String    @id @db.Uuid
+  accountId      String    @map("account_id") @db.Uuid
+  account        Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  deviceHash     String    @map("device_hash") @db.Char(64)
+  /// Navigateur résumé (« Chrome sur Android »), rappelé dans l'avis
+  userAgent      String?   @map("user_agent") @db.VarChar(200)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastSeenAt     DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  alertTokenHash String?   @unique @map("alert_token_hash") @db.Char(64)
+  alertExpiresAt DateTime? @map("alert_expires_at") @db.Timestamptz(3)
+
+  @@unique([accountId, deviceHash])
+  @@map("known_devices")
   @@schema("identity")
 }

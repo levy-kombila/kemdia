@@ -1,10 +1,10 @@
 import { createHash, randomInt } from "node:crypto";
-import { hasRole, type Role } from "./role.js";
+import { isStaff, type Role } from "./role.js";
 
 /**
  * Double authentification de l'équipe (MED-15, S6-T03, ADR-0034).
  *
- * - Obligatoire pour les comptes qui ont le droit `moderator` (modérateurs et administrateurs).
+ * - Obligatoire pour tout compte de l'équipe (catalogue, logistique, finance, service client, administrateurs).
  * - Une route d'équipe exige une session CONFIRMÉE par un code il y a moins de 15 minutes (remplace la « connexion
  *   récente » de l'ADR-0020) : une session volée ne suffit plus sans le téléphone.
  * - 10 codes de secours à usage unique, donnés une seule fois ; la base n'en garde que l'empreinte SHA-256.
@@ -20,9 +20,9 @@ export const RECOVERY_CODE_COUNT = 10;
 export const DAILY_MAX_FAILURES = 10;
 export const FAILURE_WINDOW_MS = 24 * 60 * 60_000;
 
-/** La 2FA est-elle obligatoire pour ces rôles ? (un administrateur a aussi les droits d'un modérateur) */
+/** La 2FA est-elle obligatoire pour ces rôles ? Oui pour tout rôle de l'équipe (S7.5-T04). */
 export function requiresSecondFactor(roles: readonly Role[]): boolean {
-  return hasRole(roles, "moderator");
+  return isStaff(roles);
 }
 
 /** La session a-t-elle été confirmée par un code il y a moins de 15 minutes ? */

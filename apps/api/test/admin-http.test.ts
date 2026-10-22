@@ -149,7 +149,7 @@ describe("API administration — rôles et journal d'audit (HTTP)", () => {
     events.rows.length = 0;
     await addAccount(ADMIN_ID, "admin@exemple.ga", ["admin"]);
     await addAccount(AWA_ID, "awa@exemple.ga", []);
-    await addAccount(MODO_ID, "modo@exemple.ga", ["moderator"]);
+    await addAccount(MODO_ID, "modo@exemple.ga", ["catalog"]);
   });
 
   const ROUTES = [
@@ -237,10 +237,12 @@ describe("API administration — rôles et journal d'audit (HTTP)", () => {
     const admin = await tokenFor(ADMIN_ID);
     await as(admin).put(`/api/v1/admin/accounts/${AWA_ID}/roles/admin`).expect(400);
     await as(admin).put(`/api/v1/admin/accounts/${AWA_ID}/roles/client`).expect(400);
+    // Ancien nom (avant S7.5-T04) : plus accepté
+    await as(admin).put(`/api/v1/admin/accounts/${AWA_ID}/roles/moderator`).expect(400);
     await as(admin).put("/api/v1/admin/accounts/42/roles/vendor").expect(400);
     for (const id of [ADMIN_ID, ADMIN_ID.toUpperCase()]) {
       // Même UUID en majuscules : toujours soi-même (la base ignore la casse des UUID)
-      const self = await as(admin).delete(`/api/v1/admin/accounts/${id}/roles/moderator`);
+      const self = await as(admin).delete(`/api/v1/admin/accounts/${id}/roles/catalog`);
       expect(self.status).toBe(403);
       expect(codeOf(self.body)).toBe("ROLE_SUR_SOI_INTERDIT");
     }
@@ -269,7 +271,7 @@ describe("API administration — rôles et journal d'audit (HTTP)", () => {
 
   it("journal : conforme au contrat, du plus récent au plus ancien, pages et filtres", async () => {
     const admin = await tokenFor(ADMIN_ID);
-    for (const role of ["vendor", "moderator"]) {
+    for (const role of ["vendor", "catalog"]) {
       await as(admin).put(`/api/v1/admin/accounts/${AWA_ID}/roles/${role}`).expect(200);
       await as(admin).delete(`/api/v1/admin/accounts/${AWA_ID}/roles/${role}`).expect(200);
     }
@@ -279,7 +281,7 @@ describe("API administration — rôles et journal d'audit (HTTP)", () => {
     expect(page1.items).toHaveLength(3);
     expect(page1.items[0]).toMatchObject({
       action: "role.revoked",
-      details: { role: "moderator" },
+      details: { role: "catalog" },
     });
     expect(page1.nextCursor).not.toBeNull();
 
@@ -299,7 +301,7 @@ describe("API administration — rôles et journal d'audit (HTTP)", () => {
           .expect(200)
       ).body,
     );
-    expect(granted.items.map((e) => e.details.role)).toEqual(["moderator", "vendor"]);
+    expect(granted.items.map((e) => e.details.role)).toEqual(["catalog", "vendor"]);
 
     await as(admin).get("/api/v1/admin/audit?limit=500").expect(400);
     await as(admin).get("/api/v1/admin/audit?action=tout").expect(400);

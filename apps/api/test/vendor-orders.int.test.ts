@@ -111,7 +111,7 @@ describe("Commandes des vendeurs (PostgreSQL, HTTP)", () => {
     return token ? req.set("Authorization", `Bearer ${token}`) : req;
   };
 
-  async function openSession(role?: "ADMIN" | "MODERATOR"): Promise<Session> {
+  async function openSession(role?: "ADMIN" | "CATALOG"): Promise<Session> {
     const email = `vendeur.${randomUUID()}@exemple.ga`;
     const now = new Date();
     const account = Account.register({
@@ -251,7 +251,7 @@ describe("Commandes des vendeurs (PostgreSQL, HTTP)", () => {
 
   beforeEach(async () => {
     admin = await openSession("ADMIN");
-    moderator = await openSession("MODERATOR");
+    moderator = await openSession("CATALOG");
     client = await openSession();
     // Produit Kemdia bon marché, en stock (le paiement à la livraison est plafonné)
     const cheapest = await prisma.productVariant.findFirstOrThrow({

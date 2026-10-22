@@ -33,7 +33,14 @@ export type IdentityErrorCode =
   /** Route d'équipe : la double authentification n'est pas encore activée sur ce compte. */
   | "DEUX_FACTEURS_A_ACTIVER"
   /** Route d'équipe : session pas (ou plus) confirmée par un code depuis 15 minutes. */
-  | "DEUX_FACTEURS_REQUIS";
+  | "DEUX_FACTEURS_REQUIS"
+  // Équipe et appareils (S7.5-T04, ADR-0051)
+  /** Compte administrateur : désactivé ou retiré de l'équipe seulement depuis le serveur. */
+  | "COMPTE_PROTEGE"
+  /** Motif d'une désactivation trop court ou trop long. */
+  | "MOTIF_INVALIDE"
+  /** Lien « ce n'est pas moi » inconnu, déjà utilisé ou expiré. */
+  | "ALERTE_INVALIDE";
 
 /** Une règle de l'identité n'est pas respectée. Le message est lisible par un humain, en français. */
 export class IdentityError extends Error {

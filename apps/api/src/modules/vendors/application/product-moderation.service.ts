@@ -92,7 +92,7 @@ export class ProductModerationService {
     seenSubmittedAt: Date,
     context: AuditContext,
   ): Promise<ModeratedProduct> {
-    if (!hasRole(actor.roles, "moderator")) {
+    if (!hasRole(actor.roles, "catalog")) {
       throw new IdentityError("ACCES_REFUSE", "action réservée à la modération");
     }
     return this.tx.run(async () => {

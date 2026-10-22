@@ -1,6 +1,6 @@
 import { openApiComponentSchemas } from "@kemdia/contracts";
 import { catalogPaths } from "../modules/catalog/interface/catalog.openapi.js";
-import { adminPaths } from "../modules/identity/interface/admin.openapi.js";
+import { adminPaths, supportPaths } from "../modules/identity/interface/admin.openapi.js";
 import { cartPaths } from "../modules/orders/interface/cart.openapi.js";
 import { codSettingsPaths } from "../modules/orders/interface/cod-settings.openapi.js";
 import { couponPaths } from "../modules/orders/interface/coupon.openapi.js";
@@ -17,7 +17,7 @@ import {
 } from "../modules/vendors/interface/vendors.openapi.js";
 
 /** Version du contrat HTTP (indépendante de la version de l'image) : à augmenter à chaque changement de l'API. */
-export const API_CONTRACT_VERSION = "1.25.0";
+export const API_CONTRACT_VERSION = "2.0.0";
 
 /** Document OpenAPI complet de l'API, généré à partir des schémas réellement utilisés. */
 export function buildOpenApiDocument(): Record<string, unknown> {
@@ -144,6 +144,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       ...catalogPaths,
       ...identityPaths,
       ...adminPaths,
+      ...supportPaths,
       ...cartPaths,
       ...orderPaths,
       ...couponPaths,

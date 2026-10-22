@@ -48,7 +48,7 @@ type ProductParams = { productId: string };
  * cache ; chaque décision au journal d'audit. Écrans plus tard au S6.
  */
 @Controller("moderation/products")
-@Authorize("moderator", { secondFactor: true })
+@Authorize("catalog", { secondFactor: true })
 @Throttle({ default: { limit: 30, ttl: 60_000 } })
 @AccountRateLimit(30)
 export class ModerationController {

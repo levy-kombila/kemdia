@@ -80,7 +80,7 @@ describe("Règles de la 2FA de l'équipe (S6-T03)", () => {
   it("obligatoire pour les modérateurs et les administrateurs seulement", () => {
     expect(requiresSecondFactor(["client"])).toBe(false);
     expect(requiresSecondFactor(["client", "vendor"])).toBe(false);
-    expect(requiresSecondFactor(["client", "moderator"])).toBe(true);
+    expect(requiresSecondFactor(["client", "catalog"])).toBe(true);
     expect(requiresSecondFactor(["client", "admin"])).toBe(true);
   });
 

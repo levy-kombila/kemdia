@@ -99,6 +99,11 @@ const envSchema = z
      * Par défaut : `console` sur le poste, `none` ailleurs.
      */
     EMAIL_TRANSPORT: z.enum(["console", "mailpit", "brevo", "none"]).optional(),
+    /**
+     * Adresse publique du site (S7.5-T04), pour le lien « ce n'est pas moi » des avis de nouvel appareil. Absente :
+     * l'avis part sans lien et renvoie vers « Mot de passe oublié ». HTTPS obligatoire hors du poste.
+     */
+    PUBLIC_SITE_URL: z.url({ protocol: /^https?$/ }).optional(),
     /** Adresse de Mailpit (API d'envoi). */
     MAILPIT_URL: z.url({ protocol: /^https?$/ }).default("http://localhost:8025"),
     /** Clé d'API Brevo. SECRET : uniquement dans les variables du serveur, jamais dans Git ni dans un message. */
@@ -176,6 +181,13 @@ const envSchema = z
         });
       }
     });
+    if (env.PUBLIC_SITE_URL && !env.PUBLIC_SITE_URL.startsWith("https://")) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["PUBLIC_SITE_URL"],
+        message: "HTTPS obligatoire en production",
+      });
+    }
     if (env.LOG_LEVEL === "debug" || env.LOG_LEVEL === "trace") {
       ctx.addIssue({
         code: "custom",

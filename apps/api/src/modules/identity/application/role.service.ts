@@ -38,7 +38,7 @@ const inactive = () =>
 /**
  * Attribution des rôles (S4-T06, ADR-0020) — ferme CRIT-06 et MED-07 de l'audit Django.
  *
- * - Par l'API : un administrateur accorde ou retire `vendor` / `moderator` à un AUTRE compte.
+ * - Par l'API : un administrateur accorde ou retire `vendor` ou un rôle de l'équipe (`catalog`, `logistics`, `finance`, `support`) à un AUTRE compte.
  * - Par la commande serveur (`admin:grant`, `admin:revoke`) : le rôle `admin`, et lui seul.
  * - Chaque changement effectif est écrit au journal d'audit dans la même transaction ;
  *   un changement sans effet (rôle déjà présent) n'écrit rien.

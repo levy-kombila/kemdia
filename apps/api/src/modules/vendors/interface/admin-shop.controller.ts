@@ -39,7 +39,7 @@ import { withVendorsErrors } from "./vendors-http-errors.js";
  * par adresse et par compte, jamais mis en cache ; chaque décision au journal d'audit. Écrans plus tard au S6.
  */
 @Controller("admin/shops")
-@Authorize("admin", { secondFactor: true })
+@Authorize("catalog", { secondFactor: true })
 @Throttle({ default: { limit: 30, ttl: 60_000 } })
 @AccountRateLimit(30)
 export class AdminShopController {

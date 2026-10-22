@@ -108,7 +108,7 @@ describe("Livraisons (PostgreSQL, HTTP)", () => {
     return token ? req.set("Authorization", `Bearer ${token}`) : req;
   };
 
-  async function openSession(role?: "ADMIN" | "MODERATOR"): Promise<Session> {
+  async function openSession(role?: "ADMIN" | "CATALOG"): Promise<Session> {
     const email = `livraison.${randomUUID()}@exemple.ga`;
     const now = new Date();
     const account = Account.register({
@@ -438,8 +438,8 @@ describe("Livraisons (PostgreSQL, HTTP)", () => {
     ).rejects.toThrow();
   });
 
-  it("refus : vendeur qui n'a pas répondu, commande inconnue, pas d'expédition, compte non administrateur", async () => {
-    const moderator = await openSession("MODERATOR");
+  it("refus : vendeur qui n'a pas répondu, commande inconnue, pas d'expédition, compte sans le rôle logistique", async () => {
+    const moderator = await openSession("CATALOG");
     const vendor = await openSession();
     const shop = matches(
       ShopSchema,

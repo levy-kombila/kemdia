@@ -75,7 +75,7 @@ describe("Fiches communes et offres (PostgreSQL, HTTP)", () => {
     return token ? req.set("Authorization", `Bearer ${token}`) : req;
   };
 
-  async function openSession(role?: "ADMIN" | "MODERATOR"): Promise<Session> {
+  async function openSession(role?: "ADMIN" | "CATALOG"): Promise<Session> {
     const email = `fiches.${randomUUID()}@exemple.ga`;
     const now = new Date();
     const account = Account.register({
@@ -188,7 +188,7 @@ describe("Fiches communes et offres (PostgreSQL, HTTP)", () => {
 
   beforeEach(async () => {
     admin = await openSession("ADMIN");
-    moderator = await openSession("MODERATOR");
+    moderator = await openSession("CATALOG");
   });
 
   afterAll(async () => {
@@ -938,7 +938,7 @@ describe("Fiches communes et offres (PostgreSQL, HTTP)", () => {
     ).toBe("PRODUIT_SUR_SOI_INTERDIT");
 
     // Offre retirée par l'équipe : la boutique ne propose plus rien sur cette fiche
-    const other = await openSession("MODERATOR");
+    const other = await openSession("CATALOG");
     await call("post", `/api/v1/moderation/offers/${mine.id}/withdraw`, other.token)
       .send({ reason: "Contrefaçon signalée" })
       .expect(200);

@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { TransactionContext } from "../../../database/transaction-context.js";
 
 /** Rôles d'équipe : un tel compte ne s'efface pas lui-même (un administrateur retire d'abord ses rôles). */
-const STAFF_ROLES = ["ADMIN", "MODERATOR"] as const;
+const STAFF_ROLES = ["ADMIN", "CATALOG", "LOGISTICS", "FINANCE", "SUPPORT"] as const;
 
 /** Compte proche de l'effacement pour inactivité (S7-T08) */
 export interface InactiveAccount {

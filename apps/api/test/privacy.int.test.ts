@@ -84,7 +84,7 @@ describe("Données personnelles (PostgreSQL, HTTP)", () => {
     return token ? req.set("Authorization", `Bearer ${token}`) : req;
   };
 
-  async function openSession(role?: "ADMIN" | "MODERATOR"): Promise<Session> {
+  async function openSession(role?: "ADMIN" | "CATALOG"): Promise<Session> {
     const email = `donnees.${randomUUID()}@exemple.ga`;
     const now = new Date();
     const account = Account.register({
@@ -254,7 +254,7 @@ describe("Données personnelles (PostgreSQL, HTTP)", () => {
   });
 
   it("compte de l'équipe : jamais supprimé par lui-même", async () => {
-    const staff = await openSession("MODERATOR");
+    const staff = await openSession("CATALOG");
     expect(await deletion(staff)).toEqual({ possible: false, reasons: ["COMPTE_EQUIPE"] });
   });
 

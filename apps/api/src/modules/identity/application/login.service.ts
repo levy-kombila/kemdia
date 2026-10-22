@@ -1,8 +1,10 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
+import { NO_REQUEST, type AuditContext } from "../../audit/index.js";
 import { requireIdentifier } from "../domain/identifier.js";
 import { IdentityError } from "../domain/identity-error.js";
 import { LOGIN_LOCK_MS, MAX_LOGIN_ATTEMPTS, isLocked } from "../domain/login-guard.js";
 import { PASSWORD_MAX_LENGTH } from "../domain/password-policy.js";
+import { DeviceService } from "./device.service.js";
 import { SessionService, type OpenedSession } from "./session.service.js";
 import {
   ACCOUNT_REPOSITORY,
@@ -19,6 +21,10 @@ export interface LoginInput {
   identifier: string;
   password: string;
   userAgent?: string;
+  /** Identifiant aléatoire de l'appareil (cookie du site, S7.5-T04) : avis au titulaire s'il est inconnu */
+  device?: string;
+  /** Adresse et requête, pour le journal d'audit de l'avis */
+  context?: AuditContext;
 }
 
 const wrongCredentials = () =>
@@ -50,6 +56,7 @@ export class LoginService {
     @Inject(PASSWORD_HASHER) private readonly hasher: PasswordHasher,
     @Inject(IDENTITY_CLOCK) private readonly clock: Clock,
     private readonly sessions: SessionService,
+    @Optional() @Inject(DeviceService) private readonly devices?: Pick<DeviceService, "afterLogin">,
   ) {}
 
   async login(input: LoginInput): Promise<OpenedSession> {
@@ -83,6 +90,8 @@ export class LoginService {
         "ce compte est désactivé : contactez le service client Kemdia",
       );
     }
-    return this.sessions.open(account, input.userAgent);
+    const opened = await this.sessions.open(account, input.userAgent);
+    await this.devices?.afterLogin(account, input.device, input.userAgent, input.context ?? NO_REQUEST);
+    return opened;
   }
 }

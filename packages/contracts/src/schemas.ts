@@ -31,6 +31,10 @@ import {
   ORDER_STATUSES,
   PAYMENT_METHODS,
   ROLES,
+  STAFF_ROLES,
+  STAFF_LIMITS,
+  DEVICE_ID_PATTERN,
+  DEVICE_ALERT_TOKEN_PATTERN,
   MAX_AVAILABILITY_LINES,
   MAX_ORDER_QUANTITY,
   OTP_CHANNELS,
@@ -397,7 +401,7 @@ export const AccountViewSchema = z
     phone: z.string().nullable().describe("Format +2410XXXXXXXX"),
     roles: z
       .array(z.enum(ROLES))
-      .describe("Rôles cumulables (S4-T06) : toujours « client », puis vendor, moderator, admin"),
+      .describe("Rôles cumulables (S4-T06) : toujours « client », puis vendor, catalog, logistics, finance, support, admin"),
   })
   .meta({ id: "AccountView", description: "Le compte de la personne connectée" });
 export type AccountView = z.infer<typeof AccountViewSchema>;
@@ -440,6 +444,11 @@ export const LoginRequestSchema = z
   .strictObject({
     identifier: z.string().max(300).describe("Adresse e-mail ou mobile gabonais"),
     password: z.string().max(200),
+    device: z
+      .string()
+      .regex(DEVICE_ID_PATTERN)
+      .optional()
+      .describe("Identifiant aléatoire de l'appareil (cookie du site) : avis au titulaire s'il est inconnu"),
   })
   .meta({ id: "LoginRequest" });
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
@@ -576,6 +585,81 @@ export const AdminRoleParamsSchema = z.strictObject({
   role: z.enum(ADMIN_ASSIGNABLE_ROLES),
 });
 export type AdminRoleParams = z.infer<typeof AdminRoleParamsSchema>;
+
+// --- Équipe, service client et appareils (S7.5-T04, ADR-0051) ---
+
+export const StaffMemberSchema = AdminAccountSchema.extend({
+  secondFactorEnabled: z.boolean().describe("Double authentification activée"),
+  lastActiveAt: z.iso.datetime().describe("Dernière connexion ou visite"),
+}).meta({ id: "StaffMember", description: "Membre de l'équipe Kemdia (écran Utilisateurs)" });
+export type StaffMember = z.infer<typeof StaffMemberSchema>;
+
+export const STAFF_CURSOR_PATTERN = /^[A-Za-z0-9_-]{20,700}$/;
+
+export const StaffListParamsSchema = z.strictObject({
+  role: z.enum(STAFF_ROLES).optional(),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(STAFF_LIMITS.pageMax)
+    .default(STAFF_LIMITS.pageDefault),
+  after: z.string().regex(STAFF_CURSOR_PATTERN).optional(),
+});
+export type StaffListParams = z.infer<typeof StaffListParamsSchema>;
+
+export const StaffPageSchema = z
+  .object({
+    items: z.array(StaffMemberSchema),
+    nextCursor: z.string().regex(STAFF_CURSOR_PATTERN).nullable(),
+  })
+  .meta({ id: "StaffPage", description: "Comptes qui ont au moins un rôle de l'équipe, par nom" });
+export type StaffPage = z.infer<typeof StaffPageSchema>;
+
+export const AccountIdParamsSchema = z.strictObject({ accountId: uuidInput });
+
+export const AccountDisableRequestSchema = z
+  .strictObject({
+    reason: z
+      .string()
+      .max(STAFF_LIMITS.reasonMax * 2)
+      .describe(
+        `Motif gardé au journal d'audit (${STAFF_LIMITS.reasonMin} à ${STAFF_LIMITS.reasonMax} caractères)`,
+      ),
+  })
+  .meta({ id: "AccountDisableRequest", description: "Désactivation d'un compte par l'administration" });
+export type AccountDisableRequest = z.infer<typeof AccountDisableRequestSchema>;
+
+export const StaffActionResultSchema = z
+  .object({
+    account: AdminAccountSchema,
+    sessionsClosed: z.int().nonnegative().describe("Sessions fermées tout de suite"),
+  })
+  .meta({ id: "StaffActionResult", description: "Compte après l'action, et sessions fermées" });
+export type StaffActionResult = z.infer<typeof StaffActionResultSchema>;
+
+export const SupportAccountSchema = AdminAccountSchema.extend({
+  lastActiveAt: z.iso.datetime(),
+  emailVerified: z.boolean(),
+  phoneVerified: z.boolean(),
+}).meta({ id: "SupportAccount", description: "Un compte vu par le service client (lecture seule)" });
+export type SupportAccount = z.infer<typeof SupportAccountSchema>;
+
+export const DeviceNotMeRequestSchema = z
+  .strictObject({ token: z.string().regex(DEVICE_ALERT_TOKEN_PATTERN) })
+  .meta({
+    id: "DeviceNotMeRequest",
+    description: "Jeton du lien « ce n'est pas moi » reçu dans l'avis de nouvel appareil",
+  });
+export type DeviceNotMeRequest = z.infer<typeof DeviceNotMeRequestSchema>;
+
+export const DeviceNotMeResultSchema = z
+  .object({ sessionsClosed: z.int().nonnegative() })
+  .meta({
+    id: "DeviceNotMeResult",
+    description: "Toutes les sessions du compte sont fermées ; changer le mot de passe ensuite",
+  });
+export type DeviceNotMeResult = z.infer<typeof DeviceNotMeResultSchema>;
 
 /** Position dans le journal (page suivante) : opaque pour le client. */
 export const AUDIT_CURSOR_PATTERN = /^[A-Za-z0-9_-]{20,120}$/;
@@ -920,6 +1004,12 @@ export const OrderPageSchema = z
 export type OrderPage = z.infer<typeof OrderPageSchema>;
 
 export const OrderReferenceParamsSchema = z.strictObject({ reference: orderReference });
+
+/** Commande d'un client vue par le service client (S7.5-T04). */
+export const SupportOrderParamsSchema = z.strictObject({
+  accountId: uuidInput,
+  reference: orderReference,
+});
 
 // --- Coupons : administration (S5-T03, ADR-0025) ---
 

@@ -37,7 +37,7 @@ export class TariffController {
  * confirmée ; chaque changement au journal d'audit. Le devis et la commande l'appliquent aussitôt.
  */
 @Controller("admin/shipping/tariffs")
-@Authorize("admin", { secondFactor: true })
+@Authorize("logistics", { secondFactor: true })
 @Throttle({ default: { limit: 30, ttl: 60_000 } })
 @AccountRateLimit(30)
 export class AdminTariffController {
