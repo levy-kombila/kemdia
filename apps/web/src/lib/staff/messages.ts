@@ -130,6 +130,14 @@ export const STAFF_NOTICES = {
     "Doublon fusionné : ses offres sont sur cette fiche, son ancienne adresse y mène.",
   "offre-retiree": "Offre retirée : le vendeur voit votre motif.",
   "correction-close": "Proposition close.",
+  // Équipe (S7.5-T04)
+  "role-accorde":
+    "Rôle accordé : il s'applique dès la prochaine page (double authentification exigée).",
+  "role-retire": "Rôle retiré : il ne s'applique plus, dès maintenant.",
+  "equipe-retiree":
+    "Rôles de l'équipe retirés et sessions fermées : la personne redevient cliente.",
+  "compte-desactive": "Compte désactivé : plus aucune connexion possible, sessions fermées.",
+  "compte-reactive": "Compte réactivé : la personne peut de nouveau se connecter.",
 } as const;
 export type StaffNotice = keyof typeof STAFF_NOTICES;
 
@@ -143,8 +151,15 @@ export function staffNotice(value: unknown): string | null {
  * Code d'erreur lu dans l'adresse (`?erreur=…`, après une décision refusée) : seulement un code connu, sinon rien.
  * Le texte affiché vient toujours de ce fichier, jamais de l'adresse.
  */
+/** Refus du site lui-même (avant tout appel à l'API). */
+const SITE_MESSAGES: Record<string, string> = {
+  CONFIRMATION_REQUISE:
+    "Cochez « Je confirme » avant de retirer les rôles ou de désactiver le compte.",
+};
+
 export function staffErrorFromParam(value: unknown): string | null {
   if (typeof value !== "string" || !/^[A-Z_]{3,40}$/.test(value)) return null;
+  if (Object.hasOwn(SITE_MESSAGES, value)) return SITE_MESSAGES[value] ?? null;
   if (
     value === "INDISPONIBLE" ||
     Object.hasOwn(VENDOR_MESSAGES, value) ||

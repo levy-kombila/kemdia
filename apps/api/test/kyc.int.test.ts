@@ -66,7 +66,7 @@ describe("Vérification des vendeurs (PostgreSQL, HTTP)", () => {
       .set("Content-Type", type)
       .send(bytes);
 
-  async function openSession(role?: "ADMIN" | "MODERATOR"): Promise<Session> {
+  async function openSession(role?: "ADMIN" | "CATALOG" | "LOGISTICS"): Promise<Session> {
     const email = `kyc.${randomUUID()}@exemple.ga`;
     const now = new Date();
     const account = Account.register({
@@ -289,7 +289,7 @@ describe("Vérification des vendeurs (PostgreSQL, HTTP)", () => {
     });
   });
 
-  it("accès : brouillon invisible de l'équipe ; modérateur et autre vendeur refusés ; photo illisible ou trop petite", async () => {
+  it("accès : brouillon invisible de l'équipe ; logistique et autre vendeur refusés, catalogue admis (S7.5-T04) ; photo illisible ou trop petite", async () => {
     const vendor = await openVendor();
     await call("put", "/api/v1/vendors/kyc", vendor.session.token).send(DOSSIER).expect(200);
     expect(
@@ -303,8 +303,11 @@ describe("Vérification des vendeurs (PostgreSQL, HTTP)", () => {
     );
     expect(drafts.items.map((i) => i.shopId)).not.toContain(vendor.shopId);
 
-    const moderator = await openSession("MODERATOR");
-    await call("get", "/api/v1/admin/kyc", moderator.token).expect(403);
+    // Rôles détaillés (S7.5-T04) : les vérifications relèvent du catalogue, pas de la logistique
+    const logistics = await openSession("LOGISTICS");
+    await call("get", "/api/v1/admin/kyc", logistics.token).expect(403);
+    const catalog = await openSession("CATALOG");
+    await call("get", "/api/v1/admin/kyc", catalog.token).expect(200);
     // Un autre vendeur ne voit que SON dossier (aucun ici)
     const other = await openVendor();
     await call("get", "/api/v1/vendors/kyc", other.session.token).expect(404);

@@ -98,6 +98,7 @@ for (const path of [
   "/commande",
   "/connexion",
   "/vendre",
+  "/securite/pas-moi",
 ]) {
   test(`accessibilité ${path}`, async ({ page }) => {
     await page.goto(path);
@@ -121,4 +122,15 @@ test("codes HTTP réels hors démo : une page introuvable répond 404 (relecture
   ]) {
     expect((await request.get(path)).status(), path).toBe(404);
   }
+});
+
+test("« ce n'est pas moi » : ouvrir le lien ne fait rien ; un jeton inconnu est refusé au clic (S7.5-T04)", async ({
+  page,
+}) => {
+  await page.goto(`/securite/pas-moi?jeton=${"A".repeat(43)}`);
+  const button = page.getByRole("button", { name: /Ce n'est pas moi/ });
+  await expect(button).toBeVisible();
+  await button.click();
+  await expect(page).toHaveURL(/\/securite\/pas-moi\?erreur=ALERTE_INVALIDE$/);
+  await expect(page.getByRole("alert").filter({ hasText: "plus valable" })).toBeVisible();
 });

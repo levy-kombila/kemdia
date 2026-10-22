@@ -84,7 +84,7 @@ describe("Données personnelles (PostgreSQL, HTTP)", () => {
     return token ? req.set("Authorization", `Bearer ${token}`) : req;
   };
 
-  async function openSession(role?: "ADMIN" | "MODERATOR"): Promise<Session> {
+  async function openSession(role?: "ADMIN" | "CATALOG"): Promise<Session> {
     const email = `donnees.${randomUUID()}@exemple.ga`;
     const now = new Date();
     const account = Account.register({
@@ -254,7 +254,7 @@ describe("Données personnelles (PostgreSQL, HTTP)", () => {
   });
 
   it("compte de l'équipe : jamais supprimé par lui-même", async () => {
-    const staff = await openSession("MODERATOR");
+    const staff = await openSession("CATALOG");
     expect(await deletion(staff)).toEqual({ possible: false, reasons: ["COMPTE_EQUIPE"] });
   });
 
@@ -308,6 +308,9 @@ describe("Données personnelles (PostgreSQL, HTTP)", () => {
       }),
     ).toBe(1);
 
+    await prisma.knownDevice.create({
+      data: { id: randomUUID(), accountId: client.accountId, deviceHash: "a".repeat(64) },
+    });
     await remove(client).expect(204);
 
     const account = await prisma.account.findUniqueOrThrow({ where: { id: client.accountId } });
@@ -321,6 +324,7 @@ describe("Données personnelles (PostgreSQL, HTTP)", () => {
     expect(account.deletedAt).not.toBeNull();
     expect(account.passwordHash).not.toBe(passwordHash);
     expect(await prisma.session.count({ where: { accountId: client.accountId } })).toBe(0);
+    expect(await prisma.knownDevice.count({ where: { accountId: client.accountId } })).toBe(0);
     expect(await prisma.cart.count({ where: { accountId: client.accountId } })).toBe(0);
 
     const anonymized = await prisma.order.findUniqueOrThrow({ where: { id: row.id } });

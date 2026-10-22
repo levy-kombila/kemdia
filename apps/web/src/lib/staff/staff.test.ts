@@ -65,17 +65,20 @@ beforeEach(() => {
 describe("requireVerifiedStaff", () => {
   it("pas connecté → connexion, avec retour à la page demandée", async () => {
     session.getCurrentAccount.mockResolvedValue({ status: "guest" });
-    expect(await stopOf(requireVerifiedStaff("/equipe/moderation", "moderator", NOW))).toBe(
+    expect(await stopOf(requireVerifiedStaff("/equipe/moderation", "catalog", NOW))).toBe(
       "/connexion?retour=%2Fequipe%2Fmoderation",
     );
     expect(api.secondFactor).not.toHaveBeenCalled();
   });
 
-  it("client ou vendeur → 404 ; modérateur sur une page d'administrateur → 404", async () => {
+  it("client ou vendeur → 404 ; rôle d'une autre page → 404", async () => {
     session.getCurrentAccount.mockResolvedValue(signedIn(["client", "vendor"]));
-    expect(await stopOf(requireVerifiedStaff("/equipe", "moderator", NOW))).toBe("404");
-    session.getCurrentAccount.mockResolvedValue(signedIn(["client", "moderator"]));
-    expect(await stopOf(requireVerifiedStaff("/equipe/boutiques", "admin", NOW))).toBe("404");
+    expect(await stopOf(requireVerifiedStaff("/equipe", undefined, NOW))).toBe("404");
+    session.getCurrentAccount.mockResolvedValue(signedIn(["client", "catalog"]));
+    expect(await stopOf(requireVerifiedStaff("/equipe/livraisons", "logistics", NOW))).toBe("404");
+    expect(await stopOf(requireVerifiedStaff("/equipe/utilisateurs", "admin", NOW))).toBe("404");
+    session.getCurrentAccount.mockResolvedValue(signedIn(["client", "support"]));
+    expect(await stopOf(requireVerifiedStaff("/equipe/boutiques", "catalog", NOW))).toBe("404");
     expect(api.secondFactor).not.toHaveBeenCalled();
   });
 
@@ -93,26 +96,26 @@ describe("requireVerifiedStaff", () => {
     );
   });
 
-  it("confirmée : la page s'affiche (administrateur accepté comme modérateur)", async () => {
+  it("confirmée : la page s'affiche (administrateur accepté pour tous les rôles)", async () => {
     session.getCurrentAccount.mockResolvedValue(signedIn(["client", "admin"]));
     api.secondFactor.mockResolvedValue(factor(true, "2026-10-16T18:10:00.000Z"));
-    const staff = await requireVerifiedStaff("/equipe/moderation", "moderator", NOW);
+    const staff = await requireVerifiedStaff("/equipe/moderation", "catalog", NOW);
     expect(staff.token).toBe(TOKEN);
     expect(api.secondFactor).toHaveBeenCalledWith(TOKEN);
   });
 
   it("session refusée par l'API → oubliée puis connexion ; rôle retiré → 404 ; API en panne → erreur", async () => {
-    session.getCurrentAccount.mockResolvedValue(signedIn(["client", "moderator"]));
+    session.getCurrentAccount.mockResolvedValue(signedIn(["client", "catalog"]));
     api.secondFactor.mockResolvedValue({ ok: false, code: "SESSION_INVALIDE" });
-    expect(await stopOf(requireVerifiedStaff("/equipe", "moderator", NOW))).toBe(
+    expect(await stopOf(requireVerifiedStaff("/equipe", undefined, NOW))).toBe(
       "/connexion?retour=%2Fequipe",
     );
     // Oubliée de la mémoire du site : la page de connexion ne la croit plus ouverte (pas de boucle)
     expect(session.forgetSession).toHaveBeenCalledWith(TOKEN);
     api.secondFactor.mockResolvedValue({ ok: false, code: "ACCES_REFUSE" });
-    expect(await stopOf(requireVerifiedStaff("/equipe", "moderator", NOW))).toBe("404");
+    expect(await stopOf(requireVerifiedStaff("/equipe", undefined, NOW))).toBe("404");
     api.secondFactor.mockResolvedValue({ ok: false, code: "INDISPONIBLE" });
-    await expect(requireVerifiedStaff("/equipe", "moderator", NOW)).rejects.toThrow(
+    await expect(requireVerifiedStaff("/equipe", undefined, NOW)).rejects.toThrow(
       "Double authentification momentanément illisible",
     );
   });

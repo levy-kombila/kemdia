@@ -13,7 +13,7 @@ import { withVendorsErrors } from "./vendors-http-errors.js";
  * modérateur ou administrateur, double authentification confirmée depuis moins de 15 minutes. Jamais en cache partagé.
  */
 @Controller("moderation/products/:productId/images")
-@Authorize("moderator", { secondFactor: true })
+@Authorize("catalog", { secondFactor: true })
 // Une file de modération affiche plusieurs photos par produit : limite plus haute que les décisions
 @Throttle({ default: { limit: 120, ttl: 60_000 } })
 @AccountRateLimit(120)

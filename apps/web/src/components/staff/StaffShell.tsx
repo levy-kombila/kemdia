@@ -1,4 +1,15 @@
-import { IdCard, LayoutDashboard, Layers, ShieldCheck, Store, Tags, Truck } from "lucide-react";
+import { hasRole, type Role, type StaffRole } from "@kemdia/contracts/constants";
+import {
+  IdCard,
+  LayoutDashboard,
+  Layers,
+  LifeBuoy,
+  ShieldCheck,
+  Store,
+  Tags,
+  Truck,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Breadcrumbs, type Crumb } from "@/components/catalog/Breadcrumbs";
@@ -6,35 +17,67 @@ import { FormAlert } from "@/components/ui/Field";
 import { cn } from "@/lib/cn";
 
 export type StaffSection =
-  "accueil" | "boutiques" | "verifications" | "livraisons" | "moderation" | "fiches" | "securite";
+  | "accueil"
+  | "boutiques"
+  | "verifications"
+  | "livraisons"
+  | "moderation"
+  | "fiches"
+  | "clients"
+  | "utilisateurs"
+  | "securite";
 
-const LINKS: { id: StaffSection; label: string; href: string; icon: typeof Store; admin?: true }[] =
-  [
-    { id: "accueil", label: "Tableau de bord", href: "/equipe", icon: LayoutDashboard },
-    { id: "boutiques", label: "Boutiques", href: "/equipe/boutiques", icon: Store, admin: true },
-    {
-      id: "verifications",
-      label: "Vérifications",
-      href: "/equipe/verifications",
-      icon: IdCard,
-      admin: true,
-    },
-    // Livraisons (S7-T02) : administrateurs seulement, comme dans l'API
-    { id: "livraisons", label: "Livraisons", href: "/equipe/livraisons", icon: Truck, admin: true },
-    { id: "moderation", label: "Modération", href: "/equipe/moderation", icon: Tags },
-    // Fiches communes (S7.5-T03) : corrections, fusions, retraits d'offres
-    { id: "fiches", label: "Fiches produits", href: "/equipe/fiches", icon: Layers },
-    { id: "securite", label: "Sécurité", href: "/equipe/securite", icon: ShieldCheck },
-  ];
+/** Menu de l'équipe : chaque lien n'est montré qu'au rôle qui l'ouvre (S7.5-T04, ADR-0051 ; l'API reste juge). */
+const LINKS: {
+  id: StaffSection;
+  label: string;
+  href: string;
+  icon: typeof Store;
+  role?: StaffRole;
+}[] = [
+  { id: "accueil", label: "Tableau de bord", href: "/equipe", icon: LayoutDashboard },
+  {
+    id: "moderation",
+    label: "Modération",
+    href: "/equipe/moderation",
+    icon: Tags,
+    role: "catalog",
+  },
+  { id: "fiches", label: "Fiches produits", href: "/equipe/fiches", icon: Layers, role: "catalog" },
+  { id: "boutiques", label: "Boutiques", href: "/equipe/boutiques", icon: Store, role: "catalog" },
+  {
+    id: "verifications",
+    label: "Vérifications",
+    href: "/equipe/verifications",
+    icon: IdCard,
+    role: "catalog",
+  },
+  {
+    id: "livraisons",
+    label: "Livraisons",
+    href: "/equipe/livraisons",
+    icon: Truck,
+    role: "logistics",
+  },
+  { id: "clients", label: "Clients", href: "/equipe/clients", icon: LifeBuoy, role: "support" },
+  {
+    id: "utilisateurs",
+    label: "Utilisateurs",
+    href: "/equipe/utilisateurs",
+    icon: Users,
+    role: "admin",
+  },
+  { id: "securite", label: "Sécurité", href: "/equipe/securite", icon: ShieldCheck },
+];
 
 /**
  * Cadre des pages de l'équipe (S6-T05) : fil d'Ariane, menu (défilant sur téléphone, en colonne sur ordinateur),
- * avis de la dernière action et contenu. Les liens « Boutiques » ne sont montrés qu'aux administrateurs (l'API refuse
- * de toute façon les autres).
+ * avis de la dernière action et contenu. Seuls les liens des rôles du membre sont montrés (l'API refuse de toute façon
+ * les autres).
  */
 export function StaffShell({
   section,
-  admin,
+  roles,
   title,
   crumbs = [],
   notice,
@@ -42,7 +85,7 @@ export function StaffShell({
   children,
 }: {
   section: StaffSection;
-  admin: boolean;
+  roles: readonly Role[];
   title: string;
   crumbs?: Crumb[];
   notice?: string | null;
@@ -58,22 +101,24 @@ export function StaffShell({
       <div className="grid gap-4 lg:grid-cols-[14rem_1fr] lg:gap-6">
         <nav aria-label="Espace de l'équipe" className="-mx-4 overflow-x-auto px-4 lg:mx-0 lg:px-0">
           <ul className="flex gap-2 lg:flex-col">
-            {LINKS.filter((link) => admin || !link.admin).map(({ id, label, href, icon: Icon }) => (
-              <li key={id} className="shrink-0">
-                <Link
-                  href={href}
-                  aria-current={id === section ? "page" : undefined}
-                  className={cn(
-                    "flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold lg:rounded-xl",
-                    id === section
-                      ? "bg-brand-600 text-white"
-                      : "text-ink-800 hover:bg-brand-50 bg-white",
-                  )}
-                >
-                  <Icon className="size-4" aria-hidden /> {label}
-                </Link>
-              </li>
-            ))}
+            {LINKS.filter((link) => !link.role || hasRole(roles, link.role)).map(
+              ({ id, label, href, icon: Icon }) => (
+                <li key={id} className="shrink-0">
+                  <Link
+                    href={href}
+                    aria-current={id === section ? "page" : undefined}
+                    className={cn(
+                      "flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold lg:rounded-xl",
+                      id === section
+                        ? "bg-brand-600 text-white"
+                        : "text-ink-800 hover:bg-brand-50 bg-white",
+                    )}
+                  >
+                    <Icon className="size-4" aria-hidden /> {label}
+                  </Link>
+                </li>
+              ),
+            )}
           </ul>
         </nav>
         <div className="min-w-0 space-y-4">

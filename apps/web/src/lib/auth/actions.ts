@@ -1,9 +1,17 @@
 "use server";
 
-import { OTP_CODE_PATTERN, SIGNUP_TICKET_PATTERN } from "@kemdia/contracts/constants";
+import { randomBytes } from "node:crypto";
+import {
+  DEVICE_ALERT_TOKEN_PATTERN,
+  DEVICE_ID_PATTERN,
+  OTP_CODE_PATTERN,
+  SIGNUP_TICKET_PATTERN,
+} from "@kemdia/contracts/constants";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
+  DEVICE_COOKIE,
+  DEVICE_MAX_AGE_S,
   RESET_TICKET_COOKIE,
   RESET_TICKET_MAX_AGE_S,
   SESSION_COOKIE,
@@ -62,6 +70,17 @@ async function ticketFrom(cookie: string): Promise<string | null> {
 
 // --- Connexion ---
 
+/**
+ * Identifiant de ce navigateur (S7.5-T04, ADR-0051) : celui du cookie s'il a la bonne forme (32 octets en base64url),
+ * sinon un nouveau, tiré au hasard. Il ne sert qu'à reconnaître un appareil déjà utilisé : jamais à ouvrir une session.
+ */
+async function deviceId(): Promise<string> {
+  const current = (await cookies()).get(DEVICE_COOKIE)?.value;
+  return current && DEVICE_ID_PATTERN.test(current)
+    ? current
+    : randomBytes(32).toString("base64url");
+}
+
 export async function loginAction(
   identifier: unknown,
   password: unknown,
@@ -69,9 +88,12 @@ export async function loginAction(
   const id = text(identifier, 300);
   const pw = text(password, 200);
   if (!id || !pw) return invalid("IDENTIFIANTS_INCORRECTS");
-  const result = await identityApi().login(id, pw, await userAgent());
+  const device = await deviceId();
+  const result = await identityApi().login(id, pw, await userAgent(), device);
   if (!result.ok) return result;
   await openSession(result.data.token);
+  // Posé (ou renouvelé pour 1 an) seulement après une connexion réussie
+  (await cookies()).set(DEVICE_COOKIE, device, cookieOptions(DEVICE_MAX_AGE_S));
   return { ok: true, account: toSummary(result.data.account) };
 }
 
@@ -98,6 +120,25 @@ export async function logoutAllAction(): Promise<never> {
   forgetAllSessions();
   await clearCookie(SESSION_COOKIE);
   redirect("/connexion?deconnecte=tous");
+}
+
+/**
+ * « Ce n'est pas moi » (lien de l'avis de nouvel appareil, S7.5-T04) : n'agit qu'au clic sur le bouton de la page, jamais
+ * à la simple ouverture du lien (un logiciel de messagerie qui « prévisualise » les liens ne déclenche donc rien).
+ * Toutes les sessions du compte sont fermées, celle de ce navigateur comprise, et le mot de passe est bloqué.
+ */
+export async function deviceNotMeAction(form: FormData): Promise<never> {
+  const token = text(form.get("jeton"), 100);
+  if (!token || !DEVICE_ALERT_TOKEN_PATTERN.test(token))
+    redirect("/securite/pas-moi?erreur=ALERTE_INVALIDE");
+  const result = await identityApi().deviceNotMe(token);
+  if (!result.ok) redirect(`/securite/pas-moi?erreur=${result.code}`);
+  const store = await cookies();
+  const own = store.get(SESSION_COOKIE)?.value;
+  if (own) forgetSession(own);
+  forgetAllSessions();
+  await clearCookie(SESSION_COOKIE);
+  redirect("/securite/pas-moi?fait=1");
 }
 
 /** Efface un cookie de session que l'API refuse (session expirée ou fermée ailleurs). */
@@ -152,10 +193,13 @@ export async function verifySignupAction(
   if (!value || !OTP_CODE_PATTERN.test(value)) return invalid("CODE_INVALIDE");
   const ticket = await ticketFrom(SIGNUP_TICKET_COOKIE);
   if (!ticket) return invalid("CODE_EXPIRE");
-  const result = await identityApi().verifySignup(ticket, value, await userAgent());
+  const device = await deviceId();
+  const result = await identityApi().verifySignup(ticket, value, await userAgent(), device);
   if (!result.ok) return result;
   await clearCookie(SIGNUP_TICKET_COOKIE);
   await openSession(result.data.token);
+  // Appareil retenu sans avis par l'API : la prochaine connexion depuis ce navigateur sera reconnue
+  (await cookies()).set(DEVICE_COOKIE, device, cookieOptions(DEVICE_MAX_AGE_S));
   return { ok: true, account: toSummary(result.data.account) };
 }
 

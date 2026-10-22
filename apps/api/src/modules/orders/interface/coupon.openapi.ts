@@ -14,12 +14,12 @@ const bearer = [{ session: [] }];
 const common = {
   "401": problem("`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé"),
   "403": problem(
-    "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
+    "`ACCES_REFUSE` (rôle finance ou administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
   ),
   "429": problem("Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)"),
 };
 const RULES = [
-  "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque changement est inscrit au journal d'audit.",
+  "Réservé au rôle **finance** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque changement est inscrit au journal d'audit.",
   "Un coupon : pourcentage (1 à 90 %, plafond possible) ou montant fixe, **sur les articles seulement** ; par défaut une fois par compte et pas sur les articles déjà en promotion (BR-031). Ses règles ne changent plus une fois créé.",
 ].join("\n\n");
 

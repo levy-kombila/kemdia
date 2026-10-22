@@ -21,12 +21,12 @@ const reference = {
 const common = {
   "401": problem("`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé"),
   "403": problem(
-    "`ACCES_REFUSE` (rôle administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
+    "`ACCES_REFUSE` (rôle logistique ou administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
   ),
   "429": problem("Trop de requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)"),
 };
 const ADMIN = [
-  "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque étape est inscrite au journal d'audit.",
+  "Réservé au rôle **logistique** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque étape est inscrite au journal d'audit.",
   "Transporteur **« manuel »** tant qu'aucun n'est choisi : l'équipe note chaque étape. Répéter une action déjà faite ne change rien.",
 ].join("\n\n");
 const action = (

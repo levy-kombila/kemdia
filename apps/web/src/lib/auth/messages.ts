@@ -32,6 +32,11 @@ const MESSAGES: Record<AuthErrorCode, string> = {
   ROLE_SUR_SOI_INTERDIT: "Vous ne pouvez pas modifier vos propres rôles.",
   COMPTE_INTROUVABLE: "Aucun compte ne correspond.",
   COMPTE_INACTIF: "Ce compte n'est pas actif.",
+  // Équipe et appareils (S7.5-T04)
+  COMPTE_PROTEGE: "Un compte administrateur ne se gère que depuis le serveur.",
+  MOTIF_INVALIDE: "Motif refusé : écrivez une raison claire (quelques mots au moins).",
+  ALERTE_INVALIDE:
+    "Ce lien n'est plus valable (déjà utilisé ou plus vieux de 7 jours). Changez votre mot de passe par prudence.",
   TROP_DE_REQUETES: "Trop de demandes. Patientez un instant avant de réessayer.",
   // Double authentification de l'équipe (S6-T03) : écrans plus tard au S6, messages prêts
   MOT_DE_PASSE_INCORRECT: "Mot de passe incorrect.",

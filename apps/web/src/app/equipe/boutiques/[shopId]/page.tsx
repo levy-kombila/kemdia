@@ -38,14 +38,14 @@ export default async function ShopPage({
 }) {
   const [{ shopId }, query] = await Promise.all([params, searchParams]);
   if (!UUID.test(shopId)) notFound();
-  const { token } = await requireVerifiedStaff(`/equipe/boutiques/${shopId}`, "admin");
+  const { account, token } = await requireVerifiedStaff(`/equipe/boutiques/${shopId}`, "catalog");
   const result = await staffApi().shop(token, shopId);
   if (!result.ok && result.code === "BOUTIQUE_INTROUVABLE") notFound();
 
   const crumbs = [{ label: "Boutiques", href: "/equipe/boutiques" }, { label: "Boutique" }];
   if (!result.ok) {
     return (
-      <StaffShell section="boutiques" admin title="Boutique" crumbs={crumbs}>
+      <StaffShell section="boutiques" roles={account.roles} title="Boutique" crumbs={crumbs}>
         <FormAlert>{staffErrorMessage(result.code)}</FormAlert>
       </StaffShell>
     );
@@ -59,7 +59,7 @@ export default async function ShopPage({
   return (
     <StaffShell
       section="boutiques"
-      admin
+      roles={account.roles}
       title={shop.name}
       crumbs={crumbs}
       notice={staffNotice(first(query.ok))}

@@ -20,7 +20,7 @@ class Unprotected {
 }
 
 class Mixed {
-  @Authorize(["vendor", "moderator"])
+  @Authorize(["vendor", "catalog"])
   team() {}
 }
 
@@ -83,7 +83,7 @@ describe("RoleGuard (S4-T06)", () => {
     await expect(check(contextFor(AdminOnly, "list", ["client"]))).rejects.toEqual(
       code(403, "ACCES_REFUSE"),
     );
-    await expect(check(contextFor(AdminOnly, "list", ["client", "moderator"]))).rejects.toEqual(
+    await expect(check(contextFor(AdminOnly, "list", ["client", "catalog"]))).rejects.toEqual(
       code(403, "ACCES_REFUSE"),
     );
     await expect(check(contextFor(AdminOnly, "list", ["client", "admin"], 16))).rejects.toEqual(

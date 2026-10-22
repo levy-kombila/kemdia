@@ -7,6 +7,10 @@ import {
   SignupRequestSchema,
   SignupVerifyRequestSchema,
   AdminRoleParamsSchema,
+  LoginRequestSchema,
+  AccountDisableRequestSchema,
+  DeviceNotMeRequestSchema,
+  StaffListParamsSchema,
   AuditQueryParamsSchema,
   AccountViewSchema,
   CART_ERROR_CODES,
@@ -35,6 +39,8 @@ import {
   ProductImageOrderRequestSchema,
   PublicProductImageParamsSchema,
   VENDOR_IMAGE_PATH_PATTERN,
+  hasRole,
+  isStaffRoles,
 } from "./index.js";
 import { demoCatalog, demoIds, uuidV5 } from "./demo/index.js";
 import {
@@ -109,6 +115,7 @@ describe("schémas", () => {
     expect(Object.keys(openApiComponentSchemas())).toEqual([
       "AccountDataExport",
       "AccountDeletionStatus",
+      "AccountDisableRequest",
       "AccountView",
       "AdminAccount",
       "AdminAccountLookupRequest",
@@ -155,6 +162,8 @@ describe("schémas", () => {
       "DeliveryTariffs",
       "DeliveryTariffsRequest",
       "DeliveryTariffZone",
+      "DeviceNotMeRequest",
+      "DeviceNotMeResult",
       "Facets",
       "ForgotPasswordRequest",
       "Health",
@@ -226,7 +235,11 @@ describe("schémas", () => {
       "SignupStarted",
       "SignupVerified",
       "SignupVerifyRequest",
+      "StaffActionResult",
+      "StaffMember",
+      "StaffPage",
       "StartPaymentRequest",
+      "SupportAccount",
       "Variant",
       "VendorKyc",
       "VendorListing",
@@ -280,15 +293,39 @@ describe("schémas", () => {
 describe("rôles et journal d'audit (S4-T06)", () => {
   const id = "0b9c2f5e-3c1a-4d2b-9e8f-1a2b3c4d5e6f";
 
-  it("seuls « vendor » et « moderator » sont attribuables par l'API (jamais « admin »)", () => {
-    expect(AdminRoleParamsSchema.safeParse({ accountId: id, role: "vendor" }).success).toBe(true);
+  it("rôles de l'équipe attribuables par l'API (jamais « admin ») ; un administrateur a tous les droits (S7.5-T04)", () => {
+    for (const role of ["vendor", "catalog", "logistics", "finance", "support"]) {
+      expect(AdminRoleParamsSchema.safeParse({ accountId: id, role }).success).toBe(true);
+    }
     expect(AdminRoleParamsSchema.safeParse({ accountId: id, role: "moderator" }).success).toBe(
-      true,
+      false,
     );
+    expect(hasRole(["client", "admin"], "finance")).toBe(true);
+    expect(hasRole(["client", "logistics"], "catalog")).toBe(false);
+    expect(hasRole(["client", "catalog"], "admin")).toBe(false);
+    expect(isStaffRoles(["client", "vendor"])).toBe(false);
+    expect(isStaffRoles(["client", "support"])).toBe(true);
     expect(AdminRoleParamsSchema.safeParse({ accountId: id, role: "admin" }).success).toBe(false);
     expect(AdminRoleParamsSchema.safeParse({ accountId: "42", role: "vendor" }).success).toBe(
       false,
     );
+  });
+
+  it("équipe et appareils (S7.5-T04) : filtres, motif, jetons de forme fixe", () => {
+    expect(StaffListParamsSchema.parse({})).toEqual({ limit: 50 });
+    expect(StaffListParamsSchema.safeParse({ role: "admin", limit: "100" }).success).toBe(true);
+    expect(StaffListParamsSchema.safeParse({ role: "vendor" }).success).toBe(false);
+    expect(StaffListParamsSchema.safeParse({ limit: "101" }).success).toBe(false);
+    expect(StaffListParamsSchema.safeParse({ after: "x'; DROP" }).success).toBe(false);
+    expect(AccountDisableRequestSchema.safeParse({ reason: "Fin de contrat" }).success).toBe(true);
+    expect(AccountDisableRequestSchema.safeParse({ reason: "x".repeat(601) }).success).toBe(false);
+    expect(DeviceNotMeRequestSchema.safeParse({ token: "A".repeat(43) }).success).toBe(true);
+    expect(DeviceNotMeRequestSchema.safeParse({ token: "A".repeat(42) }).success).toBe(false);
+    expect(DeviceNotMeRequestSchema.safeParse({ token: "A".repeat(43), x: 1 }).success).toBe(false);
+    expect(
+      LoginRequestSchema.safeParse({ identifier: "a@b.ga", password: "x", device: "<script>" })
+        .success,
+    ).toBe(false);
   });
 
   it("compte : rôles connus seulement", () => {

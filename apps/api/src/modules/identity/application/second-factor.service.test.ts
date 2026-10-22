@@ -187,7 +187,7 @@ describe("SecondFactorService : activation (S6-T03)", () => {
     expect(await codeOf(h.service.setup(h.session(["client", "vendor"])(), PASSWORD, CTX))).toBe(
       "ACCES_REFUSE",
     );
-    await h.service.setup(h.session(["client", "moderator"])(), PASSWORD, CTX);
+    await h.service.setup(h.session(["client", "catalog"])(), PASSWORD, CTX);
     const { current } = await enroll(h);
     expect(await codeOf(h.service.setup(current(), PASSWORD, CTX))).toBe(
       "DEUX_FACTEURS_DEJA_ACTIVE",

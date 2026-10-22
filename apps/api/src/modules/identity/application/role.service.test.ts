@@ -62,9 +62,9 @@ describe("Attribution des rôles (S4-T06, CRIT-06)", () => {
 
   it("accorder deux fois : sans effet, une seule ligne de journal", async () => {
     const { service, audit, admin } = await setup();
-    await service.grant(admin, AWA_ID, "moderator", CTX);
-    const again = await service.grant(admin, AWA_ID, "moderator", CTX);
-    expect(again.roles).toEqual(["client", "moderator"]);
+    await service.grant(admin, AWA_ID, "catalog", CTX);
+    const again = await service.grant(admin, AWA_ID, "catalog", CTX);
+    expect(again.roles).toEqual(["client", "catalog"]);
     expect(audit.actions()).toEqual(["role.granted"]);
   });
 
@@ -81,10 +81,10 @@ describe("Attribution des rôles (S4-T06, CRIT-06)", () => {
     await expect(service.grant(admin, AWA_ID, "admin", CTX)).rejects.toMatchObject({
       code: "ROLE_NON_ATTRIBUABLE",
     });
-    await expect(service.revoke(admin, ADMIN_ID, "moderator", CTX)).rejects.toMatchObject({
+    await expect(service.revoke(admin, ADMIN_ID, "catalog", CTX)).rejects.toMatchObject({
       code: "ROLE_SUR_SOI_INTERDIT",
     });
-    const moderator = { accountId: AWA_ID, roles: ["client", "moderator"] as const };
+    const moderator = { accountId: AWA_ID, roles: ["client", "catalog"] as const };
     await expect(service.grant(moderator, ADMIN_ID, "vendor", CTX)).rejects.toMatchObject({
       code: "ACCES_REFUSE",
     });
@@ -98,7 +98,7 @@ describe("Attribution des rôles (S4-T06, CRIT-06)", () => {
     ).rejects.toMatchObject({ code: "COMPTE_INTROUVABLE" });
     const closed = "44444444-4444-4444-8444-444444444444";
     await add(closed, "ferme@exemple.ga", ["vendor"], "disabled");
-    await expect(service.grant(admin, closed, "moderator", CTX)).rejects.toMatchObject({
+    await expect(service.grant(admin, closed, "catalog", CTX)).rejects.toMatchObject({
       code: "COMPTE_INACTIF",
     });
     expect((await service.revoke(admin, closed, "vendor", CTX)).roles).toEqual(["client"]);

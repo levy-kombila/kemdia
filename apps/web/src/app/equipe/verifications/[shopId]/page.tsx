@@ -40,13 +40,16 @@ export default async function KycFilePage({
 }) {
   const [{ shopId }, query] = await Promise.all([params, searchParams]);
   if (!UUID.test(shopId)) notFound();
-  const { token } = await requireVerifiedStaff(`/equipe/verifications/${shopId}`, "admin");
+  const { account, token } = await requireVerifiedStaff(
+    `/equipe/verifications/${shopId}`,
+    "catalog",
+  );
   const result = await staffApi().kyc(token, shopId);
   if (!result.ok && result.code === "KYC_INTROUVABLE") notFound();
   const crumbs = [{ label: "Vérifications", href: "/equipe/verifications" }, { label: "Dossier" }];
   if (!result.ok) {
     return (
-      <StaffShell section="verifications" admin title="Dossier" crumbs={crumbs}>
+      <StaffShell section="verifications" roles={account.roles} title="Dossier" crumbs={crumbs}>
         <FormAlert>{staffErrorMessage(result.code)}</FormAlert>
       </StaffShell>
     );
@@ -61,7 +64,7 @@ export default async function KycFilePage({
   return (
     <StaffShell
       section="verifications"
-      admin
+      roles={account.roles}
       title={file.shopName}
       crumbs={crumbs}
       notice={staffNotice(first(query.ok))}

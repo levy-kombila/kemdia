@@ -381,7 +381,7 @@ describe("VendorProductService — photos (S6-T04)", () => {
 });
 
 describe("ProductModerationService (S6-T02)", () => {
-  const moderator = { accountId: MODO, roles: ["client", "moderator"] as const };
+  const moderator = { accountId: MODO, roles: ["client", "catalog"] as const };
 
   it("valide et trace la décision ; montre la boutique du produit", async () => {
     const { moderation, audit } = setup(shopOf("active"));
@@ -413,7 +413,7 @@ describe("ProductModerationService (S6-T02)", () => {
 
   it("jamais pour un produit de sa propre boutique (UUID en majuscules compris)", async () => {
     const { moderation, audit } = setup(shopOf("active", MODO));
-    const self = { accountId: MODO.toUpperCase(), roles: ["client", "moderator"] as const };
+    const self = { accountId: MODO.toUpperCase(), roles: ["client", "catalog"] as const };
     expect(await codeOf(moderation.decide(self, PRODUCT, "approve", null, NOW, CTX))).toBe(
       "PRODUIT_SUR_SOI_INTERDIT",
     );

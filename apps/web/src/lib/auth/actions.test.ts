@@ -33,6 +33,7 @@ const api = vi.hoisted(() => ({
   forgotPassword: vi.fn(),
   resendReset: vi.fn(),
   resetPassword: vi.fn(),
+  deviceNotMe: vi.fn(),
 }));
 vi.mock("./session", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./session")>()),
@@ -41,6 +42,7 @@ vi.mock("./session", async (importOriginal) => ({
 
 const {
   clearStaleSessionAction,
+  deviceNotMeAction,
   loginAction,
   logoutAction,
   logoutAllAction,
@@ -48,7 +50,8 @@ const {
   signupAction,
   verifySignupAction,
 } = await import("./actions");
-const { RESET_TICKET_COOKIE, SESSION_COOKIE, SIGNUP_TICKET_COOKIE } = await import("./cookies");
+const { DEVICE_COOKIE, RESET_TICKET_COOKIE, SESSION_COOKIE, SIGNUP_TICKET_COOKIE } =
+  await import("./cookies");
 
 const TOKEN = "S".repeat(43);
 const TICKET = "t".repeat(43);
@@ -89,7 +92,12 @@ describe("connexion", () => {
       },
     });
     expect(JSON.stringify(result)).not.toContain(TOKEN);
-    expect(api.login).toHaveBeenCalledWith("awa@exemple.ga", "Mangue2026", "Firefox");
+    expect(api.login).toHaveBeenCalledWith(
+      "awa@exemple.ga",
+      "Mangue2026",
+      "Firefox",
+      expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
+    );
     expect(jar.get(SESSION_COOKIE)).toEqual({
       value: TOKEN,
       options: { httpOnly: true, secure: false, sameSite: "lax", path: "/", maxAge: 30 * 86400 },
@@ -155,13 +163,16 @@ describe("inscription", () => {
     expect(api.signup).not.toHaveBeenCalled();
   });
 
-  it("bon code : ticket effacé, session ouverte", async () => {
+  it("bon code : ticket effacé, session ouverte, appareil retenu (S7.5-T04)", async () => {
     jar.set(SIGNUP_TICKET_COOKIE, { value: TICKET });
     api.verifySignup.mockResolvedValue({ ok: true, data: { status: "active", ...OPENED } });
     expect((await verifySignupAction("123456")).ok).toBe(true);
-    expect(api.verifySignup).toHaveBeenCalledWith(TICKET, "123456", "Firefox");
+    const device = api.verifySignup.mock.calls[0]![3] as string;
+    expect(device).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(api.verifySignup).toHaveBeenCalledWith(TICKET, "123456", "Firefox", device);
     expect(jar.has(SIGNUP_TICKET_COOKIE)).toBe(false);
     expect(jar.get(SESSION_COOKIE)?.value).toBe(TOKEN);
+    expect(jar.get(DEVICE_COOKIE)?.value).toBe(device);
   });
 
   it("sans ticket (expiré) ou code mal formé : refusé sans appeler l'API", async () => {
@@ -223,6 +234,69 @@ describe("déconnexion", () => {
     expect(jar.has(SESSION_COOKIE)).toBe(true);
     api.session.mockResolvedValue({ ok: false, code: "SESSION_INVALIDE" });
     await clearStaleSessionAction();
+    expect(jar.has(SESSION_COOKIE)).toBe(false);
+  });
+});
+
+const form = (entries: Record<string, string>) => {
+  const f = new FormData();
+  for (const [k, v] of Object.entries(entries)) f.set(k, v);
+  return f;
+};
+
+describe("appareil et « ce n'est pas moi » (S7.5-T04)", () => {
+  const DEVICE = "d".repeat(43);
+
+  it("connexion réussie : cookie d'appareil HttpOnly d'un an, gardé d'une connexion à l'autre", async () => {
+    api.login.mockResolvedValue({ ok: true, data: OPENED });
+    await loginAction("awa@exemple.ga", "Mangue2026");
+    const first = jar.get(DEVICE_COOKIE)!;
+    expect(first.value).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(first.options).toEqual({
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 365 * 86400,
+    });
+    await loginAction("awa@exemple.ga", "Mangue2026");
+    expect(api.login).toHaveBeenLastCalledWith(
+      "awa@exemple.ga",
+      "Mangue2026",
+      "Firefox",
+      first.value,
+    );
+    expect(jar.get(DEVICE_COOKIE)!.value).toBe(first.value);
+  });
+
+  it("cookie d'appareil abîmé : remplacé ; connexion refusée : aucun cookie d'appareil posé", async () => {
+    jar.set(DEVICE_COOKIE, { value: "pas<un>identifiant" });
+    api.login.mockResolvedValue({ ok: false, code: "IDENTIFIANTS_INCORRECTS" });
+    await loginAction("awa@exemple.ga", "faux");
+    const sentDevice = api.login.mock.calls[0]![3] as string;
+    expect(sentDevice).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(jar.get(DEVICE_COOKIE)!.value).toBe("pas<un>identifiant");
+    jar.set(DEVICE_COOKIE, { value: DEVICE });
+    api.login.mockResolvedValue({ ok: true, data: OPENED });
+    await loginAction("awa@exemple.ga", "Mangue2026");
+    expect(api.login).toHaveBeenLastCalledWith("awa@exemple.ga", "Mangue2026", "Firefox", DEVICE);
+  });
+
+  it("« ce n'est pas moi » : jeton revérifié ; succès → sessions fermées et cookie de session effacé", async () => {
+    await expect(deviceNotMeAction(form({ jeton: "x" }))).rejects.toThrow(
+      "REDIRECT /securite/pas-moi?erreur=ALERTE_INVALIDE",
+    );
+    expect(api.deviceNotMe).not.toHaveBeenCalled();
+    api.deviceNotMe.mockResolvedValue({ ok: false, code: "ALERTE_INVALIDE" });
+    await expect(deviceNotMeAction(form({ jeton: DEVICE }))).rejects.toThrow(
+      "REDIRECT /securite/pas-moi?erreur=ALERTE_INVALIDE",
+    );
+    jar.set(SESSION_COOKIE, { value: TOKEN });
+    api.deviceNotMe.mockResolvedValue({ ok: true, data: { sessionsClosed: 3 } });
+    await expect(deviceNotMeAction(form({ jeton: DEVICE }))).rejects.toThrow(
+      "REDIRECT /securite/pas-moi?fait=1",
+    );
+    expect(api.deviceNotMe).toHaveBeenLastCalledWith(DEVICE);
     expect(jar.has(SESSION_COOKIE)).toBe(false);
   });
 });

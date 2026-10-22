@@ -1,9 +1,14 @@
-import type { Role } from "@kemdia/contracts/constants";
+import { hasRole, isStaffRoles, type Role, type StaffRole } from "@kemdia/contracts/constants";
 
-/** Équipe Kemdia : modérateurs et administrateurs (un administrateur peut aussi modérer, comme dans l'API). */
-export const isStaff = (roles: readonly Role[]) =>
-  roles.includes("moderator") || roles.includes("admin");
+/**
+ * Équipe Kemdia (S7.5-T04, ADR-0051) : Catalogue, Logistique, Finance, Service client et Administrateur. Même règle
+ * que l'API (`hasRole` du contrat) : un administrateur a les droits de tous les autres rôles de l'équipe.
+ */
+export const isStaff = (roles: readonly Role[]) => isStaffRoles(roles);
 export const isAdmin = (roles: readonly Role[]) => roles.includes("admin");
+/** Ces rôles ouvrent-ils les pages du rôle `role` ? (`undefined` : n'importe quel membre de l'équipe) */
+export const canAccess = (roles: readonly Role[], role?: StaffRole) =>
+  role === undefined ? isStaffRoles(roles) : hasRole(roles, role);
 
 /** Page d'accueil de l'espace de l'équipe. */
 export const STAFF_HOME = "/equipe";

@@ -95,7 +95,7 @@ describe("rôles (PostgreSQL)", () => {
     };
     const broken = new RoleService(accounts, roles, clock, failing, transactions);
     await expect(
-      broken.grant(ADMIN, awaId, "moderator", { ip: null, requestId: null }),
+      broken.grant(ADMIN, awaId, "catalog", { ip: null, requestId: null }),
     ).rejects.toThrow("journal indisponible");
     expect(await prisma.accountRole.count({ where: { accountId: awaId } })).toBe(0);
   });
@@ -104,8 +104,8 @@ describe("rôles (PostgreSQL)", () => {
     const requestId = `int-${randomUUID()}`;
     const ctx = { ip: null, requestId };
     await Promise.all([
-      service.grant(ADMIN, awaId, "moderator", ctx),
-      service.grant(ADMIN, awaId, "moderator", ctx),
+      service.grant(ADMIN, awaId, "catalog", ctx),
+      service.grant(ADMIN, awaId, "catalog", ctx),
     ]);
     expect(await prisma.accountRole.count({ where: { accountId: awaId } })).toBe(1);
     expect(await traceOf(requestId)).toHaveLength(1);

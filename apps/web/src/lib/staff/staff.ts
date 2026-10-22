@@ -1,6 +1,6 @@
 import "server-only";
 import type { SecondFactorStatus } from "@kemdia/contracts";
-import type { Role } from "@kemdia/contracts/constants";
+import type { StaffRole } from "@kemdia/contracts/constants";
 import { cookies, headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { SESSION_COOKIE } from "@/lib/auth/cookies";
@@ -9,7 +9,7 @@ import type { AccountSummary } from "@/lib/auth/types";
 import { catalogSource } from "@/lib/config/server-config";
 import { UNKNOWN_VISITOR, clientIpHeaderName, visitorIp } from "@/lib/security/client-ip";
 import { createStaffApi, type StaffApi, type StaffResult } from "./api-staff";
-import { confirmedUntil, isAdmin, isStaff, staffPath } from "./roles";
+import { canAccess, confirmedUntil, staffPath } from "./roles";
 
 let instance: StaffApi | undefined;
 
@@ -36,18 +36,13 @@ export type StaffMember = { account: AccountSummary; token: string };
 const loginFor = (path: string) => `/connexion?retour=${encodeURIComponent(staffPath(path))}`;
 
 /**
- * Membre de l'équipe connecté (modérateur ou administrateur), SANS exiger la double authentification : pour la page
+ * Membre de l'équipe connecté (le rôle `role` s'il est donné, sinon n'importe lequel), SANS exiger la double authentification : pour la page
  * de sécurité (activer la 2FA) et la page de confirmation. Personne d'autre ne voit qu'un espace existe ici (404).
  */
-export async function requireTeamMember(
-  path: string,
-  role: Role = "moderator",
-): Promise<StaffMember> {
+export async function requireTeamMember(path: string, role?: StaffRole): Promise<StaffMember> {
   const current = await getCurrentAccount();
   if (current.status !== "signed-in") redirect(loginFor(path));
-  const allowed =
-    role === "admin" ? isAdmin(current.account.roles) : isStaff(current.account.roles);
-  if (!allowed) notFound();
+  if (!canAccess(current.account.roles, role)) notFound();
   const token = await sessionToken();
   if (!token) redirect(loginFor(path));
   return { account: current.account, token };
@@ -78,13 +73,13 @@ export type VerifiedStaff = StaffMember & { factor: SecondFactorStatus };
  * depuis moins de 15 minutes, ADR-0034) ; cette garde évite seulement d'afficher une page vide :
  *
  * - pas connecté → connexion, puis retour ici ;
- * - ni modérateur ni administrateur (ou pas administrateur pour une page qui l'exige) → 404 ;
+ * - pas dans l'équipe (ou sans le rôle de la page : Catalogue, Logistique, Service client, Administrateur) → 404 ;
  * - double authentification pas encore activée → page « Sécurité » ;
  * - session pas confirmée (ou depuis plus de 15 minutes) → saisie du code, puis retour ici.
  */
 export async function requireVerifiedStaff(
   path: string,
-  role: Role = "moderator",
+  role?: StaffRole,
   now: Date = new Date(),
 ): Promise<VerifiedStaff> {
   const member = await requireTeamMember(path, role);

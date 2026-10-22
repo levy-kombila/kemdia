@@ -60,7 +60,7 @@ describe("Double authentification de l'équipe (PostgreSQL, HTTP)", () => {
   const post = (url: string, body: object = {}, token = admin.token) =>
     call("post", url, token).send(body);
 
-  async function openSession(role?: "ADMIN" | "MODERATOR") {
+  async function openSession(role?: "ADMIN" | "CATALOG") {
     const email = `equipe.${randomUUID()}@exemple.ga`;
     const now = new Date();
     const account = Account.register({
@@ -220,7 +220,7 @@ describe("Double authentification de l'équipe (PostgreSQL, HTTP)", () => {
   });
 
   it("modérateur : 2FA obligatoire aussi ; client ou vendeur : refusée", async () => {
-    const moderator = await openSession("MODERATOR");
+    const moderator = await openSession("CATALOG");
     const status = matches(
       SecondFactorStatusSchema,
       (await call("get", "/api/v1/auth/2fa", moderator.token).expect(200)).body,

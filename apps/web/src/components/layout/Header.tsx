@@ -1,3 +1,4 @@
+import { isStaffRoles } from "@kemdia/contracts/constants";
 import { unstable_rethrow } from "next/navigation";
 import { Logo } from "@/components/ui/Logo";
 import { getCurrentAccount } from "@/lib/auth/session";
@@ -77,7 +78,7 @@ export async function Header() {
       ? {
           firstName: current.account.firstName,
           vendor: roles.includes("vendor"),
-          staff: roles.includes("admin") || roles.includes("moderator"),
+          staff: isStaffRoles(roles),
         }
       : null;
   return (

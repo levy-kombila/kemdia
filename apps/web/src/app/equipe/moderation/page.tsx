@@ -9,7 +9,6 @@ import { first } from "@/lib/search-params";
 import { CURSOR, MODERATION_TABS, PRODUCT_STATUS, type ModerationTab } from "@/lib/staff/labels";
 import { staffErrorMessage, staffNotice } from "@/lib/staff/messages";
 import { staffImageSrc } from "@/lib/staff/moderation-view";
-import { isAdmin } from "@/lib/staff/roles";
 import { requireVerifiedStaff, staffApi } from "@/lib/staff/staff";
 
 export const metadata: Metadata = { title: "Modération" };
@@ -29,13 +28,14 @@ export default async function ModerationPage({
   const after = raw && CURSOR.test(raw) ? raw : undefined;
   const { account, token } = await requireVerifiedStaff(
     status === "pending" ? "/equipe/moderation" : `/equipe/moderation?statut=${status}`,
+    "catalog",
   );
   const result = await staffApi().moderationQueue(token, { status, after, limit: PAGE_SIZE });
 
   return (
     <StaffShell
       section="moderation"
-      admin={isAdmin(account.roles)}
+      roles={account.roles}
       title="Modération des produits"
       crumbs={[{ label: "Modération" }]}
       notice={staffNotice(first(params.ok))}

@@ -47,6 +47,10 @@ const api = vi.hoisted(() => ({
   mergeListing: vi.fn(),
   withdrawOffer: vi.fn(),
   closeCorrection: vi.fn(),
+  lookupAccount: vi.fn(),
+  setRole: vi.fn(),
+  staffAction: vi.fn(),
+  supportLookup: vi.fn(),
 }));
 vi.mock("./api-staff", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api-staff")>()),
@@ -480,5 +484,96 @@ describe("fiches produits (S7.5-T03)", () => {
         actions.closeCorrectionAction(form({ correctionId: id, back: "https://pirate.test/x" })),
       ),
     ).toBe("/equipe/fiches?ok=correction-close");
+  });
+});
+
+describe("équipe et service client (S7.5-T04)", () => {
+  const ACCOUNT = "99999999-9999-4999-8999-999999999999";
+  const VIEW = {
+    id: ACCOUNT,
+    firstName: "Awa",
+    lastName: "Ndong",
+    email: "awa@exemple.ga",
+    phone: null,
+    roles: ["client"],
+    status: "active",
+    createdAt: SUBMITTED,
+  };
+
+  it("recherche : identifiant revérifié, résultat rendu au seul navigateur qui l'a demandé", async () => {
+    expect(await actions.lookupStaffAccountAction(null, form({ identifier: "  " }))).toMatchObject({
+      ok: false,
+    });
+    expect(
+      await actions.lookupStaffAccountAction(null, form({ identifier: "x".repeat(301) })),
+    ).toMatchObject({ ok: false });
+    expect(api.lookupAccount).not.toHaveBeenCalled();
+    api.lookupAccount.mockResolvedValue({ ok: true, data: VIEW });
+    expect(
+      await actions.lookupStaffAccountAction(null, form({ identifier: " awa@exemple.ga " })),
+    ).toEqual({ ok: true, account: VIEW });
+    expect(api.lookupAccount).toHaveBeenCalledWith(TOKEN, "awa@exemple.ga");
+    api.supportLookup.mockResolvedValue({ ok: false, code: "COMPTE_INTROUVABLE" });
+    expect(
+      await actions.supportLookupAction(null, form({ identifier: "awa@exemple.ga" })),
+    ).toMatchObject({ ok: false, message: expect.any(String) });
+  });
+
+  it("rôle : liste fermée (jamais « admin »), puis retour à l'écran avec l'avis", async () => {
+    expect(
+      await redirectOf(
+        actions.setStaffRoleAction(form({ accountId: ACCOUNT, role: "admin", grant: "1" })),
+      ),
+    ).toBe("/equipe/utilisateurs");
+    expect(api.setRole).not.toHaveBeenCalled();
+    api.setRole.mockResolvedValue({ ok: true, data: VIEW });
+    expect(
+      await redirectOf(
+        actions.setStaffRoleAction(form({ accountId: ACCOUNT, role: "support", grant: "1" })),
+      ),
+    ).toBe("/equipe/utilisateurs?ok=role-accorde");
+    expect(api.setRole).toHaveBeenCalledWith(TOKEN, ACCOUNT, "support", true);
+    api.setRole.mockResolvedValue({ ok: false, code: "ROLE_SUR_SOI_INTERDIT" });
+    expect(
+      await redirectOf(
+        actions.setStaffRoleAction(form({ accountId: ACCOUNT, role: "catalog", grant: "0" })),
+      ),
+    ).toBe("/equipe/utilisateurs?erreur=ROLE_SUR_SOI_INTERDIT");
+  });
+
+  it("retirer, désactiver : case « Je confirme » obligatoire ; motif nettoyé ; réactiver sans case", async () => {
+    expect(
+      await redirectOf(
+        actions.staffAccountAction(form({ accountId: ACCOUNT, action: "remove-staff" })),
+      ),
+    ).toBe("/equipe/utilisateurs?erreur=CONFIRMATION_REQUISE");
+    expect(
+      await redirectOf(
+        actions.staffAccountAction(
+          form({ accountId: ACCOUNT, action: "disable", confirme: "oui", reason: "non" }),
+        ),
+      ),
+    ).toBe("/equipe/utilisateurs?erreur=MOTIF_INVALIDE");
+    expect(api.staffAction).not.toHaveBeenCalled();
+    api.staffAction.mockResolvedValue({ ok: true, data: { account: VIEW, sessionsClosed: 1 } });
+    expect(
+      await redirectOf(
+        actions.staffAccountAction(
+          form({
+            accountId: ACCOUNT,
+            action: "disable",
+            confirme: "oui",
+            reason: "  Fin   de contrat ",
+          }),
+        ),
+      ),
+    ).toBe("/equipe/utilisateurs?ok=compte-desactive");
+    expect(api.staffAction).toHaveBeenCalledWith(TOKEN, ACCOUNT, "disable", "Fin de contrat");
+    expect(
+      await redirectOf(actions.staffAccountAction(form({ accountId: ACCOUNT, action: "enable" }))),
+    ).toBe("/equipe/utilisateurs?ok=compte-reactive");
+    expect(
+      await redirectOf(actions.staffAccountAction(form({ accountId: "x", action: "enable" }))),
+    ).toBe("/equipe/utilisateurs");
   });
 });

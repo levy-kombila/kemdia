@@ -46,7 +46,7 @@ import { withPaymentsErrors } from "./payments-http-errors.js";
  * d'administration (ADR-0020) ; chaque action au journal d'audit. Écrans au S6.
  */
 @Controller("admin")
-@Authorize("admin", { secondFactor: true })
+@Authorize("finance", { secondFactor: true })
 @Throttle({ default: { limit: 30, ttl: 60_000 } })
 @AccountRateLimit(30)
 export class PaymentAdminController {

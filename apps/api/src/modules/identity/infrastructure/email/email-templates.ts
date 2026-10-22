@@ -122,6 +122,32 @@ export function renderEmail(message: OtpMessage): Email {
     };
   }
 
+  if (message.kind === "new-device") {
+    const when = message.at.toLocaleString("fr-FR", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Africa/Libreville",
+    });
+    const subject = "Nouvelle connexion à votre compte Kemdia";
+    const intro = `Votre compte Kemdia vient d'être ouvert depuis un appareil que nous ne connaissions pas : ${message.device}, le ${when} (heure de Libreville).`;
+    const notMe = message.link
+      ? "Si ce n'est pas vous : utilisez le lien ci-dessous pour déconnecter tout de suite tous les appareils et bloquer votre mot de passe, puis choisissez-en un nouveau (« Mot de passe oublié » sur le site)."
+      : "Si ce n'est pas vous : utilisez tout de suite « Mot de passe oublié » sur le site ; tous les appareils seront déconnectés.";
+    const lines = [intro, "Si c'est vous : vous n'avez rien à faire.", notMe];
+    const button = message.link
+      ? `<p style="margin:0 0 16px"><a href="${escapeHtml(message.link)}" style="display:inline-block;background:#111827;color:#ffffff;padding:10px 16px;border-radius:999px;text-decoration:none;font-weight:700">Ce n'est pas moi</a></p>`
+      : "";
+    return {
+      to: message.to,
+      subject,
+      text: ["Kemdia", "", ...lines, ...(message.link ? ["", message.link] : [])].join("\n"),
+      html: layout(subject, lines).replace("</div></body>", `${button}</div></body>`),
+    };
+  }
+
   if (message.kind === "password-changed") {
     const lines = [
       "Le mot de passe de votre compte Kemdia vient d'être modifié, et vos autres appareils ont été déconnectés.",
@@ -153,4 +179,14 @@ export function renderEmail(message: OtpMessage): Email {
     text: ["Kemdia", "", intro, "", message.code, "", ...after].join("\n"),
     html: layout(subject, [intro, ...after], message.code),
   };
+}
+
+/** Échappement HTML (texte placé dans un attribut ou un paragraphe d'e-mail). */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }

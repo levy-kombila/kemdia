@@ -130,7 +130,7 @@ describe("Produits des vendeurs et modération (PostgreSQL, HTTP)", () => {
       ).body,
     ).ok;
 
-  async function openSession(role?: "ADMIN" | "MODERATOR"): Promise<Session> {
+  async function openSession(role?: "ADMIN" | "CATALOG"): Promise<Session> {
     const email = `produits.${randomUUID()}@exemple.ga`;
     const now = new Date();
     const account = Account.register({
@@ -196,7 +196,7 @@ describe("Produits des vendeurs et modération (PostgreSQL, HTTP)", () => {
 
   beforeEach(async () => {
     admin = await openSession("ADMIN");
-    moderator = await openSession("MODERATOR");
+    moderator = await openSession("CATALOG");
     ({ session: vendor, shopId } = await openVendor());
   });
 
@@ -417,7 +417,7 @@ describe("Produits des vendeurs et modération (PostgreSQL, HTTP)", () => {
     const product = await create();
     await call("get", "/api/v1/moderation/products", vendor.token).expect(403);
     // Un modérateur qui est aussi vendeur ne modère pas ses propres produits
-    await prisma.accountRole.create({ data: { accountId: vendor.accountId, role: "MODERATOR" } });
+    await prisma.accountRole.create({ data: { accountId: vendor.accountId, role: "CATALOG" } });
     await confirmSecondFactor(prisma, vendor.accountId);
     expect(
       codeOf(

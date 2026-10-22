@@ -1,12 +1,14 @@
 "use server";
 
 import {
+  ADMIN_ASSIGNABLE_ROLES,
   OTP_CODE_PATTERN,
+  STAFF_LIMITS,
   SHIPPING_LIMITS,
   SHOP_LIMITS,
   VENDOR_PRODUCT_LIMITS,
 } from "@kemdia/contracts/constants";
-import type { DeliveryTariffsRequest } from "@kemdia/contracts";
+import type { AdminAccount, DeliveryTariffsRequest, SupportAccount } from "@kemdia/contracts";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE, expiredCookieOptions } from "@/lib/auth/cookies";
@@ -393,4 +395,90 @@ export async function closeCorrectionAction(form: FormData): Promise<never> {
   const result = await staffApi().closeCorrection(token, correctionId, note);
   if (!result.ok) return afterFailure(token, result, page);
   redirect(`${page}?ok=correction-close`);
+}
+
+// --- Équipe (S7.5-T04, ADR-0051 ; administrateurs) ---
+
+const USERS_PAGE = "/equipe/utilisateurs";
+
+export type LookupResult<T> = { ok: true; account: T } | StaffActionFailure | null;
+
+/** Identifiant saisi (e-mail ou mobile) : revérifié par l'API ; jamais mis dans une adresse. */
+const identifierOf = (form: FormData) => field(form, "identifier", 300)?.trim() || null;
+
+/** Retrouver un compte pour lui donner un rôle : le résultat n'est rendu qu'au navigateur qui l'a demandé. */
+export async function lookupStaffAccountAction(
+  _previous: LookupResult<AdminAccount>,
+  form: FormData,
+): Promise<LookupResult<AdminAccount>> {
+  const token = await sessionToken();
+  if (!token) return signedOutFailure;
+  const identifier = identifierOf(form);
+  if (!identifier) return { ok: false, message: staffErrorMessage("IDENTIFIANT_INVALIDE") };
+  const result = await staffApi().lookupAccount(token, identifier);
+  if (!result.ok) return failure(token, result);
+  return { ok: true, account: result.data };
+}
+
+/** Accorder ou retirer UN rôle (jamais « admin » : liste fermée du contrat). */
+export async function setStaffRoleAction(form: FormData): Promise<never> {
+  const accountId = field(form, "accountId", 36);
+  const role = ADMIN_ASSIGNABLE_ROLES.find((r) => r === form.get("role"));
+  const grant = form.get("grant");
+  if (!accountId || !UUID.test(accountId) || !role || (grant !== "1" && grant !== "0"))
+    redirect(USERS_PAGE);
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(USERS_PAGE)}`);
+  const result = await staffApi().setRole(token, accountId, role, grant === "1");
+  if (!result.ok) return afterFailure(token, result, USERS_PAGE);
+  redirect(`${USERS_PAGE}?ok=${grant === "1" ? "role-accorde" : "role-retire"}`);
+}
+
+const ACCOUNT_ACTIONS = ["remove-staff", "disable", "enable"] as const;
+const ACCOUNT_NOTICES: Record<(typeof ACCOUNT_ACTIONS)[number], StaffNotice> = {
+  "remove-staff": "equipe-retiree",
+  disable: "compte-desactive",
+  enable: "compte-reactive",
+};
+
+/**
+ * Départ d'un employé, désactivation ou réactivation. « Retirer » et « Désactiver » exigent la case « Je confirme »
+ * (choix du 2026-10-22) ; la désactivation exige aussi un motif, gardé au journal d'audit.
+ */
+export async function staffAccountAction(form: FormData): Promise<never> {
+  const accountId = field(form, "accountId", 36);
+  const action = ACCOUNT_ACTIONS.find((a) => a === form.get("action"));
+  if (!accountId || !UUID.test(accountId) || !action) redirect(USERS_PAGE);
+  if (action !== "enable" && form.get("confirme") !== "oui")
+    redirect(`${USERS_PAGE}?erreur=CONFIRMATION_REQUISE`);
+  let reason: string | undefined;
+  if (action === "disable") {
+    reason = field(form, "reason", STAFF_LIMITS.reasonMax * 2)
+      ?.trim()
+      .replace(/\s+/g, " ");
+    const length = reason ? [...reason].length : 0;
+    if (!reason || length < STAFF_LIMITS.reasonMin || length > STAFF_LIMITS.reasonMax)
+      redirect(`${USERS_PAGE}?erreur=MOTIF_INVALIDE`);
+  }
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(USERS_PAGE)}`);
+  const result = await staffApi().staffAction(token, accountId, action, reason);
+  if (!result.ok) return afterFailure(token, result, USERS_PAGE);
+  redirect(`${USERS_PAGE}?ok=${ACCOUNT_NOTICES[action]}`);
+}
+
+// --- Service client (S7.5-T04 ; lecture seule) ---
+
+/** Retrouver un client (recherche inscrite au journal d'audit par l'API). */
+export async function supportLookupAction(
+  _previous: LookupResult<SupportAccount>,
+  form: FormData,
+): Promise<LookupResult<SupportAccount>> {
+  const token = await sessionToken();
+  if (!token) return signedOutFailure;
+  const identifier = identifierOf(form);
+  if (!identifier) return { ok: false, message: staffErrorMessage("IDENTIFIANT_INVALIDE") };
+  const result = await staffApi().supportLookup(token, identifier);
+  if (!result.ok) return failure(token, result);
+  return { ok: true, account: result.data };
 }

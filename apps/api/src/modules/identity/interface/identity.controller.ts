@@ -13,6 +13,9 @@ import {
 import type { Request } from "express";
 import { Throttle } from "@nestjs/throttler";
 import {
+  DeviceNotMeRequestSchema,
+  type DeviceNotMeRequest,
+  type DeviceNotMeResult,
   ForgotPasswordRequestSchema,
   LoginRequestSchema,
   ResetPasswordRequestSchema,
@@ -37,6 +40,7 @@ import {
   type SignupVerifyRequest,
 } from "@kemdia/contracts";
 import { auditContextOf } from "../../audit/index.js";
+import { DeviceService } from "../application/device.service.js";
 import { LoginService } from "../application/login.service.js";
 import { PasswordChangeService } from "../application/password-change.service.js";
 import { PasswordResetService } from "../application/password-reset.service.js";
@@ -77,6 +81,7 @@ export class IdentityController {
     private readonly sessions: SessionService,
     private readonly passwordReset: PasswordResetService,
     private readonly passwordChange: PasswordChangeService,
+    private readonly devices: DeviceService,
   ) {}
 
   /** FR-001 : crée le compte en attente et envoie le code (réponse identique si le compte existe déjà). */
@@ -103,7 +108,7 @@ export class IdentityController {
     @Headers("x-kemdia-user-agent") userAgent?: string,
   ): Promise<SignupVerified> {
     const opened = await withIdentityErrors(() =>
-      this.signup.verify(body.ticket, body.code, userAgent),
+      this.signup.verify(body.ticket, body.code, userAgent, body.device),
     );
     return { status: "active", ...presentOpened(opened) };
   }
@@ -114,10 +119,17 @@ export class IdentityController {
   @Header("Cache-Control", "no-store")
   async signIn(
     @Body({ schema: LoginRequestSchema }) body: LoginRequest,
+    @Req() req: Request,
     @Headers("x-kemdia-user-agent") userAgent?: string,
   ): Promise<OpenedSessionView> {
     const opened = await withIdentityErrors(() =>
-      this.login.login({ identifier: body.identifier, password: body.password, userAgent }),
+      this.login.login({
+        identifier: body.identifier,
+        password: body.password,
+        userAgent,
+        device: body.device,
+        context: auditContextOf(req),
+      }),
     );
     return presentOpened(opened);
   }
@@ -153,6 +165,20 @@ export class IdentityController {
     @Req() req: Request,
   ): Promise<LogoutAll> {
     return { revoked: await this.sessions.logoutAll(session.account.id, auditContextOf(req)) };
+  }
+
+  /**
+   * « Ce n'est pas moi » (S7.5-T04) : le jeton de l'avis de nouvel appareil ferme toutes les sessions du compte. Sans
+   * session (le titulaire n'a peut-être plus accès à son compte) ; jeton à usage unique, valable 7 jours.
+   */
+  @Post("devices/not-me")
+  @HttpCode(HttpStatus.OK)
+  @Header("Cache-Control", "no-store")
+  async notMe(
+    @Body({ schema: DeviceNotMeRequestSchema }) body: DeviceNotMeRequest,
+    @Req() req: Request,
+  ): Promise<DeviceNotMeResult> {
+    return withIdentityErrors(() => this.devices.notMe(body.token, auditContextOf(req)));
   }
 
   @Post("signup/resend")

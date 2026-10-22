@@ -344,3 +344,103 @@ describe("fiches communes et propositions (S7.5-T03)", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+
+describe("équipe et service client (S7.5-T04)", () => {
+  const ACCOUNT = "99999999-9999-4999-8999-999999999999";
+  const ADMIN_ACCOUNT = {
+    id: ACCOUNT,
+    firstName: "Awa",
+    lastName: "Ndong",
+    email: "awa@exemple.ga",
+    phone: null,
+    roles: ["client", "support"],
+    status: "active",
+    createdAt: NOW,
+  };
+
+  it("liste de l'équipe : filtre de rôle et position dans l'adresse ; position fabriquée ignorée", async () => {
+    const { fetch, staff } = api(
+      json(200, {
+        items: [{ ...ADMIN_ACCOUNT, secondFactorEnabled: true, lastActiveAt: NOW }],
+        nextCursor: null,
+      }),
+    );
+    const result = await staff.staff(TOKEN, { role: "support", after: "a".repeat(30), limit: 50 });
+    expect(result).toMatchObject({ ok: true, data: { items: [{ id: ACCOUNT }] } });
+    expect(sent(fetch).url).toBe(
+      `http://serveur.test:4000/api/v1/admin/staff?role=support&after=${"a".repeat(30)}&limit=50`,
+    );
+    const other = api(json(200, { items: [], nextCursor: null }));
+    await other.staff.staff(TOKEN, { after: "x&role=admin" });
+    expect(sent(other.fetch).url).toBe("http://serveur.test:4000/api/v1/admin/staff");
+  });
+
+  it("recherches : identifiant dans le CORPS, jamais dans l'adresse", async () => {
+    const { fetch, staff } = api(json(200, ADMIN_ACCOUNT));
+    expect(await staff.lookupAccount(TOKEN, "awa@exemple.ga")).toMatchObject({ ok: true });
+    expect(sent(fetch)).toMatchObject({
+      url: "http://serveur.test:4000/api/v1/admin/accounts/lookup",
+      method: "POST",
+      body: { identifier: "awa@exemple.ga" },
+    });
+    const support = api(
+      json(200, { ...ADMIN_ACCOUNT, lastActiveAt: NOW, emailVerified: true, phoneVerified: false }),
+    );
+    expect(await support.staff.supportLookup(TOKEN, "awa@exemple.ga")).toMatchObject({ ok: true });
+    expect(sent(support.fetch)).toMatchObject({
+      url: "http://serveur.test:4000/api/v1/support/accounts/lookup",
+      body: { identifier: "awa@exemple.ga" },
+    });
+  });
+
+  it("rôles et actions : bonne méthode, motif seulement pour la désactivation", async () => {
+    const grant = api(json(200, ADMIN_ACCOUNT));
+    await grant.staff.setRole(TOKEN, ACCOUNT.toUpperCase(), "logistics", true);
+    expect(sent(grant.fetch)).toMatchObject({
+      method: "PUT",
+      url: `http://serveur.test:4000/api/v1/admin/accounts/${ACCOUNT}/roles/logistics`,
+    });
+    const revoke = api(json(200, ADMIN_ACCOUNT));
+    await revoke.staff.setRole(TOKEN, ACCOUNT, "finance", false);
+    expect(sent(revoke.fetch).method).toBe("DELETE");
+
+    const done = { account: ADMIN_ACCOUNT, sessionsClosed: 2 };
+    const disable = api(json(200, done));
+    expect(await disable.staff.staffAction(TOKEN, ACCOUNT, "disable", "Fin de contrat")).toEqual({
+      ok: true,
+      data: done,
+    });
+    expect(sent(disable.fetch)).toMatchObject({
+      url: `http://serveur.test:4000/api/v1/admin/accounts/${ACCOUNT}/disable`,
+      body: { reason: "Fin de contrat" },
+    });
+    const remove = api(json(200, done));
+    await remove.staff.staffAction(TOKEN, ACCOUNT, "remove-staff");
+    expect(sent(remove.fetch).body).toEqual({});
+    const refused = api(problem(403, "COMPTE_PROTEGE"));
+    expect(await refused.staff.staffAction(TOKEN, ACCOUNT, "enable")).toEqual({
+      ok: false,
+      code: "COMPTE_PROTEGE",
+    });
+  });
+
+  it("commandes du service client ; identifiants fabriqués : rien n'est demandé", async () => {
+    const page = api(json(200, { items: [], nextCursor: null }));
+    await page.staff.supportOrders(TOKEN, ACCOUNT, "b".repeat(30));
+    expect(sent(page.fetch).url).toBe(
+      `http://serveur.test:4000/api/v1/support/accounts/${ACCOUNT}/orders?before=${"b".repeat(30)}`,
+    );
+    const { fetch, staff } = api(json(200, {}));
+    expect(await staff.setRole(TOKEN, "../x", "catalog", true)).toEqual({
+      ok: false,
+      code: "COMPTE_INTROUVABLE",
+    });
+    expect(await staff.staffAction(TOKEN, "x", "disable", "Motif")).toMatchObject({ ok: false });
+    expect(await staff.supportOrders(TOKEN, "x")).toMatchObject({ ok: false });
+    expect(await staff.supportOrder(TOKEN, ACCOUNT, "../../admin")).toEqual({
+      ok: false,
+      code: "COMMANDE_INTROUVABLE",
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});

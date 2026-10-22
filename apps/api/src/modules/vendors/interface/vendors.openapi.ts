@@ -24,7 +24,7 @@ const sessionErrors = {
 const adminErrors = {
   ...sessionErrors,
   "403": problem(
-    "`ACCES_REFUSE` (rôle administrateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
+    "`ACCES_REFUSE` (rôle catalogue ou administrateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `BOUTIQUE_SUR_SOI_INTERDITE` (sa propre boutique)",
   ),
   "429": problem("Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)"),
 };
@@ -37,12 +37,12 @@ const decisionErrors = {
 };
 
 const OWNER_RULES = [
-  "Compte connecté. **Une boutique par compte** ; elle attend la décision d'un administrateur avant toute vente.",
+  "Compte connecté. **Une boutique par compte** ; elle attend la décision de l'équipe Kemdia avant toute vente.",
   "Nom unique (casse, accents et ponctuation ignorés), en lettres latines, chiffres et ponctuation simple, sans « Kemdia ». Mobile de contact gabonais.",
   "Après un **refus**, une nouvelle demande remplace l'ancienne et repart en attente.",
 ].join("\n\n");
 const ADMIN_RULES = [
-  "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.",
+  "Réservé au rôle **catalogue** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.",
   "Valider (en attente ou suspendue → active) accorde le rôle **vendeur** ; suspendre (active → suspendue) le retire ; refuser (en attente → refusée) ne change aucun rôle. Boutique, rôle et journal changent ensemble ou pas du tout. Personne ne décide pour sa propre boutique ; la boutique Kemdia n'est jamais concernée.",
 ].join("\n\n");
 
@@ -231,13 +231,13 @@ const vendorErrors = {
 const vendorProduct = (description: string) => json("VendorProduct", description);
 
 const MODERATION_RULES = [
-  "Réservé aux **modérateurs** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.",
+  "Réservé au rôle **catalogue** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque décision est inscrite au journal d'audit.",
   "Seulement un produit **en attente**, et seulement **la version lue** : la décision porte le `submittedAt` lu ; si le vendeur a renvoyé le produit depuis, elle est refusée (`PRODUIT_MODIFIE`). Personne ne modère un produit de sa propre boutique. Un produit validé n'est visible que si sa boutique n'est pas suspendue.",
 ].join("\n\n");
 const moderationErrors = {
   ...sessionErrors,
   "403": problem(
-    "`ACCES_REFUSE` (rôle modérateur requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
+    "`ACCES_REFUSE` (rôle catalogue requis), `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes) ou `PRODUIT_SUR_SOI_INTERDIT`",
   ),
   "429": problem("Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)"),
 };
@@ -1055,7 +1055,7 @@ function kycPaths() {
     "Modifiable « en préparation » ou après un refus ; envoyé, il attend l'équipe ; validé, il ne change plus (service client). Sans clé de chiffrement sur le serveur : `KYC_INDISPONIBLE` (503).",
   ].join("\n\n");
   const ADMIN_KYC_RULES = [
-    "Réservé aux **administrateurs** (pas aux modérateurs), session confirmée par la double authentification depuis moins de 15 minutes.",
+    "Réservé au rôle **catalogue** et aux **administrateurs**, session confirmée par la double authentification depuis moins de 15 minutes.",
     "Seuls les dossiers **envoyés** sont visibles (un brouillon reste chez le vendeur). Ouvrir un dossier (numéros complets) et regarder une photo sont **inscrits au journal d'audit**. Photos effacées **30 jours après la décision**.",
   ].join("\n\n");
   const kycErrors = {

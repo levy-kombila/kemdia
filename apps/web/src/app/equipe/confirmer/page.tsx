@@ -5,7 +5,7 @@ import { VerifyCodeForm } from "@/components/staff/VerifyCodeForm";
 import { FormAlert } from "@/components/ui/Field";
 import { first } from "@/lib/search-params";
 import { staffErrorMessage } from "@/lib/staff/messages";
-import { confirmedUntil, isAdmin, staffPath } from "@/lib/staff/roles";
+import { confirmedUntil, staffPath } from "@/lib/staff/roles";
 import { readSecondFactor, requireTeamMember } from "@/lib/staff/staff";
 
 export const metadata: Metadata = { title: "Confirmer mon identité" };
@@ -23,7 +23,6 @@ export default async function ConfirmPage({
   const member = await requireTeamMember(returnTo);
   const { account } = member;
   const status = await readSecondFactor(member, returnTo);
-  const admin = isAdmin(account.roles);
   if (status.ok) {
     if (!status.data.enabled) redirect("/equipe/securite");
     // Déjà confirmée : rien à saisir
@@ -33,7 +32,7 @@ export default async function ConfirmPage({
   return (
     <StaffShell
       section="securite"
-      admin={admin}
+      roles={account.roles}
       title="Confirmez votre identité"
       crumbs={[{ label: "Confirmer mon identité" }]}
     >

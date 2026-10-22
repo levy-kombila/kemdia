@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assertCanChangeRole,
+  isStaff,
   effectiveRoles,
   hasRole,
   isRecentLogin,
@@ -16,15 +17,25 @@ describe("Rôles (RBAC, S4-T06)", () => {
     expect(effectiveRoles(["admin", "vendor"])).toEqual(["client", "vendor", "admin"]);
   });
 
-  it("hiérarchie : l'administrateur a les droits du modérateur, pas ceux du vendeur", () => {
+  it("équipe : quatre rôles séparés, l'administrateur a tous leurs droits", () => {
+    for (const role of ["catalog", "logistics", "finance", "support"] as const) {
+      expect(hasRole(effectiveRoles(["admin"]), role)).toBe(true);
+      expect(isStaff(effectiveRoles([role]))).toBe(true);
+    }
+    expect(hasRole(effectiveRoles(["logistics"]), "finance")).toBe(false);
+    expect(hasRole(effectiveRoles(["support"]), "catalog")).toBe(false);
+    expect(isStaff(effectiveRoles(["vendor"]))).toBe(false);
+  });
+
+  it("hiérarchie : l'administrateur a les droits du catalogue, pas ceux du vendeur", () => {
     const admin = effectiveRoles(["admin"]);
     expect(hasRole(admin, "admin")).toBe(true);
-    expect(hasRole(admin, "moderator")).toBe(true);
+    expect(hasRole(admin, "catalog")).toBe(true);
     expect(hasRole(admin, "vendor")).toBe(false);
     expect(hasRole(admin, "client")).toBe(true);
-    const moderator = effectiveRoles(["moderator"]);
-    expect(hasRole(moderator, "admin")).toBe(false);
-    expect(hasRole(effectiveRoles(["vendor"]), "moderator")).toBe(false);
+    const catalog = effectiveRoles(["catalog"]);
+    expect(hasRole(catalog, "admin")).toBe(false);
+    expect(hasRole(effectiveRoles(["vendor"]), "catalog")).toBe(false);
   });
 
   it("CRIT-06 : seul un administrateur change un rôle, jamais « admin » ni « client »", () => {
@@ -37,7 +48,7 @@ describe("Rôles (RBAC, S4-T06)", () => {
         actorId: ADMIN,
         actorRoles: admin,
         targetId: OTHER,
-        role: "moderator",
+        role: "catalog",
       }),
     ).not.toThrow();
     for (const role of ["admin", "client", "root"]) {
@@ -46,7 +57,7 @@ describe("Rôles (RBAC, S4-T06)", () => {
       ).toThrow(expect.objectContaining({ code: "ROLE_NON_ATTRIBUABLE" }));
     }
     // Un modérateur ou un vendeur ne peut rien accorder (MED-07 : hiérarchie)
-    for (const stored of [["moderator"], ["vendor"], []] as const) {
+    for (const stored of [["catalog"], ["vendor"], []] as const) {
       expect(() =>
         assertCanChangeRole({
           actorId: ADMIN,
@@ -73,7 +84,7 @@ describe("Rôles (RBAC, S4-T06)", () => {
         actorId: ADMIN,
         actorRoles: effectiveRoles(["admin"]),
         targetId: ADMIN.toUpperCase(),
-        role: "moderator",
+        role: "catalog",
       }),
     ).toThrow(expect.objectContaining({ code: "ROLE_SUR_SOI_INTERDIT" }));
   });

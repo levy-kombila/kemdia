@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { TransactionContext } from "../../../database/transaction-context.js";
 
 /** Rôles d'équipe : un tel compte ne s'efface pas lui-même (un administrateur retire d'abord ses rôles). */
-const STAFF_ROLES = ["ADMIN", "MODERATOR"] as const;
+const STAFF_ROLES = ["ADMIN", "CATALOG", "LOGISTICS", "FINANCE", "SUPPORT"] as const;
 
 /** Compte proche de l'effacement pour inactivité (S7-T08) */
 export interface InactiveAccount {
@@ -79,6 +79,12 @@ export class IdentityPersonalData {
       },
       orderBy: { createdAt: "desc" },
     });
+    // Appareils reconnus (S7.5-T04) : jamais l'empreinte ni le jeton d'avis
+    const known = await db.knownDevice.findMany({
+      where: { accountId },
+      select: { userAgent: true, createdAt: true, lastSeenAt: true },
+      orderBy: { lastSeenAt: "desc" },
+    });
     const factor = await db.secondFactor.findUnique({
       where: { accountId },
       select: { enabledAt: true },
@@ -87,6 +93,7 @@ export class IdentityPersonalData {
       compte: account,
       roles,
       appareils: sessions,
+      appareilsReconnus: known,
       doubleAuthentification: {
         activee: Boolean(factor?.enabledAt),
         depuis: factor?.enabledAt ?? null,
@@ -112,6 +119,8 @@ export class IdentityPersonalData {
     await db.recoveryCode.deleteMany({ where: { accountId } });
     await db.secondFactor.deleteMany({ where: { accountId } });
     await db.accountRole.deleteMany({ where: { accountId } });
+    // Appareils connus (S7.5-T04) : empreintes et liens « ce n'est pas moi » partent avec le compte
+    await db.knownDevice.deleteMany({ where: { accountId } });
     await db.resetTicket.deleteMany({
       where: { OR: [{ accountId }, { destination: { in: identifiers } }] },
     });

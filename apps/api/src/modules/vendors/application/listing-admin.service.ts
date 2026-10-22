@@ -297,7 +297,7 @@ export class ListingAdminService {
 }
 
 function assertModerator(actor: ModerationActor): void {
-  if (!hasRole(actor.roles, "moderator")) {
+  if (!hasRole(actor.roles, "catalog")) {
     throw new IdentityError("ACCES_REFUSE", "action réservée à l'équipe catalogue");
   }
 }

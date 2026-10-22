@@ -135,7 +135,7 @@ export class VendorListingController {
  * chaque écriture au journal d'audit.
  */
 @Controller("moderation")
-@Authorize("moderator", { secondFactor: true })
+@Authorize("catalog", { secondFactor: true })
 @Throttle({ default: { limit: 30, ttl: 60_000 } })
 @AccountRateLimit(30)
 export class ListingAdminController {

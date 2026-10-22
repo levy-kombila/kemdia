@@ -8,6 +8,7 @@ import {
 import { APP_CONFIG } from "../../../config/config.module.js";
 import type { AppConfig } from "../../../config/env.js";
 import { PrismaService } from "../../../database/prisma.service.js";
+import { KNOWN_DEVICE_RETENTION_DAYS } from "@kemdia/contracts/constants";
 import type { IdentityMaintenance } from "../application/ports.js";
 
 const DAY_MS = 24 * 60 * 60_000;
@@ -20,7 +21,8 @@ export class PrismaIdentityMaintenance implements IdentityMaintenance {
 
   async purgeExpired(now: Date): Promise<Record<string, number>> {
     const dayAgo = new Date(now.getTime() - DAY_MS);
-    const [sessions, codes, tickets, resets, guards] = await this.prisma.$transaction([
+    const yearAgo = new Date(now.getTime() - KNOWN_DEVICE_RETENTION_DAYS * DAY_MS);
+    const [sessions, codes, tickets, resets, guards, devices] = await this.prisma.$transaction([
       // Sessions expirées, ou fermées depuis plus d'un jour
       this.prisma.session.deleteMany({
         where: { OR: [{ expiresAt: { lt: now } }, { revokedAt: { lt: dayAgo } }] },
@@ -36,12 +38,20 @@ export class PrismaIdentityMaintenance implements IdentityMaintenance {
           OR: [{ lockedUntil: null }, { lockedUntil: { lt: now } }],
         },
       }),
+      // Appareils pas revus depuis un an (cookie expiré) et sans lien « ce n'est pas moi » valable (S7.5-T04)
+      this.prisma.knownDevice.deleteMany({
+        where: {
+          lastSeenAt: { lt: yearAgo },
+          OR: [{ alertExpiresAt: null }, { alertExpiresAt: { lt: now } }],
+        },
+      }),
     ]);
     return {
       sessions: sessions.count,
       codes: codes.count,
       tickets: tickets.count + resets.count,
       compteurs: guards.count,
+      appareils: devices.count,
     };
   }
 }

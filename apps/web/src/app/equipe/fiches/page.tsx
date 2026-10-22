@@ -8,7 +8,6 @@ import { first } from "@/lib/search-params";
 import { closeCorrectionAction } from "@/lib/staff/actions";
 import { CURSOR, PRODUCT_STATUS } from "@/lib/staff/labels";
 import { staffErrorFromParam, staffErrorMessage, staffNotice } from "@/lib/staff/messages";
-import { isAdmin } from "@/lib/staff/roles";
 import { requireVerifiedStaff, staffApi } from "@/lib/staff/staff";
 
 export const metadata: Metadata = { title: "Fiches produits" };
@@ -29,7 +28,7 @@ export default async function ListingsPage({
   const q = (first(params.q) ?? "").slice(0, 100).trim();
   const raw = first(params.apres);
   const after = raw && CURSOR.test(raw) ? raw : undefined;
-  const { account, token } = await requireVerifiedStaff("/equipe/fiches");
+  const { account, token } = await requireVerifiedStaff("/equipe/fiches", "catalog");
   const [corrections, listings] = await Promise.all([
     staffApi().corrections(token, { status: "open" }),
     staffApi().listings(token, { q, after }),
@@ -38,7 +37,7 @@ export default async function ListingsPage({
   return (
     <StaffShell
       section="fiches"
-      admin={isAdmin(account.roles)}
+      roles={account.roles}
       title="Fiches produits"
       crumbs={[{ label: "Fiches produits" }]}
       notice={staffNotice(first(params.ok))}

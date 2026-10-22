@@ -17,17 +17,27 @@ const FROM_DB = {
   DISABLED: "disabled",
 } as const satisfies Record<AccountRow["status"], AccountStatus>;
 
-export const ROLE_TO_DB = { vendor: "VENDOR", moderator: "MODERATOR", admin: "ADMIN" } as const;
+export const ROLE_TO_DB = {
+  vendor: "VENDOR",
+  catalog: "CATALOG",
+  logistics: "LOGISTICS",
+  finance: "FINANCE",
+  support: "SUPPORT",
+  admin: "ADMIN",
+} as const satisfies Record<StoredRole, AccountRoleRow["role"]>;
 const ROLE_FROM_DB = {
   VENDOR: "vendor",
-  MODERATOR: "moderator",
+  CATALOG: "catalog",
+  LOGISTICS: "logistics",
+  FINANCE: "finance",
+  SUPPORT: "support",
   ADMIN: "admin",
 } as const satisfies Record<AccountRoleRow["role"], StoredRole>;
 
 /** Les rôles sont lus avec le compte, à chaque requête : un rôle retiré ne sert plus, tout de suite. */
-const WITH_ROLES = { roles: { select: { role: true } } } as const;
+export const WITH_ROLES = { roles: { select: { role: true } } } as const;
 
-function toDomain(row: AccountRow & { roles: Pick<AccountRoleRow, "role">[] }): Account {
+export function toDomain(row: AccountRow & { roles: Pick<AccountRoleRow, "role">[] }): Account {
   return Account.restore({
     id: row.id,
     firstName: row.firstName,

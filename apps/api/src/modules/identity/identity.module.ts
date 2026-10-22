@@ -27,6 +27,8 @@ import {
   SESSION_REPOSITORY,
   TRANSACTION_RUNNER,
   SIGNUP_TICKET_REPOSITORY,
+  STAFF_DIRECTORY,
+  KNOWN_DEVICE_REPOSITORY,
   type IdentityOptions,
 } from "./application/ports.js";
 import { AesSecretBox } from "./infrastructure/aes-secret-box.js";
@@ -53,6 +55,13 @@ import { SecondFactorController } from "./interface/second-factor.controller.js"
 import { SessionGuard } from "./interface/session.guard.js";
 import { IdentityPersonalData } from "./infrastructure/identity-personal-data.js";
 
+import { DeviceService } from "./application/device.service.js";
+import { StaffAccountService } from "./application/staff-account.service.js";
+import { SupportService } from "./application/support.service.js";
+import { PrismaKnownDeviceRepository } from "./infrastructure/prisma-known-device.repository.js";
+import { PrismaStaffDirectory } from "./infrastructure/prisma-staff-directory.repository.js";
+import { SupportController } from "./interface/support.controller.js";
+
 /**
  * Module identity (S4, ADR-0015) : comptes, codes à usage unique, sessions.
  * Routes : interface/identity.controller.ts (`/api/v1/auth/…`) — inscription (S4-T02), connexion et sessions (S4-T03) ;
@@ -62,12 +71,18 @@ import { IdentityPersonalData } from "./infrastructure/identity-personal-data.js
 @Module({
   // Journal d'audit : mot de passe réinitialisé, « tous mes appareils », rôles (S4-T06)
   imports: [AuditModule],
-  controllers: [IdentityController, AdminController, SecondFactorController],
+  controllers: [IdentityController, AdminController, SecondFactorController, SupportController],
   providers: [
     // Données personnelles (S7-T08) : copie, effacement — utilisé par le module privacy
     IdentityPersonalData,
     RoleService,
     RoleGuard,
+    // Équipe, service client et appareils (S7.5-T04, ADR-0051)
+    StaffAccountService,
+    SupportService,
+    DeviceService,
+    { provide: STAFF_DIRECTORY, useClass: PrismaStaffDirectory },
+    { provide: KNOWN_DEVICE_REPOSITORY, useClass: PrismaKnownDeviceRepository },
     { provide: ROLE_REPOSITORY, useClass: PrismaRoleRepository },
     { provide: TRANSACTION_RUNNER, useClass: PrismaTransactionRunner },
     OtpService,
@@ -115,7 +130,10 @@ import { IdentityPersonalData } from "./infrastructure/identity-personal-data.js
     {
       provide: IDENTITY_OPTIONS,
       inject: [APP_CONFIG],
-      useFactory: (c: AppConfig): IdentityOptions => ({ smsEnabled: c.SMS_ENABLED }),
+      useFactory: (c: AppConfig): IdentityOptions => ({
+        smsEnabled: c.SMS_ENABLED,
+        siteUrl: c.PUBLIC_SITE_URL ? new URL(c.PUBLIC_SITE_URL).origin : null,
+      }),
     },
   ],
   // Les autres modules protègent leurs routes avec SessionGuard ou @Authorize (S5 : commandes, S6 : vendeurs)
@@ -134,6 +152,8 @@ import { IdentityPersonalData } from "./infrastructure/identity-personal-data.js
     // RoleGuard vérifie la double authentification des routes d'équipe (S6-T03) ; la commande mfa:reset l'utilise
     SECOND_FACTOR_REPOSITORY,
     SecondFactorService,
+    // Le module orders vérifie le rôle « support » avant de montrer les commandes d'un client (S7.5-T04)
+    SupportService,
   ],
 })
 export class IdentityModule {}

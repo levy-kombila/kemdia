@@ -1,13 +1,13 @@
 import { ShieldCheck, Store } from "lucide-react";
 import Link from "next/link";
-import { ROLE_LABELS, type Role } from "@kemdia/contracts/constants";
+import { ROLE_LABELS, isStaffRoles, type Role } from "@kemdia/contracts/constants";
 
 /**
  * Rôles du compte (S4-T06). Équipe : lien vers son espace (S6-T05), protégé par la double authentification ; vendeur :
  * lien vers l'espace vendeur (S6-T06).
  */
 export function RoleList({ roles }: { roles: readonly Role[] }) {
-  const team = roles.includes("admin") || roles.includes("moderator");
+  const team = isStaffRoles(roles);
   const vendor = roles.includes("vendor");
   return (
     <div className="mt-4">

@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { Account, assertValidNames } from "../domain/account.js";
 import { parseIdentifier, requireIdentifier } from "../domain/identifier.js";
 import { IdentityError } from "../domain/identity-error.js";
@@ -11,6 +11,7 @@ import {
   type SignupTicket,
 } from "../domain/signup-ticket.js";
 import { OtpService, type IssuedOtp } from "./otp.service.js";
+import { DeviceService } from "./device.service.js";
 import { SessionService, type OpenedSession } from "./session.service.js";
 import {
   ACCOUNT_REPOSITORY,
@@ -57,6 +58,9 @@ export class SignupService {
     @Inject(IDENTITY_CLOCK) private readonly clock: Clock,
     private readonly otp: OtpService,
     private readonly sessions: SessionService,
+    @Optional()
+    @Inject(DeviceService)
+    private readonly devices?: Pick<DeviceService, "afterSignup">,
   ) {}
 
   async start(input: SignupInput): Promise<SignupStarted> {
@@ -108,7 +112,12 @@ export class SignupService {
    * BR-041 : le bon code crée le compte, déjà vérifié, avec les données du ticket,
    * et ouvre directement une session (choix du 2026-10-08 : pas besoin de retaper le mot de passe).
    */
-  async verify(ticket: string, code: string, userAgent?: string): Promise<OpenedSession> {
+  async verify(
+    ticket: string,
+    code: string,
+    userAgent?: string,
+    device?: string,
+  ): Promise<OpenedSession> {
     const found = await this.findTicket(ticket);
     const identifier = requireIdentifier(found.destination);
     await this.otp.verify("signup", identifier, code);
@@ -127,7 +136,10 @@ export class SignupService {
       throw error;
     }
     await this.tickets.deleteForDestination(found.destination);
-    return this.sessions.open(account, userAgent);
+    const opened = await this.sessions.open(account, userAgent);
+    // L'appareil qui vient de créer le compte est retenu sans avis (S7.5-T04) : le suivant en recevra un
+    await this.devices?.afterSignup(account, device, userAgent);
+    return opened;
   }
 
   private async createTicket(

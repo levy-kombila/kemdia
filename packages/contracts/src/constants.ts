@@ -97,6 +97,10 @@ export const IDENTITY_ERROR_CODES = [
   "DEUX_FACTEURS_DEJA_ACTIVE",
   "DEUX_FACTEURS_A_ACTIVER",
   "DEUX_FACTEURS_REQUIS",
+  // Équipe et appareils (S7.5-T04)
+  "COMPTE_PROTEGE",
+  "MOTIF_INVALIDE",
+  "ALERTE_INVALIDE",
 ] as const;
 export type IdentityErrorCode = (typeof IDENTITY_ERROR_CODES)[number];
 
@@ -117,22 +121,85 @@ export const SIGNUP_TICKET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 export const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 /** Durée d'une session sans visite : 30 jours, prolongés à chaque visite (ADR-0017). */
 export const SESSION_TTL_DAYS = 30;
+/**
+ * Identifiant d'appareil (S7.5-T04) : 32 octets aléatoires en base64url, dans un cookie du site. L'API n'en garde que
+ * l'empreinte ; il sert à reconnaître un appareil déjà utilisé, jamais à ouvrir une session.
+ */
+export const DEVICE_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+/** Jeton du lien « ce n'est pas moi » d'un avis de nouvel appareil : 32 octets en base64url, 7 jours. */
+export const DEVICE_ALERT_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+export const DEVICE_ALERT_DAYS = 7;
+/** Appareils retenus par compte : au-delà, le moins récemment utilisé est oublié. */
+export const KNOWN_DEVICES_MAX = 20;
+/** Avis « nouvel appareil » encore valables par compte : au-delà, l'appareil est retenu sans nouvel e-mail. */
+export const DEVICE_ALERTS_MAX = 5;
+/** Un appareil pas revu depuis ce nombre de jours est oublié (son cookie a expiré). */
+export const KNOWN_DEVICE_RETENTION_DAYS = 365;
+/** Équipe (S7.5-T04) : motif d'une désactivation, membres par page. */
+export const STAFF_LIMITS = {
+  reasonMin: 5,
+  reasonMax: 300,
+  pageDefault: 50,
+  pageMax: 100,
+} as const;
 /** Canaux d'envoi des codes. */
 export const OTP_CHANNELS = ["email", "sms"] as const;
 
 // --- Rôles et journal d'audit (S4-T06, ADR-0020) ---
 
-/** Rôles d'un compte, cumulables. `client` : tout compte actif. */
-export const ROLES = ["client", "vendor", "moderator", "admin"] as const;
+/**
+ * Rôles d'un compte, cumulables. `client` : tout compte actif. Équipe (S7.5-T04, ADR-0051) : `catalog` (produits,
+ * fiches, boutiques, vérifications), `logistics` (livraisons), `finance` (paiements, remboursements, encaissements,
+ * factures, codes promo), `support` (service client, lecture seule), `admin` (tout, et les utilisateurs).
+ */
+export const ROLES = [
+  "client",
+  "vendor",
+  "catalog",
+  "logistics",
+  "finance",
+  "support",
+  "admin",
+] as const;
 export type Role = (typeof ROLES)[number];
+/** Rôles de l'équipe Kemdia (double authentification obligatoire). */
+export const STAFF_ROLES = ["catalog", "logistics", "finance", "support", "admin"] as const;
+export type StaffRole = (typeof STAFF_ROLES)[number];
+/** Un administrateur a les droits de tous les autres rôles de l'équipe. */
+export const ROLE_IMPLIES: Readonly<Record<Role, readonly Role[]>> = {
+  client: [],
+  vendor: [],
+  catalog: [],
+  logistics: [],
+  finance: [],
+  support: [],
+  admin: ["catalog", "logistics", "finance", "support"],
+};
+/** Ces rôles donnent-ils les droits de `required` ? (même règle que l'API) */
+export function hasRole(roles: readonly Role[], required: Role): boolean {
+  return roles.some((role) => role === required || ROLE_IMPLIES[role].includes(required));
+}
+/** Ces rôles font-ils partie de l'équipe ? */
+export function isStaffRoles(roles: readonly Role[]): boolean {
+  return roles.some((role) => (STAFF_ROLES as readonly Role[]).includes(role));
+}
 /** Rôles qu'un administrateur peut accorder ou retirer par l'API (`admin` : commande serveur seulement). */
-export const ADMIN_ASSIGNABLE_ROLES = ["vendor", "moderator"] as const;
+export const ADMIN_ASSIGNABLE_ROLES = [
+  "vendor",
+  "catalog",
+  "logistics",
+  "finance",
+  "support",
+] as const;
 export type AssignableRole = (typeof ADMIN_ASSIGNABLE_ROLES)[number];
 /** Libellés affichés par le site. */
 export const ROLE_LABELS: Readonly<Record<Role, string>> = {
   client: "Client",
   vendor: "Vendeur",
-  moderator: "Modérateur",
+  catalog: "Catalogue",
+  logistics: "Logistique",
+  finance: "Finance",
+  support: "Service client",
   admin: "Administrateur",
 };
 /** Actions inscrites au journal d'audit (liste fermée, même liste que le module audit de l'API). */
@@ -212,6 +279,16 @@ export const AUDIT_ACTIONS = [
   // Propositions de correction (S7.5-T03)
   "listing.correction_proposed",
   "listing.correction_closed",
+  // Équipe et utilisateurs (S7.5-T04)
+  "account.disabled",
+  "account.enabled",
+  "staff.removed",
+  "support.account_viewed",
+  "support.lookup_failed",
+  "support.orders_viewed",
+  // Appareils (S7.5-T04)
+  "device.new_login",
+  "device.not_me",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** Lignes par page du journal d'audit. */

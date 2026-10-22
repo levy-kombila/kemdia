@@ -114,7 +114,7 @@ describe("Photos des produits des vendeurs (PostgreSQL, HTTP)", () => {
   };
   const publicStatus = async (slug: string) =>
     (await call("get", `/api/v1/products/${slug}`)).status;
-  async function openSession(role?: "ADMIN" | "MODERATOR"): Promise<Session> {
+  async function openSession(role?: "ADMIN" | "CATALOG"): Promise<Session> {
     const email = `produits.${randomUUID()}@exemple.ga`;
     const now = new Date();
     const account = Account.register({
@@ -180,7 +180,7 @@ describe("Photos des produits des vendeurs (PostgreSQL, HTTP)", () => {
 
   beforeEach(async () => {
     admin = await openSession("ADMIN");
-    moderator = await openSession("MODERATOR");
+    moderator = await openSession("CATALOG");
     ({ session: vendor, shopId } = await openVendor());
   });
 

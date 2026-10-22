@@ -43,7 +43,7 @@ type Ref = { reference: string };
  * rien et renvoient l'expédition telle quelle.
  */
 @Controller("admin/shipping")
-@Authorize("admin", { secondFactor: true })
+@Authorize("logistics", { secondFactor: true })
 @Throttle({ default: { limit: 60, ttl: 60_000 } })
 @AccountRateLimit(60)
 export class ShipmentController {

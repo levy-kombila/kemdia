@@ -60,7 +60,7 @@ function present(coupon: Coupon): CouponView {
  * et par compte, jamais mis en cache, chaque changement au journal d'audit. Écrans au S6.
  */
 @Controller("admin/coupons")
-@Authorize("admin", { secondFactor: true })
+@Authorize("finance", { secondFactor: true })
 @Throttle({ default: { limit: 30, ttl: 60_000 } })
 @AccountRateLimit(30)
 export class CouponController {
