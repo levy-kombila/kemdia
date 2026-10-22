@@ -235,8 +235,8 @@ test.describe("espace de l'équipe : parcours complet", () => {
       .getByRole("button", { name: "Service client", pressed: false })
       .click();
     await expect(page).toHaveURL(/\/equipe\/utilisateurs\?ok=role-accorde$/);
-    // Adresse exacte : « equipe-e2e@kemdia.test » (le compte de l'équipe) ne doit pas correspondre
-    const member = page.getByRole("listitem").filter({ hasText: /(^|[^-\w])e2e@kemdia\.test/ });
+    // Par son nom : l'adresse « e2e@kemdia.test » est aussi contenue dans celle de l'équipe
+    const member = page.getByRole("listitem").filter({ hasText: "Awa Testeuse" });
     await expect(member).toContainText("Double authentification à activer");
     await member.getByRole("button", { name: "Service client", pressed: true }).click();
     await expect(page).toHaveURL(/\/equipe\/utilisateurs\?ok=role-retire$/);
