@@ -25,14 +25,19 @@ export default async function ShopsPage({
   const status: ShopStatus = SHOP_STATUSES.find((s) => s === first(params.statut)) ?? "pending";
   const raw = first(params.apres);
   const after = raw && CURSOR.test(raw) ? raw : undefined;
-  const { token } = await requireVerifiedStaff(
+  const { account, token } = await requireVerifiedStaff(
     status === "pending" ? "/equipe/boutiques" : `/equipe/boutiques?statut=${status}`,
-    "admin",
+    "catalog",
   );
   const result = await staffApi().shops(token, { status, after, limit: PAGE_SIZE });
 
   return (
-    <StaffShell section="boutiques" admin title="Boutiques" crumbs={[{ label: "Boutiques" }]}>
+    <StaffShell
+      section="boutiques"
+      roles={account.roles}
+      title="Boutiques"
+      crumbs={[{ label: "Boutiques" }]}
+    >
       <nav aria-label="Statut des boutiques" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
         <ul className="flex gap-2">
           {SHOP_STATUSES.map((s) => (

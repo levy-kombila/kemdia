@@ -112,6 +112,8 @@ export class IdentityPersonalData {
     await db.recoveryCode.deleteMany({ where: { accountId } });
     await db.secondFactor.deleteMany({ where: { accountId } });
     await db.accountRole.deleteMany({ where: { accountId } });
+    // Appareils connus (S7.5-T04) : empreintes et liens « ce n'est pas moi » partent avec le compte
+    await db.knownDevice.deleteMany({ where: { accountId } });
     await db.resetTicket.deleteMany({
       where: { OR: [{ accountId }, { destination: { in: identifiers } }] },
     });

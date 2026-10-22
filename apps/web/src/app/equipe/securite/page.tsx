@@ -7,7 +7,7 @@ import { StaffShell, StatusBadge } from "@/components/staff/StaffShell";
 import { FormAlert } from "@/components/ui/Field";
 import { formatTime } from "@/lib/format";
 import { staffErrorMessage } from "@/lib/staff/messages";
-import { confirmedUntil, isAdmin } from "@/lib/staff/roles";
+import { confirmedUntil } from "@/lib/staff/roles";
 import { readSecondFactor, requireTeamMember } from "@/lib/staff/staff";
 
 export const metadata: Metadata = { title: "Sécurité" };
@@ -23,13 +23,12 @@ export default async function SecurityPage() {
   const member = await requireTeamMember("/equipe/securite");
   const { account } = member;
   const status = await readSecondFactor(member, "/equipe/securite");
-  const admin = isAdmin(account.roles);
 
   if (!status.ok) {
     return (
       <StaffShell
         section="securite"
-        admin={admin}
+        roles={account.roles}
         title="Sécurité"
         crumbs={[{ label: "Sécurité" }]}
       >
@@ -42,13 +41,18 @@ export default async function SecurityPage() {
   const verified = confirmedUntil(factor);
 
   return (
-    <StaffShell section="securite" admin={admin} title="Sécurité" crumbs={[{ label: "Sécurité" }]}>
+    <StaffShell
+      section="securite"
+      roles={account.roles}
+      title="Sécurité"
+      crumbs={[{ label: "Sécurité" }]}
+    >
       {!factor.enabled ? (
         <>
           <FormAlert tone="info">
             La double authentification est <strong>obligatoire</strong> pour l&apos;équipe : en plus
             du mot de passe, un code à 6 chiffres donné par une application de votre téléphone
-            protège la modération et l&apos;administration, même si votre mot de passe est volé.
+            protège le travail de l&apos;équipe, même si votre mot de passe est volé.
           </FormAlert>
           <SecondFactorSetup />
         </>

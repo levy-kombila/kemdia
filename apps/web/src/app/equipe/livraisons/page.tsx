@@ -47,9 +47,9 @@ export default async function ShippingPage({
 }) {
   const params = await searchParams;
   const tab = SHIPPING_TABS.find((t) => t === first(params.statut)) ?? "ready";
-  const { token } = await requireVerifiedStaff(
+  const { account, token } = await requireVerifiedStaff(
     tab === "ready" ? "/equipe/livraisons" : `/equipe/livraisons?statut=${tab}`,
-    "admin",
+    "logistics",
   );
   const api = staffApi();
   const [ready, shipments] = await Promise.all([
@@ -61,7 +61,7 @@ export default async function ShippingPage({
   return (
     <StaffShell
       section="livraisons"
-      admin
+      roles={account.roles}
       title="Livraisons"
       crumbs={[{ label: "Livraisons" }]}
       notice={staffNotice(first(params.ok))}

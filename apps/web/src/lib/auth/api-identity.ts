@@ -3,6 +3,9 @@ import {
   CLIENT_IP_HEADER,
   IDENTITY_ERROR_CODES,
   CurrentSessionSchema,
+  DEVICE_ALERT_TOKEN_PATTERN,
+  DEVICE_ID_PATTERN,
+  DeviceNotMeResultSchema,
   INTERNAL_KEY_HEADER,
   LogoutAllSchema,
   OpenedSessionSchema,
@@ -13,6 +16,7 @@ import {
   SignupVerifiedSchema,
   type AccountView,
   type CurrentSession,
+  type DeviceNotMeResult,
   type OpenedSession,
   type ResetStarted,
   type SignupStarted,
@@ -120,12 +124,29 @@ export function createIdentityApi(options: IdentityApiOptions) {
       }),
     resendSignup: (ticket: string): Promise<ApiResult<SignupStarted>> =>
       call("POST", "/signup/resend", SignupStartedSchema, { body: { ticket } }),
+    /**
+     * `device` : identifiant aléatoire du navigateur (cookie `kemdia_appareil`, S7.5-T04) pour l'avis « nouvel
+     * appareil » ; envoyé seulement s'il a la bonne forme.
+     */
     login: (
       identifier: string,
       password: string,
       userAgent: string | null,
+      device?: string | null,
     ): Promise<ApiResult<OpenedSession>> =>
-      call("POST", "/login", OpenedSessionSchema, { body: { identifier, password }, userAgent }),
+      call("POST", "/login", OpenedSessionSchema, {
+        body: {
+          identifier,
+          password,
+          ...(device && DEVICE_ID_PATTERN.test(device) ? { device } : {}),
+        },
+        userAgent,
+      }),
+    /** Lien « ce n'est pas moi » de l'avis : ferme toutes les sessions du compte. Jeton mal formé → refus direct. */
+    deviceNotMe: (token: string): Promise<ApiResult<DeviceNotMeResult>> =>
+      DEVICE_ALERT_TOKEN_PATTERN.test(token)
+        ? call("POST", "/devices/not-me", DeviceNotMeResultSchema, { body: { token } })
+        : Promise.resolve({ ok: false, code: "ALERTE_INVALIDE" }),
     /** Session valable ? (la prolonge). Un jeton mal formé n'est même pas envoyé. */
     session: (token: string): Promise<ApiResult<CurrentSession>> =>
       SESSION_TOKEN_PATTERN.test(token)

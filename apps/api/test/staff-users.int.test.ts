@@ -67,7 +67,9 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
   let admin: Member;
 
   const call = (method: "get" | "post" | "put" | "delete", url: string, token?: string) => {
-    const req = request(app.getHttpServer())[method](url).set("X-Kemdia-Internal-Key", INTERNAL_KEY);
+    const req = request(app.getHttpServer())
+      [method](url)
+      .set("X-Kemdia-Internal-Key", INTERNAL_KEY);
     return token ? req.set("Authorization", `Bearer ${token}`) : req;
   };
 
@@ -77,7 +79,7 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
     const account = Account.register({
       id: randomUUID(),
       firstName: "Awa",
-      lastName: `Ndong ${randomBytes(2).toString("hex")}`,
+      lastName: "Ndong",
       identifier: requireIdentifier(email),
       passwordHash: await hasher.hash(PASSWORD),
       now,
@@ -92,7 +94,11 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
     return { token: opened.token, id: account.id, email };
   }
 
-  const login = (email: string, device?: string, userAgent = "Mozilla/5.0 (Linux; Android 14) Chrome/130.0") =>
+  const login = (
+    email: string,
+    device?: string,
+    userAgent = "Mozilla/5.0 (Linux; Android 14) Chrome/130.0",
+  ) =>
     call("post", "/api/v1/auth/login")
       .set("X-Kemdia-User-Agent", userAgent)
       .send({ identifier: email, password: PASSWORD, ...(device ? { device } : {}) });
@@ -159,7 +165,10 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
     const fresh = await member();
     await prisma.accountRole.create({ data: { accountId: fresh.id, role: "SUPPORT" } });
     expect(
-      codeOf((await call("get", `/api/v1/support/accounts/${fresh.id}/orders`, fresh.token).expect(403)).body),
+      codeOf(
+        (await call("get", `/api/v1/support/accounts/${fresh.id}/orders`, fresh.token).expect(403))
+          .body,
+      ),
     ).toBe("DEUX_FACTEURS_A_ACTIVER");
   });
 
@@ -168,10 +177,15 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
     const vendorOnly = await member("VENDOR");
     const page = matches(
       StaffPageSchema,
-      (await call("get", "/api/v1/admin/staff?role=support&limit=100", admin.token).expect(200)).body,
+      (await call("get", "/api/v1/admin/staff?role=support&limit=100", admin.token).expect(200))
+        .body,
     );
     const row = page.items.find((m) => m.id === support.id);
-    expect(row).toMatchObject({ roles: ["client", "support"], status: "active", secondFactorEnabled: false });
+    expect(row).toMatchObject({
+      roles: ["client", "support"],
+      status: "active",
+      secondFactorEnabled: false,
+    });
     expect(page.items.map((m) => m.id)).not.toContain(vendorOnly.id);
     // Pagination : deux pages d'un membre couvrent les deux premiers, sans doublon
     const first = matches(
@@ -181,7 +195,11 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
     const second = matches(
       StaffPageSchema,
       (
-        await call("get", `/api/v1/admin/staff?limit=1&after=${first.nextCursor}`, admin.token).expect(200)
+        await call(
+          "get",
+          `/api/v1/admin/staff?limit=1&after=${first.nextCursor}`,
+          admin.token,
+        ).expect(200)
       ).body,
     );
     expect(second.items[0]?.id).not.toBe(first.items[0]?.id);
@@ -193,14 +211,18 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
     await call("get", "/api/v1/moderation/products", leaving.token).expect(200);
     const result = matches(
       StaffActionResultSchema,
-      (await call("post", `/api/v1/admin/accounts/${leaving.id}/remove-staff`, admin.token).expect(200)).body,
+      (
+        await call("post", `/api/v1/admin/accounts/${leaving.id}/remove-staff`, admin.token).expect(
+          200,
+        )
+      ).body,
     );
     expect(result.account.roles).toEqual(["client", "vendor"]);
     expect(result.sessionsClosed).toBe(1);
     // Session fermée : plus rien, même pas « Mon compte »
-    expect(codeOf((await call("get", "/api/v1/auth/session", leaving.token).expect(401)).body)).toBe(
-      "SESSION_INVALIDE",
-    );
+    expect(
+      codeOf((await call("get", "/api/v1/auth/session", leaving.token).expect(401)).body),
+    ).toBe("SESSION_INVALIDE");
     const [line] = await audit(leaving.id, "staff.removed");
     expect(line?.details).toEqual({ roles: "catalog,finance", sessions: 1 });
     // Il se reconnecte comme client et vendeur seulement
@@ -212,7 +234,10 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
     const target = await member("LOGISTICS");
     const url = `/api/v1/admin/accounts/${target.id}`;
     expect(
-      codeOf((await call("post", `${url}/disable`, admin.token).send({ reason: "non" }).expect(422)).body),
+      codeOf(
+        (await call("post", `${url}/disable`, admin.token).send({ reason: "non" }).expect(422))
+          .body,
+      ),
     ).toBe("MOTIF_INVALIDE");
     const done = matches(
       StaffActionResultSchema,
@@ -231,7 +256,13 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
     });
     // Déjà désactivé : refus clair
     expect(
-      codeOf((await call("post", `${url}/disable`, admin.token).send({ reason: "Encore une fois" }).expect(409)).body),
+      codeOf(
+        (
+          await call("post", `${url}/disable`, admin.token)
+            .send({ reason: "Encore une fois" })
+            .expect(409)
+        ).body,
+      ),
     ).toBe("COMPTE_INACTIF");
 
     const enabled = matches(
@@ -250,22 +281,37 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
       const body = action === "disable" ? { reason: "Motif suffisant" } : {};
       expect(
         codeOf(
-          (await call("post", `/api/v1/admin/accounts/${admin.id.toUpperCase()}/${action}`, admin.token)
-            .send(body)
-            .expect(403)).body,
+          (
+            await call(
+              "post",
+              `/api/v1/admin/accounts/${admin.id.toUpperCase()}/${action}`,
+              admin.token,
+            )
+              .send(body)
+              .expect(403)
+          ).body,
         ),
       ).toBe("ROLE_SUR_SOI_INTERDIT");
       expect(
         codeOf(
-          (await call("post", `/api/v1/admin/accounts/${other.id}/${action}`, admin.token).send(body).expect(403))
-            .body,
+          (
+            await call("post", `/api/v1/admin/accounts/${other.id}/${action}`, admin.token)
+              .send(body)
+              .expect(403)
+          ).body,
         ),
       ).toBe("COMPTE_PROTEGE");
     }
     const gone = await member();
-    await prisma.account.update({ where: { id: gone.id }, data: { status: "DISABLED", deletedAt: new Date() } });
+    await prisma.account.update({
+      where: { id: gone.id },
+      data: { status: "DISABLED", deletedAt: new Date(), email: null, phone: null },
+    });
     expect(
-      codeOf((await call("post", `/api/v1/admin/accounts/${gone.id}/enable`, admin.token).expect(404)).body),
+      codeOf(
+        (await call("post", `/api/v1/admin/accounts/${gone.id}/enable`, admin.token).expect(404))
+          .body,
+      ),
     ).toBe("COMPTE_INTROUVABLE");
     const catalog = await member("CATALOG");
     await call("post", `/api/v1/admin/accounts/${gone.id}/remove-staff`, catalog.token).expect(403);
@@ -282,17 +328,25 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
           .expect(200)
       ).body,
     );
-    expect(found).toMatchObject({ id: client.id, status: "active", emailVerified: true, phoneVerified: false });
+    expect(found).toMatchObject({
+      id: client.id,
+      status: "active",
+      emailVerified: true,
+      phoneVerified: false,
+    });
     const [viewed] = await audit(client.id, "support.account_viewed");
     expect(viewed?.actorId).toBe(support.id);
     const orders = matches(
       OrderPageSchema,
-      (await call("get", `/api/v1/support/accounts/${client.id}/orders`, support.token).expect(200)).body,
+      (await call("get", `/api/v1/support/accounts/${client.id}/orders`, support.token).expect(200))
+        .body,
     );
     expect(orders.items).toEqual([]);
-    await call("get", `/api/v1/support/accounts/${client.id}/orders/KD-20261020-ABCDE`, support.token).expect(
-      (res) => expect([400, 404]).toContain(res.status),
-    );
+    await call(
+      "get",
+      `/api/v1/support/accounts/${client.id}/orders/KD-20261020-ABCDE`,
+      support.token,
+    ).expect((res) => expect([400, 404]).toContain(res.status));
     await call("post", "/api/v1/support/accounts/lookup", support.token)
       .send({ identifier: "personne@exemple.ga" })
       .expect(404);
@@ -309,7 +363,8 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
     const thief = randomBytes(32).toString("base64url");
     const alerts = () =>
       sender.sent.filter(
-        (m): m is Extract<OtpMessage, { kind: "new-device" }> => m.kind === "new-device" && m.to === owner.email,
+        (m): m is Extract<OtpMessage, { kind: "new-device" }> =>
+          m.kind === "new-device" && m.to === owner.email,
       );
 
     await login(owner.email, phone).expect(200);
@@ -329,7 +384,9 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
     // Description choisie dans des listes fixes : rien du navigateur n'est recopié
     expect(alert.device).toBe("Firefox sur Windows");
     expect(alert.link).toMatch(new RegExp(`^${SITE}/securite/pas-moi\\?jeton=[A-Za-z0-9_-]{43}$`));
-    expect((await audit(owner.id, "device.new_login"))[0]?.details).toEqual({ device: "Firefox sur Windows" });
+    expect((await audit(owner.id, "device.new_login"))[0]?.details).toEqual({
+      device: "Firefox sur Windows",
+    });
     // La base ne garde que des empreintes
     const rows = await prisma.knownDevice.findMany({ where: { accountId: owner.id } });
     expect(rows).toHaveLength(2);
@@ -348,9 +405,9 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
     await call("get", "/api/v1/auth/session", stolen.body.token).expect(401);
     expect(await audit(owner.id, "device.not_me")).toHaveLength(1);
     // Usage unique ; jeton inventé refusé pareil
-    expect(codeOf((await call("post", "/api/v1/auth/devices/not-me").send({ token }).expect(410)).body)).toBe(
-      "ALERTE_INVALIDE",
-    );
+    expect(
+      codeOf((await call("post", "/api/v1/auth/devices/not-me").send({ token }).expect(410)).body),
+    ).toBe("ALERTE_INVALIDE");
     await call("post", "/api/v1/auth/devices/not-me")
       .send({ token: randomBytes(32).toString("base64url") })
       .expect(410);
@@ -366,7 +423,8 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
     await login(owner.email, randomBytes(32).toString("base64url")).expect(200);
     await new Promise((resolve) => setTimeout(resolve, 50));
     const alert = sender.sent.findLast(
-      (m): m is Extract<OtpMessage, { kind: "new-device" }> => m.kind === "new-device" && m.to === owner.email,
+      (m): m is Extract<OtpMessage, { kind: "new-device" }> =>
+        m.kind === "new-device" && m.to === owner.email,
     )!;
     await prisma.knownDevice.updateMany({
       where: { accountId: owner.id, alertExpiresAt: { not: null } },

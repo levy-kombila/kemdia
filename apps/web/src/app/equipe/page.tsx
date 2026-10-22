@@ -1,9 +1,9 @@
-import { ChevronRight, Store, Tags, Truck } from "lucide-react";
+import { ChevronRight, LifeBuoy, Store, Tags, Truck, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { StaffShell } from "@/components/staff/StaffShell";
 import { formatTime } from "@/lib/format";
-import { isAdmin } from "@/lib/staff/roles";
+import { hasRole } from "@kemdia/contracts/constants";
 import { requireVerifiedStaff, staffApi } from "@/lib/staff/staff";
 
 export const metadata: Metadata = { title: "Tableau de bord" };
@@ -39,34 +39,40 @@ function Counter({
   );
 }
 
+const SHORTCUT =
+  "text-brand-700 hover:bg-brand-50 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold";
+
 const counted = (page: { items: unknown[]; nextCursor: string | null }) =>
   page.nextCursor ? `${COUNT_LIMIT}+` : String(page.items.length);
 
 /** Tableau de bord de l'équipe (S6-T05) : ce qui attend une décision. */
 export default async function StaffHomePage() {
   const { account, token, factor } = await requireVerifiedStaff("/equipe");
-  const admin = isAdmin(account.roles);
+  // Chaque compteur n'est lu que pour le rôle qui l'ouvre (S7.5-T04, ADR-0051)
+  const catalog = hasRole(account.roles, "catalog");
   const api = staffApi();
   const [products, shops, ready] = await Promise.all([
-    api.moderationQueue(token, { status: "pending", limit: COUNT_LIMIT }),
-    admin ? api.shops(token, { status: "pending", limit: COUNT_LIMIT }) : null,
+    catalog ? api.moderationQueue(token, { status: "pending", limit: COUNT_LIMIT }) : null,
+    catalog ? api.shops(token, { status: "pending", limit: COUNT_LIMIT }) : null,
     // Livraisons (S7-T02) : l'API renvoie 100 commandes prêtes au plus
-    admin ? api.readyOrders(token) : null,
+    hasRole(account.roles, "logistics") ? api.readyOrders(token) : null,
   ]);
 
   return (
-    <StaffShell section="accueil" admin={admin} title={`Bonjour ${account.firstName}`}>
+    <StaffShell section="accueil" roles={account.roles} title={`Bonjour ${account.firstName}`}>
       <p className="text-ink-500 text-sm">
         Session confirmée jusqu&apos;à{" "}
         {factor.verifiedUntil ? formatTime(factor.verifiedUntil) : "—"}.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Counter
-          href="/equipe/moderation"
-          icon={Tags}
-          label="produits à modérer"
-          count={products.ok ? counted(products.data) : null}
-        />
+        {products && (
+          <Counter
+            href="/equipe/moderation"
+            icon={Tags}
+            label="produits à modérer"
+            count={products.ok ? counted(products.data) : null}
+          />
+        )}
         {shops && (
           <Counter
             href="/equipe/boutiques"
@@ -90,11 +96,27 @@ export default async function StaffHomePage() {
           />
         )}
       </div>
-      {(!products.ok || (shops && !shops.ok) || (ready && !ready.ok)) && (
+      {[products, shops, ready].some((r) => r && !r.ok) && (
         <p className="text-ink-500 text-sm">
           « — » : nombre momentanément indisponible. Rechargez la page dans un instant.
         </p>
       )}
+      <ul className="flex flex-wrap gap-2">
+        {hasRole(account.roles, "support") && (
+          <li>
+            <Link href="/equipe/clients" className={SHORTCUT}>
+              <LifeBuoy className="size-4" aria-hidden /> Retrouver un client
+            </Link>
+          </li>
+        )}
+        {account.roles.includes("admin") && (
+          <li>
+            <Link href="/equipe/utilisateurs" className={SHORTCUT}>
+              <Users className="size-4" aria-hidden /> Gérer l&apos;équipe
+            </Link>
+          </li>
+        )}
+      </ul>
     </StaffShell>
   );
 }

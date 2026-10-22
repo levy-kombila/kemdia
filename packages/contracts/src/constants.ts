@@ -132,7 +132,12 @@ export const DEVICE_ALERT_DAYS = 7;
 /** Appareils retenus par compte : au-delà, le moins récemment utilisé est oublié. */
 export const KNOWN_DEVICES_MAX = 20;
 /** Équipe (S7.5-T04) : motif d'une désactivation, membres par page. */
-export const STAFF_LIMITS = { reasonMin: 5, reasonMax: 300, pageDefault: 50, pageMax: 100 } as const;
+export const STAFF_LIMITS = {
+  reasonMin: 5,
+  reasonMax: 300,
+  pageDefault: 50,
+  pageMax: 100,
+} as const;
 /** Canaux d'envoi des codes. */
 export const OTP_CHANNELS = ["email", "sms"] as const;
 
@@ -175,7 +180,13 @@ export function isStaffRoles(roles: readonly Role[]): boolean {
   return roles.some((role) => (STAFF_ROLES as readonly Role[]).includes(role));
 }
 /** Rôles qu'un administrateur peut accorder ou retirer par l'API (`admin` : commande serveur seulement). */
-export const ADMIN_ASSIGNABLE_ROLES = ["vendor", "catalog", "logistics", "finance", "support"] as const;
+export const ADMIN_ASSIGNABLE_ROLES = [
+  "vendor",
+  "catalog",
+  "logistics",
+  "finance",
+  "support",
+] as const;
 export type AssignableRole = (typeof ADMIN_ASSIGNABLE_ROLES)[number];
 /** Libellés affichés par le site. */
 export const ROLE_LABELS: Readonly<Record<Role, string>> = {

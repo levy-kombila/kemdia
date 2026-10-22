@@ -24,16 +24,16 @@ export default async function KycQueuePage({
   const status = KYC_TABS.find((s) => s === first(params.statut)) ?? "pending";
   const raw = first(params.apres);
   const after = raw && CURSOR.test(raw) ? raw : undefined;
-  const { token } = await requireVerifiedStaff(
+  const { account, token } = await requireVerifiedStaff(
     status === "pending" ? "/equipe/verifications" : `/equipe/verifications?statut=${status}`,
-    "admin",
+    "catalog",
   );
   const result = await staffApi().kycList(token, { status, after, limit: PAGE_SIZE });
 
   return (
     <StaffShell
       section="verifications"
-      admin
+      roles={account.roles}
       title="Vérifications des vendeurs"
       crumbs={[{ label: "Vérifications" }]}
     >

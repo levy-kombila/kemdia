@@ -1,5 +1,21 @@
 import "server-only";
 import {
+  AdminAccountSchema,
+  ORDER_CURSOR_PATTERN,
+  OrderPageSchema,
+  OrderSchema,
+  STAFF_CURSOR_PATTERN,
+  StaffActionResultSchema,
+  StaffPageSchema,
+  SupportAccountSchema,
+  type AdminAccount,
+  type AssignableRole,
+  type Order,
+  type OrderPage,
+  type StaffActionResult,
+  type StaffPage,
+  type StaffRole,
+  type SupportAccount,
   AdminListingDetailSchema,
   AdminListingPageSchema,
   AdminListingSchema,
@@ -508,6 +524,83 @@ export function createStaffApi(options: StaffApiOptions) {
       tariffs: DeliveryTariffsRequest,
     ): Promise<StaffResult<DeliveryTariffs>> =>
       call("PUT", "/admin/shipping/tariffs", token, DeliveryTariffsSchema, tariffs),
+    // --- Équipe (S7.5-T04, ADR-0051 ; administrateurs) ---
+    staff: (
+      token: string,
+      params: { role?: StaffRole; after?: string; limit?: number },
+    ): Promise<StaffResult<StaffPage>> => {
+      const query = new URLSearchParams();
+      if (params.role) query.set("role", params.role);
+      if (params.after && STAFF_CURSOR_PATTERN.test(params.after)) query.set("after", params.after);
+      if (params.limit) query.set("limit", String(params.limit));
+      const text = query.toString();
+      return call("GET", `/admin/staff${text ? `?${text}` : ""}`, token, StaffPageSchema);
+    },
+    /** E-mail ou téléphone dans le CORPS : jamais dans l'adresse ni dans les journaux. */
+    lookupAccount: (token: string, identifier: string): Promise<StaffResult<AdminAccount>> =>
+      call("POST", "/admin/accounts/lookup", token, AdminAccountSchema, {
+        identifier: identifier.slice(0, 300),
+      }),
+    setRole: (
+      token: string,
+      accountId: string,
+      role: AssignableRole,
+      granted: boolean,
+    ): Promise<StaffResult<AdminAccount>> => {
+      const account = id(accountId);
+      if (!account) return Promise.resolve(notFound("COMPTE_INTROUVABLE"));
+      return call(
+        granted ? "PUT" : "DELETE",
+        `/admin/accounts/${account}/roles/${role}`,
+        token,
+        AdminAccountSchema,
+      );
+    },
+    /** Départ d'un employé (retirer ses rôles), désactivation (motif obligatoire) ou réactivation. */
+    staffAction: (
+      token: string,
+      accountId: string,
+      action: "remove-staff" | "disable" | "enable",
+      reason?: string,
+    ): Promise<StaffResult<StaffActionResult>> => {
+      const account = id(accountId);
+      if (!account) return Promise.resolve(notFound("COMPTE_INTROUVABLE"));
+      return call(
+        "POST",
+        `/admin/accounts/${account}/${action}`,
+        token,
+        StaffActionResultSchema,
+        action === "disable" ? { reason: reason ?? "" } : {},
+      );
+    },
+
+    // --- Service client (S7.5-T04 ; lecture seule) ---
+    /** Recherche inscrite au journal d'audit par l'API ; e-mail ou téléphone dans le corps seulement. */
+    supportLookup: (token: string, identifier: string): Promise<StaffResult<SupportAccount>> =>
+      call("POST", "/support/accounts/lookup", token, SupportAccountSchema, {
+        identifier: identifier.slice(0, 300),
+      }),
+    supportOrders: (
+      token: string,
+      accountId: string,
+      before?: string,
+    ): Promise<StaffResult<OrderPage>> => {
+      const account = id(accountId);
+      if (!account) return Promise.resolve(notFound("COMPTE_INTROUVABLE"));
+      const query = before && ORDER_CURSOR_PATTERN.test(before) ? `?before=${before}` : "";
+      return call("GET", `/support/accounts/${account}/orders${query}`, token, OrderPageSchema);
+    },
+    supportOrder: (
+      token: string,
+      accountId: string,
+      reference: string,
+    ): Promise<StaffResult<Order>> => {
+      const account = id(accountId);
+      if (!account || !ORDER_REFERENCE.test(reference))
+        return Promise.resolve(notFound("COMMANDE_INTROUVABLE"));
+      return call("GET", `/support/accounts/${account}/orders/${reference}`, token, OrderSchema);
+    },
+
     /** Photo du dossier, déchiffrée par l'API (consultation au journal) : WebP vérifié, 5 Mo au plus. */
     kycDocument(token: string, shopId: string, kind: KycDocumentKind): Promise<StaffImageResult> {
       const shop = id(shopId);

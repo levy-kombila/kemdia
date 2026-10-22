@@ -114,13 +114,16 @@ export default async function ShipmentPage({
 }) {
   const [{ reference }, query] = await Promise.all([params, searchParams]);
   if (!ORDER_REFERENCE.test(reference)) notFound();
-  const { token } = await requireVerifiedStaff(`/equipe/livraisons/${reference}`, "admin");
+  const { account, token } = await requireVerifiedStaff(
+    `/equipe/livraisons/${reference}`,
+    "logistics",
+  );
   const result = await staffApi().shipment(token, reference);
   if (!result.ok && result.code === "EXPEDITION_INTROUVABLE") notFound();
   const crumbs = [{ label: "Livraisons", href: "/equipe/livraisons" }, { label: reference }];
   if (!result.ok) {
     return (
-      <StaffShell section="livraisons" admin title={reference} crumbs={crumbs}>
+      <StaffShell section="livraisons" roles={account.roles} title={reference} crumbs={crumbs}>
         <FormAlert>{staffErrorMessage(result.code)}</FormAlert>
       </StaffShell>
     );
@@ -133,7 +136,7 @@ export default async function ShipmentPage({
   return (
     <StaffShell
       section="livraisons"
-      admin
+      roles={account.roles}
       title={`Livraison ${s.reference}`}
       crumbs={crumbs}
       notice={staffNotice(first(query.ok))}

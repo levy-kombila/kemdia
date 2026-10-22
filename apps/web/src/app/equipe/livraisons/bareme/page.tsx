@@ -58,14 +58,14 @@ export default async function TariffsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const { token } = await requireVerifiedStaff("/equipe/livraisons/bareme", "admin");
+  const { account, token } = await requireVerifiedStaff("/equipe/livraisons/bareme", "logistics");
   const result = await staffApi().tariffs(token);
   const crumbs = [{ label: "Livraisons", href: "/equipe/livraisons" }, { label: "Barème" }];
 
   return (
     <StaffShell
       section="livraisons"
-      admin
+      roles={account.roles}
       title="Barème de livraison"
       crumbs={crumbs}
       notice={staffNotice(first(params.ok))}

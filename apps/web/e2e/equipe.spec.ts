@@ -219,5 +219,32 @@ test.describe("espace de l'équipe : parcours complet", () => {
     ).toBeVisible();
     await expect(page.getByRole("group", { name: "Libreville / Grand Libreville" })).toBeVisible();
     await expectAccessible(page);
+
+    // --- Utilisateurs (S7.5-T04) : un administrateur n'est jamais modifiable ici ---
+    await page.goto("/equipe/utilisateurs");
+    await expect(page.getByRole("heading", { name: "Utilisateurs", level: 1 })).toBeVisible();
+    await expect(
+      page.getByText("Administrateur : géré depuis le serveur seulement."),
+    ).toBeVisible();
+    await expectAccessible(page);
+    // Recherche d'un client, rôle accordé puis retiré (la base revient comme avant)
+    await page.getByLabel("Compte à ajouter à l'équipe").fill(CLIENT.email);
+    await page.getByRole("button", { name: "Rechercher" }).click();
+    await page.getByRole("button", { name: "Service client", pressed: false }).click();
+    await expect(page).toHaveURL(/\/equipe\/utilisateurs\?ok=role-accorde$/);
+    const member = page.getByRole("listitem").filter({ hasText: CLIENT.email });
+    await expect(member).toContainText("Double authentification à activer");
+    await member.getByRole("button", { name: "Service client", pressed: true }).click();
+    await expect(page).toHaveURL(/\/equipe\/utilisateurs\?ok=role-retire$/);
+
+    // --- Service client : recherche, puis commandes en lecture seule ---
+    await page.goto("/equipe/clients");
+    await page.getByLabel("Client à retrouver").fill(CLIENT.email);
+    await page.getByRole("button", { name: "Rechercher" }).click();
+    await page.getByRole("link", { name: /voir ses commandes/ }).click();
+    await expect(
+      page.getByRole("heading", { name: "Commandes du client", level: 1 }),
+    ).toBeVisible();
+    await expectAccessible(page);
   });
 });

@@ -72,6 +72,11 @@ export function PrivacyPolicy() {
         </li>
         <li>Sessions de connexion : 30 jours, prolongés à chaque visite.</li>
         <li>
+          Appareils déjà utilisés pour vous connecter : une empreinte de l&apos;identifiant (jamais
+          l&apos;identifiant lui-même) et le résumé du navigateur, pour les 20 plus récents ;
+          effacés avec le compte.
+        </li>
+        <li>
           Sauvegardes chiffrées : 6 mois au plus ; une donnée effacée disparaît des sauvegardes à
           leur rotation.
         </li>
@@ -79,7 +84,10 @@ export function PrivacyPolicy() {
 
       <h2 className="text-xl font-bold">Qui reçoit vos données</h2>
       <ul>
-        <li>L&apos;équipe {SITE.name}, selon son rôle (administration, modération).</li>
+        <li>
+          L&apos;équipe {SITE.name}, selon son rôle (catalogue, logistique, finance, service client,
+          administration).
+        </li>
         <li>Le vendeur de vos articles : ce qu&apos;il faut pour préparer sa part de commande.</li>
         <li>Le livreur : nom, téléphone et adresse de livraison.</li>
         <li>L&apos;opérateur Mobile Money (Airtel, Moov) : le numéro et le montant à payer.</li>
@@ -101,6 +109,11 @@ export function PrivacyPolicy() {
         <li>
           Cookie de session (connexion, 30 jours) et cookies temporaires d&apos;inscription et de
           mot de passe oublié (quelques minutes).
+        </li>
+        <li>
+          Cookie d&apos;appareil (<code>kemdia_appareil</code>, un an, renouvelé à chaque connexion)
+          : un nombre tiré au hasard, pour vous prévenir par e-mail quand votre compte est ouvert
+          depuis un appareil inconnu. Il ne sert à rien d&apos;autre.
         </li>
         <li>
           Stockage du navigateur : panier (<code>kemdia.cart.v2</code>), favoris (

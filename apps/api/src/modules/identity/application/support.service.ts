@@ -28,13 +28,18 @@ export interface SupportAccountView extends AdminAccountView {
 @Injectable()
 export class SupportService {
   constructor(
-    @Inject(ACCOUNT_REPOSITORY) private readonly accounts: Pick<AccountRepository, "findByIdentifier" | "findById">,
+    @Inject(ACCOUNT_REPOSITORY)
+    private readonly accounts: Pick<AccountRepository, "findByIdentifier" | "findById">,
     @Inject(STAFF_DIRECTORY) private readonly staff: Pick<StaffDirectory, "activity">,
     @Inject(AuditLog) private readonly audit: Pick<AuditLog, "record">,
     @Inject(TRANSACTION_RUNNER) private readonly transactions: TransactionRunner,
   ) {}
 
-  lookup(actor: RoleActor, rawIdentifier: string, context: AuditContext): Promise<SupportAccountView> {
+  lookup(
+    actor: RoleActor,
+    rawIdentifier: string,
+    context: AuditContext,
+  ): Promise<SupportAccountView> {
     if (!hasRole(actor.roles, "support")) {
       throw new IdentityError("ACCES_REFUSE", "action réservée au service client");
     }

@@ -401,7 +401,9 @@ export const AccountViewSchema = z
     phone: z.string().nullable().describe("Format +2410XXXXXXXX"),
     roles: z
       .array(z.enum(ROLES))
-      .describe("Rôles cumulables (S4-T06) : toujours « client », puis vendor, catalog, logistics, finance, support, admin"),
+      .describe(
+        "Rôles cumulables (S4-T06) : toujours « client », puis vendor, catalog, logistics, finance, support, admin",
+      ),
   })
   .meta({ id: "AccountView", description: "Le compte de la personne connectée" });
 export type AccountView = z.infer<typeof AccountViewSchema>;
@@ -448,7 +450,9 @@ export const LoginRequestSchema = z
       .string()
       .regex(DEVICE_ID_PATTERN)
       .optional()
-      .describe("Identifiant aléatoire de l'appareil (cookie du site) : avis au titulaire s'il est inconnu"),
+      .describe(
+        "Identifiant aléatoire de l'appareil (cookie du site) : avis au titulaire s'il est inconnu",
+      ),
   })
   .meta({ id: "LoginRequest" });
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
@@ -598,12 +602,7 @@ export const STAFF_CURSOR_PATTERN = /^[A-Za-z0-9_-]{20,700}$/;
 
 export const StaffListParamsSchema = z.strictObject({
   role: z.enum(STAFF_ROLES).optional(),
-  limit: z.coerce
-    .number()
-    .int()
-    .min(1)
-    .max(STAFF_LIMITS.pageMax)
-    .default(STAFF_LIMITS.pageDefault),
+  limit: z.coerce.number().int().min(1).max(STAFF_LIMITS.pageMax).default(STAFF_LIMITS.pageDefault),
   after: z.string().regex(STAFF_CURSOR_PATTERN).optional(),
 });
 export type StaffListParams = z.infer<typeof StaffListParamsSchema>;
@@ -627,7 +626,10 @@ export const AccountDisableRequestSchema = z
         `Motif gardé au journal d'audit (${STAFF_LIMITS.reasonMin} à ${STAFF_LIMITS.reasonMax} caractères)`,
       ),
   })
-  .meta({ id: "AccountDisableRequest", description: "Désactivation d'un compte par l'administration" });
+  .meta({
+    id: "AccountDisableRequest",
+    description: "Désactivation d'un compte par l'administration",
+  });
 export type AccountDisableRequest = z.infer<typeof AccountDisableRequestSchema>;
 
 export const StaffActionResultSchema = z
@@ -642,7 +644,10 @@ export const SupportAccountSchema = AdminAccountSchema.extend({
   lastActiveAt: z.iso.datetime(),
   emailVerified: z.boolean(),
   phoneVerified: z.boolean(),
-}).meta({ id: "SupportAccount", description: "Un compte vu par le service client (lecture seule)" });
+}).meta({
+  id: "SupportAccount",
+  description: "Un compte vu par le service client (lecture seule)",
+});
 export type SupportAccount = z.infer<typeof SupportAccountSchema>;
 
 export const DeviceNotMeRequestSchema = z
@@ -653,12 +658,10 @@ export const DeviceNotMeRequestSchema = z
   });
 export type DeviceNotMeRequest = z.infer<typeof DeviceNotMeRequestSchema>;
 
-export const DeviceNotMeResultSchema = z
-  .object({ sessionsClosed: z.int().nonnegative() })
-  .meta({
-    id: "DeviceNotMeResult",
-    description: "Toutes les sessions du compte sont fermées ; changer le mot de passe ensuite",
-  });
+export const DeviceNotMeResultSchema = z.object({ sessionsClosed: z.int().nonnegative() }).meta({
+  id: "DeviceNotMeResult",
+  description: "Toutes les sessions du compte sont fermées ; changer le mot de passe ensuite",
+});
 export type DeviceNotMeResult = z.infer<typeof DeviceNotMeResultSchema>;
 
 /** Position dans le journal (page suivante) : opaque pour le client. */

@@ -308,6 +308,9 @@ describe("Données personnelles (PostgreSQL, HTTP)", () => {
       }),
     ).toBe(1);
 
+    await prisma.knownDevice.create({
+      data: { id: randomUUID(), accountId: client.accountId, deviceHash: "a".repeat(64) },
+    });
     await remove(client).expect(204);
 
     const account = await prisma.account.findUniqueOrThrow({ where: { id: client.accountId } });
@@ -321,6 +324,7 @@ describe("Données personnelles (PostgreSQL, HTTP)", () => {
     expect(account.deletedAt).not.toBeNull();
     expect(account.passwordHash).not.toBe(passwordHash);
     expect(await prisma.session.count({ where: { accountId: client.accountId } })).toBe(0);
+    expect(await prisma.knownDevice.count({ where: { accountId: client.accountId } })).toBe(0);
     expect(await prisma.cart.count({ where: { accountId: client.accountId } })).toBe(0);
 
     const anonymized = await prisma.order.findUniqueOrThrow({ where: { id: row.id } });

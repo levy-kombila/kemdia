@@ -39,7 +39,8 @@ export class DeviceService {
 
   constructor(
     @Inject(KNOWN_DEVICE_REPOSITORY) private readonly devices: KnownDeviceRepository,
-    @Inject(SESSION_REPOSITORY) private readonly sessions: Pick<SessionRepository, "revokeAllForAccount">,
+    @Inject(SESSION_REPOSITORY)
+    private readonly sessions: Pick<SessionRepository, "revokeAllForAccount">,
     @Inject(IDENTITY_CLOCK) private readonly clock: Clock,
     @Inject(IDENTITY_OPTIONS) private readonly options: IdentityOptions,
     @Inject(AuditLog) private readonly audit: Pick<AuditLog, "record">,

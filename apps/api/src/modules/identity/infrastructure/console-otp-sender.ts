@@ -27,7 +27,9 @@ export class ConsoleOtpSender implements OtpSender {
       );
     } else if (message.kind === "new-device") {
       // Le lien n'est jamais écrit : il ferme toutes les sessions du compte
-      this.logger.warn(`[${message.channel}] ${message.to} — avis : nouvel appareil (${message.device})`);
+      this.logger.warn(
+        `[${message.channel}] ${message.to} — avis : nouvel appareil (${message.device})`,
+      );
     } else if (message.kind === "signup-alert") {
       this.logger.warn(
         `[${message.channel}] ${message.to} — alerte : inscription tentée sur un compte existant`,

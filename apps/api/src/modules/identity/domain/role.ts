@@ -30,7 +30,13 @@ export const STAFF_ROLES = ["catalog", "logistics", "finance", "support", "admin
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
 /** Rôles qu'un administrateur peut accorder ou retirer par l'API (jamais `admin`). */
-export const ADMIN_ASSIGNABLE_ROLES = ["vendor", "catalog", "logistics", "finance", "support"] as const;
+export const ADMIN_ASSIGNABLE_ROLES = [
+  "vendor",
+  "catalog",
+  "logistics",
+  "finance",
+  "support",
+] as const;
 export type AssignableRole = (typeof ADMIN_ASSIGNABLE_ROLES)[number];
 
 /** Rôles impliqués par un autre : un administrateur a les droits de toute l'équipe. */

@@ -12,7 +12,6 @@ import { decideProductAction } from "@/lib/staff/actions";
 import { PRODUCT_STATUS, SHOP_STATUS } from "@/lib/staff/labels";
 import { staffErrorFromParam, staffErrorMessage } from "@/lib/staff/messages";
 import { categoryPathOf, staffImageSrc } from "@/lib/staff/moderation-view";
-import { isAdmin } from "@/lib/staff/roles";
 import { requireVerifiedStaff, staffApi } from "@/lib/staff/staff";
 
 export const metadata: Metadata = { title: "Produit à modérer" };
@@ -32,8 +31,10 @@ export default async function ModerationProductPage({
 }) {
   const [{ productId }, query] = await Promise.all([params, searchParams]);
   if (!UUID.test(productId)) notFound();
-  const { account, token } = await requireVerifiedStaff(`/equipe/moderation/${productId}`);
-  const admin = isAdmin(account.roles);
+  const { account, token } = await requireVerifiedStaff(
+    `/equipe/moderation/${productId}`,
+    "catalog",
+  );
   const [result, tree] = await Promise.all([
     staffApi().moderationProduct(token, productId),
     getCategoryTree().catch(() => []),
@@ -43,7 +44,12 @@ export default async function ModerationProductPage({
   const crumbs = [{ label: "Modération", href: "/equipe/moderation" }, { label: "Produit" }];
   if (!result.ok) {
     return (
-      <StaffShell section="moderation" admin={admin} title="Produit à modérer" crumbs={crumbs}>
+      <StaffShell
+        section="moderation"
+        roles={account.roles}
+        title="Produit à modérer"
+        crumbs={crumbs}
+      >
         <FormAlert>{staffErrorMessage(result.code)}</FormAlert>
       </StaffShell>
     );
@@ -61,7 +67,7 @@ export default async function ModerationProductPage({
   return (
     <StaffShell
       section="moderation"
-      admin={admin}
+      roles={account.roles}
       title={product.title}
       crumbs={crumbs}
       error={staffErrorFromParam(first(query.erreur))}
@@ -81,17 +87,15 @@ export default async function ModerationProductPage({
                 </StatusBadge>
               </>
             )}
-            {admin && (
-              <>
-                {" · "}
-                <Link
-                  href={`/equipe/boutiques/${product.shop.id}`}
-                  className="text-brand-700 font-semibold underline"
-                >
-                  voir la boutique
-                </Link>
-              </>
-            )}
+            <>
+              {" · "}
+              <Link
+                href={`/equipe/boutiques/${product.shop.id}`}
+                className="text-brand-700 font-semibold underline"
+              >
+                voir la boutique
+              </Link>
+            </>
           </span>
         )}
         {product.submittedAt && (

@@ -17,7 +17,6 @@ import {
 import { PRODUCT_STATUS } from "@/lib/staff/labels";
 import { staffErrorFromParam, staffErrorMessage, staffNotice } from "@/lib/staff/messages";
 import { staffImageSrc } from "@/lib/staff/moderation-view";
-import { isAdmin } from "@/lib/staff/roles";
 import { requireVerifiedStaff, staffApi } from "@/lib/staff/staff";
 import { categoryOptions } from "@/lib/vendor/categories";
 
@@ -45,7 +44,7 @@ export default async function StaffListingPage({
   const [{ listingId }, query] = await Promise.all([params, searchParams]);
   if (!UUID.test(listingId)) notFound();
   const page = `/equipe/fiches/${listingId}`;
-  const { account, token } = await requireVerifiedStaff(page);
+  const { account, token } = await requireVerifiedStaff(page, "catalog");
   const fusion = first(query.fusion);
   const targetQuery = (first(query.cible) ?? "").slice(0, 100).trim();
   const [result, corrections, tree, target, candidates] = await Promise.all([
@@ -64,7 +63,7 @@ export default async function StaffListingPage({
   const shell = (title: string, children: React.ReactNode) => (
     <StaffShell
       section="fiches"
-      admin={isAdmin(account.roles)}
+      roles={account.roles}
       title={title}
       crumbs={crumbs}
       notice={staffNotice(first(query.ok))}

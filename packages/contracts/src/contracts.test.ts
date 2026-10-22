@@ -7,6 +7,10 @@ import {
   SignupRequestSchema,
   SignupVerifyRequestSchema,
   AdminRoleParamsSchema,
+  LoginRequestSchema,
+  AccountDisableRequestSchema,
+  DeviceNotMeRequestSchema,
+  StaffListParamsSchema,
   AuditQueryParamsSchema,
   AccountViewSchema,
   CART_ERROR_CODES,
@@ -111,6 +115,7 @@ describe("schémas", () => {
     expect(Object.keys(openApiComponentSchemas())).toEqual([
       "AccountDataExport",
       "AccountDeletionStatus",
+      "AccountDisableRequest",
       "AccountView",
       "AdminAccount",
       "AdminAccountLookupRequest",
@@ -157,6 +162,8 @@ describe("schémas", () => {
       "DeliveryTariffs",
       "DeliveryTariffsRequest",
       "DeliveryTariffZone",
+      "DeviceNotMeRequest",
+      "DeviceNotMeResult",
       "Facets",
       "ForgotPasswordRequest",
       "Health",
@@ -228,7 +235,11 @@ describe("schémas", () => {
       "SignupStarted",
       "SignupVerified",
       "SignupVerifyRequest",
+      "StaffActionResult",
+      "StaffMember",
+      "StaffPage",
       "StartPaymentRequest",
+      "SupportAccount",
       "Variant",
       "VendorKyc",
       "VendorListing",
@@ -298,6 +309,23 @@ describe("rôles et journal d'audit (S4-T06)", () => {
     expect(AdminRoleParamsSchema.safeParse({ accountId: "42", role: "vendor" }).success).toBe(
       false,
     );
+  });
+
+  it("équipe et appareils (S7.5-T04) : filtres, motif, jetons de forme fixe", () => {
+    expect(StaffListParamsSchema.parse({})).toEqual({ limit: 50 });
+    expect(StaffListParamsSchema.safeParse({ role: "admin", limit: "100" }).success).toBe(true);
+    expect(StaffListParamsSchema.safeParse({ role: "vendor" }).success).toBe(false);
+    expect(StaffListParamsSchema.safeParse({ limit: "101" }).success).toBe(false);
+    expect(StaffListParamsSchema.safeParse({ after: "x'; DROP" }).success).toBe(false);
+    expect(AccountDisableRequestSchema.safeParse({ reason: "Fin de contrat" }).success).toBe(true);
+    expect(AccountDisableRequestSchema.safeParse({ reason: "x".repeat(601) }).success).toBe(false);
+    expect(DeviceNotMeRequestSchema.safeParse({ token: "A".repeat(43) }).success).toBe(true);
+    expect(DeviceNotMeRequestSchema.safeParse({ token: "A".repeat(42) }).success).toBe(false);
+    expect(DeviceNotMeRequestSchema.safeParse({ token: "A".repeat(43), x: 1 }).success).toBe(false);
+    expect(
+      LoginRequestSchema.safeParse({ identifier: "a@b.ga", password: "x", device: "<script>" })
+        .success,
+    ).toBe(false);
   });
 
   it("compte : rôles connus seulement", () => {

@@ -91,7 +91,12 @@ export class LoginService {
       );
     }
     const opened = await this.sessions.open(account, input.userAgent);
-    await this.devices?.afterLogin(account, input.device, input.userAgent, input.context ?? NO_REQUEST);
+    await this.devices?.afterLogin(
+      account,
+      input.device,
+      input.userAgent,
+      input.context ?? NO_REQUEST,
+    );
     return opened;
   }
 }

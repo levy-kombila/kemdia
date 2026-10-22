@@ -72,7 +72,11 @@ export class StaffAccountService {
   }
 
   /** Départ d'un employé : tous ses rôles de l'équipe retirés, toutes ses sessions fermées. Il redevient client. */
-  removeStaff(actor: RoleActor, targetId: string, context: AuditContext): Promise<StaffActionResult> {
+  removeStaff(
+    actor: RoleActor,
+    targetId: string,
+    context: AuditContext,
+  ): Promise<StaffActionResult> {
     return this.onAccount(actor, targetId, async (account) => {
       const held = REMOVABLE.filter((role) => account.roles.includes(role));
       for (const role of held) await this.roles.revoke(account.id, role);
@@ -124,24 +128,20 @@ export class StaffAccountService {
 
   /** Réactivation d'un compte désactivé (jamais d'un compte effacé). Ses rôles éventuels n'ont pas bougé. */
   enable(actor: RoleActor, targetId: string, context: AuditContext): Promise<StaffActionResult> {
-    return this.onAccount(
-      actor,
-      targetId,
-      async (account) => {
-        if (account.status !== "disabled") {
-          throw new IdentityError("COMPTE_INACTIF", "ce compte n'est pas désactivé");
-        }
-        await this.staff.setStatus(account.id, "active", this.clock.now());
-        await this.audit.record({
-          action: "account.enabled",
-          actor: { type: "account", id: actor.accountId },
-          target: { type: "account", id: account.id },
-          details: {},
-          context,
-        });
-        return 0;
-      },
-    );
+    return this.onAccount(actor, targetId, async (account) => {
+      if (account.status !== "disabled") {
+        throw new IdentityError("COMPTE_INACTIF", "ce compte n'est pas désactivé");
+      }
+      await this.staff.setStatus(account.id, "active", this.clock.now());
+      await this.audit.record({
+        action: "account.enabled",
+        actor: { type: "account", id: actor.accountId },
+        target: { type: "account", id: account.id },
+        details: {},
+        context,
+      });
+      return 0;
+    });
   }
 
   /** Règles communes, sous le verrou du compte, puis l'action ; renvoie le compte relu. */

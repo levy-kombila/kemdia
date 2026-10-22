@@ -195,7 +195,10 @@ export class OtpService {
   }
 
   /** Connexion depuis un appareil inconnu (S7.5-T04). `contact` : e-mail ou mobile vérifié, déjà normalisé. */
-  notifyNewDevice(contact: string, notice: { device: string; at: Date; link: string | null }): void {
+  notifyNewDevice(
+    contact: string,
+    notice: { device: string; at: Date; link: string | null },
+  ): void {
     const identifier = parseIdentifier(contact);
     if (!identifier) return;
     const channel = channelOf(identifier);

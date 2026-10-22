@@ -53,6 +53,35 @@ describe("adaptateur API de l'identité", () => {
     });
   });
 
+  it("appareil (S7.5-T04) : envoyé seulement s'il a la bonne forme", async () => {
+    const good = api(json(200, OPENED));
+    await good.identity.login("awa@exemple.ga", "Mangue2026", null, "d".repeat(43));
+    expect(JSON.parse(good.fetch.mock.calls[0]![1]?.body as string)).toMatchObject({
+      device: "d".repeat(43),
+    });
+    const bad = api(json(200, OPENED));
+    await bad.identity.login("awa@exemple.ga", "Mangue2026", null, "<script>");
+    expect(JSON.parse(bad.fetch.mock.calls[0]![1]?.body as string)).not.toHaveProperty("device");
+  });
+
+  it("« ce n'est pas moi » : jeton dans le corps ; jeton mal formé jamais envoyé", async () => {
+    const { fetch, identity } = api(json(200, { sessionsClosed: 2 }));
+    expect(await identity.deviceNotMe("j".repeat(43))).toEqual({
+      ok: true,
+      data: { sessionsClosed: 2 },
+    });
+    expect(fetch.mock.calls[0]![0]).toBe("http://api:4000/api/v1/auth/devices/not-me");
+    expect(JSON.parse(fetch.mock.calls[0]![1]?.body as string)).toEqual({ token: "j".repeat(43) });
+    const refused = api(problem(410, "ALERTE_INVALIDE"));
+    expect(await refused.identity.deviceNotMe("j".repeat(43))).toEqual({
+      ok: false,
+      code: "ALERTE_INVALIDE",
+    });
+    const none = api(json(200, {}));
+    expect(await none.identity.deviceNotMe("../x")).toEqual({ ok: false, code: "ALERTE_INVALIDE" });
+    expect(none.fetch).not.toHaveBeenCalled();
+  });
+
   it("adresse du visiteur transmise quand elle est connue (S4-T07), jamais sinon", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(json(200, OPENED)));
     const options = { url: "http://api:4000", key: KEY, timeoutMs: 1000, fetch };

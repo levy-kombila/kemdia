@@ -3,19 +3,32 @@ import { describe, expect, it } from "vitest";
 import { staffErrorFromParam, staffErrorMessage, staffNotice } from "./messages";
 import { categoryPathOf, staffImageSrc } from "./moderation-view";
 import { qrDrawing } from "./qr";
-import { confirmedUntil, isAdmin, isStaff, staffPath } from "./roles";
+import { canAccess, confirmedUntil, isAdmin, isStaff, staffPath } from "./roles";
 
 const PRODUCT = "22222222-2222-4222-8222-222222222222";
 const IMAGE = "33333333-3333-4333-8333-333333333333";
 
 describe("rôles de l'équipe", () => {
-  it("modérateur ou administrateur ; l'administrateur seul pour les boutiques", () => {
+  it("cinq rôles de l'équipe ; client et vendeur n'en font pas partie", () => {
     expect(isStaff(["client"])).toBe(false);
     expect(isStaff(["client", "vendor"])).toBe(false);
-    expect(isStaff(["client", "moderator"])).toBe(true);
-    expect(isStaff(["client", "admin"])).toBe(true);
-    expect(isAdmin(["client", "moderator"])).toBe(false);
+    for (const role of ["catalog", "logistics", "finance", "support", "admin"] as const) {
+      expect(isStaff(["client", role])).toBe(true);
+    }
+    expect(isAdmin(["client", "catalog"])).toBe(false);
     expect(isAdmin(["client", "admin"])).toBe(true);
+  });
+
+  it("chaque page à son rôle ; l'administrateur ouvre tout", () => {
+    expect(canAccess(["client", "catalog"])).toBe(true);
+    expect(canAccess(["client", "vendor"])).toBe(false);
+    expect(canAccess(["client", "catalog"], "catalog")).toBe(true);
+    expect(canAccess(["client", "catalog"], "logistics")).toBe(false);
+    expect(canAccess(["client", "support"], "admin")).toBe(false);
+    expect(canAccess(["client", "logistics", "support"], "support")).toBe(true);
+    for (const role of ["catalog", "logistics", "finance", "support", "admin"] as const) {
+      expect(canAccess(["client", "admin"], role)).toBe(true);
+    }
   });
 });
 
