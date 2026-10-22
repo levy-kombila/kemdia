@@ -250,5 +250,26 @@ test.describe("espace de l'équipe : parcours complet", () => {
       page.getByRole("heading", { name: "Commandes du client", level: 1 }),
     ).toBeVisible();
     await expectAccessible(page);
+
+    // --- Finance et journal (S7.5-T05) : l'administrateur a aussi le rôle Finance ---
+    for (const [path, heading] of [
+      ["/equipe/factures", "Factures"],
+      ["/equipe/encaissements", "Espèces à encaisser"],
+      ["/equipe/remboursements", "Remboursements"],
+      ["/equipe/codes-promo", "Codes promo"],
+      ["/equipe/reglages", "Réglages"],
+      ["/equipe/journal", "Journal"],
+    ] as const) {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
+      await expectAccessible(page);
+    }
+    // Journal : la remise au transporteur faite plus haut y figure
+    await page.getByLabel("Action").selectOption({ label: "Remise au transporteur" });
+    await page.getByRole("button", { name: "Filtrer" }).click();
+    await expect(page).toHaveURL(/action=shipment\.handed_over/);
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Remise au transporteur" }).first(),
+    ).toBeVisible();
   });
 });

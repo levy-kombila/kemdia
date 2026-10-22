@@ -1333,6 +1333,73 @@ export const InvoiceParamsSchema = z.strictObject({
   number: z.string().regex(INVOICE_NUMBER_PATTERN),
 });
 
+// --- Finance : factures, espèces à encaisser (S7.5-T05, ADR-0052) ---
+
+export const ADMIN_INVOICE_CURSOR_PATTERN = /^[A-Za-z0-9_-]{20,120}$/;
+
+export const AdminInvoiceListParamsSchema = z.strictObject({
+  q: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^(KMD-[FA]-\d{4}-\d{6}|KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6})$/)
+    .optional()
+    .describe(
+      "Numéro de facture ou d'avoir (KMD-F-2026-000001), ou numéro de commande (KMD-7F3K9Q)",
+    ),
+  after: z.string().regex(ADMIN_INVOICE_CURSOR_PATTERN).optional(),
+});
+export type AdminInvoiceListParams = z.infer<typeof AdminInvoiceListParamsSchema>;
+
+export const AdminInvoiceSchema = InvoiceSummarySchema.extend({
+  buyerName: z.string().describe("Nom du client figé sur la facture"),
+  paymentMethod: z.enum(["airtel", "moov", "cod"]),
+  email: z
+    .enum(["sent", "pending", "failed"])
+    .describe(
+      "Envoi par e-mail : parti, en cours d'essais, ou abandonné (pas d'adresse vérifiée, 5 échecs)",
+    ),
+  emailSentAt: z.iso.datetime().nullable(),
+}).meta({ id: "AdminInvoice", description: "Facture ou avoir vu par la Finance" });
+export type AdminInvoice = z.infer<typeof AdminInvoiceSchema>;
+
+export const AdminInvoicePageSchema = z
+  .object({
+    items: z.array(AdminInvoiceSchema).max(50),
+    nextCursor: z.string().regex(ADMIN_INVOICE_CURSOR_PATTERN).nullable(),
+  })
+  .meta({
+    id: "AdminInvoicePage",
+    description: "Factures et avoirs, du plus récent au plus ancien",
+  });
+export type AdminInvoicePage = z.infer<typeof AdminInvoicePageSchema>;
+
+export const AdminInvoiceParamsSchema = z.strictObject({
+  number: z.string().regex(INVOICE_NUMBER_PATTERN),
+});
+
+export const CashToCollectSchema = z
+  .object({
+    reference: orderReference,
+    status: z.enum(["shipped", "delivered"]),
+    total: fcfa.describe("Montant à encaisser : le total de la commande"),
+    cityName: z.string(),
+    createdAt: z.iso.datetime(),
+  })
+  .meta({
+    id: "CashToCollect",
+    description: "Commande payée en espèces à la livraison, pas encore encaissée",
+  });
+export type CashToCollect = z.infer<typeof CashToCollectSchema>;
+
+export const CashToCollectListSchema = z
+  .object({ items: z.array(CashToCollectSchema).max(100) })
+  .meta({
+    id: "CashToCollectList",
+    description: "Espèces à encaisser (100 au plus) : livrées d'abord, puis les plus anciennes",
+  });
+export type CashToCollectList = z.infer<typeof CashToCollectListSchema>;
+
 const billingText = (max: number) => z.string().trim().min(1).max(max);
 
 export const BillingSettingsRequestSchema = z

@@ -1,7 +1,10 @@
 import {
   IDENTITY_ERROR_CODES,
   SHIPPING_LIMITS,
+  COUPON_PERCENT_MAX,
+  type CouponErrorCode,
   type IdentityErrorCode,
+  type PaymentErrorCode,
   type ShippingErrorCode,
   type VendorErrorCode,
 } from "@kemdia/contracts/constants";
@@ -17,7 +20,45 @@ export type StaffMessageCode =
   | ShippingErrorCode
   | "COMMANDE_INTROUVABLE"
   | "PANIER_OCCUPE"
+  | "ANNULATION_IMPOSSIBLE"
+  | PaymentErrorCode
+  | CouponErrorCode
   | "INDISPONIBLE";
+
+/** Finance (S7.5-T05) : paiements, factures, remboursements, encaissements, codes promo. */
+const FINANCE_MESSAGES: Record<
+  PaymentErrorCode | CouponErrorCode | "ANNULATION_IMPOSSIBLE",
+  string
+> = {
+  PAIEMENT_IMPOSSIBLE: "Paiement impossible pour cette commande.",
+  PAIEMENT_EN_COURS: "Un paiement est en cours pour cette commande. Réessayez dans un instant.",
+  TROP_D_ESSAIS_PAIEMENT: "Trop d'essais de paiement pour cette commande.",
+  PAIEMENT_INDISPONIBLE: "Le paiement Mobile Money est momentanément indisponible.",
+  PAIEMENT_INTROUVABLE: "Ce paiement n'existe pas.",
+  REMBOURSEMENT_INTROUVABLE: "Ce remboursement n'existe pas.",
+  REMBOURSEMENT_DEJA_FAIT:
+    "Ce remboursement est déjà noté fait, avec une autre référence. La page a été rechargée.",
+  ENCAISSEMENT_IMPOSSIBLE:
+    "Encaissement refusé : le montant doit être exactement le total, et la commande ne doit pas être annulée.",
+  SIGNATURE_INVALIDE: "Notification refusée.",
+  NOTIFICATION_EXPIREE: "Notification expirée.",
+  DEMANDE_INTROUVABLE: "Cette demande n'existe pas.",
+  CODE_PIN_INVALIDE: "Code PIN refusé.",
+  FACTURE_INTROUVABLE: "Cette facture n'existe pas.",
+  ENVOI_IMPOSSIBLE:
+    "Renvoi impossible : envoi automatique encore en cours, client sans e-mail vérifié, ou facture renvoyée il y a moins de 10 minutes.",
+  ANNULATION_IMPOSSIBLE:
+    "Action impossible pour cette commande (déjà expédiée, ou un vendeur n'a pas encore répondu).",
+  COUPON_INVALIDE: `Code promo refusé : vérifiez le code (4 à 20 lettres, chiffres ou tirets), la valeur (1 à ${COUPON_PERCENT_MAX} % ou un montant), le minimum d'articles (obligatoire et supérieur au montant fixe) et les dates.`,
+  COUPON_EXPIRE: "Ce code promo a expiré.",
+  COUPON_EPUISE: "Ce code promo n'a plus d'utilisation disponible.",
+  COUPON_DEJA_UTILISE: "Ce code promo a déjà été utilisé.",
+  COUPON_MINIMUM_NON_ATTEINT: "Montant minimum non atteint.",
+  COUPON_NON_APPLICABLE: "Ce code promo ne s'applique pas.",
+  COUPON_EXISTE: "Ce code promo existe déjà : choisissez-en un autre.",
+  COUPON_INTROUVABLE: "Ce code promo n'existe pas.",
+  COUPON_TROP_D_ESSAIS: "Trop d'essais de codes promo.",
+};
 
 /** Livraisons (S7-T02) et codes des commandes renvoyés par leurs routes. */
 const SHIPPING_MESSAGES: Record<
@@ -90,11 +131,14 @@ const isIdentityCode = (value: string): value is IdentityErrorCode =>
 const isVendorCode = (code: StaffMessageCode): code is VendorErrorCode => code in VENDOR_MESSAGES;
 const isShippingCode = (code: StaffMessageCode): code is keyof typeof SHIPPING_MESSAGES =>
   Object.hasOwn(SHIPPING_MESSAGES, code);
+const isFinanceCode = (code: StaffMessageCode): code is keyof typeof FINANCE_MESSAGES =>
+  Object.hasOwn(FINANCE_MESSAGES, code);
 
 /** Message en français pour une erreur de l'espace de l'équipe. */
 export function staffErrorMessage(code: StaffMessageCode, retryAfterSeconds?: number): string {
   if (isVendorCode(code)) return VENDOR_MESSAGES[code];
   if (isShippingCode(code)) return SHIPPING_MESSAGES[code];
+  if (isFinanceCode(code)) return FINANCE_MESSAGES[code];
   // 2FA : un code faux n'a rien à voir avec un code reçu par e-mail
   if (code === "CODE_INVALIDE")
     return "Code incorrect. Saisissez le code à 6 chiffres affiché maintenant dans votre application, ou un code de secours.";
@@ -138,6 +182,16 @@ export const STAFF_NOTICES = {
     "Rôles de l'équipe retirés et sessions fermées : la personne redevient cliente.",
   "compte-desactive": "Compte désactivé : plus aucune connexion possible, sessions fermées.",
   "compte-reactive": "Compte réactivé : la personne peut de nouveau se connecter.",
+  // Finance (S7.5-T05)
+  "facture-renvoyee": "Facture renvoyée au client par e-mail.",
+  "especes-encaissees": "Encaissement noté : la commande est payée et sa facture est établie.",
+  "remboursement-fait": "Remboursement noté fait.",
+  "code-cree": "Code promo créé : il est actif tout de suite (ou à sa date de début).",
+  "code-active": "Code promo activé.",
+  "code-desactive": "Code promo désactivé : il ne s'applique plus aux nouvelles commandes.",
+  "facturation-enregistree":
+    "Informations de facturation enregistrées : elles figureront sur les prochaines factures.",
+  "livraison-enregistree": "Réglage du paiement à la livraison enregistré.",
 } as const;
 export type StaffNotice = keyof typeof STAFF_NOTICES;
 
@@ -155,6 +209,10 @@ export function staffNotice(value: unknown): string | null {
 const SITE_MESSAGES: Record<string, string> = {
   CONFIRMATION_REQUISE:
     "Cochez « Je confirme » avant de retirer les rôles ou de désactiver le compte.",
+  REFERENCE_INVALIDE:
+    "Référence refusée : 3 à 100 caractères (lettres, chiffres, points, tirets, barres obliques).",
+  REGLAGES_INVALIDES:
+    "Réglage refusé : remplissez tous les champs (adresse e-mail valide, montants entiers).",
 };
 
 export function staffErrorFromParam(value: unknown): string | null {
@@ -164,6 +222,7 @@ export function staffErrorFromParam(value: unknown): string | null {
     value === "INDISPONIBLE" ||
     Object.hasOwn(VENDOR_MESSAGES, value) ||
     Object.hasOwn(SHIPPING_MESSAGES, value) ||
+    Object.hasOwn(FINANCE_MESSAGES, value) ||
     isIdentityCode(value)
   )
     return staffErrorMessage(value as StaffMessageCode);

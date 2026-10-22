@@ -11,6 +11,7 @@ import {
   AccountDisableRequestSchema,
   DeviceNotMeRequestSchema,
   StaffListParamsSchema,
+  AdminInvoiceListParamsSchema,
   AuditQueryParamsSchema,
   AccountViewSchema,
   CART_ERROR_CODES,
@@ -120,6 +121,8 @@ describe("schémas", () => {
       "AdminAccount",
       "AdminAccountLookupRequest",
       "AdminCancelOrderRequest",
+      "AdminInvoice",
+      "AdminInvoicePage",
       "AdminKyc",
       "AdminKycPage",
       "AdminKycSummary",
@@ -140,6 +143,8 @@ describe("schémas", () => {
       "CartMerged",
       "CartMergeRequest",
       "CartQuantityRequest",
+      "CashToCollect",
+      "CashToCollectList",
       "Category",
       "CategoryNode",
       "CategoryTree",
@@ -309,6 +314,16 @@ describe("rôles et journal d'audit (S4-T06)", () => {
     expect(AdminRoleParamsSchema.safeParse({ accountId: "42", role: "vendor" }).success).toBe(
       false,
     );
+  });
+
+  it("finance (S7.5-T05) : recherche de facture limitée aux numéros, position bornée", () => {
+    expect(AdminInvoiceListParamsSchema.parse({ q: " kmd-f-2026-000001 " })).toEqual({
+      q: "KMD-F-2026-000001",
+    });
+    expect(AdminInvoiceListParamsSchema.parse({ q: "KMD-7F3K9Q" }).q).toBe("KMD-7F3K9Q");
+    expect(AdminInvoiceListParamsSchema.safeParse({ q: "Marie" }).success).toBe(false);
+    expect(AdminInvoiceListParamsSchema.safeParse({ after: "x'; DROP" }).success).toBe(false);
+    expect(AdminInvoiceListParamsSchema.safeParse({ other: "1" }).success).toBe(false);
   });
 
   it("équipe et appareils (S7.5-T04) : filtres, motif, jetons de forme fixe", () => {

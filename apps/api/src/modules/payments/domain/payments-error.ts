@@ -20,7 +20,9 @@ export type PaymentsErrorCode =
   | "DEMANDE_INTROUVABLE"
   | "CODE_PIN_INVALIDE"
   // Factures (S5-T06, ADR-0028)
-  | "FACTURE_INTROUVABLE";
+  | "FACTURE_INTROUVABLE"
+  /** Renvoi d'une facture impossible : envoi automatique en cours, pas d'e-mail vérifié, ou renvoyée il y a peu */
+  | "ENVOI_IMPOSSIBLE";
 
 /** Une règle du paiement n'est pas respectée. Le message est lisible par un humain, en français. */
 export class PaymentsError extends Error {

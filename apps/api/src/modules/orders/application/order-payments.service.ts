@@ -47,6 +47,11 @@ export class OrderPayments {
     return order;
   }
 
+  /** Espèces à encaisser (S7.5-T05, écran Finance) : 100 commandes au plus. */
+  listCashToCollect(): Promise<OrderRecord[]> {
+    return this.orders.listCashToCollect(100);
+  }
+
   /** Commande du compte, sans verrou. */
   async findForAccount(accountId: string, reference: string): Promise<OrderRecord> {
     const order = await this.orders.findByReference(accountId, reference);

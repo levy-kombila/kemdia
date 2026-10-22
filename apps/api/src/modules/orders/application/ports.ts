@@ -156,6 +156,11 @@ export interface OrderRepository {
   countPendingShopParts(orderId: string): Promise<number>;
   /** Commandes prêtes à expédier (S7-T01), les plus anciennes d'abord. */
   listReadyToShip(limit: number): Promise<OrderRecord[]>;
+  /**
+   * Commandes à la livraison expédiées ou livrées, pas encore notées encaissées (S7.5-T05) : livrées d'abord, puis les
+   * plus anciennes.
+   */
+  listCashToCollect(limit: number): Promise<OrderRecord[]>;
   /** Décision d'une part EN ATTENTE (commande verrouillée par l'appelant) ; `false` si elle n'attendait plus. */
   decideShopPart(
     orderId: string,

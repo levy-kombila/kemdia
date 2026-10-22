@@ -286,6 +286,9 @@ export const AUDIT_ACTIONS = [
   "support.account_viewed",
   "support.lookup_failed",
   "support.orders_viewed",
+  // Finance (S7.5-T05)
+  "invoice.downloaded",
+  "invoice.resent",
   // Appareils (S7.5-T04)
   "device.new_login",
   "device.not_me",
@@ -502,6 +505,7 @@ export const PAYMENT_ERROR_CODES = [
   "CODE_PIN_INVALIDE",
   // Factures (S5-T06)
   "FACTURE_INTROUVABLE",
+  "ENVOI_IMPOSSIBLE",
 ] as const;
 export type PaymentErrorCode = (typeof PAYMENT_ERROR_CODES)[number];
 

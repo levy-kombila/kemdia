@@ -8,7 +8,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { demoCatalog } from "@kemdia/contracts/demo";
 import {
+  AdminInvoicePageSchema,
+  AdminInvoiceSchema,
   BillingSettingsSchema,
+  CashToCollectListSchema,
   InvoiceListSchema,
   OrderQuoteSchema,
   OrderSchema,
@@ -152,7 +155,7 @@ describe("Factures (PostgreSQL, HTTP)", () => {
       (await call("get", `/api/v1/orders/${reference}/invoices`, token).expect(200)).body,
     ).items;
 
-  async function openSession(role?: "ADMIN") {
+  async function openSession(role?: "ADMIN" | "FINANCE" | "CATALOG") {
     const email = `facture.${randomUUID()}@exemple.ga`;
     const now = new Date();
     const account = Account.register({
@@ -518,5 +521,132 @@ describe("Factures (PostgreSQL, HTTP)", () => {
     await expect(
       prisma.$executeRawUnsafe(`DELETE FROM "payments"."billing_settings"`),
     ).rejects.toThrow(/suppression interdite/);
+  });
+
+  describe("Finance (S7.5-T05)", () => {
+    it("factures : liste du plus récent, recherche par numéro ou par commande, PDF tracé ; réservé à la Finance", async () => {
+      const finance = await openSession("FINANCE");
+      const first = await paidOrder();
+      const second = await paidOrder();
+      const page = matches(
+        AdminInvoicePageSchema,
+        (await call("get", "/api/v1/admin/invoices", finance.token).expect(200)).body,
+      );
+      const mine = page.items.filter((i) =>
+        [first.reference, second.reference].includes(i.orderReference),
+      );
+      expect(mine.map((i) => i.orderReference)).toEqual([second.reference, first.reference]);
+      expect(mine[0]).toMatchObject({ kind: "invoice", buyerName: "Marie Nze", email: "pending" });
+
+      const [invoice] = await invoicesOf(first.reference);
+      const byNumber = matches(
+        AdminInvoicePageSchema,
+        (
+          await call(
+            "get",
+            `/api/v1/admin/invoices?q=${invoice!.number.toLowerCase()}`,
+            finance.token,
+          ).expect(200)
+        ).body,
+      );
+      expect(byNumber.items.map((i) => i.number)).toEqual([invoice!.number]);
+      const byOrder = matches(
+        AdminInvoicePageSchema,
+        (
+          await call("get", `/api/v1/admin/invoices?q=${first.reference}`, finance.token).expect(
+            200,
+          )
+        ).body,
+      );
+      expect(byOrder).toMatchObject({ items: [{ number: invoice!.number }], nextCursor: null });
+      await call("get", "/api/v1/admin/invoices?q=DROP%20TABLE", finance.token).expect(400);
+      await call("get", `/api/v1/admin/invoices?after=${"a".repeat(40)}`, finance.token).expect(
+        400,
+      );
+
+      const pdf = await call("get", `/api/v1/admin/invoices/${invoice!.number}`, finance.token)
+        .buffer(true)
+        .parse((res, done) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (c: Buffer) => chunks.push(c));
+          res.on("end", () => done(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+      expect((pdf.body as Buffer).subarray(0, 5).toString()).toBe("%PDF-");
+      expect(
+        await prisma.auditEvent.count({
+          where: { action: "invoice.downloaded", actorId: finance.accountId },
+        }),
+      ).toBe(1);
+      await call("get", "/api/v1/admin/invoices/KMD-F-2000-000001", finance.token).expect(404);
+      // Le catalogue et le client n'y ont pas accès
+      const catalog = await openSession("CATALOG");
+      await call("get", "/api/v1/admin/invoices", catalog.token).expect(403);
+      await call("get", "/api/v1/admin/invoices", client.token).expect(403);
+    });
+
+    it("renvoi au client : pas pendant l'envoi automatique, puis tout de suite, tracé, 10 minutes entre deux", async () => {
+      const finance = await openSession("FINANCE");
+      const order = await paidOrder();
+      const [invoice] = await invoicesOf(order.reference);
+      const resend = () =>
+        call("post", `/api/v1/admin/invoices/${invoice!.number}/resend`, finance.token).send({});
+      expect(codeOf((await resend().expect(409)).body)).toBe("ENVOI_IMPOSSIBLE");
+      // Envoi automatique fait (la base n'accepte qu'une date posée une fois)
+      await prisma.invoice.update({
+        where: { number: invoice!.number },
+        data: { emailSentAt: new Date() },
+      });
+      const done = matches(AdminInvoiceSchema, (await resend().expect(200)).body);
+      expect(done.email).toBe("sent");
+      expect(mailer.sent.filter((m) => m.number === invoice!.number)).toEqual([
+        expect.objectContaining({ to: client.email }),
+      ]);
+      expect(
+        await prisma.auditEvent.count({
+          where: { action: "invoice.resent", actorId: finance.accountId },
+        }),
+      ).toBe(1);
+      expect(codeOf((await resend().expect(409)).body)).toBe("ENVOI_IMPOSSIBLE");
+      expect(mailer.sent.filter((m) => m.number === invoice!.number)).toHaveLength(1);
+    });
+
+    it("espèces à encaisser : commandes à la livraison expédiées ou livrées, livrées d'abord ; disparaît une fois encaissée", async () => {
+      const finance = await openSession("FINANCE");
+      const shipped = await placeOrder("cod");
+      const delivered = await placeOrder("cod");
+      const waiting = await placeOrder("cod");
+      // Statuts dans l'ordre que la base exige
+      const advance = async (id: string, to: ("PREPARING" | "SHIPPED" | "DELIVERED")[]) => {
+        for (const status of to) await prisma.order.update({ where: { id }, data: { status } });
+      };
+      await advance(shipped.id, ["PREPARING", "SHIPPED"]);
+      await advance(delivered.id, ["PREPARING", "SHIPPED", "DELIVERED"]);
+      const list = async () =>
+        matches(
+          CashToCollectListSchema,
+          (await call("get", "/api/v1/admin/cash-to-collect", finance.token).expect(200)).body,
+        ).items.filter((i) =>
+          [shipped.reference, delivered.reference, waiting.reference].includes(i.reference),
+        );
+      expect(await list()).toEqual([
+        expect.objectContaining({
+          reference: delivered.reference,
+          status: "delivered",
+          total: delivered.total,
+        }),
+        expect.objectContaining({
+          reference: shipped.reference,
+          status: "shipped",
+          cityName: "Libreville",
+        }),
+      ]);
+      await call("post", `/api/v1/admin/orders/${delivered.reference}/cod-collected`, finance.token)
+        .send({ amount: delivered.total })
+        .expect(201);
+      expect((await list()).map((i) => i.reference)).toEqual([shipped.reference]);
+      const catalog = await openSession("CATALOG");
+      await call("get", "/api/v1/admin/cash-to-collect", catalog.token).expect(403);
+    });
   });
 });

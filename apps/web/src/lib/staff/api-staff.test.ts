@@ -444,3 +444,101 @@ describe("équipe et service client (S7.5-T04)", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+
+describe("Finance et journal (S7.5-T05)", () => {
+  const NUMBER = "KMD-F-2026-000012";
+  const INVOICE = {
+    number: NUMBER,
+    kind: "invoice",
+    orderReference: "KMD-7F3K9Q",
+    issuedAt: NOW,
+    total: 15_000,
+    buyerName: "Marie Nze",
+    paymentMethod: "cod",
+    email: "sent",
+    emailSentAt: NOW,
+  };
+
+  it("factures : recherche et position dans l'adresse ; position fabriquée ignorée ; renvoi par numéro vérifié", async () => {
+    const { fetch, staff } = api(json(200, { items: [INVOICE], nextCursor: null }));
+    expect(await staff.invoices(TOKEN, { q: "KMD-7F3K9Q", after: "c".repeat(30) })).toMatchObject({
+      ok: true,
+    });
+    expect(sent(fetch).url).toBe(
+      `http://serveur.test:4000/api/v1/admin/invoices?q=KMD-7F3K9Q&after=${"c".repeat(30)}`,
+    );
+    const other = api(json(200, { items: [], nextCursor: null }));
+    await other.staff.invoices(TOKEN, { after: "x&q=1" });
+    expect(sent(other.fetch).url).toBe("http://serveur.test:4000/api/v1/admin/invoices");
+    const resend = api(json(200, INVOICE));
+    await resend.staff.resendInvoice(TOKEN, NUMBER);
+    expect(sent(resend.fetch)).toMatchObject({
+      method: "POST",
+      url: `http://serveur.test:4000/api/v1/admin/invoices/${NUMBER}/resend`,
+    });
+    const none = api(json(200, {}));
+    expect(await none.staff.resendInvoice(TOKEN, "../admin")).toEqual({
+      ok: false,
+      code: "FACTURE_INTROUVABLE",
+    });
+    expect(none.fetch).not.toHaveBeenCalled();
+  });
+
+  it("PDF : seulement un vrai PDF est relayé ; refus → 403 ; numéro fabriqué jamais demandé", async () => {
+    const pdf = new TextEncoder().encode("%PDF-1.7 contenu");
+    const ok = api(
+      new Response(pdf, { status: 200, headers: { "content-type": "application/pdf" } }),
+    );
+    expect(await ok.staff.invoicePdf(TOKEN, NUMBER)).toMatchObject({ status: 200 });
+    const html = api(
+      new Response("<html>", { status: 200, headers: { "content-type": "application/pdf" } }),
+    );
+    expect(await html.staff.invoicePdf(TOKEN, NUMBER)).toEqual({ status: 503 });
+    expect(await api(problem(403, "ACCES_REFUSE")).staff.invoicePdf(TOKEN, NUMBER)).toEqual({
+      status: 403,
+    });
+    const none = api(json(200, {}));
+    expect(await none.staff.invoicePdf(TOKEN, "KMD-F-2026-1")).toEqual({ status: 404 });
+    expect(none.fetch).not.toHaveBeenCalled();
+  });
+
+  it("encaissement, remboursement, code promo : bonnes routes, corps attendu, erreurs métier gardées", async () => {
+    const cod = api(problem(409, "ENCAISSEMENT_IMPOSSIBLE"));
+    expect(await cod.staff.codCollected(TOKEN, "KMD-7F3K9Q", 15_000)).toEqual({
+      ok: false,
+      code: "ENCAISSEMENT_IMPOSSIBLE",
+    });
+    expect(sent(cod.fetch)).toMatchObject({
+      url: "http://serveur.test:4000/api/v1/admin/orders/KMD-7F3K9Q/cod-collected",
+      body: { amount: 15_000 },
+    });
+    const refund = api(problem(409, "REMBOURSEMENT_DEJA_FAIT"));
+    expect(
+      await refund.staff.refundDone(TOKEN, "99999999-9999-4999-8999-999999999999", "AM-123"),
+    ).toEqual({ ok: false, code: "REMBOURSEMENT_DEJA_FAIT" });
+    expect(sent(refund.fetch).body).toEqual({ externalReference: "AM-123" });
+    const coupon = api(problem(409, "COUPON_EXISTE"));
+    expect(
+      await coupon.staff.setCouponActive(TOKEN, "99999999-9999-4999-8999-999999999999", false),
+    ).toEqual({ ok: false, code: "COUPON_EXISTE" });
+    expect(sent(coupon.fetch)).toMatchObject({ method: "PATCH", body: { active: false } });
+    const none = api(json(200, {}));
+    expect(await none.staff.codCollected(TOKEN, "../x", 1)).toMatchObject({ ok: false });
+    expect(await none.staff.refundDone(TOKEN, "x", "AM-123")).toMatchObject({ ok: false });
+    expect(none.fetch).not.toHaveBeenCalled();
+  });
+
+  it("journal : action, compte et position dans l'adresse ; compte fabriqué ignoré", async () => {
+    const { fetch, staff } = api(json(200, { items: [], nextCursor: null }));
+    await staff.audit(TOKEN, {
+      action: "invoice.resent",
+      accountId: "99999999-9999-4999-8999-999999999999",
+    });
+    expect(sent(fetch).url).toBe(
+      "http://serveur.test:4000/api/v1/admin/audit?limit=50&action=invoice.resent&accountId=99999999-9999-4999-8999-999999999999",
+    );
+    const other = api(json(200, { items: [], nextCursor: null }));
+    await other.staff.audit(TOKEN, { accountId: "x&action=role.granted" });
+    expect(sent(other.fetch).url).toBe("http://serveur.test:4000/api/v1/admin/audit?limit=50");
+  });
+});

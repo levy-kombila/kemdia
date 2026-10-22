@@ -1,5 +1,39 @@
 import "server-only";
 import {
+  AdminInvoicePageSchema,
+  AdminInvoiceSchema,
+  AuditPageSchema,
+  BillingSettingsSchema,
+  CashToCollectListSchema,
+  CodSettingsSchema,
+  COUPON_ERROR_CODES,
+  CouponPageSchema,
+  CouponSchema,
+  ADMIN_INVOICE_CURSOR_PATTERN,
+  AUDIT_CURSOR_PATTERN,
+  COUPON_CURSOR_PATTERN,
+  INVOICE_NUMBER_PATTERN,
+  PAYMENT_ERROR_CODES,
+  PaymentSchema,
+  RefundPageSchema,
+  RefundSchema,
+  type AdminInvoice,
+  type AdminInvoicePage,
+  type AuditAction,
+  type AuditPage,
+  type BillingSettings,
+  type BillingSettingsRequest,
+  type CashToCollectList,
+  type CodSettings,
+  type CodSettingsRequest,
+  type Coupon,
+  type CouponCreateRequest,
+  type CouponErrorCode,
+  type CouponPage,
+  type Payment,
+  type PaymentErrorCode,
+  type Refund,
+  type RefundPage,
   AdminAccountSchema,
   ORDER_CURSOR_PATTERN,
   OrderPageSchema,
@@ -91,9 +125,16 @@ import { log } from "@/lib/log";
  */
 
 /** S7-T02 : codes des livraisons, et deux codes des commandes renvoyés par ces routes. */
-export type StaffOrderCode = "COMMANDE_INTROUVABLE" | "PANIER_OCCUPE";
+export type StaffOrderCode = "COMMANDE_INTROUVABLE" | "PANIER_OCCUPE" | "ANNULATION_IMPOSSIBLE";
 export type StaffFailureCode =
-  IdentityErrorCode | VendorErrorCode | ShippingErrorCode | StaffOrderCode | "INDISPONIBLE";
+  | IdentityErrorCode
+  | VendorErrorCode
+  | ShippingErrorCode
+  | StaffOrderCode
+  // Finance (S7.5-T05)
+  | PaymentErrorCode
+  | CouponErrorCode
+  | "INDISPONIBLE";
 export type StaffFailure = { ok: false; code: StaffFailureCode; retryAfterSeconds?: number };
 export type StaffResult<T> = { ok: true; data: T } | StaffFailure;
 
@@ -112,6 +153,9 @@ const KNOWN_CODES: readonly StaffFailureCode[] = [
   ...SHIPPING_ERROR_CODES,
   "COMMANDE_INTROUVABLE",
   "PANIER_OCCUPE",
+  "ANNULATION_IMPOSSIBLE",
+  ...PAYMENT_ERROR_CODES,
+  ...COUPON_ERROR_CODES,
 ];
 /** Numéro de commande (« KMD-7F3K9Q ») : vérifié avant de construire l'adresse de l'API. */
 const ORDER_REFERENCE = /^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/;
@@ -126,6 +170,9 @@ const isWebp = (bytes: Uint8Array) =>
   bytes.length >= 12 &&
   String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" &&
   String.fromCharCode(...bytes.subarray(8, 12)) === "WEBP";
+
+export type StaffPdfResult =
+  { status: 200; bytes: Uint8Array<ArrayBuffer> } | { status: 403 | 404 | 503 };
 
 export type StaffImageResult =
   { status: 200; bytes: Uint8Array<ArrayBuffer> } | { status: 403 | 404 | 503 };
@@ -599,6 +646,117 @@ export function createStaffApi(options: StaffApiOptions) {
       if (!account || !ORDER_REFERENCE.test(reference))
         return Promise.resolve(notFound("COMMANDE_INTROUVABLE"));
       return call("GET", `/support/accounts/${account}/orders/${reference}`, token, OrderSchema);
+    },
+
+    // --- Finance (S7.5-T05, ADR-0052 ; rôle finance) ---
+    invoices: (
+      token: string,
+      params: { q?: string; after?: string },
+    ): Promise<StaffResult<AdminInvoicePage>> => {
+      const query = new URLSearchParams();
+      if (params.q) query.set("q", params.q.slice(0, 30));
+      if (params.after && ADMIN_INVOICE_CURSOR_PATTERN.test(params.after))
+        query.set("after", params.after);
+      const text = query.toString();
+      return call("GET", `/admin/invoices${text ? `?${text}` : ""}`, token, AdminInvoicePageSchema);
+    },
+    resendInvoice: (token: string, number: string): Promise<StaffResult<AdminInvoice>> =>
+      INVOICE_NUMBER_PATTERN.test(number)
+        ? call("POST", `/admin/invoices/${number}/resend`, token, AdminInvoiceSchema, {})
+        : Promise.resolve(notFound("FACTURE_INTROUVABLE")),
+    /** PDF d'une facture : vérifié (signature %PDF, 5 Mo au plus) avant d'être relayé. */
+    async invoicePdf(token: string, number: string): Promise<StaffPdfResult> {
+      if (!INVOICE_NUMBER_PATTERN.test(number) || !SESSION_TOKEN_PATTERN.test(token))
+        return { status: 404 };
+      let response: Response;
+      try {
+        response = await doFetch(`${options.url}/api/v1/admin/invoices/${number}`, {
+          headers: await headersFor(token, "application/pdf"),
+          cache: "no-store",
+          redirect: "error",
+          signal: AbortSignal.timeout(options.timeoutMs),
+        });
+      } catch {
+        log.error("équipe", "GET /admin/invoices/{numéro} : API injoignable");
+        return { status: 503 };
+      }
+      if (response.status === 404) return { status: 404 };
+      if (response.status === 401 || response.status === 403) return { status: 403 };
+      const type = response.headers.get("content-type") ?? "";
+      if (!response.ok || !type.startsWith("application/pdf")) return { status: 503 };
+      const bytes = await readAtMost(response, 5_242_880);
+      if (!bytes || String.fromCharCode(...bytes.subarray(0, 5)) !== "%PDF-")
+        return { status: 503 };
+      return { status: 200, bytes };
+    },
+    cashToCollect: (token: string): Promise<StaffResult<CashToCollectList>> =>
+      call("GET", "/admin/cash-to-collect", token, CashToCollectListSchema),
+    codCollected: (
+      token: string,
+      reference: string,
+      amount: number,
+    ): Promise<StaffResult<Payment>> =>
+      ORDER_REFERENCE.test(reference)
+        ? call("POST", `/admin/orders/${reference}/cod-collected`, token, PaymentSchema, { amount })
+        : Promise.resolve(notFound("COMMANDE_INTROUVABLE")),
+    refunds: (token: string, status: "to_do" | "done"): Promise<StaffResult<RefundPage>> =>
+      call("GET", `/admin/refunds?status=${status}`, token, RefundPageSchema),
+    refundDone: (
+      token: string,
+      refundId: string,
+      externalReference: string,
+    ): Promise<StaffResult<Refund>> => {
+      const refund = id(refundId);
+      return refund
+        ? call("POST", `/admin/refunds/${refund}/done`, token, RefundSchema, { externalReference })
+        : Promise.resolve(notFound("REMBOURSEMENT_INTROUVABLE"));
+    },
+    coupons: (token: string, before?: string): Promise<StaffResult<CouponPage>> =>
+      call(
+        "GET",
+        `/admin/coupons${before && COUPON_CURSOR_PATTERN.test(before) ? `?before=${before}` : ""}`,
+        token,
+        CouponPageSchema,
+      ),
+    createCoupon: (token: string, coupon: CouponCreateRequest): Promise<StaffResult<Coupon>> =>
+      call("POST", "/admin/coupons", token, CouponSchema, coupon),
+    setCouponActive: (
+      token: string,
+      couponId: string,
+      active: boolean,
+    ): Promise<StaffResult<Coupon>> => {
+      const coupon = id(couponId);
+      return coupon
+        ? call("PATCH", `/admin/coupons/${coupon}`, token, CouponSchema, { active })
+        : Promise.resolve(notFound("COUPON_INTROUVABLE"));
+    },
+    billingSettings: (token: string): Promise<StaffResult<BillingSettings>> =>
+      call("GET", "/admin/settings/billing", token, BillingSettingsSchema),
+    saveBillingSettings: (
+      token: string,
+      settings: BillingSettingsRequest,
+    ): Promise<StaffResult<BillingSettings>> =>
+      call("PUT", "/admin/settings/billing", token, BillingSettingsSchema, settings),
+    codSettings: (token: string): Promise<StaffResult<CodSettings>> =>
+      call("GET", "/admin/settings/cod", token, CodSettingsSchema),
+    saveCodSettings: (
+      token: string,
+      settings: CodSettingsRequest,
+    ): Promise<StaffResult<CodSettings>> =>
+      call("PUT", "/admin/settings/cod", token, CodSettingsSchema, settings),
+
+    // --- Journal d'audit (S7.5-T05 ; administrateurs) ---
+    audit: (
+      token: string,
+      params: { action?: AuditAction; accountId?: string; before?: string },
+    ): Promise<StaffResult<AuditPage>> => {
+      const query = new URLSearchParams({ limit: "50" });
+      if (params.action) query.set("action", params.action);
+      const account = params.accountId ? id(params.accountId) : null;
+      if (account) query.set("accountId", account);
+      if (params.before && AUDIT_CURSOR_PATTERN.test(params.before))
+        query.set("before", params.before);
+      return call("GET", `/admin/audit?${query.toString()}`, token, AuditPageSchema);
     },
 
     /** Photo du dossier, déchiffrée par l'API (consultation au journal) : WebP vérifié, 5 Mo au plus. */

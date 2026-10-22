@@ -45,6 +45,8 @@ import { SandboxController } from "./interface/sandbox.controller.js";
 import { WebhookController } from "./interface/webhook.controller.js";
 import { StalePaymentsScheduler } from "./infrastructure/stale-payments.js";
 import { PaymentAdminController } from "./interface/payment-admin.controller.js";
+import { FinanceController } from "./interface/finance.controller.js";
+import { FinanceService } from "./application/finance.service.js";
 import { PaymentController } from "./interface/payment.controller.js";
 import { PaymentsPersonalData } from "./infrastructure/payments-personal-data.js";
 
@@ -63,12 +65,15 @@ import { PaymentsPersonalData } from "./infrastructure/payments-personal-data.js
     SandboxController,
     InvoiceController,
     BillingSettingsController,
+    FinanceController,
   ],
   providers: [
     // Données personnelles (S7-T08) : copie, effacement — utilisé par le module privacy
     PaymentsPersonalData,
     PaymentService,
     PaymentAdminService,
+    // Écrans de la Finance (S7.5-T05)
+    FinanceService,
     StalePaymentsScheduler,
     { provide: PAYMENT_REPOSITORY, useClass: PrismaPaymentRepository },
     { provide: REFUND_REPOSITORY, useClass: PrismaRefundRepository },

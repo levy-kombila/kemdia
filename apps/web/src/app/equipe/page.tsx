@@ -1,4 +1,4 @@
-import { ChevronRight, LifeBuoy, Store, Tags, Truck, Users } from "lucide-react";
+import { Banknote, ChevronRight, LifeBuoy, Store, Tags, Truck, Undo2, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { StaffShell } from "@/components/staff/StaffShell";
@@ -42,6 +42,9 @@ function Counter({
 const SHORTCUT =
   "text-brand-700 hover:bg-brand-50 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold";
 
+/** Liste plafonnée par l'API : « 100+ » quand elle est pleine. */
+const listed = (count: number, max: number) => (count >= max ? `${max}+` : String(count));
+
 const counted = (page: { items: unknown[]; nextCursor: string | null }) =>
   page.nextCursor ? `${COUNT_LIMIT}+` : String(page.items.length);
 
@@ -51,11 +54,15 @@ export default async function StaffHomePage() {
   // Chaque compteur n'est lu que pour le rôle qui l'ouvre (S7.5-T04, ADR-0051)
   const catalog = hasRole(account.roles, "catalog");
   const api = staffApi();
-  const [products, shops, ready] = await Promise.all([
+  const finance = hasRole(account.roles, "finance");
+  const [products, shops, ready, cash, refunds] = await Promise.all([
     catalog ? api.moderationQueue(token, { status: "pending", limit: COUNT_LIMIT }) : null,
     catalog ? api.shops(token, { status: "pending", limit: COUNT_LIMIT }) : null,
     // Livraisons (S7-T02) : l'API renvoie 100 commandes prêtes au plus
     hasRole(account.roles, "logistics") ? api.readyOrders(token) : null,
+    // Finance (S7.5-T05)
+    finance ? api.cashToCollect(token) : null,
+    finance ? api.refunds(token, "to_do") : null,
   ]);
 
   return (
@@ -95,8 +102,24 @@ export default async function StaffHomePage() {
             }
           />
         )}
+        {cash && (
+          <Counter
+            href="/equipe/encaissements"
+            icon={Banknote}
+            label="commandes en espèces à encaisser"
+            count={cash.ok ? listed(cash.data.items.length, 100) : null}
+          />
+        )}
+        {refunds && (
+          <Counter
+            href="/equipe/remboursements"
+            icon={Undo2}
+            label="remboursements à faire"
+            count={refunds.ok ? listed(refunds.data.items.length, 200) : null}
+          />
+        )}
       </div>
-      {[products, shops, ready].some((r) => r && !r.ok) && (
+      {[products, shops, ready, cash, refunds].some((r) => r && !r.ok) && (
         <p className="text-ink-500 text-sm">
           « — » : nombre momentanément indisponible. Rechargez la page dans un instant.
         </p>
