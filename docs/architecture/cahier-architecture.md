@@ -28,6 +28,7 @@
 | **4.17** | 2026-10-20 | S7.5   | Fiche commune et offres (ADR-0049) : §3.24 (nouvelle) fiches, déclinaisons, offres, offre mise en avant, déclencheurs de la base, routes des vendeurs et de l'équipe ; §3.6 lecture publique par fiche ; §3.12 réservation limitée aux fiches en ligne ; contrat 1.24.0                                                      |
 | **4.18** | 2026-10-20 | S7.5   | Écrans de la fiche commune (ADR-0050) : §3.24 page produit « Autres vendeurs » et cookie `kemdia_ville`, « Vendre ce produit » (chercher d'abord, photos d'abord), espace de l'équipe « Fiches produits », propositions de correction (`catalog.listing_corrections`, 3 routes, 2 actions d'audit) ; contrat 1.25.0          |
 | **4.19** | 2026-10-22 | S7.5   | Rôles détaillés et écran Utilisateurs (ADR-0051) : §3.25 (nouvelle) rôles Catalogue, Logistique, Finance, Service client, Administrateur, écran Utilisateurs, service client en lecture seule, appareils connus et lien « ce n'est pas moi » ; §2 rôles mis à jour ; contrat 2.0.0                                           |
+| **4.20** | 2026-10-22 | S7.5   | Écrans de la Finance et journal (ADR-0052) : §3.26 (nouvelle) factures (liste, PDF, renvoi), espèces à encaisser, remboursements, codes promo, réglages, journal d'audit à l'écran ; 4 routes ; contrat 2.1.0                                                                                                                |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                         |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                               |
 | **3.7**  | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                                                                  |
@@ -1096,6 +1097,25 @@ l'appareil.
 
 Journal d'audit : `staff.removed`, `account.disabled`, `account.enabled`, `support.account_viewed`,
 `support.lookup_failed`, `support.orders_viewed`, `device.new_login`, `device.not_me`. Contrat de l'API : **2.0.0** (rôle `moderator` retiré).
+
+### 3.26 Écrans de la Finance et journal d'audit (S7.5-T05)
+
+Décision : [ADR-0052](adr/0052-ecrans-finance-journal.md). Pages de l'équipe (rôle Finance, administrateur compris) :
+`/equipe/factures`, `/equipe/encaissements`, `/equipe/remboursements`, `/equipe/codes-promo`, `/equipe/reglages` ;
+administrateurs : `/equipe/journal`.
+
+| Route (`/api/v1`)                      | Règle                                                                                                                                       |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /admin/invoices?q=&after=`        | 30 par page, du plus récent ; `q` = numéro de facture, d'avoir ou de commande seulement                                                     |
+| `GET /admin/invoices/{number}`         | PDF (même que le client) ; `invoice.downloaded` au journal                                                                                  |
+| `POST /admin/invoices/{number}/resend` | Envoi immédiat à l'e-mail vérifié ; `ENVOI_IMPOSSIBLE` pendant l'envoi automatique, < 10 min ou 5 renvois par client et par heure ; journal |
+| `GET /admin/cash-to-collect`           | Commandes à la livraison expédiées ou livrées, non encaissées ; livrées d'abord, 100 au plus                                                |
+
+Les écrans réutilisent les routes existantes : remboursements (`/admin/refunds`), encaissement
+(`/admin/orders/{reference}/cod-collected`), codes promo (`/admin/coupons`), réglages (`/admin/settings/billing`,
+`/admin/settings/cod`), journal (`/admin/audit`). Le relais du PDF (`/equipe/factures/{numéro}`) ne passe qu'un fichier
+commençant par `%PDF-`, de 5 Mo au plus, sans cache, et refuse un lien venu d'un autre site. Index ajoutés sur
+`payments.invoices` (date d'émission décroissante, numéro de commande). Contrat de l'API : **2.1.0**.
 
 ## 4. Choix technologiques
 

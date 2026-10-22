@@ -140,3 +140,17 @@ describe("vue de modération", () => {
     expect(categoryPathOf(tree, "z")).toBeNull();
   });
 });
+
+describe("journal et messages de la Finance (S7.5-T05)", () => {
+  it("chaque action du journal a un libellé ; chaque code de la Finance a son message", async () => {
+    const { AUDIT_ACTIONS, PAYMENT_ERROR_CODES, COUPON_ERROR_CODES } =
+      await import("@kemdia/contracts/constants");
+    const { AUDIT_ACTION_LABELS } = await import("./audit-labels");
+    for (const action of AUDIT_ACTIONS) expect(AUDIT_ACTION_LABELS[action]).toBeTruthy();
+    for (const code of [...PAYMENT_ERROR_CODES, ...COUPON_ERROR_CODES]) {
+      expect(staffErrorMessage(code)).not.toBe(staffErrorMessage("INDISPONIBLE"));
+      expect(staffErrorFromParam(code)).toBe(staffErrorMessage(code));
+    }
+    expect(staffErrorFromParam("REFERENCE_INVALIDE")).toContain("Référence refusée");
+  });
+});

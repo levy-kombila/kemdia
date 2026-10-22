@@ -139,6 +139,10 @@ export const AUDIT_ACTIONS = [
   "support.account_viewed",
   /** Recherche du service client sans résultat (aucun identifiant en clair) — S7.5-T04, relecture */
   "support.lookup_failed",
+  /** PDF d'une facture ou d'un avoir téléchargé par la Finance (détails : number) — S7.5-T05 */
+  "invoice.downloaded",
+  /** Facture ou avoir renvoyé au client par e-mail, à la demande de la Finance (détails : number) — S7.5-T05 */
+  "invoice.resent",
   /** Commandes d'un client lues par le service client (détails : reference, ou rien pour la liste) — S7.5-T04, relecture */
   "support.orders_viewed",
   /** Connexion depuis un appareil inconnu, avis envoyé (détails : device) — S7.5-T04 */

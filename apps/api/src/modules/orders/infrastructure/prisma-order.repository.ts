@@ -423,6 +423,16 @@ export class PrismaOrderRepository implements OrderRepository {
     return rows.map(toRecord);
   }
 
+  async listCashToCollect(limit: number): Promise<OrderRecord[]> {
+    const rows = await this.tx.db.order.findMany({
+      where: { paymentMethod: "COD", paidAt: null, status: { in: ["SHIPPED", "DELIVERED"] } },
+      orderBy: [{ status: "desc" }, { createdAt: "asc" }, { id: "asc" }],
+      take: limit,
+      include: withDetails,
+    });
+    return rows.map(toRecord);
+  }
+
   countPendingShopParts(orderId: string): Promise<number> {
     return this.tx.db.orderShopPart.count({ where: { orderId, status: "PENDING" } });
   }

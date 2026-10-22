@@ -142,6 +142,18 @@ export interface InvoiceRepository {
   /** Factures et avoirs à envoyer maintenant (pas encore envoyés, essais restants, délai passé), plus anciens d'abord. */
   findDueEmails(now: Date, limit: number): Promise<string[]>;
   findById(id: string): Promise<InvoiceRecord | null>;
+  /** Finance (S7.5-T05) : par numéro de facture ou d'avoir. */
+  findByNumber(number: string): Promise<InvoiceRecord | null>;
+  /**
+   * Finance (S7.5-T05) : factures et avoirs du plus récent au plus ancien, filtrés par numéro de facture ou de
+   * commande ; `after` : position (date d'émission, identifiant) de la dernière ligne de la page précédente.
+   */
+  page(input: {
+    invoiceNumber?: string;
+    orderReference?: string;
+    after?: { issuedAt: Date; id: string };
+    limit: number;
+  }): Promise<{ items: InvoiceRecord[]; next: { issuedAt: Date; id: string } | null }>;
   /**
    * Réserve l'envoi : un essai de plus et la date du suivant, en une seule mise à jour conditionnelle. `false` : déjà
    * envoyée, essais épuisés, pas encore l'heure, ou réservée au même moment par une autre instance.

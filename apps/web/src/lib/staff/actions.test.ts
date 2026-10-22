@@ -51,6 +51,13 @@ const api = vi.hoisted(() => ({
   setRole: vi.fn(),
   staffAction: vi.fn(),
   supportLookup: vi.fn(),
+  resendInvoice: vi.fn(),
+  codCollected: vi.fn(),
+  refundDone: vi.fn(),
+  createCoupon: vi.fn(),
+  setCouponActive: vi.fn(),
+  saveBillingSettings: vi.fn(),
+  saveCodSettings: vi.fn(),
 }));
 vi.mock("./api-staff", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api-staff")>()),
@@ -575,5 +582,115 @@ describe("équipe et service client (S7.5-T04)", () => {
     expect(
       await redirectOf(actions.staffAccountAction(form({ accountId: "x", action: "enable" }))),
     ).toBe("/equipe/utilisateurs");
+  });
+});
+
+describe("Finance (S7.5-T05)", () => {
+  const REFUND = "99999999-9999-4999-8999-999999999999";
+
+  it("renvoi, encaissement, remboursement : arguments revérifiés, puis retour à la page avec l'avis", async () => {
+    expect(await redirectOf(actions.resendInvoiceAction(form({ number: "../x" })))).toBe(
+      "/equipe/factures",
+    );
+    api.resendInvoice.mockResolvedValue({ ok: true, data: {} });
+    expect(
+      await redirectOf(actions.resendInvoiceAction(form({ number: "KMD-F-2026-000012" }))),
+    ).toBe("/equipe/factures?ok=facture-renvoyee");
+    api.resendInvoice.mockResolvedValue({ ok: false, code: "ENVOI_IMPOSSIBLE" });
+    expect(
+      await redirectOf(actions.resendInvoiceAction(form({ number: "KMD-F-2026-000012" }))),
+    ).toBe("/equipe/factures?erreur=ENVOI_IMPOSSIBLE");
+
+    expect(
+      await redirectOf(actions.codCollectedAction(form({ reference: "KMD-7F3K9Q", amount: "-5" }))),
+    ).toBe("/equipe/encaissements?erreur=ENCAISSEMENT_IMPOSSIBLE");
+    api.codCollected.mockResolvedValue({ ok: true, data: {} });
+    expect(
+      await redirectOf(
+        actions.codCollectedAction(form({ reference: "KMD-7F3K9Q", amount: "15 000" })),
+      ),
+    ).toBe("/equipe/encaissements?ok=especes-encaissees");
+    expect(api.codCollected).toHaveBeenCalledWith(TOKEN, "KMD-7F3K9Q", 15_000);
+
+    expect(
+      await redirectOf(
+        actions.refundDoneAction(form({ refundId: REFUND, externalReference: "<script>" })),
+      ),
+    ).toBe("/equipe/remboursements?erreur=REFERENCE_INVALIDE");
+    expect(api.refundDone).not.toHaveBeenCalled();
+    api.refundDone.mockResolvedValue({ ok: true, data: {} });
+    expect(
+      await redirectOf(
+        actions.refundDoneAction(form({ refundId: REFUND, externalReference: " AM-2026/42 " })),
+      ),
+    ).toBe("/equipe/remboursements?ok=remboursement-fait");
+    expect(api.refundDone).toHaveBeenCalledWith(TOKEN, REFUND, "AM-2026/42");
+  });
+
+  it("code promo : champs convertis et revérifiés (contrat) ; dates de fin incluses", async () => {
+    expect(
+      await redirectOf(
+        actions.createCouponAction(form({ code: "x", kind: "percent", value: "10" })),
+      ),
+    ).toBe("/equipe/codes-promo?erreur=COUPON_INVALIDE");
+    // Date impossible : refusée (JavaScript l'aurait reportée au 3 mars)
+    expect(
+      await redirectOf(
+        actions.createCouponAction(
+          form({ code: "FEVRIER", kind: "percent", value: "10", endsAt: "2026-02-31" }),
+        ),
+      ),
+    ).toBe("/equipe/codes-promo?erreur=COUPON_INVALIDE");
+    expect(api.createCoupon).not.toHaveBeenCalled();
+    api.createCoupon.mockResolvedValue({ ok: true, data: {} });
+    expect(
+      await redirectOf(
+        actions.createCouponAction(
+          form({
+            code: "bienvenue-10",
+            kind: "percent",
+            value: "10",
+            maxDiscount: "5 000",
+            minSubtotal: "",
+            perAccountLimit: "1",
+            endsAt: "2026-12-31",
+            stackableWithSales: "oui",
+          }),
+        ),
+      ),
+    ).toBe("/equipe/codes-promo?ok=code-cree");
+    expect(api.createCoupon).toHaveBeenCalledWith(TOKEN, {
+      code: "BIENVENUE-10",
+      kind: "percent",
+      value: 10,
+      maxDiscount: 5_000,
+      minSubtotal: null,
+      startsAt: null,
+      endsAt: "2026-12-31T22:59:59.000Z",
+      usageLimit: null,
+      perAccountLimit: 1,
+      stackableWithSales: true,
+    });
+    api.setCouponActive.mockResolvedValue({ ok: true, data: {} });
+    expect(
+      await redirectOf(actions.setCouponActiveAction(form({ couponId: REFUND, active: "0" }))),
+    ).toBe("/equipe/codes-promo?ok=code-desactive");
+  });
+
+  it("réglages : facturation complète exigée ; zones du paiement à la livraison dans une liste fermée", async () => {
+    expect(
+      await redirectOf(actions.saveBillingSettingsAction(form({ legalName: "Kemdia SARL" }))),
+    ).toBe("/equipe/reglages?erreur=REGLAGES_INVALIDES");
+    api.saveCodSettings.mockResolvedValue({ ok: true, data: {} });
+    const f = form({ maxTotal: "200 000" });
+    f.append("zones", "zone_1");
+    f.append("zones", "zone_9");
+    expect(await redirectOf(actions.saveCodSettingsAction(f))).toBe(
+      "/equipe/reglages?ok=livraison-enregistree",
+    );
+    expect(api.saveCodSettings).toHaveBeenCalledWith(TOKEN, {
+      zones: ["zone_1"],
+      maxTotal: 200_000,
+    });
   });
 });

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.\n- Factures (S5-T06) : établies au paiement reçu, avoir à l'annulation, numéros par année sans trou, PDF et e-mail.\n- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo.\n- Boutiques (S6-T01) : un client demande à ouvrir sa boutique ; un administrateur la valide (rôle vendeur accordé), la refuse ou la suspend.\n- Double authentification (S6-T03) : obligatoire pour les modérateurs et administrateurs sur les routes d'équipe (`DEUX_FACTEURS_A_ACTIVER`, `DEUX_FACTEURS_REQUIS`).\n- Produits des vendeurs (S6-T02) : invisibles jusqu'à leur validation par la modération (BR-003) ; cachés si la boutique est suspendue.\n- Photos des vendeurs (S6-T04) : fichier envoyé tel quel (JPEG, PNG, WebP, 5 Mo), réencodé en WebP sans métadonnées ; publiques seulement pour un produit visible.\n- Commandes des vendeurs (S6-T07) : chaque boutique accepte ou refuse sa part dans les 24 h (BR-013) ; un refus ou l'absence de réponse annule la commande entière.\n- Données personnelles (S7-T08) : copie JSON, suppression du compte par le titulaire, comptes effacés après 3 ans sans connexion (prévenus 30 jours avant)."
   },
   "servers": [
@@ -5473,6 +5473,329 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle finance ou administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/invoices": {
+      "get": {
+        "tags": ["Administration"],
+        "summary": "Factures et avoirs (Finance)",
+        "description": "Réservé au rôle **finance** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque action est inscrite au journal d'audit.\n\nDu plus récent au plus ancien, 30 par page. `q` : numéro de facture ou d'avoir, ou numéro de commande.",
+        "operationId": "adminListInvoices",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "KMD-F-2026-000001, KMD-A-2026-000001 ou KMD-7F3K9Q",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Position renvoyée par la page précédente (`nextCursor`)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Une page de factures",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminInvoicePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Paramètres invalides",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle finance ou administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/invoices/{number}": {
+      "get": {
+        "tags": ["Administration"],
+        "summary": "PDF d'une facture ou d'un avoir (Finance)",
+        "description": "Réservé au rôle **finance** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque action est inscrite au journal d'audit.\n\nLe même PDF que celui du client ; téléchargement inscrit au journal (`invoice.downloaded`).",
+        "operationId": "adminInvoicePdf",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "description": "Numéro de la facture ou de l'avoir (ex. KMD-F-2026-000001)",
+            "schema": {
+              "type": "string",
+              "pattern": "^KMD-[FA]-\\d{4}-\\d{6}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le PDF (en pièce jointe)",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Numéro de facture invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle finance ou administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`FACTURE_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/invoices/{number}/resend": {
+      "post": {
+        "tags": ["Administration"],
+        "summary": "Renvoyer une facture au client (Finance)",
+        "description": "Réservé au rôle **finance** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque action est inscrite au journal d'audit.\n\nL'e-mail part tout de suite, à l'adresse vérifiée du client. Refusé (`ENVOI_IMPOSSIBLE`) pendant l'envoi automatique, sans adresse vérifiée, sans envoi configuré, ou dans les 10 minutes qui suivent un renvoi.",
+        "operationId": "adminResendInvoice",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "description": "Numéro de la facture ou de l'avoir (ex. KMD-F-2026-000001)",
+            "schema": {
+              "type": "string",
+              "pattern": "^KMD-[FA]-\\d{4}-\\d{6}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Facture renvoyée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminInvoice"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Numéro de facture invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle finance ou administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS` (double authentification à activer, ou à confirmer depuis 15 minutes)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`FACTURE_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`ENVOI_IMPOSSIBLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plus de 30 requêtes par minute, par adresse ou par compte (`TROP_DE_REQUETES`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/cash-to-collect": {
+      "get": {
+        "tags": ["Administration"],
+        "summary": "Espèces à encaisser (Finance)",
+        "description": "Réservé au rôle **finance** et aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes. Chaque action est inscrite au journal d'audit.\n\nCommandes payées à la livraison, expédiées ou livrées, pas encore notées encaissées : livrées d'abord, 100 au plus. L'encaissement se note avec `POST /admin/orders/{reference}/cod-collected`.",
+        "operationId": "adminCashToCollect",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Les commandes à encaisser",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashToCollectList"
                 }
               }
             }
@@ -11901,6 +12224,97 @@
         "required": ["note"],
         "additionalProperties": false
       },
+      "AdminInvoice": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "string",
+            "pattern": "^KMD-[FA]-\\d{4}-\\d{6}$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["invoice", "credit_note"]
+          },
+          "orderReference": {
+            "type": "string"
+          },
+          "issuedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "total": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Montant en FCFA, entier (BR-004)"
+          },
+          "buyerName": {
+            "type": "string",
+            "description": "Nom du client figé sur la facture"
+          },
+          "paymentMethod": {
+            "type": "string",
+            "enum": ["airtel", "moov", "cod"]
+          },
+          "email": {
+            "type": "string",
+            "enum": ["sent", "pending", "failed"],
+            "description": "Envoi par e-mail : parti, en cours d'essais, ou abandonné (pas d'adresse vérifiée, 5 échecs)"
+          },
+          "emailSentAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "number",
+          "kind",
+          "orderReference",
+          "issuedAt",
+          "total",
+          "buyerName",
+          "paymentMethod",
+          "email",
+          "emailSentAt"
+        ],
+        "additionalProperties": false,
+        "description": "Facture ou avoir vu par la Finance"
+      },
+      "AdminInvoicePage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminInvoice"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{20,120}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["items", "nextCursor"],
+        "additionalProperties": false,
+        "description": "Factures et avoirs, du plus récent au plus ancien"
+      },
       "AdminKyc": {
         "type": "object",
         "properties": {
@@ -12484,6 +12898,8 @@
               "support.account_viewed",
               "support.lookup_failed",
               "support.orders_viewed",
+              "invoice.downloaded",
+              "invoice.resent",
               "device.new_login",
               "device.not_me"
             ]
@@ -13053,6 +13469,52 @@
         "required": ["quantity"],
         "additionalProperties": false,
         "description": "Nouvelle quantité d'une ligne (ramenée au stock disponible si besoin)"
+      },
+      "CashToCollect": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "pattern": "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$",
+            "description": "Numéro de commande montré au client (« KMD-7F3K9Q »), jamais des numéros qui se suivent"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["shipped", "delivered"]
+          },
+          "total": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Montant à encaisser : le total de la commande"
+          },
+          "cityName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": ["reference", "status", "total", "cityName", "createdAt"],
+        "additionalProperties": false,
+        "description": "Commande payée en espèces à la livraison, pas encore encaissée"
+      },
+      "CashToCollectList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CashToCollect"
+            }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false,
+        "description": "Espèces à encaisser (100 au plus) : livrées d'abord, puis les plus anciennes"
       },
       "Category": {
         "type": "object",
@@ -15512,6 +15974,7 @@
               "DEMANDE_INTROUVABLE",
               "CODE_PIN_INVALIDE",
               "FACTURE_INTROUVABLE",
+              "ENVOI_IMPOSSIBLE",
               "BOUTIQUE_INVALIDE",
               "BOUTIQUE_EXISTE",
               "NOM_BOUTIQUE_PRIS",

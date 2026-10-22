@@ -18,6 +18,13 @@ const reference = {
   description: "Numéro de la commande (ex. KMD-7F3K9Q)",
   schema: { type: "string", pattern: "^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$" },
 };
+const invoiceNumber = {
+  name: "number",
+  in: "path",
+  required: true,
+  description: "Numéro de la facture ou de l'avoir (ex. KMD-F-2026-000001)",
+  schema: { type: "string", pattern: "^KMD-[FA]-\\d{4}-\\d{6}$" },
+};
 const session = {
   "401": problem("`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé"),
   "429": problem("Trop de demandes pour ce compte (`TROP_DE_REQUETES`)"),
@@ -330,6 +337,84 @@ export const paymentPaths = {
       responses: {
         "200": json("BillingSettings", "Les nouvelles informations"),
         "400": problem("Corps invalide"),
+        ...admin,
+      },
+    },
+  },
+  // --- Finance (S7.5-T05, ADR-0052) ---
+  "/api/v1/admin/invoices": {
+    get: {
+      tags: ["Administration"],
+      summary: "Factures et avoirs (Finance)",
+      description: `${ADMIN_RULES}\n\nDu plus récent au plus ancien, 30 par page. \`q\` : numéro de facture ou d'avoir, ou numéro de commande.`,
+      operationId: "adminListInvoices",
+      security: bearer,
+      parameters: [
+        {
+          name: "q",
+          in: "query",
+          description: "KMD-F-2026-000001, KMD-A-2026-000001 ou KMD-7F3K9Q",
+          schema: { type: "string" },
+        },
+        {
+          name: "after",
+          in: "query",
+          description: "Position renvoyée par la page précédente (`nextCursor`)",
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": json("AdminInvoicePage", "Une page de factures"),
+        "400": problem("Paramètres invalides"),
+        ...admin,
+      },
+    },
+  },
+  "/api/v1/admin/invoices/{number}": {
+    get: {
+      tags: ["Administration"],
+      summary: "PDF d'une facture ou d'un avoir (Finance)",
+      description: `${ADMIN_RULES}\n\nLe même PDF que celui du client ; téléchargement inscrit au journal (\`invoice.downloaded\`).`,
+      operationId: "adminInvoicePdf",
+      security: bearer,
+      parameters: [invoiceNumber],
+      responses: {
+        "200": {
+          description: "Le PDF (en pièce jointe)",
+          content: { "application/pdf": { schema: { type: "string", format: "binary" } } },
+        },
+        "400": problem("Numéro de facture invalide"),
+        ...admin,
+        "404": problem("`FACTURE_INTROUVABLE`"),
+      },
+    },
+  },
+  "/api/v1/admin/invoices/{number}/resend": {
+    post: {
+      tags: ["Administration"],
+      summary: "Renvoyer une facture au client (Finance)",
+      description: `${ADMIN_RULES}\n\nL'e-mail part tout de suite, à l'adresse vérifiée du client. Refusé (\`ENVOI_IMPOSSIBLE\`) pendant l'envoi automatique, sans adresse vérifiée, sans envoi configuré, ou dans les 10 minutes qui suivent un renvoi.`,
+      operationId: "adminResendInvoice",
+      security: bearer,
+      parameters: [invoiceNumber],
+      responses: {
+        "200": json("AdminInvoice", "Facture renvoyée"),
+        "400": problem("Numéro de facture invalide"),
+        ...admin,
+        "404": problem("`FACTURE_INTROUVABLE`"),
+        "409": problem("`ENVOI_IMPOSSIBLE`"),
+      },
+    },
+  },
+  "/api/v1/admin/cash-to-collect": {
+    get: {
+      tags: ["Administration"],
+      summary: "Espèces à encaisser (Finance)",
+      description: `${ADMIN_RULES}\n\nCommandes payées à la livraison, expédiées ou livrées, pas encore notées encaissées : livrées d'abord, 100 au plus. L'encaissement se note avec \`POST /admin/orders/{reference}/cod-collected\`.`,
+      operationId: "adminCashToCollect",
+      security: bearer,
+      responses: {
+        "200": json("CashToCollectList", "Les commandes à encaisser"),
         ...admin,
       },
     },

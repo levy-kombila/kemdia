@@ -18,6 +18,7 @@ const STATUS: Record<PaymentsErrorCode, number> = {
   DEMANDE_INTROUVABLE: HttpStatus.NOT_FOUND,
   CODE_PIN_INVALIDE: HttpStatus.UNPROCESSABLE_ENTITY,
   FACTURE_INTROUVABLE: HttpStatus.NOT_FOUND,
+  ENVOI_IMPOSSIBLE: HttpStatus.CONFLICT,
 };
 
 /**

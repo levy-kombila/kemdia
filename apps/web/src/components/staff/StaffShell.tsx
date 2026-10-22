@@ -1,6 +1,12 @@
 import { hasRole, type Role, type StaffRole } from "@kemdia/contracts/constants";
 import {
+  BadgePercent,
+  Banknote,
+  FileText,
   IdCard,
+  ScrollText,
+  Settings,
+  Undo2,
   LayoutDashboard,
   Layers,
   LifeBuoy,
@@ -25,6 +31,12 @@ export type StaffSection =
   | "fiches"
   | "clients"
   | "utilisateurs"
+  | "factures"
+  | "encaissements"
+  | "remboursements"
+  | "codes-promo"
+  | "reglages"
+  | "journal"
   | "securite";
 
 /** Menu de l'équipe : chaque lien n'est montré qu'au rôle qui l'ouvre (S7.5-T04, ADR-0051 ; l'API reste juge). */
@@ -60,6 +72,30 @@ const LINKS: {
     role: "logistics",
   },
   { id: "clients", label: "Clients", href: "/equipe/clients", icon: LifeBuoy, role: "support" },
+  // Finance (S7.5-T05, ADR-0052)
+  { id: "factures", label: "Factures", href: "/equipe/factures", icon: FileText, role: "finance" },
+  {
+    id: "encaissements",
+    label: "Encaissements",
+    href: "/equipe/encaissements",
+    icon: Banknote,
+    role: "finance",
+  },
+  {
+    id: "remboursements",
+    label: "Remboursements",
+    href: "/equipe/remboursements",
+    icon: Undo2,
+    role: "finance",
+  },
+  {
+    id: "codes-promo",
+    label: "Codes promo",
+    href: "/equipe/codes-promo",
+    icon: BadgePercent,
+    role: "finance",
+  },
+  { id: "reglages", label: "Réglages", href: "/equipe/reglages", icon: Settings, role: "finance" },
   {
     id: "utilisateurs",
     label: "Utilisateurs",
@@ -67,6 +103,7 @@ const LINKS: {
     icon: Users,
     role: "admin",
   },
+  { id: "journal", label: "Journal", href: "/equipe/journal", icon: ScrollText, role: "admin" },
   { id: "securite", label: "Sécurité", href: "/equipe/securite", icon: ShieldCheck },
 ];
 

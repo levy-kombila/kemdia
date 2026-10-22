@@ -2,13 +2,21 @@
 
 import {
   ADMIN_ASSIGNABLE_ROLES,
+  COUPON_KINDS,
+  INVOICE_NUMBER_PATTERN,
   OTP_CODE_PATTERN,
   STAFF_LIMITS,
   SHIPPING_LIMITS,
   SHOP_LIMITS,
   VENDOR_PRODUCT_LIMITS,
 } from "@kemdia/contracts/constants";
-import type { AdminAccount, DeliveryTariffsRequest, SupportAccount } from "@kemdia/contracts";
+import {
+  BillingSettingsRequestSchema,
+  CouponCreateRequestSchema,
+  type AdminAccount,
+  type DeliveryTariffsRequest,
+  type SupportAccount,
+} from "@kemdia/contracts";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE, expiredCookieOptions } from "@/lib/auth/cookies";
@@ -481,4 +489,150 @@ export async function supportLookupAction(
   const result = await staffApi().supportLookup(token, identifier);
   if (!result.ok) return failure(token, result);
   return { ok: true, account: result.data };
+}
+
+// --- Finance (S7.5-T05, ADR-0052) ---
+
+const INVOICES_PAGE = "/equipe/factures";
+const CASH_PAGE = "/equipe/encaissements";
+const REFUNDS_PAGE = "/equipe/remboursements";
+const COUPONS_PAGE = "/equipe/codes-promo";
+const SETTINGS_PAGE = "/equipe/reglages";
+
+async function tokenFor(page: string): Promise<string> {
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(page)}`);
+  return token;
+}
+
+/** Renvoyer une facture au client (e-mail tout de suite ; refusé pendant l'envoi automatique). */
+export async function resendInvoiceAction(form: FormData): Promise<never> {
+  const number = field(form, "number", 20);
+  if (!number || !INVOICE_NUMBER_PATTERN.test(number)) redirect(INVOICES_PAGE);
+  const token = await tokenFor(INVOICES_PAGE);
+  const result = await staffApi().resendInvoice(token, number);
+  if (!result.ok) return afterFailure(token, result, INVOICES_PAGE);
+  redirect(`${INVOICES_PAGE}?ok=facture-renvoyee`);
+}
+
+/** Espèces reçues : le montant saisi doit être le total (revérifié par l'API). */
+export async function codCollectedAction(form: FormData): Promise<never> {
+  const reference = field(form, "reference", 10);
+  const amount = integer(form, "amount", 10_000_000);
+  if (!reference || !ORDER_REFERENCE.test(reference)) redirect(CASH_PAGE);
+  if (amount === null || amount <= 0) redirect(`${CASH_PAGE}?erreur=ENCAISSEMENT_IMPOSSIBLE`);
+  const token = await tokenFor(CASH_PAGE);
+  const result = await staffApi().codCollected(token, reference, amount);
+  if (!result.ok) return afterFailure(token, result, CASH_PAGE);
+  redirect(`${CASH_PAGE}?ok=especes-encaissees`);
+}
+
+const EXTERNAL_REFERENCE = /^[A-Za-z0-9._/-]{3,100}$/;
+
+/** Remboursement fait chez l'opérateur, avec la référence de l'opération. */
+export async function refundDoneAction(form: FormData): Promise<never> {
+  const refundId = field(form, "refundId", 36);
+  const reference = field(form, "externalReference", 100)?.trim();
+  if (!refundId || !UUID.test(refundId)) redirect(REFUNDS_PAGE);
+  if (!reference || !EXTERNAL_REFERENCE.test(reference))
+    redirect(`${REFUNDS_PAGE}?erreur=REFERENCE_INVALIDE`);
+  const token = await tokenFor(REFUNDS_PAGE);
+  const result = await staffApi().refundDone(token, refundId, reference);
+  if (!result.ok) return afterFailure(token, result, REFUNDS_PAGE);
+  redirect(`${REFUNDS_PAGE}?ok=remboursement-fait`);
+}
+
+/** Date saisie dans un champ « date » (AAAA-MM-JJ), à minuit heure de Libreville (UTC+1) ; vide → `null`. */
+function dateField(form: FormData, name: string, endOfDay = false): string | null | undefined {
+  const raw = field(form, name, 10)?.trim();
+  if (!raw) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return undefined;
+  const at = new Date(`${raw}T${endOfDay ? "23:59:59.000" : "00:00:00.000"}+01:00`);
+  if (Number.isNaN(at.getTime())) return undefined;
+  // Date impossible (31 février…) : JavaScript la reporte au mois suivant ; on la refuse (relecture)
+  const local = new Date(at.getTime() + 60 * 60_000).toISOString().slice(0, 10);
+  return local === raw ? at.toISOString() : undefined;
+}
+
+/** Nombre facultatif : vide → `null`, sinon entier dans les bornes (`undefined` : refusé). */
+function optionalInteger(form: FormData, name: string, max: number): number | null | undefined {
+  const raw = field(form, name, 20)?.trim();
+  if (!raw) return null;
+  return integer(form, name, max) ?? undefined;
+}
+
+/** Nouveau code promo : chaque champ revérifié ici (schéma du contrat), puis par l'API (règles BR-031). */
+export async function createCouponAction(form: FormData): Promise<never> {
+  const token = await tokenFor(COUPONS_PAGE);
+  const kind = COUPON_KINDS.find((k) => k === form.get("kind"));
+  const startsAt = dateField(form, "startsAt");
+  const endsAt = dateField(form, "endsAt", true);
+  // Date mal formée ou impossible : refusée (sinon le champ serait simplement omis)
+  if (startsAt === undefined || endsAt === undefined)
+    redirect(`${COUPONS_PAGE}?erreur=COUPON_INVALIDE`);
+  const candidate = {
+    code: field(form, "code", 40)?.trim().toUpperCase(),
+    kind,
+    value: integer(form, "value", 10_000_000),
+    maxDiscount: optionalInteger(form, "maxDiscount", 10_000_000),
+    minSubtotal: optionalInteger(form, "minSubtotal", 100_000_000),
+    startsAt,
+    endsAt,
+    usageLimit: optionalInteger(form, "usageLimit", 1_000_000),
+    perAccountLimit: optionalInteger(form, "perAccountLimit", 1_000_000),
+    stackableWithSales: form.get("stackableWithSales") === "oui",
+  };
+  const parsed = CouponCreateRequestSchema.safeParse(candidate);
+  if (!parsed.success) redirect(`${COUPONS_PAGE}?erreur=COUPON_INVALIDE`);
+  const result = await staffApi().createCoupon(token, parsed.data);
+  if (!result.ok) return afterFailure(token, result, COUPONS_PAGE);
+  redirect(`${COUPONS_PAGE}?ok=code-cree`);
+}
+
+export async function setCouponActiveAction(form: FormData): Promise<never> {
+  const couponId = field(form, "couponId", 36);
+  const active = form.get("active");
+  if (!couponId || !UUID.test(couponId) || (active !== "1" && active !== "0"))
+    redirect(COUPONS_PAGE);
+  const token = await tokenFor(COUPONS_PAGE);
+  const result = await staffApi().setCouponActive(token, couponId, active === "1");
+  if (!result.ok) return afterFailure(token, result, COUPONS_PAGE);
+  redirect(`${COUPONS_PAGE}?ok=${active === "1" ? "code-active" : "code-desactive"}`);
+}
+
+const BILLING_FIELDS = [
+  "legalName",
+  "address",
+  "city",
+  "phone",
+  "email",
+  "taxId",
+  "tradeRegister",
+  "vatMention",
+] as const;
+
+/** Coordonnées de l'entreprise imprimées sur les NOUVELLES factures (une facture émise ne change jamais). */
+export async function saveBillingSettingsAction(form: FormData): Promise<never> {
+  const token = await tokenFor(SETTINGS_PAGE);
+  const candidate = Object.fromEntries(
+    BILLING_FIELDS.map((name) => [name, field(form, name, 240)?.trim() ?? ""]),
+  );
+  const parsed = BillingSettingsRequestSchema.safeParse(candidate);
+  if (!parsed.success) redirect(`${SETTINGS_PAGE}?erreur=REGLAGES_INVALIDES`);
+  const result = await staffApi().saveBillingSettings(token, parsed.data);
+  if (!result.ok) return afterFailure(token, result, SETTINGS_PAGE);
+  redirect(`${SETTINGS_PAGE}?ok=facturation-enregistree`);
+}
+
+const COD_ZONES = ["zone_1", "zone_2", "zone_3", "zone_4"] as const;
+
+/** Paiement à la livraison : zones où il est proposé et total maximum. */
+export async function saveCodSettingsAction(form: FormData): Promise<never> {
+  const token = await tokenFor(SETTINGS_PAGE);
+  const zones = COD_ZONES.filter((zone) => form.getAll("zones").includes(zone));
+  const maxTotal = integer(form, "maxTotal", 10_000_000);
+  if (maxTotal === null) redirect(`${SETTINGS_PAGE}?erreur=REGLAGES_INVALIDES`);
+  const result = await staffApi().saveCodSettings(token, { zones, maxTotal });
+  if (!result.ok) return afterFailure(token, result, SETTINGS_PAGE);
+  redirect(`${SETTINGS_PAGE}?ok=livraison-enregistree`);
 }

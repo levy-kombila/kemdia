@@ -123,6 +123,51 @@ export class PrismaInvoiceRepository implements InvoiceRepository {
     return row ? this.withCredited(row) : null;
   }
 
+  async findByNumber(number: string): Promise<InvoiceRecord | null> {
+    const row = await this.tx.db.invoice.findUnique({ where: { number } });
+    return row ? this.withCredited(row) : null;
+  }
+
+  async page(input: {
+    invoiceNumber?: string;
+    orderReference?: string;
+    after?: { issuedAt: Date; id: string };
+    limit: number;
+  }): Promise<{ items: InvoiceRecord[]; next: { issuedAt: Date; id: string } | null }> {
+    const after = input.after;
+    const rows = await this.tx.db.invoice.findMany({
+      where: {
+        ...(input.invoiceNumber ? { number: input.invoiceNumber } : {}),
+        ...(input.orderReference ? { orderReference: input.orderReference } : {}),
+        ...(after
+          ? {
+              OR: [
+                { issuedAt: { lt: after.issuedAt } },
+                { issuedAt: after.issuedAt, id: { lt: after.id } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ issuedAt: "desc" }, { id: "desc" }],
+      take: input.limit + 1,
+    });
+    const items = rows.slice(0, input.limit);
+    const credited = await this.tx.db.invoice.findMany({
+      where: {
+        id: { in: items.flatMap((r) => (r.creditedInvoiceId ? [r.creditedInvoiceId] : [])) },
+      },
+      select: { id: true, number: true },
+    });
+    const numbers = new Map(credited.map((r) => [r.id, r.number]));
+    const last = items.at(-1);
+    return {
+      items: items.map((r) =>
+        toRecord(r, r.creditedInvoiceId ? (numbers.get(r.creditedInvoiceId) ?? null) : null),
+      ),
+      next: rows.length > input.limit && last ? { issuedAt: last.issuedAt, id: last.id } : null,
+    };
+  }
+
   async findDueEmails(now: Date, limit: number): Promise<string[]> {
     const rows = await this.tx.db.invoice.findMany({
       where: {
