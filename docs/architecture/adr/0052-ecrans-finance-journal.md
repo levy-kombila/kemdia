@@ -35,7 +35,9 @@ Choix du propriétaire (2026-10-22) :
 2. **Renvoi d'une facture.** La base fige la facture, y compris le suivi de son envoi automatique (il ne fait
    qu'avancer). Le renvoi ne touche donc pas à ce suivi : il envoie tout de suite, à part. Il est refusé
    (`ENVOI_IMPOSSIBLE`) pendant l'envoi automatique (la facture partirait deux fois), sans e-mail vérifié, sans envoi
-   configuré, et dans les 10 minutes qui suivent un renvoi de la même facture.
+   configuré, dans les 10 minutes qui suivent un renvoi de la même facture, et au-delà de 5 renvois par client et par
+   heure (relecture de sécurité). La place est réservée avant toute attente : deux clics simultanés n'envoient qu'un
+   e-mail.
 3. **Pages du site** (`/equipe/…`), chacune réservée à son rôle (menu et garde ; l'API reste juge) :
    - Finance : `factures` (+ relais du PDF, vérifié et jamais gardé en cache), `encaissements`, `remboursements`,
      `codes-promo`, `reglages` ; compteurs « à encaisser » et « remboursements à faire » au tableau de bord ;
@@ -43,6 +45,9 @@ Choix du propriétaire (2026-10-22) :
 4. **Formulaires.** Simples formulaires envoyés à des actions serveur, qui revérifient chaque champ avec les schémas
    du contrat (code promo, facturation) ou des listes fermées (zones, statuts) avant l'API. Les dates d'un code promo
    sont prises à l'heure de Libreville ; la date de fin est **incluse** (jusqu'à 23 h 59).
+
+5. **Index** (migration `20261022150000_index_factures`) : date d'émission décroissante et numéro de commande, pour
+   la liste et la recherche.
 
 ## Conséquences
 

@@ -108,6 +108,7 @@ export class FinanceController {
   }
 
   @Post("invoices/:number/resend")
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @Header("Cache-Control", "no-store")
   async resend(

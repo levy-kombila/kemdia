@@ -1,4 +1,5 @@
 import { INVOICE_NUMBER_PATTERN } from "@kemdia/contracts/constants";
+import { redirect } from "next/navigation";
 import { sessionToken, staffApi } from "@/lib/staff/staff";
 
 /**
@@ -21,10 +22,13 @@ function text(status: number, message: string): Response {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ number: string }> },
 ): Promise<Response> {
   const { number } = await params;
+  // Lien venu d'un autre site : refusé, sans rien demander à l'API (pas de fausse ligne au journal — relecture)
+  const site = request.headers.get("sec-fetch-site");
+  if (site && site !== "same-origin" && site !== "none") return text(404, "Facture introuvable.");
   const token = await sessionToken();
   // Sans session, refusée ou numéro mal formé : même réponse qu'une facture absente (l'espace ne se signale pas)
   if (!token || !INVOICE_NUMBER_PATTERN.test(number)) return text(404, "Facture introuvable.");
@@ -41,6 +45,8 @@ export async function GET(
         },
       });
     case 403:
+      // Session sans double authentification récente (ou sans le rôle) : la page de confirmation décide
+      redirect("/equipe/confirmer?retour=%2Fequipe%2Ffactures");
     case 404:
       return text(404, "Facture introuvable.");
     case 503:

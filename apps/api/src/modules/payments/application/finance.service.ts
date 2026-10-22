@@ -17,6 +17,9 @@ import {
 export const ADMIN_INVOICE_PAGE = 30;
 /** Une même facture n'est renvoyée qu'une fois par période (évite d'inonder le client par erreur). */
 export const RESEND_COOLDOWN_MS = 10 * 60_000;
+/** Renvois au plus par client et par heure (relecture : un compte Finance volé n'inonde pas un client). */
+export const CLIENT_RESEND_MAX = 5;
+const CLIENT_WINDOW_MS = 60 * 60_000;
 
 export type InvoiceEmailState = "sent" | "pending" | "failed";
 
@@ -34,6 +37,9 @@ const notFound = () => new PaymentsError("FACTURE_INTROUVABLE", "facture introuv
  * espèces à encaisser. Les routes exigent le rôle « finance » et la double authentification ; un téléchargement et un
  * renvoi sont inscrits au journal d'audit (données personnelles du client sur le PDF).
  *
+ * Les délais (10 minutes par facture, 5 renvois par client et par heure) sont gardés en mémoire : une seule instance
+ * de l'API au MVP ; à revoir (table à part ou Redis) avant d'en lancer plusieurs.
+ *
  * Une facture est figée par la base (obligation légale), y compris le suivi de son envoi automatique : un renvoi part
  * donc tout de suite, à part, sans toucher à ce suivi.
  */
@@ -43,6 +49,8 @@ export class FinanceService {
   clock: () => Date = () => new Date();
   /** Dernier renvoi par facture (une seule instance de l'API au MVP). */
   private readonly lastResent = new Map<string, number>();
+  /** Renvois de la dernière heure par client (toutes ses factures confondues). */
+  private readonly perClient = new Map<string, number[]>();
 
   constructor(
     private readonly orders: OrderPayments,
@@ -99,7 +107,9 @@ export class FinanceService {
         "aucun envoi d'e-mail n'est configuré sur le serveur",
       );
     }
+    // Réservation AVANT toute attente : deux clics simultanés ne passent pas tous les deux (relecture)
     const now = this.clock().getTime();
+    this.forgetOld(now);
     const last = this.lastResent.get(invoice.id);
     if (last !== undefined && now - last < RESEND_COOLDOWN_MS) {
       throw new PaymentsError(
@@ -107,11 +117,29 @@ export class FinanceService {
         "cette facture vient d'être renvoyée : patientez 10 minutes avant de recommencer",
       );
     }
-    const contact = await this.directory.contactOf(invoice.accountId);
-    if (!contact?.email) {
-      throw new PaymentsError("ENVOI_IMPOSSIBLE", "le client n'a pas d'adresse e-mail vérifiée");
+    const recent = (this.perClient.get(invoice.accountId) ?? []).filter(
+      (at) => now - at < CLIENT_WINDOW_MS,
+    );
+    if (recent.length >= CLIENT_RESEND_MAX) {
+      throw new PaymentsError(
+        "ENVOI_IMPOSSIBLE",
+        `déjà ${CLIENT_RESEND_MAX} renvois à ce client dans l'heure : réessayez plus tard`,
+      );
     }
     this.lastResent.set(invoice.id, now);
+    this.perClient.set(invoice.accountId, [...recent, now]);
+    const release = () => {
+      this.lastResent.delete(invoice.id);
+      this.perClient.set(
+        invoice.accountId,
+        (this.perClient.get(invoice.accountId) ?? []).filter((at) => at !== now),
+      );
+    };
+    const contact = await this.directory.contactOf(invoice.accountId);
+    if (!contact?.email) {
+      release();
+      throw new PaymentsError("ENVOI_IMPOSSIBLE", "le client n'a pas d'adresse e-mail vérifiée");
+    }
     try {
       await this.mailer.send(
         contact.email,
@@ -120,7 +148,7 @@ export class FinanceService {
         await this.renderer.render(invoice),
       );
     } catch {
-      this.lastResent.delete(invoice.id);
+      release();
       throw new PaymentsError(
         "ENVOI_IMPOSSIBLE",
         "l'e-mail n'a pas pu partir : réessayez dans un instant",
@@ -134,6 +162,18 @@ export class FinanceService {
       context,
     });
     return invoice;
+  }
+
+  /** Oublie les renvois de plus d'une heure : les tables en mémoire restent petites. */
+  private forgetOld(now: number): void {
+    for (const [id, at] of this.lastResent) {
+      if (now - at >= RESEND_COOLDOWN_MS) this.lastResent.delete(id);
+    }
+    for (const [account, times] of this.perClient) {
+      const kept = times.filter((at) => now - at < CLIENT_WINDOW_MS);
+      if (kept.length === 0) this.perClient.delete(account);
+      else this.perClient.set(account, kept);
+    }
   }
 
   /** Commandes payées en espèces à la livraison, expédiées ou livrées, pas encore encaissées. */

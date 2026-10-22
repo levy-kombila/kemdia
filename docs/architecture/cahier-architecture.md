@@ -1104,17 +1104,18 @@ Décision : [ADR-0052](adr/0052-ecrans-finance-journal.md). Pages de l'équipe (
 `/equipe/factures`, `/equipe/encaissements`, `/equipe/remboursements`, `/equipe/codes-promo`, `/equipe/reglages` ;
 administrateurs : `/equipe/journal`.
 
-| Route (`/api/v1`)                      | Règle                                                                                                    |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `GET /admin/invoices?q=&after=`        | 30 par page, du plus récent ; `q` = numéro de facture, d'avoir ou de commande seulement                  |
-| `GET /admin/invoices/{number}`         | PDF (même que le client) ; `invoice.downloaded` au journal                                               |
-| `POST /admin/invoices/{number}/resend` | Envoi immédiat à l'e-mail vérifié ; `ENVOI_IMPOSSIBLE` pendant l'envoi automatique ou < 10 min ; journal |
-| `GET /admin/cash-to-collect`           | Commandes à la livraison expédiées ou livrées, non encaissées ; livrées d'abord, 100 au plus             |
+| Route (`/api/v1`)                      | Règle                                                                                                                                       |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /admin/invoices?q=&after=`        | 30 par page, du plus récent ; `q` = numéro de facture, d'avoir ou de commande seulement                                                     |
+| `GET /admin/invoices/{number}`         | PDF (même que le client) ; `invoice.downloaded` au journal                                                                                  |
+| `POST /admin/invoices/{number}/resend` | Envoi immédiat à l'e-mail vérifié ; `ENVOI_IMPOSSIBLE` pendant l'envoi automatique, < 10 min ou 5 renvois par client et par heure ; journal |
+| `GET /admin/cash-to-collect`           | Commandes à la livraison expédiées ou livrées, non encaissées ; livrées d'abord, 100 au plus                                                |
 
 Les écrans réutilisent les routes existantes : remboursements (`/admin/refunds`), encaissement
 (`/admin/orders/{reference}/cod-collected`), codes promo (`/admin/coupons`), réglages (`/admin/settings/billing`,
 `/admin/settings/cod`), journal (`/admin/audit`). Le relais du PDF (`/equipe/factures/{numéro}`) ne passe qu'un fichier
-commençant par `%PDF-`, de 5 Mo au plus, sans cache. Contrat de l'API : **2.1.0**.
+commençant par `%PDF-`, de 5 Mo au plus, sans cache, et refuse un lien venu d'un autre site. Index ajoutés sur
+`payments.invoices` (date d'émission décroissante, numéro de commande). Contrat de l'API : **2.1.0**.
 
 ## 4. Choix technologiques
 

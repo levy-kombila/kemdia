@@ -633,6 +633,14 @@ describe("Finance (S7.5-T05)", () => {
         actions.createCouponAction(form({ code: "x", kind: "percent", value: "10" })),
       ),
     ).toBe("/equipe/codes-promo?erreur=COUPON_INVALIDE");
+    // Date impossible : refusée (JavaScript l'aurait reportée au 3 mars)
+    expect(
+      await redirectOf(
+        actions.createCouponAction(
+          form({ code: "FEVRIER", kind: "percent", value: "10", endsAt: "2026-02-31" }),
+        ),
+      ),
+    ).toBe("/equipe/codes-promo?erreur=COUPON_INVALIDE");
     expect(api.createCoupon).not.toHaveBeenCalled();
     api.createCoupon.mockResolvedValue({ ok: true, data: {} });
     expect(

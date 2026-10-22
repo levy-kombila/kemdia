@@ -611,6 +611,30 @@ describe("Factures (PostgreSQL, HTTP)", () => {
       expect(mailer.sent.filter((m) => m.number === invoice!.number)).toHaveLength(1);
     });
 
+    it("renvoi : deux clics simultanés → un seul e-mail ; 5 renvois par client et par heure (relecture)", async () => {
+      const finance = await openSession("FINANCE");
+      const numbers: string[] = [];
+      for (let i = 0; i < 6; i++) {
+        const order = await paidOrder();
+        numbers.push((await invoicesOf(order.reference))[0]!.number);
+        // Livrée : la commande ne compte plus parmi les 3 commandes ouvertes du client
+        for (const status of ["PREPARING", "SHIPPED", "DELIVERED"] as const) {
+          await prisma.order.update({ where: { id: order.id }, data: { status } });
+        }
+      }
+      await prisma.invoice.updateMany({
+        where: { number: { in: numbers } },
+        data: { emailSentAt: new Date() },
+      });
+      const resend = (number: string) =>
+        call("post", `/api/v1/admin/invoices/${number}/resend`, finance.token).send({});
+      const both = await Promise.all([resend(numbers[0]!), resend(numbers[0]!)]);
+      expect(both.map((r) => r.status).sort()).toEqual([200, 409]);
+      expect(mailer.sent.filter((m) => m.number === numbers[0])).toHaveLength(1);
+      for (const number of numbers.slice(1, 5)) await resend(number).expect(200);
+      expect(codeOf((await resend(numbers[5]!).expect(409)).body)).toBe("ENVOI_IMPOSSIBLE");
+    });
+
     it("espèces à encaisser : commandes à la livraison expédiées ou livrées, livrées d'abord ; disparaît une fois encaissée", async () => {
       const finance = await openSession("FINANCE");
       const shipped = await placeOrder("cod");

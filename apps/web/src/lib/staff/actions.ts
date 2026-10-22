@@ -548,7 +548,10 @@ function dateField(form: FormData, name: string, endOfDay = false): string | nul
   if (!raw) return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return undefined;
   const at = new Date(`${raw}T${endOfDay ? "23:59:59.000" : "00:00:00.000"}+01:00`);
-  return Number.isNaN(at.getTime()) ? undefined : at.toISOString();
+  if (Number.isNaN(at.getTime())) return undefined;
+  // Date impossible (31 février…) : JavaScript la reporte au mois suivant ; on la refuse (relecture)
+  const local = new Date(at.getTime() + 60 * 60_000).toISOString().slice(0, 10);
+  return local === raw ? at.toISOString() : undefined;
 }
 
 /** Nombre facultatif : vide → `null`, sinon entier dans les bornes (`undefined` : refusé). */
@@ -564,6 +567,9 @@ export async function createCouponAction(form: FormData): Promise<never> {
   const kind = COUPON_KINDS.find((k) => k === form.get("kind"));
   const startsAt = dateField(form, "startsAt");
   const endsAt = dateField(form, "endsAt", true);
+  // Date mal formée ou impossible : refusée (sinon le champ serait simplement omis)
+  if (startsAt === undefined || endsAt === undefined)
+    redirect(`${COUPONS_PAGE}?erreur=COUPON_INVALIDE`);
   const candidate = {
     code: field(form, "code", 40)?.trim().toUpperCase(),
     kind,

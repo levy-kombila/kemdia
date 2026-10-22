@@ -211,6 +211,9 @@ model Invoice {
   @@unique([orderId, kind])
   @@index([accountId])
   @@index([emailSentAt, emailNextAt])
+  /// Écran Factures de la Finance (S7.5-T05) : du plus récent au plus ancien, et recherche par commande
+  @@index([issuedAt(sort: Desc), id(sort: Desc)])
+  @@index([orderReference])
   @@map("invoices")
   @@schema("payments")
 }
