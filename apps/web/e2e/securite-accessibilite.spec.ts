@@ -132,5 +132,5 @@ test("« ce n'est pas moi » : ouvrir le lien ne fait rien ; un jeton inconnu es
   await expect(button).toBeVisible();
   await button.click();
   await expect(page).toHaveURL(/\/securite\/pas-moi\?erreur=ALERTE_INVALIDE$/);
-  await expect(page.getByRole("alert")).toContainText("plus valable");
+  await expect(page.getByRole("alert").filter({ hasText: "plus valable" })).toBeVisible();
 });

@@ -230,9 +230,13 @@ test.describe("espace de l'équipe : parcours complet", () => {
     // Recherche d'un client, rôle accordé puis retiré (la base revient comme avant)
     await page.getByLabel("Compte à ajouter à l'équipe").fill(CLIENT.email);
     await page.getByRole("button", { name: "Rechercher" }).click();
-    await page.getByRole("button", { name: "Service client", pressed: false }).click();
+    await page
+      .getByRole("region", { name: "Compte trouvé" })
+      .getByRole("button", { name: "Service client", pressed: false })
+      .click();
     await expect(page).toHaveURL(/\/equipe\/utilisateurs\?ok=role-accorde$/);
-    const member = page.getByRole("listitem").filter({ hasText: CLIENT.email });
+    // Adresse exacte : « equipe-e2e@kemdia.test » (le compte de l'équipe) ne doit pas correspondre
+    const member = page.getByRole("listitem").filter({ hasText: /(^|[^-\w])e2e@kemdia\.test/ });
     await expect(member).toContainText("Double authentification à activer");
     await member.getByRole("button", { name: "Service client", pressed: true }).click();
     await expect(page).toHaveURL(/\/equipe\/utilisateurs\?ok=role-retire$/);

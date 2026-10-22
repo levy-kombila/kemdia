@@ -82,7 +82,7 @@ export function StaffAccountLookup() {
       </form>
       {state && !state.ok && <FormAlert>{state.message}</FormAlert>}
       {state?.ok && (
-        <div className="space-y-3 rounded-xl bg-white p-4">
+        <section aria-label="Compte trouvé" className="space-y-3 rounded-xl bg-white p-4">
           <Identity account={state.account} />
           {state.account.roles.includes("admin") ? (
             <p className="text-ink-500 text-sm">
@@ -100,7 +100,7 @@ export function StaffAccountLookup() {
               )}
             </>
           )}
-        </div>
+        </section>
       )}
     </div>
   );
