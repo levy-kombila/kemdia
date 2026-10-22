@@ -44,28 +44,59 @@ export class SupportService {
       throw new IdentityError("ACCES_REFUSE", "action réservée au service client");
     }
     const identifier = requireIdentifier(rawIdentifier);
-    return this.transactions.run(async () => {
-      const account = await this.accounts.findByIdentifier(identifier);
-      const activity = account ? await this.staff.activity(account.id) : null;
-      if (!account || !activity) {
-        throw new IdentityError("COMPTE_INTROUVABLE", "aucun compte ne correspond");
-      }
-      await this.audit.record({
-        action: "support.account_viewed",
-        actor: { type: "account", id: actor.accountId },
-        target: { type: "account", id: account.id },
-        details: {},
-        context,
+    return this.transactions
+      .run(async () => {
+        const account = await this.accounts.findByIdentifier(identifier);
+        const activity = account ? await this.staff.activity(account.id) : null;
+        if (!account || !activity) {
+          // Recherche sans résultat tracée aussi (sans l'identifiant) : sonder qui a un compte laisse une trace
+          await this.audit.record({
+            action: "support.lookup_failed",
+            actor: { type: "account", id: actor.accountId },
+            target: null,
+            details: {},
+            context,
+          });
+          return null;
+        }
+        await this.audit.record({
+          action: "support.account_viewed",
+          actor: { type: "account", id: actor.accountId },
+          target: { type: "account", id: account.id },
+          details: {},
+          context,
+        });
+        return { ...account.adminView(), ...activity };
+      })
+      .then((found) => {
+        // Levée APRÈS la transaction : la ligne du journal est gardée
+        if (!found) throw new IdentityError("COMPTE_INTROUVABLE", "aucun compte ne correspond");
+        return found;
       });
-      return { ...account.adminView(), ...activity };
-    });
   }
 
-  /** Le compte existe-t-il (avant de lire ses commandes) ? */
-  async exists(actor: RoleActor, accountId: string): Promise<boolean> {
+  /**
+   * Avant de lire les commandes d'un client : le compte doit exister (sinon `COMPTE_INTROUVABLE`), et chaque lecture
+   * est inscrite au journal (`support.orders_viewed`, avec la référence pour une commande).
+   */
+  async recordOrdersView(
+    actor: RoleActor,
+    accountId: string,
+    reference: string | null,
+    context: AuditContext,
+  ): Promise<void> {
     if (!hasRole(actor.roles, "support")) {
       throw new IdentityError("ACCES_REFUSE", "action réservée au service client");
     }
-    return (await this.accounts.findById(accountId)) !== null;
+    if ((await this.accounts.findById(accountId)) === null) {
+      throw new IdentityError("COMPTE_INTROUVABLE", "aucun compte ne correspond");
+    }
+    await this.audit.record({
+      action: "support.orders_viewed",
+      actor: { type: "account", id: actor.accountId },
+      target: { type: "account", id: accountId },
+      details: reference ? { reference } : {},
+      context,
+    });
   }
 }

@@ -125,7 +125,7 @@ export async function logoutAllAction(): Promise<never> {
 /**
  * « Ce n'est pas moi » (lien de l'avis de nouvel appareil, S7.5-T04) : n'agit qu'au clic sur le bouton de la page, jamais
  * à la simple ouverture du lien (un logiciel de messagerie qui « prévisualise » les liens ne déclenche donc rien).
- * Toutes les sessions du compte sont fermées, celle de ce navigateur comprise.
+ * Toutes les sessions du compte sont fermées, celle de ce navigateur comprise, et le mot de passe est bloqué.
  */
 export async function deviceNotMeAction(form: FormData): Promise<never> {
   const token = text(form.get("jeton"), 100);
@@ -193,10 +193,13 @@ export async function verifySignupAction(
   if (!value || !OTP_CODE_PATTERN.test(value)) return invalid("CODE_INVALIDE");
   const ticket = await ticketFrom(SIGNUP_TICKET_COOKIE);
   if (!ticket) return invalid("CODE_EXPIRE");
-  const result = await identityApi().verifySignup(ticket, value, await userAgent());
+  const device = await deviceId();
+  const result = await identityApi().verifySignup(ticket, value, await userAgent(), device);
   if (!result.ok) return result;
   await clearCookie(SIGNUP_TICKET_COOKIE);
   await openSession(result.data.token);
+  // Appareil retenu sans avis par l'API : la prochaine connexion depuis ce navigateur sera reconnue
+  (await cookies()).set(DEVICE_COOKIE, device, cookieOptions(DEVICE_MAX_AGE_S));
   return { ok: true, account: toSummary(result.data.account) };
 }
 

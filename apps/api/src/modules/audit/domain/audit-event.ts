@@ -137,9 +137,13 @@ export const AUDIT_ACTIONS = [
   "staff.removed",
   /** Compte consulté par le service client — S7.5-T04 */
   "support.account_viewed",
+  /** Recherche du service client sans résultat (aucun identifiant en clair) — S7.5-T04, relecture */
+  "support.lookup_failed",
+  /** Commandes d'un client lues par le service client (détails : reference, ou rien pour la liste) — S7.5-T04, relecture */
+  "support.orders_viewed",
   /** Connexion depuis un appareil inconnu, avis envoyé (détails : device) — S7.5-T04 */
   "device.new_login",
-  /** Lien « ce n'est pas moi » utilisé : toutes les sessions fermées (détails : sessions) — S7.5-T04 */
+  /** Lien « ce n'est pas moi » utilisé : sessions fermées, mot de passe bloqué (détails : sessions) — S7.5-T04 */
   "device.not_me",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

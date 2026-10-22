@@ -14,6 +14,8 @@ export {
 } from "./interface/session.guard.js";
 export { Authorize, RoleGuard } from "./interface/role.guard.js";
 export { RoleService } from "./application/role.service.js";
+/** Service client (S7.5-T04) : le module orders trace chaque lecture des commandes d'un client */
+export { SupportService } from "./application/support.service.js";
 export { SecondFactorService } from "./application/second-factor.service.js";
 export { AccountDirectory, type AccountContact } from "./application/account-directory.service.js";
 export { ROLES, hasRole, type Role } from "./domain/role.js";

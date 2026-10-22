@@ -180,7 +180,7 @@ export const adminPaths = {
       summary: "Journal d'audit des actions sensibles, du plus récent au plus ancien",
       description: [
         RULES,
-        "Actions (liste complète dans le schéma `AuditPage`) : rôles, mots de passe, sessions, équipe (`account.disabled`, `account.enabled`, `staff.removed`), service client (`support.account_viewed`), appareils (`device.new_login`, `device.not_me`)… Conservé 365 jours ; la base refuse toute modification.",
+        "Actions (liste complète dans le schéma `AuditPage`) : rôles, mots de passe, sessions, équipe (`account.disabled`, `account.enabled`, `staff.removed`), service client (`support.account_viewed`, `support.lookup_failed`, `support.orders_viewed`), appareils (`device.new_login`, `device.not_me`)… Conservé 365 jours ; la base refuse toute modification.",
         "Page suivante : repasser `nextCursor` dans `before`.",
       ].join("\n\n"),
       operationId: "listAuditEvents",
@@ -238,7 +238,7 @@ export const supportPaths = {
     post: {
       tags: ["Service client"],
       summary: "Retrouver un client par e-mail ou téléphone",
-      description: `${SUPPORT_RULES}\n\nL'identifiant est dans le corps (jamais dans l'adresse) ; chaque consultation est inscrite au journal d'audit (\`support.account_viewed\`).`,
+      description: `${SUPPORT_RULES}\n\nL'identifiant est dans le corps (jamais dans l'adresse) ; chaque recherche est inscrite au journal d'audit (\`support.account_viewed\`, ou \`support.lookup_failed\` sans résultat).`,
       operationId: "supportLookupAccount",
       security: bearer,
       requestBody: {

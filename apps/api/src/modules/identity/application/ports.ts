@@ -265,9 +265,10 @@ export type DeviceSighting =
 
 export interface KnownDeviceRepository {
   /**
-   * Note l'appareil (une requête atomique, compte verrouillé) : déjà connu → date de visite ; sinon il est ajouté,
-   * avec l'empreinte du jeton d'avis s'il n'est pas le premier du compte. Au-delà de `max`, les moins récents sont
-   * oubliés.
+   * Note l'appareil (une requête atomique, compte verrouillé) : déjà connu → date de visite (`known`) ; sinon il est
+   * ajouté. `silent` (connexion juste après l'inscription) → retenu sans avis (`recorded`). Sinon il porte l'empreinte
+   * du jeton d'avis (`alerted`), sauf si le compte a déjà `maxAlerts` avis encore valables (`throttled`). Au-delà de
+   * `max`, les appareils les moins récents SANS avis valable sont oubliés.
    */
   sight(input: {
     id: string;
@@ -278,7 +279,9 @@ export interface KnownDeviceRepository {
     alertExpiresAt: Date;
     now: Date;
     max: number;
-  }): Promise<"known" | "first" | "new">;
+    maxAlerts: number;
+    silent: boolean;
+  }): Promise<"known" | "alerted" | "throttled" | "recorded">;
   /**
    * Consomme le jeton « ce n'est pas moi » (usage unique, avant l'échéance) : l'appareil est oublié. Renvoie le
    * compte concerné, ou `null` si le jeton est inconnu, déjà utilisé ou expiré.

@@ -79,6 +79,12 @@ export class IdentityPersonalData {
       },
       orderBy: { createdAt: "desc" },
     });
+    // Appareils reconnus (S7.5-T04) : jamais l'empreinte ni le jeton d'avis
+    const known = await db.knownDevice.findMany({
+      where: { accountId },
+      select: { userAgent: true, createdAt: true, lastSeenAt: true },
+      orderBy: { lastSeenAt: "desc" },
+    });
     const factor = await db.secondFactor.findUnique({
       where: { accountId },
       select: { enabledAt: true },
@@ -87,6 +93,7 @@ export class IdentityPersonalData {
       compte: account,
       roles,
       appareils: sessions,
+      appareilsReconnus: known,
       doubleAuthentification: {
         activee: Boolean(factor?.enabledAt),
         depuis: factor?.enabledAt ?? null,

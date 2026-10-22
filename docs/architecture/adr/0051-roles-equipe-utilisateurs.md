@@ -59,7 +59,20 @@ RENAME VALUE`) : les modérateurs gardent leur accès sans perte de ligne. `LOGI
    **toutes** les sessions, oublie l'appareil et écrit `device.not_me` au journal. La page du site **n'agit qu'au
    clic** : une messagerie qui ouvre les liens pour les prévisualiser ne déclenche rien. La page n'est pas indexée et
    n'envoie pas d'en-tête `Referer`.
-6. **Lien de l'avis.** Il est construit avec la variable **facultative** `PUBLIC_SITE_URL`. Sans elle, l'avis part sans
+6. **Après la relecture de sécurité.**
+   - Une connexion **sans** identifiant d'appareil (appel direct à l'API) compte comme un appareil inconnu : avis.
+   - Seule la connexion qui suit l'inscription (`POST /auth/signup/verify`, champ `device` facultatif) retient
+     l'appareil sans avis.
+   - Au plus **5 avis** encore valables par compte (`DEVICE_ALERTS_MAX`) : au-delà, l'appareil est retenu et tracé
+     (`device.new_login` avec `notice: non`) sans nouvel e-mail. Une ligne qui porte un lien encore valable n'est
+     **jamais** oubliée : se connecter 20 fois avec des appareils inventés ne peut plus effacer le lien du titulaire.
+   - « Ce n'est pas moi » **bloque le mot de passe** : il est remplacé par l'empreinte d'un secret aléatoire jeté.
+   - Appareils pas revus depuis un an purgés par le ménage horaire ; présents dans la copie des données.
+   - Service client : chaque lecture des commandes est tracée (`support.orders_viewed`), un compte inconnu répond
+     `COMPTE_INTROUVABLE`, une recherche sans résultat est tracée (`support.lookup_failed`, sans l'identifiant).
+   - Les rôles de l'équipe d'un administrateur ne se changent pas par l'API (`COMPTE_PROTEGE`) ; le rôle vendeur,
+     qui suit la décision sur sa boutique, reste possible.
+7. **Lien de l'avis.** Il est construit avec la variable **facultative** `PUBLIC_SITE_URL`. Sans elle, l'avis part sans
    lien.
 
 ## Conséquences
@@ -68,6 +81,9 @@ RENAME VALUE`) : les modérateurs gardent leur accès sans perte de ligne. `LOGI
 - Un départ se règle en deux clics, avec effet immédiat : les rôles sont relus à chaque requête et les sessions sont
   fermées.
 - Le titulaire d'un compte est prévenu d'une connexion inconnue et peut tout couper sans se connecter.
+- Le rôle **Catalogue** voit les pièces d'identité des vendeurs (vérifications), comme choisi le 2026-10-20.
+- Juste après le déploiement, la première connexion de chaque compte existant envoie un avis (aucun appareil n'est
+  encore connu).
 - Les pages Finance n'existent pas encore sur le site : elles arrivent avec S7.5-T05. Le rôle est déjà en place dans
   l'API.
 - **Déploiement** : migration à appliquer (`db:deploy` puis `db:check`). `PUBLIC_SITE_URL` est à définir sur Render

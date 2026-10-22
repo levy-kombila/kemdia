@@ -19,7 +19,9 @@ export class PrismaKnownDeviceRepository implements KnownDeviceRepository {
     alertExpiresAt: Date;
     now: Date;
     max: number;
-  }): Promise<"known" | "first" | "new"> {
+    maxAlerts: number;
+    silent: boolean;
+  }): Promise<"known" | "alerted" | "throttled" | "recorded"> {
     return this.tx.run(async () => {
       const db = this.tx.db;
       await db.$executeRaw`
@@ -29,7 +31,10 @@ export class PrismaKnownDeviceRepository implements KnownDeviceRepository {
         data: { lastSeenAt: input.now },
       });
       if (seen.count > 0) return "known";
-      const first = (await db.knownDevice.count({ where: { accountId: input.accountId } })) === 0;
+      // Avis encore valables : au plus `maxAlerts` (pas d'inondation de la boîte du titulaire)
+      const live = { accountId: input.accountId, alertExpiresAt: { gt: input.now } };
+      const alert =
+        !input.silent && (await db.knownDevice.count({ where: live })) < input.maxAlerts;
       await db.knownDevice.create({
         data: {
           id: input.id,
@@ -38,22 +43,28 @@ export class PrismaKnownDeviceRepository implements KnownDeviceRepository {
           userAgent: input.userAgent,
           createdAt: input.now,
           lastSeenAt: input.now,
-          ...(first
-            ? {}
-            : { alertTokenHash: input.alertTokenHash, alertExpiresAt: input.alertExpiresAt }),
+          ...(alert
+            ? { alertTokenHash: input.alertTokenHash, alertExpiresAt: input.alertExpiresAt }
+            : {}),
         },
       });
-      // Au plus `max` appareils retenus : les moins récemment utilisés sont oubliés
+      // Au plus `max` appareils sans avis valable : les moins récemment utilisés sont oubliés. Une ligne qui porte un
+      // lien « ce n'est pas moi » encore valable n'est JAMAIS oubliée (relecture : sinon un voleur pourrait l'effacer
+      // en se connectant 20 fois avec des appareils inventés).
+      const quiet = {
+        accountId: input.accountId,
+        OR: [{ alertExpiresAt: null }, { alertExpiresAt: { lte: input.now } }],
+      };
       const keep = await db.knownDevice.findMany({
-        where: { accountId: input.accountId },
+        where: quiet,
         orderBy: [{ lastSeenAt: "desc" }, { id: "desc" }],
         take: input.max,
         select: { id: true },
       });
       await db.knownDevice.deleteMany({
-        where: { accountId: input.accountId, id: { notIn: keep.map((d) => d.id) } },
+        where: { ...quiet, id: { notIn: keep.map((d) => d.id) } },
       });
-      return first ? "first" : "new";
+      return alert ? "alerted" : input.silent ? "recorded" : "throttled";
     });
   }
 

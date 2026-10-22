@@ -163,13 +163,16 @@ describe("inscription", () => {
     expect(api.signup).not.toHaveBeenCalled();
   });
 
-  it("bon code : ticket effacé, session ouverte", async () => {
+  it("bon code : ticket effacé, session ouverte, appareil retenu (S7.5-T04)", async () => {
     jar.set(SIGNUP_TICKET_COOKIE, { value: TICKET });
     api.verifySignup.mockResolvedValue({ ok: true, data: { status: "active", ...OPENED } });
     expect((await verifySignupAction("123456")).ok).toBe(true);
-    expect(api.verifySignup).toHaveBeenCalledWith(TICKET, "123456", "Firefox");
+    const device = api.verifySignup.mock.calls[0]![3] as string;
+    expect(device).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(api.verifySignup).toHaveBeenCalledWith(TICKET, "123456", "Firefox", device);
     expect(jar.has(SIGNUP_TICKET_COOKIE)).toBe(false);
     expect(jar.get(SESSION_COOKIE)?.value).toBe(TOKEN);
+    expect(jar.get(DEVICE_COOKIE)?.value).toBe(device);
   });
 
   it("sans ticket (expiré) ou code mal formé : refusé sans appeler l'API", async () => {

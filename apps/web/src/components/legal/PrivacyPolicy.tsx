@@ -73,8 +73,8 @@ export function PrivacyPolicy() {
         <li>Sessions de connexion : 30 jours, prolongés à chaque visite.</li>
         <li>
           Appareils déjà utilisés pour vous connecter : une empreinte de l&apos;identifiant (jamais
-          l&apos;identifiant lui-même) et le résumé du navigateur, pour les 20 plus récents ;
-          effacés avec le compte.
+          l&apos;identifiant lui-même) et le résumé du navigateur ; oubliés après un an sans
+          connexion, et effacés avec le compte. Ils figurent dans la copie de vos données.
         </li>
         <li>
           Sauvegardes chiffrées : 6 mois au plus ; une donnée effacée disparaît des sauvegardes à

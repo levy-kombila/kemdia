@@ -28,6 +28,7 @@ import {
 import { SessionService } from "../src/modules/identity/index.js";
 import { Account } from "../src/modules/identity/domain/account.js";
 import { requireIdentifier } from "../src/modules/identity/domain/identifier.js";
+import { DeviceService } from "../src/modules/identity/application/device.service.js";
 import { PrismaAccountRepository } from "../src/modules/identity/infrastructure/prisma-account.repository.js";
 import { testDatabaseUrl } from "./integration-db.js";
 import { confirmSecondFactor } from "./second-factor-helper.js";
@@ -303,6 +304,21 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
         ),
       ).toBe("COMPTE_PROTEGE");
     }
+    // Rôles de l'équipe d'un administrateur : jamais par l'API (relecture) ; le rôle vendeur, oui (boutique)
+    for (const method of ["put", "delete"] as const) {
+      expect(
+        codeOf(
+          (
+            await call(
+              method,
+              `/api/v1/admin/accounts/${other.id}/roles/catalog`,
+              admin.token,
+            ).expect(403)
+          ).body,
+        ),
+      ).toBe("COMPTE_PROTEGE");
+    }
+    await call("put", `/api/v1/admin/accounts/${other.id}/roles/vendor`, admin.token).expect(200);
     const gone = await member();
     await prisma.account.update({
       where: { id: gone.id },
@@ -343,6 +359,19 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
         .body,
     );
     expect(orders.items).toEqual([]);
+    // Chaque lecture des commandes est tracée ; un compte inconnu → 404 (relecture)
+    expect((await audit(client.id, "support.orders_viewed"))[0]?.actorId).toBe(support.id);
+    expect(
+      codeOf(
+        (
+          await call(
+            "get",
+            `/api/v1/support/accounts/${randomUUID()}/orders`,
+            support.token,
+          ).expect(404)
+        ).body,
+      ),
+    ).toBe("COMPTE_INTROUVABLE");
     await call(
       "get",
       `/api/v1/support/accounts/${client.id}/orders/KD-20261020-ABCDE`,
@@ -351,6 +380,12 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
     await call("post", "/api/v1/support/accounts/lookup", support.token)
       .send({ identifier: "personne@exemple.ga" })
       .expect(404);
+    // Recherche sans résultat tracée aussi, sans l'identifiant
+    const failed = await prisma.auditEvent.findMany({
+      where: { action: "support.lookup_failed", actorId: support.id },
+    });
+    expect(failed).toHaveLength(1);
+    expect(JSON.stringify(failed[0])).not.toContain("personne@exemple.ga");
     // Le catalogue ne voit pas les clients
     const catalog = await member("CATALOG");
     await call("post", "/api/v1/support/accounts/lookup", catalog.token)
@@ -358,7 +393,7 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
       .expect(403);
   });
 
-  it("nouvel appareil : premier retenu sans avis, inconnu → avis avec lien ; « ce n'est pas moi » ferme tout", async () => {
+  it("nouvel appareil : avis dès le premier (hors inscription) et sans identifiant ; « ce n'est pas moi » ferme tout et bloque le mot de passe", async () => {
     const owner = await member();
     const phone = randomBytes(32).toString("base64url");
     const thief = randomBytes(32).toString("base64url");
@@ -367,35 +402,44 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
         (m): m is Extract<OtpMessage, { kind: "new-device" }> =>
           m.kind === "new-device" && m.to === owner.email,
       );
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
 
+    // Appareil retenu à l'inscription : aucun avis, ensuite reconnu
+    const account = (await new PrismaAccountRepository(prisma).findById(owner.id))!;
+    await app
+      .get(DeviceService)
+      .afterSignup(account, phone, "Mozilla/5.0 (Linux; Android 14) Chrome/130.0");
     await login(owner.email, phone).expect(200);
-    await login(owner.email, phone).expect(200);
-    // Sans identifiant d'appareil (appel direct) : rien à reconnaître
-    await login(owner.email).expect(200);
+    await settle();
     expect(alerts()).toHaveLength(0);
+    // Sans identifiant d'appareil (appel direct à l'API) : appareil inconnu → avis (relecture)
+    await login(owner.email).expect(200);
+    await settle();
+    expect(alerts()).toHaveLength(1);
 
     const stolen = await login(
       owner.email,
       thief,
       "Mozilla/5.0 (Windows NT 10.0) <script>Firefox/131.0",
     ).expect(200);
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(alerts()).toHaveLength(1);
-    const alert = alerts()[0]!;
+    await settle();
+    expect(alerts()).toHaveLength(2);
+    const alert = alerts()[1]!;
     // Description choisie dans des listes fixes : rien du navigateur n'est recopié
     expect(alert.device).toBe("Firefox sur Windows");
     expect(alert.link).toMatch(new RegExp(`^${SITE}/securite/pas-moi\\?jeton=[A-Za-z0-9_-]{43}$`));
-    expect((await audit(owner.id, "device.new_login"))[0]?.details).toEqual({
+    expect((await audit(owner.id, "device.new_login")).at(-1)?.details).toEqual({
       device: "Firefox sur Windows",
     });
     // La base ne garde que des empreintes
     const rows = await prisma.knownDevice.findMany({ where: { accountId: owner.id } });
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     for (const row of rows) expect(row.deviceHash).not.toContain(phone);
 
     // Même appareil : plus d'avis
     await login(owner.email, thief).expect(200);
-    expect(alerts()).toHaveLength(1);
+    await settle();
+    expect(alerts()).toHaveLength(2);
 
     const token = new URL(alert.link!).searchParams.get("jeton")!;
     const closed = matches(
@@ -405,6 +449,10 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
     expect(closed.sessionsClosed).toBeGreaterThanOrEqual(5);
     await call("get", "/api/v1/auth/session", tokenOf(stolen.body)).expect(401);
     expect(await audit(owner.id, "device.not_me")).toHaveLength(1);
+    // Mot de passe bloqué : le voleur (et le titulaire) passent par « Mot de passe oublié »
+    expect(codeOf((await login(owner.email, thief).expect(401)).body)).toBe(
+      "IDENTIFIANTS_INCORRECTS",
+    );
     // Usage unique ; jeton inventé refusé pareil
     expect(
       codeOf((await call("post", "/api/v1/auth/devices/not-me").send({ token }).expect(410)).body),
@@ -412,10 +460,26 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
     await call("post", "/api/v1/auth/devices/not-me")
       .send({ token: randomBytes(32).toString("base64url") })
       .expect(410);
-    // L'appareil signalé est oublié : une nouvelle connexion depuis lui redonne un avis
-    await login(owner.email, thief).expect(200);
+  });
+
+  it("appareils inventés en rafale : 5 avis au plus, et le premier lien reste valable (relecture)", async () => {
+    const owner = await member();
+    const alerts = () =>
+      sender.sent.filter(
+        (m): m is Extract<OtpMessage, { kind: "new-device" }> =>
+          m.kind === "new-device" && m.to === owner.email,
+      );
+    for (let i = 0; i < 30; i += 1) {
+      await login(owner.email, randomBytes(32).toString("base64url")).expect(200);
+    }
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(alerts()).toHaveLength(2);
+    expect(alerts()).toHaveLength(5);
+    // Connexions sans avis tracées quand même
+    expect(await audit(owner.id, "device.new_login")).toHaveLength(30);
+    // 20 appareils sans avis au plus, plus les 5 qui portent un lien encore valable
+    expect(await prisma.knownDevice.count({ where: { accountId: owner.id } })).toBe(25);
+    const token = new URL(alerts()[0]!.link!).searchParams.get("jeton")!;
+    await call("post", "/api/v1/auth/devices/not-me").send({ token }).expect(200);
   });
 
   it("lien « ce n'est pas moi » expiré après 7 jours ; base : empreintes seulement", async () => {

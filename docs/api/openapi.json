@@ -2715,7 +2715,7 @@
       "get": {
         "tags": ["Administration"],
         "summary": "Journal d'audit des actions sensibles, du plus récent au plus ancien",
-        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes (sinon `DEUX_FACTEURS_REQUIS` : redonner un code).\n\nLes rôles sont relus à chaque requête : un rôle retiré ne sert plus, tout de suite.\n\nActions (liste complète dans le schéma `AuditPage`) : rôles, mots de passe, sessions, équipe (`account.disabled`, `account.enabled`, `staff.removed`), service client (`support.account_viewed`), appareils (`device.new_login`, `device.not_me`)… Conservé 365 jours ; la base refuse toute modification.\n\nPage suivante : repasser `nextCursor` dans `before`.",
+        "description": "Réservé aux **administrateurs**, avec une session **confirmée par la double authentification** il y a moins de 15 minutes (sinon `DEUX_FACTEURS_REQUIS` : redonner un code).\n\nLes rôles sont relus à chaque requête : un rôle retiré ne sert plus, tout de suite.\n\nActions (liste complète dans le schéma `AuditPage`) : rôles, mots de passe, sessions, équipe (`account.disabled`, `account.enabled`, `staff.removed`), service client (`support.account_viewed`, `support.lookup_failed`, `support.orders_viewed`), appareils (`device.new_login`, `device.not_me`)… Conservé 365 jours ; la base refuse toute modification.\n\nPage suivante : repasser `nextCursor` dans `before`.",
         "operationId": "listAuditEvents",
         "security": [
           {
@@ -2819,7 +2819,7 @@
       "post": {
         "tags": ["Service client"],
         "summary": "Retrouver un client par e-mail ou téléphone",
-        "description": "Service client, **lecture seule** : rôle « support » (ou administrateur), session **confirmée par la double authentification** il y a moins de 15 minutes.\n\nL'identifiant est dans le corps (jamais dans l'adresse) ; chaque consultation est inscrite au journal d'audit (`support.account_viewed`).",
+        "description": "Service client, **lecture seule** : rôle « support » (ou administrateur), session **confirmée par la double authentification** il y a moins de 15 minutes.\n\nL'identifiant est dans le corps (jamais dans l'adresse) ; chaque recherche est inscrite au journal d'audit (`support.account_viewed`, ou `support.lookup_failed` sans résultat).",
         "operationId": "supportLookupAccount",
         "security": [
           {
@@ -12482,6 +12482,8 @@
               "account.enabled",
               "staff.removed",
               "support.account_viewed",
+              "support.lookup_failed",
+              "support.orders_viewed",
               "device.new_login",
               "device.not_me"
             ]
@@ -16769,6 +16771,11 @@
             "type": "string",
             "pattern": "^\\d{6}$",
             "description": "Code à 6 chiffres"
+          },
+          "device": {
+            "description": "Identifiant aléatoire de l'appareil (cookie du site) : retenu sans avis (S7.5-T04)",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$"
           }
         },
         "required": ["ticket", "code"],

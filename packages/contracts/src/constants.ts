@@ -131,6 +131,10 @@ export const DEVICE_ALERT_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 export const DEVICE_ALERT_DAYS = 7;
 /** Appareils retenus par compte : au-delà, le moins récemment utilisé est oublié. */
 export const KNOWN_DEVICES_MAX = 20;
+/** Avis « nouvel appareil » encore valables par compte : au-delà, l'appareil est retenu sans nouvel e-mail. */
+export const DEVICE_ALERTS_MAX = 5;
+/** Un appareil pas revu depuis ce nombre de jours est oublié (son cookie a expiré). */
+export const KNOWN_DEVICE_RETENTION_DAYS = 365;
 /** Équipe (S7.5-T04) : motif d'une désactivation, membres par page. */
 export const STAFF_LIMITS = {
   reasonMin: 5,
@@ -280,6 +284,8 @@ export const AUDIT_ACTIONS = [
   "account.enabled",
   "staff.removed",
   "support.account_viewed",
+  "support.lookup_failed",
+  "support.orders_viewed",
   // Appareils (S7.5-T04)
   "device.new_login",
   "device.not_me",

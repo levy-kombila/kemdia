@@ -38,11 +38,12 @@ export default async function DeviceNotMePage({ searchParams }: Props) {
       <AuthShell title="Toutes vos sessions sont fermées">
         <div className="space-y-4">
           <FormAlert tone="info">
-            Plus personne n&apos;est connecté à votre compte, sur aucun appareil (celui-ci compris).
+            Plus personne n&apos;est connecté à votre compte, sur aucun appareil (celui-ci compris),
+            et votre ancien mot de passe ne fonctionne plus.
           </FormAlert>
           <p>
-            Choisissez maintenant un <strong>nouveau mot de passe</strong> : celui d&apos;avant est
-            peut-être connu de quelqu&apos;un d&apos;autre.
+            Choisissez maintenant un <strong>nouveau mot de passe</strong> avec « Mot de passe
+            oublié » : un code vous sera envoyé.
           </p>
           <Link
             href="/mot-de-passe-oublie"
@@ -63,7 +64,8 @@ export default async function DeviceNotMePage({ searchParams }: Props) {
           <>
             <p>
               Ce bouton ferme <strong>toutes</strong> les sessions ouvertes sur votre compte, sur
-              tous les appareils. Vous devrez ensuite choisir un nouveau mot de passe.
+              tous les appareils, et <strong>bloque votre mot de passe</strong>. Vous en choisirez
+              ensuite un nouveau avec « Mot de passe oublié ».
             </p>
             <form action={deviceNotMeAction}>
               <input type="hidden" name="jeton" value={token} />

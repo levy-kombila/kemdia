@@ -386,7 +386,17 @@ export const SignupStartedSchema = z
 export type SignupStarted = z.infer<typeof SignupStartedSchema>;
 
 export const SignupVerifyRequestSchema = z
-  .strictObject({ ticket, code: z.string().regex(OTP_CODE_PATTERN).describe("Code à 6 chiffres") })
+  .strictObject({
+    ticket,
+    code: z.string().regex(OTP_CODE_PATTERN).describe("Code à 6 chiffres"),
+    device: z
+      .string()
+      .regex(DEVICE_ID_PATTERN)
+      .optional()
+      .describe(
+        "Identifiant aléatoire de l'appareil (cookie du site) : retenu sans avis (S7.5-T04)",
+      ),
+  })
   .meta({ id: "SignupVerifyRequest" });
 export type SignupVerifyRequest = z.infer<typeof SignupVerifyRequestSchema>;
 

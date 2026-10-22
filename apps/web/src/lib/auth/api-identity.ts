@@ -117,9 +117,18 @@ export function createIdentityApi(options: IdentityApiOptions) {
   return {
     signup: (input: SignupInput): Promise<ApiResult<SignupStarted>> =>
       call("POST", "/signup", SignupStartedSchema, { body: input }),
-    verifySignup: (ticket: string, code: string, userAgent: string | null) =>
+    verifySignup: (
+      ticket: string,
+      code: string,
+      userAgent: string | null,
+      device?: string | null,
+    ) =>
       call("POST", "/signup/verify", SignupVerifiedSchema, {
-        body: { ticket, code },
+        body: {
+          ticket,
+          code,
+          ...(device && DEVICE_ID_PATTERN.test(device) ? { device } : {}),
+        },
         userAgent,
       }),
     resendSignup: (ticket: string): Promise<ApiResult<SignupStarted>> =>

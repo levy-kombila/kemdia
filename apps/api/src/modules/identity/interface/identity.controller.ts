@@ -108,7 +108,7 @@ export class IdentityController {
     @Headers("x-kemdia-user-agent") userAgent?: string,
   ): Promise<SignupVerified> {
     const opened = await withIdentityErrors(() =>
-      this.signup.verify(body.ticket, body.code, userAgent),
+      this.signup.verify(body.ticket, body.code, userAgent, body.device),
     );
     return { status: "active", ...presentOpened(opened) };
   }

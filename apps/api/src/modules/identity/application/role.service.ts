@@ -43,6 +43,19 @@ const inactive = () =>
  * - Chaque changement effectif est écrit au journal d'audit dans la même transaction ;
  *   un changement sans effet (rôle déjà présent) n'écrit rien.
  */
+/**
+ * Les rôles de l'équipe d'un administrateur ne se gèrent que depuis le serveur (relecture S7.5-T04 : même règle que
+ * l'écran Utilisateurs). Le rôle vendeur reste possible : il suit la décision sur sa boutique (module vendors).
+ */
+function assertNotAdmin(target: Account, role: string): void {
+  if (role !== "vendor" && target.adminView().roles.includes("admin")) {
+    throw new IdentityError(
+      "COMPTE_PROTEGE",
+      "un administrateur se gère seulement depuis le serveur (commandes admin:grant et admin:revoke)",
+    );
+  }
+}
+
 @Injectable()
 export class RoleService {
   constructor(
@@ -70,6 +83,7 @@ export class RoleService {
     assertCanChangeRole(change);
     // Contrôle anticipé (réponse claire) ; la règle qui fait foi est revérifiée sous verrou dans `apply`
     const target = await this.requireAccount(targetId);
+    assertNotAdmin(target, change.role);
     if (!target.isActive()) throw inactive();
     await this.apply(
       "grant",
@@ -92,6 +106,7 @@ export class RoleService {
     assertCanChangeRole(change);
     // Retirer reste possible sur un compte fermé (on ne laisse pas traîner un rôle)
     const target = await this.requireAccount(targetId);
+    assertNotAdmin(target, change.role);
     await this.apply(
       "revoke",
       target.id,

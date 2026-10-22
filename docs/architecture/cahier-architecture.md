@@ -1087,12 +1087,15 @@ administrateur (`COMPTE_PROTEGE`), jamais un compte effacé. Le site exige la ca
 
 Appareils : cookie `HttpOnly` `kemdia_appareil` (32 octets base64url, 1 an renouvelé à chaque connexion) → champ
 `device` de `POST /auth/login`. Table `identity.known_devices` : empreinte SHA-256, résumé du navigateur, 20 au plus par
-compte, effacée avec le compte. Appareil inconnu (pas le premier) → e-mail « new-device » (description tirée de listes
-fixes) avec `PUBLIC_SITE_URL/securite/pas-moi?jeton=…` (usage unique, 7 jours, empreinte seulement). La page n'agit
-qu'au clic ; `POST /auth/devices/not-me` (sans session) ferme toutes les sessions et oublie l'appareil.
+compte sans lien valable, purgée après un an sans connexion, effacée avec le compte et présente dans la copie des
+données. Appareil inconnu (ou connexion sans identifiant) → e-mail « new-device » (description tirée de listes fixes)
+avec `PUBLIC_SITE_URL/securite/pas-moi?jeton=…` (usage unique, 7 jours, empreinte seulement), 5 avis valables au plus
+par compte ; seul l'appareil de l'inscription (`signup/verify`, champ `device`) est retenu sans avis. La page n'agit
+qu'au clic ; `POST /auth/devices/not-me` (sans session) ferme toutes les sessions, bloque le mot de passe et oublie
+l'appareil.
 
-Journal d'audit : `staff.removed`, `account.disabled`, `account.enabled`, `support.account_viewed`, `device.new_login`,
-`device.not_me`. Contrat de l'API : **2.0.0** (rôle `moderator` retiré).
+Journal d'audit : `staff.removed`, `account.disabled`, `account.enabled`, `support.account_viewed`,
+`support.lookup_failed`, `support.orders_viewed`, `device.new_login`, `device.not_me`. Contrat de l'API : **2.0.0** (rôle `moderator` retiré).
 
 ## 4. Choix technologiques
 
