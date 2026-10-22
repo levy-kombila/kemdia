@@ -27,6 +27,7 @@
 | **4.16** | 2026-10-19 | S7.5   | CI plus rapide (ADR-0048) : §7 jobs en parallèle, déploiements, production et étiquettes `main`/`latest` conditionnés aux tests verts ; ZAP plus robuste (code de sortie, mémoire, jetons retirés des artefacts) ; CI/CD 13 → 6 min                                                                                          |
 | **4.17** | 2026-10-20 | S7.5   | Fiche commune et offres (ADR-0049) : §3.24 (nouvelle) fiches, déclinaisons, offres, offre mise en avant, déclencheurs de la base, routes des vendeurs et de l'équipe ; §3.6 lecture publique par fiche ; §3.12 réservation limitée aux fiches en ligne ; contrat 1.24.0                                                      |
 | **4.18** | 2026-10-20 | S7.5   | Écrans de la fiche commune (ADR-0050) : §3.24 page produit « Autres vendeurs » et cookie `kemdia_ville`, « Vendre ce produit » (chercher d'abord, photos d'abord), espace de l'équipe « Fiches produits », propositions de correction (`catalog.listing_corrections`, 3 routes, 2 actions d'audit) ; contrat 1.25.0          |
+| **4.19** | 2026-10-22 | S7.5   | Rôles détaillés et écran Utilisateurs (ADR-0051) : §3.25 (nouvelle) rôles Catalogue, Logistique, Finance, Service client, Administrateur, écran Utilisateurs, service client en lecture seule, appareils connus et lien « ce n'est pas moi » ; §2 rôles mis à jour ; contrat 2.0.0                                           |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                         |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                               |
 | **3.7**  | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                                                                  |
@@ -429,7 +430,7 @@ Décision : [ADR-0010](adr/0010-api-rest-openapi.md). Description complète : [`
 | `POST /api/v1/auth/password/reset`                                                       | Ticket + code + nouveau mot de passe → **connecté ici, déconnecté ailleurs**, blocage levé                                                      | aucun  | 10/min/IP                    |
 | `POST /api/v1/auth/password/change`                                                      | Mot de passe actuel + nouveau → **reconnecté ici, déconnecté ailleurs** ; 3 erreurs : blocage 15 min et session fermée (S7-T07)                 | Bearer | 5/min/compte                 |
 | `POST /api/v1/admin/accounts/lookup`                                                     | Retrouver un compte par e-mail ou téléphone (dans le corps) — **admin, connexion < 15 min** (S4-T06)                                            | aucun  | 30/min/IP                    |
-| `PUT\|DELETE /api/v1/admin/accounts/{id}/roles/{role}`                                   | Accorder / retirer `vendor` ou `moderator` (jamais `admin`, jamais sur soi) — admin, < 15 min                                                   | aucun  | 30/min/IP                    |
+| `PUT\|DELETE /api/v1/admin/accounts/{id}/roles/{role}`                                   | Accorder / retirer `vendor`, `catalog`, `logistics`, `finance` ou `support` (jamais `admin`, jamais sur soi) — admin, < 15 min                  | aucun  | 30/min/IP                    |
 | `GET /api/v1/admin/audit`                                                                | Journal d'audit, du plus récent au plus ancien (curseur, filtres) — admin, < 15 min                                                             | aucun  | 30/min/IP                    |
 | `GET\|DELETE /api/v1/cart`                                                               | Panier du compte connecté, **revérifié** (BR-001, prix BR-004) / le vider (S5-T01)                                                              | aucun  | 120/min/IP                   |
 | `POST /api/v1/cart/items`                                                                | Ajouter une variante (quantités additionnées, ramenées au stock)                                                                                | aucun  | 120/min/IP                   |
@@ -608,10 +609,10 @@ Tables du schéma `identity` :
 | `reset_tickets`  | **Empreinte** du ticket, destination, compte (vide = leurre), expiration (S4-T04)                                                                                                               | Empreinte hexadécimale ; expiration après création ; suppression en cascade avec le compte        |
 | `login_guards`   | Identifiant (compte ou pas), essais, fin du blocage, dernière tentative (S4-T03)                                                                                                                | Essais ≥ 0 ; écrit seulement par `INSERT … ON CONFLICT DO UPDATE`                                 |
 | `signup_tickets` | **Empreinte** du ticket, destination, inscription (prénom, nom, hachage ; vide = leurre), expiration (S4-T02)                                                                                   | Empreinte hexadécimale ; inscription complète ou vide ; une seule par destination                 |
-| `account_roles`  | Compte, rôle (`VENDOR`, `MODERATOR`, `ADMIN`), date, administrateur qui l'a accordé (vide = commande serveur) (S4-T06)                                                                          | Un rôle par ligne (clé compte + rôle) ; jamais accordé par son titulaire ; cascade avec le compte |
+| `account_roles`  | Compte, rôle (`VENDOR`, `CATALOG` — ex-`MODERATOR` —, `LOGISTICS`, `FINANCE`, `SUPPORT`, `ADMIN`), date, administrateur qui l'a accordé (vide = commande serveur) (S4-T06)                      | Un rôle par ligne (clé compte + rôle) ; jamais accordé par son titulaire ; cascade avec le compte |
 
-**Rôles (S4-T06, [ADR-0020](adr/0020-roles-journal-audit.md))** : `client` (tout compte actif, jamais stocké), `vendor`, `moderator`, `admin`,
-cumulables ; `admin` a les droits de `moderator`. Un administrateur accorde ou retire `vendor` / `moderator` à un autre compte ; `admin`
+**Rôles (S4-T06, [ADR-0020](adr/0020-roles-journal-audit.md) ; détaillés au S7.5-T04, §3.25)** : `client` (tout compte actif, jamais stocké), `vendor`, `catalog`, `logistics`, `finance`, `support`, `admin`,
+cumulables ; `admin` a les droits de tous les rôles de l'équipe. Un administrateur accorde ou retire `vendor` et les rôles de l'équipe à un autre compte ; `admin`
 s'accorde seulement par la commande serveur :
 
 ```bash
@@ -1063,6 +1064,35 @@ tenue par `vendors` à chaque décision. Contrat de l'API : 1.24.0.
 
 Journal d'audit : `listing.correction_proposed`, `listing.correction_closed`. Espace de l'équipe : section « Fiches
 produits » (`/equipe/fiches`, `/equipe/fiches/{id}`). Contrat de l'API : 1.25.0.
+
+### 3.25 Rôles détaillés de l'équipe, écran Utilisateurs et appareils (S7.5-T04)
+
+Décision : [ADR-0051](adr/0051-roles-equipe-utilisateurs.md). `MODERATOR` devient `CATALOG` (renommage dans la base :
+aucun accès perdu) ; `LOGISTICS`, `FINANCE` et `SUPPORT` s'ajoutent. `admin` a les droits de tous les autres
+(`ROLE_IMPLIES` du contrat, recopié dans le domaine et vérifié par un test). Double authentification obligatoire pour
+tout rôle de l'équipe ; `admin` ne s'accorde que par la commande serveur.
+
+| Rôle           | Pages du site (`/equipe/…`)                           | Routes de l'API                                                        |
+| -------------- | ----------------------------------------------------- | ---------------------------------------------------------------------- |
+| Catalogue      | `moderation`, `fiches`, `boutiques`, `verifications`  | `/moderation/*`, `/admin/shops`, `/admin/kyc`, fiches et offres        |
+| Logistique     | `livraisons`, `livraisons/bareme`                     | `/admin/shipping/*`                                                    |
+| Finance        | (écrans au S7.5-T05)                                  | paiements, remboursements, encaissements, factures, codes promo        |
+| Service client | `clients`, `clients/{id}`, `clients/{id}/{reference}` | `POST /support/accounts/lookup` (journal), `GET …/{id}/orders[/{ref}]` |
+| Administrateur | toutes, plus `utilisateurs`                           | toutes, plus `/admin/staff` et `/admin/accounts/*`                     |
+
+Écran Utilisateurs : `GET /admin/staff?role=&after=&limit=` (par nom), `POST /admin/accounts/lookup`,
+`PUT|DELETE …/roles/{role}`, `POST …/remove-staff` (rôles de l'équipe retirés, vendeur gardé, sessions fermées),
+`POST …/disable` (motif 5 à 300 caractères au journal, sessions fermées), `POST …/enable`. Jamais sur soi, jamais sur un
+administrateur (`COMPTE_PROTEGE`), jamais un compte effacé. Le site exige la case « Je confirme ».
+
+Appareils : cookie `HttpOnly` `kemdia_appareil` (32 octets base64url, 1 an renouvelé à chaque connexion) → champ
+`device` de `POST /auth/login`. Table `identity.known_devices` : empreinte SHA-256, résumé du navigateur, 20 au plus par
+compte, effacée avec le compte. Appareil inconnu (pas le premier) → e-mail « new-device » (description tirée de listes
+fixes) avec `PUBLIC_SITE_URL/securite/pas-moi?jeton=…` (usage unique, 7 jours, empreinte seulement). La page n'agit
+qu'au clic ; `POST /auth/devices/not-me` (sans session) ferme toutes les sessions et oublie l'appareil.
+
+Journal d'audit : `staff.removed`, `account.disabled`, `account.enabled`, `support.account_viewed`, `device.new_login`,
+`device.not_me`. Contrat de l'API : **2.0.0** (rôle `moderator` retiré).
 
 ## 4. Choix technologiques
 

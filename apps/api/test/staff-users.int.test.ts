@@ -7,6 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   DeviceNotMeResultSchema,
+  OpenedSessionSchema,
   OrderPageSchema,
   ProblemDetailsSchema,
   StaffActionResultSchema,
@@ -45,6 +46,7 @@ const matches = <T>(schema: z.ZodType<T>, body: unknown): T => {
   return result.data;
 };
 const codeOf = (body: unknown) => matches(ProblemDetailsSchema, body).code;
+const tokenOf = (body: unknown) => matches(OpenedSessionSchema, body).token;
 
 type Role = "ADMIN" | "CATALOG" | "LOGISTICS" | "FINANCE" | "SUPPORT" | "VENDOR";
 type Member = { token: string; id: string; email: string };
@@ -67,9 +69,8 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
   let admin: Member;
 
   const call = (method: "get" | "post" | "put" | "delete", url: string, token?: string) => {
-    const req = request(app.getHttpServer())
-      [method](url)
-      .set("X-Kemdia-Internal-Key", INTERNAL_KEY);
+    const server = request(app.getHttpServer());
+    const req = server[method](url).set("X-Kemdia-Internal-Key", INTERNAL_KEY);
     return token ? req.set("Authorization", `Bearer ${token}`) : req;
   };
 
@@ -227,7 +228,7 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
     expect(line?.details).toEqual({ roles: "catalog,finance", sessions: 1 });
     // Il se reconnecte comme client et vendeur seulement
     const back = await login(leaving.email).expect(200);
-    await call("get", "/api/v1/moderation/products", back.body.token).expect(403);
+    await call("get", "/api/v1/moderation/products", tokenOf(back.body)).expect(403);
   });
 
   it("désactivation : plus de connexion, sessions fermées, motif au journal ; réactivation", async () => {
@@ -402,7 +403,7 @@ describe("Équipe, utilisateurs, service client et appareils (PostgreSQL, HTTP)"
       (await call("post", "/api/v1/auth/devices/not-me").send({ token }).expect(200)).body,
     );
     expect(closed.sessionsClosed).toBeGreaterThanOrEqual(5);
-    await call("get", "/api/v1/auth/session", stolen.body.token).expect(401);
+    await call("get", "/api/v1/auth/session", tokenOf(stolen.body)).expect(401);
     expect(await audit(owner.id, "device.not_me")).toHaveLength(1);
     // Usage unique ; jeton inventé refusé pareil
     expect(
