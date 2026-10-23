@@ -1,0 +1,41 @@
+// Module reviews (S8-T01, ADR-0056) : avis des clients sur les fiches produits (FR-020). Chaque modèle de ce fichier
+// porte @@schema("reviews"). Les fiches (catalog) et les comptes (identity) sont désignés par leur UUID.
+
+/// Avis : note seule → publiée tout de suite ; avec un commentaire → en attente de l'équipe Catalogue.
+enum ReviewStatus {
+  PENDING
+  PUBLISHED
+  REJECTED
+
+  @@map("review_status")
+  @@schema("reviews")
+}
+
+/// Un avis par compte et par fiche, réservé à un client dont une commande contenant ce produit est livrée.
+model Review {
+  id           String       @id @db.Uuid
+  /// Fiche commune (catalog.listings)
+  listingId    String       @map("listing_id") @db.Uuid
+  /// Compte de l'auteur (identity.accounts)
+  accountId    String       @map("account_id") @db.Uuid
+  /// 1 à 5 étoiles
+  rating       Int          @db.SmallInt
+  /// Commentaire facultatif (10 à 1 000 caractères)
+  comment      String?      @db.VarChar(1000)
+  /// Nom affiché, figé à l'écriture : « Awa N. »
+  authorName   String       @map("author_name") @db.VarChar(80)
+  status       ReviewStatus
+  /// Motif d'un refus, montré à l'auteur
+  rejectReason String?      @map("reject_reason") @db.VarChar(300)
+  reviewedBy   String?      @map("reviewed_by") @db.Uuid
+  reviewedAt   DateTime?    @map("reviewed_at") @db.Timestamptz(3)
+  createdAt    DateTime     @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime     @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([listingId, accountId])
+  @@index([listingId, status, updatedAt(sort: Desc), id(sort: Desc)])
+  @@index([status, updatedAt, id])
+  @@index([accountId])
+  @@map("reviews")
+  @@schema("reviews")
+}

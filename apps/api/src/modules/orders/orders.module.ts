@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { OrdersPurchases } from "./infrastructure/orders-purchases.js";
 import { randomBytes } from "node:crypto";
 import { APP_CONFIG } from "../../config/config.module.js";
 import type { AppConfig } from "../../config/env.js";
@@ -57,6 +58,8 @@ import { SupportOrderController } from "./interface/support-order.controller.js"
     SupportOrderController,
   ],
   providers: [
+    // Achats vérifiés pour les avis (S8-T01)
+    OrdersPurchases,
     // Données personnelles (S7-T08) : copie, effacement — utilisé par le module privacy
     OrdersPersonalData,
     CartService,
@@ -88,6 +91,7 @@ import { SupportOrderController } from "./interface/support-order.controller.js"
   ],
   exports: [
     OrdersPersonalData,
+    OrdersPurchases,
     CartService,
     OrderService,
     OrderPayments,

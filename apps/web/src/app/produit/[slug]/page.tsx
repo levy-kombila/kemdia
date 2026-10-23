@@ -6,6 +6,7 @@ import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 import { SectionHeader } from "@/components/home/SectionHeader";
 import { BuyBox } from "@/components/product/BuyBox";
 import { OtherSellers } from "@/components/product/OtherSellers";
+import { ProductReviews } from "@/components/reviews/ProductReviews";
 import { FavoriteButton } from "@/components/product/FavoriteButton";
 import { ProductCard } from "@/components/product/ProductCard";
 import { ProductGallery } from "@/components/product/ProductGallery";
@@ -74,6 +75,9 @@ export default async function ProductPage({ params, searchParams }: Props) {
   if (!product) notFound();
 
   const variant = selectVariant(product, first(sp.variante));
+  const rawReviewPage = first(sp.avis);
+  const reviewPage =
+    rawReviewPage && /^\d{1,3}$/.test(rawReviewPage) ? Math.max(1, Number(rawReviewPage)) : 1;
   const path = product.path;
   const related = await getRelatedProducts(product, 10);
   const discount = discountPercent(variant.price, variant.compareAtPrice);
@@ -275,22 +279,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
           <h2 id="avis" className="mb-3 text-lg font-bold">
             Avis clients
           </h2>
-          {product.reviewCount > 0 ? (
-            <div className="flex items-center gap-4">
-              <p className="font-price text-5xl">{product.rating.toFixed(1).replace(".", ",")}</p>
-              <div>
-                <Rating value={product.rating} size="md" />
-                <p className="text-ink-500 text-sm">
-                  Moyenne de {product.reviewCount} avis d&apos;acheteurs
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-ink-500">Aucun avis pour le moment.</p>
-          )}
-          <p className="text-ink-500 mt-3 text-sm">
-            Seuls les clients ayant reçu ce produit peuvent donner leur avis.
-          </p>
+          {/* Avis réels des clients (S8-T01) */}
+          <ProductReviews slug={product.slug} page={reviewPage} />
         </section>
       </div>
 

@@ -25,3 +25,5 @@ export { presentOrder } from "./interface/order.presenter.js";
 export { OrdersError, type OrdersErrorCode } from "./domain/orders-error.js";
 /** Données personnelles du module (S7-T08) : copie et effacement, pour le module privacy */
 export { OrdersPersonalData } from "./infrastructure/orders-personal-data.js";
+/** Achats vérifiés pour les avis (S8-T01) */
+export { OrdersPurchases } from "./infrastructure/orders-purchases.js";

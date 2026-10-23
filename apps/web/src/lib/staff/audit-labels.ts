@@ -29,6 +29,8 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<AuditAction, string>> = {
   "shop.rejected": "Boutique refusée",
   "shop.suspended": "Boutique suspendue",
   "shop.profile_updated": "Boutique modifiée par le vendeur",
+  "review.published": "Avis publié",
+  "review.rejected": "Avis refusé",
   "product.submitted": "Produit envoyé à la modération",
   "product.approved": "Produit validé",
   "product.rejected": "Produit refusé",
@@ -87,4 +89,5 @@ export const AUDIT_TARGET_LABELS = {
   shop: "boutique",
   product: "produit",
   listing: "fiche",
+  review: "avis",
 } as const;

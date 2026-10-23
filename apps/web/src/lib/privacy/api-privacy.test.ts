@@ -15,6 +15,7 @@ const EXPORT = {
   livraisons: { livraisons: [] },
   boutique: { boutique: null },
   journal: { evenements: [] },
+  avis: [],
 };
 
 function api(response: Response | Error) {

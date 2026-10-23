@@ -238,6 +238,9 @@ export const AUDIT_ACTIONS = [
   "shop.suspended",
   // « Ma boutique » : ville, quartier, description (S7.5-T07)
   "shop.profile_updated",
+  // Avis des clients (S8-T01)
+  "review.published",
+  "review.rejected",
   // Produits des vendeurs et modération (S6-T02)
   "product.submitted",
   "product.approved",
@@ -756,6 +759,29 @@ export const ACCOUNT_RETENTION = {
   invoiceYears: 10,
 } as const;
 
+/** Avis des clients (S8-T01, ADR-0056). */
+// « PRODUIT_INTROUVABLE » (fiche inconnue ou pas en ligne) est déjà dans les codes des vendeurs
+export const REVIEW_ERROR_CODES = [
+  "AVIS_INVALIDE",
+  "ACHAT_REQUIS",
+  "AVIS_INTROUVABLE",
+  "AVIS_DEJA_TRAITE",
+] as const;
+export type ReviewErrorCode = (typeof REVIEW_ERROR_CODES)[number];
+
+/** Avis : note de 1 à 5, commentaire facultatif de 10 à 1 000 caractères, motif d'un refus de 5 à 300. */
+export const REVIEW_LIMITS = {
+  ratingMin: 1,
+  ratingMax: 5,
+  commentMin: 10,
+  commentMax: 1000,
+  reasonMin: 5,
+  reasonMax: 300,
+} as const;
+export const REVIEW_STATUSES = ["pending", "published", "rejected"] as const;
+export const REVIEW_PAGE_DEFAULT = 30;
+export const REVIEW_PAGE_MAX = 100;
+
 /** Ce qui empêche de supprimer son compte maintenant (409). */
 export const PRIVACY_ERROR_CODES = [
   // Commande pas encore livrée, annulée ou remboursée : il faut pouvoir livrer, rembourser, répondre
@@ -781,6 +807,7 @@ export const API_ERROR_CODES = [
   ...VENDOR_ERROR_CODES,
   ...SHIPPING_ERROR_CODES,
   ...PRIVACY_ERROR_CODES,
+  ...REVIEW_ERROR_CODES,
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
 

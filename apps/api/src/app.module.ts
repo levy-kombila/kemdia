@@ -14,6 +14,7 @@ import { IdentityModule } from "./modules/identity/index.js";
 import { OrdersModule } from "./modules/orders/index.js";
 import { PaymentsModule } from "./modules/payments/index.js";
 import { PrivacyModule } from "./modules/privacy/index.js";
+import { ReviewsModule } from "./modules/reviews/index.js";
 import { ShippingModule } from "./modules/shipping/index.js";
 import { VendorsModule } from "./modules/vendors/index.js";
 
@@ -38,6 +39,7 @@ export class AppModule {
         PaymentsModule,
         VendorsModule,
         ShippingModule,
+        ReviewsModule,
         // Données personnelles (S7-T08) : après les modules qu'il assemble
         PrivacyModule,
         // Documentation (/api/docs, /api/v1/openapi.json) : désactivée par défaut en production

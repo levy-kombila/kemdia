@@ -33,6 +33,7 @@ function build(overrides: Partial<PersonalDataStore> = {}) {
         livraisons: {},
         boutique: {},
         journal: {},
+        avis: [],
       }),
     erase,
     inactiveToNotify: () => Promise.resolve([]),

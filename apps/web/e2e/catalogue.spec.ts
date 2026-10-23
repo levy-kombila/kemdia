@@ -103,3 +103,16 @@ test("S7.5-T07 : annuaire des boutiques, page publique et lien depuis la fiche p
   const missing = await page.goto("/boutique/boutique-qui-n-existe-pas");
   expect(missing?.status()).toBe(404);
 });
+
+test("S8-T01 : avis clients sur la fiche produit — réservés aux clients livrés", async ({
+  page,
+}) => {
+  await page.goto("/boutique/kemdia");
+  await page.locator("a[href^='/produit/']").first().click();
+  await expect(page.getByRole("heading", { name: "Avis clients", level: 2 })).toBeVisible();
+  // Visiteur : pas de formulaire, un lien pour se connecter
+  await expect(
+    page.getByText("Seuls les clients ayant reçu ce produit peuvent donner leur avis."),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Publier mon avis" })).toHaveCount(0);
+});

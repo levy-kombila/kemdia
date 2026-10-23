@@ -16,6 +16,7 @@ import {
 } from "./application/ports.js";
 import { VendorCatalog } from "./application/vendor-catalog.service.js";
 import { PrismaVendorProductRepository } from "./infrastructure/prisma-vendor-product.repository.js";
+import { ListingRatings } from "./infrastructure/listing-ratings.js";
 import { PrismaListingRepository } from "./infrastructure/prisma-listing.repository.js";
 import { PrismaPublicShopsRepository } from "./infrastructure/prisma-public-shops.repository.js";
 import { PrismaListingCorrectionRepository } from "./infrastructure/prisma-listing-correction.repository.js";
@@ -43,6 +44,8 @@ function pick(alphabet: string, size: number): string {
   providers: [
     CatalogService,
     StockService,
+    // Fiches vues par le module reviews (S8-T01)
+    ListingRatings,
     { provide: STOCK_REPOSITORY, useClass: PrismaStockRepository },
     { provide: CATEGORY_REPOSITORY, useClass: PrismaCategoryRepository },
     { provide: PRODUCT_REPOSITORY, useClass: PrismaProductRepository },
@@ -68,6 +71,6 @@ function pick(alphabet: string, size: number): string {
       },
     },
   ],
-  exports: [CatalogService, StockService, VendorCatalog],
+  exports: [CatalogService, StockService, VendorCatalog, ListingRatings],
 })
 export class CatalogModule {}

@@ -1,6 +1,10 @@
 import { z } from "zod";
 import {
   API_ERROR_CODES,
+  REVIEW_LIMITS,
+  REVIEW_PAGE_DEFAULT,
+  REVIEW_PAGE_MAX,
+  REVIEW_STATUSES,
   AVATAR_VERSION_PATTERN,
   LISTING_CORRECTION_LIMITS,
   PRIVACY_ERROR_CODES,
@@ -604,6 +608,9 @@ export const AccountDataExportSchema = z
     journal: z
       .record(z.string(), z.unknown())
       .describe("Actions du compte et celles qui le visent (journal d'audit, 365 jours)"),
+    avis: z
+      .array(z.record(z.string(), z.unknown()))
+      .describe("Avis donnés sur des produits (S8-T01)"),
   })
   .meta({
     id: "AccountDataExport",
@@ -738,7 +745,16 @@ export const AuditEventSchema = z
     ]),
     target: z
       .object({
-        type: z.enum(["account", "coupon", "order", "refund", "shop", "product", "listing"]),
+        type: z.enum([
+          "account",
+          "coupon",
+          "order",
+          "refund",
+          "shop",
+          "product",
+          "listing",
+          "review",
+        ]),
         id: uuid,
       })
       .nullable(),
@@ -2582,3 +2598,125 @@ export function openApiComponentSchemas(): Record<string, JsonSchema> {
       }),
   );
 }
+
+// --- Avis des clients (S8-T01, ADR-0056) ---
+
+const reviewStatus = z
+  .enum(REVIEW_STATUSES)
+  .describe(
+    "published : visible ; pending : commentaire en attente de l'équipe ; rejected : refusé",
+  );
+
+/** Avis publié, tel que tout le monde le voit : prénom et initiale seulement, jamais le compte. */
+export const PublicReviewSchema = z
+  .object({
+    rating: z.int().min(REVIEW_LIMITS.ratingMin).max(REVIEW_LIMITS.ratingMax),
+    comment: z.string().nullable(),
+    authorName: z.string().describe("Prénom et initiale du nom (« Awa N. »)"),
+    verifiedPurchase: z
+      .literal(true)
+      .describe("Toujours : seul un client livré peut donner son avis"),
+    date: z.iso.datetime().describe("Dernière modification"),
+  })
+  .meta({ id: "PublicReview", description: "Avis publié d'un client" });
+export type PublicReview = z.infer<typeof PublicReviewSchema>;
+
+export const ReviewSummarySchema = z
+  .object({
+    count: z.int().nonnegative().describe("Avis publiés"),
+    average: z.number().min(0).max(5).describe("Moyenne au dixième ; 0 sans avis"),
+    distribution: z
+      .array(z.int().nonnegative())
+      .length(5)
+      .describe("Nombre d'avis publiés pour 1, 2, 3, 4 et 5 étoiles"),
+  })
+  .meta({ id: "ReviewSummary" });
+export type ReviewSummary = z.infer<typeof ReviewSummarySchema>;
+
+export const ReviewPageSchema = z
+  .object({
+    summary: ReviewSummarySchema,
+    items: z.array(PublicReviewSchema).max(10),
+    page: z.int().min(1),
+    totalPages: z.int().min(1),
+  })
+  .meta({ id: "ReviewPage", description: "Avis publiés d'une fiche, 10 par page" });
+export type ReviewPage = z.infer<typeof ReviewPageSchema>;
+
+/** L'avis du compte connecté sur une fiche. */
+export const OwnReviewSchema = z
+  .object({
+    rating: z.int().min(REVIEW_LIMITS.ratingMin).max(REVIEW_LIMITS.ratingMax),
+    comment: z.string().nullable(),
+    status: reviewStatus,
+    rejectReason: z.string().nullable().describe("Motif d'un refus"),
+    date: z.iso.datetime(),
+  })
+  .meta({ id: "OwnReview" });
+export type OwnReview = z.infer<typeof OwnReviewSchema>;
+
+export const MyReviewSchema = z
+  .object({
+    canReview: z.boolean().describe("Une commande contenant ce produit a été livrée à ce compte"),
+    review: OwnReviewSchema.nullable(),
+  })
+  .meta({ id: "MyReview", description: "Mon avis sur une fiche, et si je peux en donner un" });
+export type MyReview = z.infer<typeof MyReviewSchema>;
+
+export const ReviewRequestSchema = z
+  .strictObject({
+    rating: z.int().min(REVIEW_LIMITS.ratingMin).max(REVIEW_LIMITS.ratingMax),
+    comment: z
+      .string()
+      .max(REVIEW_LIMITS.commentMax * 2)
+      .nullable()
+      .optional()
+      .describe(
+        `Commentaire facultatif (${REVIEW_LIMITS.commentMin} à ${REVIEW_LIMITS.commentMax} caractères) : lu par l'équipe avant d'être publié`,
+      ),
+  })
+  .meta({ id: "ReviewRequest", description: "Donner ou modifier son avis" });
+export type ReviewRequest = z.infer<typeof ReviewRequestSchema>;
+
+/** Avis vu par l'équipe Catalogue (file de modération). */
+export const AdminReviewSchema = z
+  .object({
+    id: uuid,
+    rating: z.int().min(1).max(5),
+    comment: z.string().nullable(),
+    authorName: z.string(),
+    status: reviewStatus,
+    rejectReason: z.string().nullable(),
+    listing: z.object({ title: z.string(), slug }).nullable(),
+    date: z.iso.datetime(),
+  })
+  .meta({ id: "AdminReview" });
+export type AdminReview = z.infer<typeof AdminReviewSchema>;
+
+export const AdminReviewPageSchema = z
+  .object({ items: z.array(AdminReviewSchema), nextCursor: z.string().nullable() })
+  .meta({ id: "AdminReviewPage" });
+export type AdminReviewPage = z.infer<typeof AdminReviewPageSchema>;
+
+export const REVIEW_CURSOR_PATTERN = /^[A-Za-z0-9_-]{20,120}$/;
+
+export const ReviewListParamsSchema = z.strictObject({
+  status: z.enum(REVIEW_STATUSES).default("pending"),
+  limit: z.coerce.number().int().min(1).max(REVIEW_PAGE_MAX).default(REVIEW_PAGE_DEFAULT),
+  after: z.string().regex(REVIEW_CURSOR_PATTERN).optional(),
+});
+export type ReviewListParams = z.infer<typeof ReviewListParamsSchema>;
+
+export const ReviewRejectRequestSchema = z
+  .strictObject({
+    reason: z
+      .string()
+      .max(REVIEW_LIMITS.reasonMax * 2)
+      .describe(
+        `Motif montré à l'auteur (${REVIEW_LIMITS.reasonMin} à ${REVIEW_LIMITS.reasonMax} caractères)`,
+      ),
+  })
+  .meta({ id: "ReviewRejectRequest" });
+export type ReviewRejectRequest = z.infer<typeof ReviewRejectRequestSchema>;
+
+export const ReviewIdParamsSchema = z.strictObject({ reviewId: uuidInput });

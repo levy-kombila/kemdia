@@ -5,6 +5,7 @@ import {
   type CouponErrorCode,
   type IdentityErrorCode,
   type PaymentErrorCode,
+  type ReviewErrorCode,
   type ShippingErrorCode,
   type VendorErrorCode,
 } from "@kemdia/contracts/constants";
@@ -23,6 +24,7 @@ export type StaffMessageCode =
   | "ANNULATION_IMPOSSIBLE"
   | PaymentErrorCode
   | CouponErrorCode
+  | ReviewErrorCode
   | "INDISPONIBLE";
 
 /** Finance (S7.5-T05) : paiements, factures, remboursements, encaissements, codes promo. */
@@ -125,6 +127,17 @@ const VENDOR_MESSAGES: Record<VendorErrorCode, string> = {
   TROP_DE_CORRECTIONS: "Trop de propositions en attente pour cette boutique.",
 };
 
+/** Avis des clients (S8-T01). */
+const REVIEW_MESSAGES: Record<ReviewErrorCode, string> = {
+  AVIS_INVALIDE: "Motif refusé : écrivez de 5 à 300 caractères.",
+  ACHAT_REQUIS: "Seuls les clients qui ont reçu ce produit peuvent donner leur avis.",
+  AVIS_INTROUVABLE: "Avis introuvable : il a peut-être été retiré par son auteur.",
+  AVIS_DEJA_TRAITE:
+    "Cet avis a déjà été traité (ou modifié par son auteur). La page a été rechargée.",
+};
+const isReviewCode = (code: StaffMessageCode): code is ReviewErrorCode =>
+  Object.hasOwn(REVIEW_MESSAGES, code);
+
 const isIdentityCode = (value: string): value is IdentityErrorCode =>
   (IDENTITY_ERROR_CODES as readonly string[]).includes(value);
 
@@ -139,6 +152,7 @@ export function staffErrorMessage(code: StaffMessageCode, retryAfterSeconds?: nu
   if (isVendorCode(code)) return VENDOR_MESSAGES[code];
   if (isShippingCode(code)) return SHIPPING_MESSAGES[code];
   if (isFinanceCode(code)) return FINANCE_MESSAGES[code];
+  if (isReviewCode(code)) return REVIEW_MESSAGES[code];
   // 2FA : un code faux n'a rien à voir avec un code reçu par e-mail
   if (code === "CODE_INVALIDE")
     return "Code incorrect. Saisissez le code à 6 chiffres affiché maintenant dans votre application, ou un code de secours.";
@@ -174,6 +188,9 @@ export const STAFF_NOTICES = {
     "Doublon fusionné : ses offres sont sur cette fiche, son ancienne adresse y mène.",
   "offre-retiree": "Offre retirée : le vendeur voit votre motif.",
   "correction-close": "Proposition close.",
+  // Avis des clients (S8-T01)
+  "avis-publie": "Avis publié : il compte maintenant dans la note du produit.",
+  "avis-refuse": "Avis refusé : son auteur voit le motif et peut le corriger.",
   // Équipe (S7.5-T04)
   "role-accorde":
     "Rôle accordé : il s'applique dès la prochaine page (double authentification exigée).",
@@ -223,6 +240,7 @@ export function staffErrorFromParam(value: unknown): string | null {
     Object.hasOwn(VENDOR_MESSAGES, value) ||
     Object.hasOwn(SHIPPING_MESSAGES, value) ||
     Object.hasOwn(FINANCE_MESSAGES, value) ||
+    Object.hasOwn(REVIEW_MESSAGES, value) ||
     isIdentityCode(value)
   )
     return staffErrorMessage(value as StaffMessageCode);

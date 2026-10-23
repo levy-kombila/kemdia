@@ -259,6 +259,8 @@ test.describe("espace de l'équipe : parcours complet", () => {
       ["/equipe/codes-promo", "Codes promo"],
       ["/equipe/reglages", "Réglages"],
       ["/equipe/journal", "Journal"],
+      // Avis clients (S8-T01) : l'administrateur a aussi le rôle Catalogue
+      ["/equipe/avis", "Avis clients"],
     ] as const) {
       await page.goto(path);
       await expect(page.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
