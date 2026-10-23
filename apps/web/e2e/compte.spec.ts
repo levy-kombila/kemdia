@@ -65,6 +65,12 @@ test.describe("compte client", () => {
     await page.getByRole("button", { name: "Se connecter" }).click();
     await expect(page).toHaveURL(/\/compte$/);
     await expect(page.getByText("Visible seulement par vous.")).toBeVisible();
+    // Compte partagé : repartir sans photo si un essai précédent en a laissé une
+    const retirer = page.getByRole("button", { name: "Retirer" });
+    if (await retirer.isVisible()) {
+      await retirer.click();
+      await expect(page.getByText(/vos initiales s'affichent/)).toBeVisible();
+    }
 
     const photo = await sharp({
       create: { width: 1200, height: 900, channels: 3, background: { r: 20, g: 90, b: 160 } },
@@ -81,11 +87,20 @@ test.describe("compte client", () => {
     const img = page.locator("img[src^='/compte/photo?v=']").first();
     await expect(img).toBeVisible();
     const src = await img.getAttribute("src");
-    const served = await page.request.get(src!);
-    expect(served.status()).toBe(200);
-    expect(served.headers()["content-type"]).toBe("image/webp");
-    expect(served.headers()["cache-control"]).toContain("private");
-    expect((await sharp(await served.body()).metadata()).width).toBe(256);
+    // Lue PAR LE NAVIGATEUR (ses cookies de session), comme l'image de la page
+    const served = await page.evaluate(async (url) => {
+      const r = await fetch(url, { cache: "no-store" });
+      return {
+        status: r.status,
+        type: r.headers.get("content-type"),
+        cache: r.headers.get("cache-control"),
+        bytes: Array.from(new Uint8Array(await r.arrayBuffer())),
+      };
+    }, src!);
+    expect(served.status).toBe(200);
+    expect(served.type).toBe("image/webp");
+    expect(served.cache).toContain("private");
+    expect((await sharp(Buffer.from(served.bytes)).metadata()).width).toBe(256);
     const a11y = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(
       a11y.violations.filter((v) => v.impact === "critical" || v.impact === "serious"),

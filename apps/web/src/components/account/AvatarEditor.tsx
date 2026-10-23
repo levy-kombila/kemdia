@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useId, useState, type ChangeEvent } from "react";
 import { reduce } from "@/components/vendor/PhotoUploader";
 import { FormAlert } from "@/components/ui/Field";
+import { refreshSessionAction } from "@/lib/auth/actions";
 import { Avatar } from "./Avatar";
 
 /**
@@ -33,6 +34,8 @@ export function AvatarEditor({
     setPending(null);
     if (response?.ok && body?.ok) {
       setMessage({ tone: "info", text: ok });
+      // Mémoire des sessions des pages oubliée AVANT de les redemander : la nouvelle photo s'affiche tout de suite
+      await refreshSessionAction().catch(() => undefined);
       router.refresh();
       return;
     }
