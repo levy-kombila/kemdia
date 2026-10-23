@@ -36,6 +36,7 @@
 | **4.25** | 2026-10-23 | S7.5   | Clôture du Sprint 7.5 (v0.8.1) : aucun changement d'architecture ; versions des paquets 0.8.1, contrat de l'API 2.4.0 inchangé                                                                                                                                                                                                                                                |
 | **4.26** | 2026-10-23 | S8     | Avis des clients (ADR-0056) : §3.30 (nouvelle) module `reviews` (schéma `reviews`), achat livré vérifié par les ports de catalog et orders, modération des commentaires par l'équipe Catalogue, note des fiches tirée des avis publiés ; contrat 2.5.0                                                                                                                        |
 | **4.27** | 2026-10-23 | S8     | Bêta fermée et signalements (ADR-0057) : §3.31 (nouvelle) réglage `identity.beta_settings` et invitations `identity.beta_invitations` (inscription réservée aux adresses invitées, vérifiée avant l'existence du compte), module `feedback` (schéma `feedback`) « Signaler un problème » suivi par le service client ; contrat 2.6.0                                          |
+| **4.28** | 2026-10-23 | S8     | Import du vrai catalogue (ADR-0058) : §3.32 (nouvelle) fichier CSV vérifié puis importé tout ou rien par l'équipe Catalogue, produits en attente de modération, colonne `catalog.products.import_reference` unique par boutique ; contrat 2.7.0                                                                                                                               |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                                                                          |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                                                                                |
 | **3.7**  | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                                                                                                                   |
@@ -1211,6 +1212,21 @@ circulaire). Invitation utilisée et signalements dans la copie des données, ef
 invitations mortes (30 jours) et des signalements résolus (180 jours). Site : annonce sur « Créer un compte », bouton
 « Signaler un problème » dans le pied de page (`/signaler-un-probleme`, connexion exigée), pages `/equipe/beta` et
 `/equipe/signalements`. Contrat de l'API : **2.6.0**.
+
+### 3.32 Import du vrai catalogue (S8-T03)
+
+Décision : [ADR-0058](adr/0058-import-catalogue.md). Migration `20261023233000_import_catalogue` : colonne
+`catalog.products.import_reference` (minuscules, unique par boutique).
+
+| Route (`/api/v1`)                  | Règle                                                                                                                                                   |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /admin/catalog-import/check` | Équipe Catalogue + double authentification ; corps `text/csv` (2 Mo, 1 000 lignes) ; compte rendu de toutes les erreurs, rien n'est écrit               |
+| `POST /admin/catalog-import`       | Même accès ; boutiques verrouillées, fichier revérifié, puis tout écrit dans une transaction ou rien ; produits en attente ; journal `catalog.imported` |
+
+L'analyse du fichier est dans le domaine de `vendors` (pure) ; les produits sont créés par `VendorCatalog.importProduct`
+(même chemin qu'un vendeur, sans limite de file d'attente). Boutiques partenaires actives seulement ; une référence déjà
+importée est ignorée. Site : page `/equipe/import` (modèle, aide, catégories, compte rendu) et relais
+`/equipe/import/fichier` (session avant lecture, UTF-8 ou Windows-1252). Contrat de l'API : **2.7.0**.
 
 ## 4. Choix technologiques
 
