@@ -9,6 +9,7 @@ import { orderPaths } from "../modules/orders/interface/order.openapi.js";
 import { identityPaths } from "../modules/identity/interface/identity.openapi.js";
 import { shippingPaths } from "../modules/shipping/interface/shipping.openapi.js";
 import { privacyPaths } from "../modules/privacy/interface/privacy.openapi.js";
+import { reviewsPaths } from "../modules/reviews/interface/reviews.openapi.js";
 import {
   productImagePaths,
   vendorOrderPaths,
@@ -17,7 +18,7 @@ import {
 } from "../modules/vendors/interface/vendors.openapi.js";
 
 /** Version du contrat HTTP (indépendante de la version de l'image) : à augmenter à chaque changement de l'API. */
-export const API_CONTRACT_VERSION = "2.4.0";
+export const API_CONTRACT_VERSION = "2.5.0";
 
 /** Document OpenAPI complet de l'API, généré à partir des schémas réellement utilisés. */
 export function buildOpenApiDocument(): Record<string, unknown> {
@@ -92,6 +93,11 @@ export function buildOpenApiDocument(): Record<string, unknown> {
           "Téléphone simulé de l'opérateur Mobile Money (S5-T05) : poste de développement et démo seulement",
       },
       {
+        name: "Avis",
+        description:
+          "Avis des clients sur les fiches (module reviews, S8-T01) : achat livré obligatoire, commentaires lus par l'équipe Catalogue",
+      },
+      {
         name: "Livraisons",
         description:
           "Barème de livraison et suivi des expéditions par l'équipe (module shipping, S7-T01) ; part de Kemdia sur les frais (BR-021)",
@@ -156,6 +162,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       ...productImagePaths,
       ...shippingPaths,
       ...privacyPaths,
+      ...reviewsPaths,
     },
     // Schémas du contrat partagé avec le site (@kemdia/contracts)
     components: {

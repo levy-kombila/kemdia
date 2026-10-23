@@ -636,3 +636,37 @@ export async function saveCodSettingsAction(form: FormData): Promise<never> {
   if (!result.ok) return afterFailure(token, result, SETTINGS_PAGE);
   redirect(`${SETTINGS_PAGE}?ok=livraison-enregistree`);
 }
+
+// --- Avis des clients (S8-T01, ADR-0056 ; équipe Catalogue) ---
+
+const REVIEWS_PAGE = "/equipe/avis";
+// Champ caché « version » : date ISO de l'avis lu, pour que l'équipe décide sur le texte qu'elle a vu
+
+/** Publier un avis en attente. */
+export async function publishReviewAction(form: FormData): Promise<never> {
+  const reviewId = field(form, "reviewId", 36);
+  const version = field(form, "version", 30);
+  if (!reviewId || !UUID.test(reviewId) || !version || !ISO_DATE.test(version))
+    redirect(REVIEWS_PAGE);
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(REVIEWS_PAGE)}`);
+  const result = await staffApi().decideReview(token, reviewId, "publish", version);
+  if (!result.ok) return afterFailure(token, result, REVIEWS_PAGE);
+  redirect(`${REVIEWS_PAGE}?ok=avis-publie`);
+}
+
+/** Refuser un avis en attente, avec un motif montré à l'auteur (5 à 300 caractères, revérifié par l'API). */
+export async function rejectReviewAction(form: FormData): Promise<never> {
+  const reviewId = field(form, "reviewId", 36);
+  const version = field(form, "version", 30);
+  if (!reviewId || !UUID.test(reviewId) || !version || !ISO_DATE.test(version))
+    redirect(REVIEWS_PAGE);
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(REVIEWS_PAGE)}`);
+  const reason = field(form, "reason", 600)?.trim() ?? "";
+  const length = [...reason].length;
+  if (length < 5 || length > 300) redirect(`${REVIEWS_PAGE}?erreur=AVIS_INVALIDE`);
+  const result = await staffApi().decideReview(token, reviewId, "reject", version, reason);
+  if (!result.ok) return afterFailure(token, result, REVIEWS_PAGE);
+  redirect(`${REVIEWS_PAGE}?ok=avis-refuse`);
+}

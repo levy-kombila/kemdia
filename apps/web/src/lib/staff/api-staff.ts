@@ -1,5 +1,11 @@
 import "server-only";
 import {
+  AdminReviewPageSchema,
+  AdminReviewSchema,
+  REVIEW_ERROR_CODES,
+  type AdminReview,
+  type AdminReviewPage,
+  type ReviewErrorCode,
   AdminInvoicePageSchema,
   AdminInvoiceSchema,
   AuditPageSchema,
@@ -134,6 +140,8 @@ export type StaffFailureCode =
   // Finance (S7.5-T05)
   | PaymentErrorCode
   | CouponErrorCode
+  // Avis des clients (S8-T01)
+  | ReviewErrorCode
   | "INDISPONIBLE";
 export type StaffFailure = { ok: false; code: StaffFailureCode; retryAfterSeconds?: number };
 export type StaffResult<T> = { ok: true; data: T } | StaffFailure;
@@ -156,6 +164,7 @@ const KNOWN_CODES: readonly StaffFailureCode[] = [
   "ANNULATION_IMPOSSIBLE",
   ...PAYMENT_ERROR_CODES,
   ...COUPON_ERROR_CODES,
+  ...REVIEW_ERROR_CODES,
 ];
 /** Numéro de commande (« KMD-7F3K9Q ») : vérifié avant de construire l'adresse de l'API. */
 const ORDER_REFERENCE = /^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/;
@@ -457,6 +466,38 @@ export function createStaffApi(options: StaffApiOptions) {
             note ? { note } : {},
           )
         : Promise.resolve(notFound("CORRECTION_INTROUVABLE"));
+    },
+
+    // --- Avis des clients (S8-T01, équipe Catalogue) ---
+    reviews: (
+      token: string,
+      params: { status?: "pending" | "published" | "rejected"; after?: string },
+    ): Promise<StaffResult<AdminReviewPage>> => {
+      const query = new URLSearchParams();
+      if (params.status) query.set("status", params.status);
+      if (params.after && /^[A-Za-z0-9_-]{20,120}$/.test(params.after))
+        query.set("after", params.after);
+      const text = query.toString();
+      return call("GET", `/admin/reviews${text ? `?${text}` : ""}`, token, AdminReviewPageSchema);
+    },
+    decideReview: (
+      token: string,
+      reviewId: string,
+      decision: "publish" | "reject",
+      version: string,
+      reason?: string,
+    ): Promise<StaffResult<AdminReview>> => {
+      const review = id(reviewId);
+      // `version` : date de l'avis lu par l'équipe ; l'API refuse (AVIS_MODIFIE) si l'auteur l'a changé depuis
+      return review
+        ? call(
+            "POST",
+            `/admin/reviews/${review}/${decision}`,
+            token,
+            AdminReviewSchema,
+            decision === "reject" ? { version, reason: reason ?? "" } : { version },
+          )
+        : Promise.resolve(notFound("AVIS_INTROUVABLE"));
     },
 
     // --- Modération des produits (S6-T02, modérateurs et administrateurs) ---

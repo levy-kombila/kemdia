@@ -55,6 +55,10 @@ export const AUDIT_ACTIONS = [
   "shop.suspended",
   /** « Ma boutique » : le vendeur change ville, quartier ou description (détails : city, neighborhood, previousCity, descriptionChanged) — S7.5-T07 */
   "shop.profile_updated",
+  /** Avis d'un client publié par l'équipe Catalogue (détails : rating) — S8-T01 */
+  "review.published",
+  /** Avis d'un client refusé par l'équipe Catalogue (détails : rating, reason) — S8-T01 */
+  "review.rejected",
   /** Produit d'un vendeur envoyé en modération : création, contenu modifié, remise en vente, photo ajoutée (détails : title, reason, from ; image et sha256 pour une photo, S6-T04) — S6-T02 */
   "product.submitted",
   /** Produit validé par la modération (détails : title, from, to) — S6-T02 */
@@ -169,6 +173,8 @@ export const AUDIT_TARGET_TYPES = [
   "product",
   /** Fiche commune (S7.5-T02) */
   "listing",
+  /** Avis d'un client (S8-T01) */
+  "review",
 ] as const;
 export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];
 

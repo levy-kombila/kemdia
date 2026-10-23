@@ -13,8 +13,10 @@ import type { Shop } from "../domain/shop.js";
 import { VendorsError } from "../domain/vendors-error.js";
 import type { ModeratedProduct, ModerationActor } from "./product-moderation.service.js";
 import {
+  LISTING_REVIEWS,
   SHOP_REPOSITORY,
   VENDORS_TRANSACTION,
+  type ListingReviews,
   type ShopRepository,
   type VendorsTransaction,
 } from "./ports.js";
@@ -56,6 +58,7 @@ export class ListingAdminService {
     @Inject(VENDORS_TRANSACTION) private readonly tx: VendorsTransaction,
     @Inject(AuditLog) private readonly audit: Pick<AuditLog, "record">,
     @Inject(VendorCatalog) private readonly catalog: ListingCatalogPort,
+    @Inject(LISTING_REVIEWS) private readonly reviews: ListingReviews,
   ) {}
 
   list(query: {
@@ -149,6 +152,8 @@ export class ListingAdminService {
         this.clock(),
         actor.accountId,
       );
+      // Les avis suivent les offres vers la fiche cible (relecture de sécurité S8-T01)
+      await this.reviews.moveReviews(source.id, targetId);
       const { listing: target } = await this.catalog.listingWithOffers(targetId);
       await this.audit.record({
         action: "listing.merged",

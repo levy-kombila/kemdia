@@ -3,6 +3,7 @@ import { AuditPersonalData } from "../../audit/index.js";
 import { IdentityPersonalData } from "../../identity/index.js";
 import { OrdersPersonalData } from "../../orders/index.js";
 import { PaymentsPersonalData } from "../../payments/index.js";
+import { ReviewsPersonalData } from "../../reviews/index.js";
 import { ShippingPersonalData } from "../../shipping/index.js";
 import { VendorsPersonalData } from "../../vendors/index.js";
 import type {
@@ -25,6 +26,7 @@ export class ModulesPersonalData implements PersonalDataStore {
     private readonly shipping: ShippingPersonalData,
     private readonly vendors: VendorsPersonalData,
     private readonly audit: AuditPersonalData,
+    private readonly reviews: ReviewsPersonalData,
   ) {}
 
   /** Compte puis panier (même ordre partout : pas d'interblocage avec la création d'une commande). */
@@ -52,6 +54,7 @@ export class ModulesPersonalData implements PersonalDataStore {
       paiements: await this.payments.export(accountId),
       livraisons: await this.shipping.export(references),
       boutique: await this.vendors.export(accountId),
+      avis: await this.reviews.export(accountId),
       journal: await this.audit.export(accountId),
     };
   }
@@ -63,6 +66,8 @@ export class ModulesPersonalData implements PersonalDataStore {
     await this.payments.erase(accountId, now);
     await this.orders.erase(accountId, now);
     await this.vendors.erase(accountId);
+    // Avis (S8-T01) : retirés, note des fiches recalculée
+    await this.reviews.erase(accountId);
     await this.identity.erase(accountId, now);
   }
 

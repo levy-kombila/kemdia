@@ -70,7 +70,7 @@
 | FR-018          | Le livreur met à jour le statut (récupéré, en cours, livré)                                                   | S7                                                                 |
 | FR-010          | Suivi GPS en temps réel                                                                                       | ⏳ après MVP (KSAD : Kemdia Logistics)                             |
 | FR-019          | L'administrateur valide le KYC des vendeurs                                                                   | S6                                                                 |
-| FR-020          | Modération des avis                                                                                           | S6                                                                 |
+| FR-020          | Modération des avis                                                                                           | S8 ✅ (S8-T01, [ADR-0056](adr/0056-avis-clients.md))               |
 
 ## Questions ouvertes
 

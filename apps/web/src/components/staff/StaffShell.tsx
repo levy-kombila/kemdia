@@ -15,6 +15,7 @@ import {
   Tags,
   Truck,
   Users,
+  MessageSquare,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -29,6 +30,7 @@ export type StaffSection =
   | "livraisons"
   | "moderation"
   | "fiches"
+  | "avis"
   | "clients"
   | "utilisateurs"
   | "factures"
@@ -56,6 +58,7 @@ const LINKS: {
     role: "catalog",
   },
   { id: "fiches", label: "Fiches produits", href: "/equipe/fiches", icon: Layers, role: "catalog" },
+  { id: "avis", label: "Avis clients", href: "/equipe/avis", icon: MessageSquare, role: "catalog" },
   { id: "boutiques", label: "Boutiques", href: "/equipe/boutiques", icon: Store, role: "catalog" },
   {
     id: "verifications",

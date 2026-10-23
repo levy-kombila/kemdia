@@ -54,3 +54,5 @@ export { SORT_KEYS } from "./application/ports.js";
 export type { ProductSearchInput } from "./application/product-search.js";
 export type { Category, CategoryNode } from "./domain/category.js";
 export type { Orderability, Product, ProductStatus, Variant } from "./domain/product.js";
+/** Fiches vues par le module reviews (S8-T01) : fiche publiée, titres, note moyenne */
+export { ListingRatings } from "./infrastructure/listing-ratings.js";

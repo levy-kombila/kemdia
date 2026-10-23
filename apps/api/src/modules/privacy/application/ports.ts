@@ -9,6 +9,8 @@ export interface CollectedData {
   boutique: Record<string, unknown>;
   /** Actions du compte et celles qui le visent (journal d'audit, 365 jours) */
   journal: Record<string, unknown>;
+  /** Avis donnés sur des produits (S8-T01) */
+  avis: Record<string, unknown>[];
 }
 
 /** État d'un compte relu et VERROUILLÉ dans la transaction d'effacement (absent ou déjà effacé : `null`). */

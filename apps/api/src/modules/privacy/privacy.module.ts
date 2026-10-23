@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { ReviewsModule } from "../reviews/index.js";
 import { AuditModule } from "../audit/index.js";
 import { IdentityModule } from "../identity/index.js";
 import { OrdersModule } from "../orders/index.js";
@@ -22,6 +23,7 @@ import { PrivacyController } from "./interface/privacy.controller.js";
     IdentityModule,
     AuditModule,
     OrdersModule,
+    ReviewsModule,
     PaymentsModule,
     ShippingModule,
     VendorsModule,

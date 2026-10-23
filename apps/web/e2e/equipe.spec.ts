@@ -258,6 +258,9 @@ test.describe("espace de l'équipe : parcours complet", () => {
       ["/equipe/remboursements", "Remboursements"],
       ["/equipe/codes-promo", "Codes promo"],
       ["/equipe/reglages", "Réglages"],
+      // Avis clients (S8-T01) : l'administrateur a aussi le rôle Catalogue
+      ["/equipe/avis", "Avis clients"],
+      // Le journal en dernier : la suite du test le filtre
       ["/equipe/journal", "Journal"],
     ] as const) {
       await page.goto(path);

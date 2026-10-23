@@ -177,7 +177,7 @@ describe("Fiches communes et offres (PostgreSQL, HTTP)", () => {
     await app.init();
     prisma = app.get(PrismaService);
     await prisma.$executeRawUnsafe(
-      'TRUNCATE "catalog"."product_variants", "catalog"."products", "catalog"."listing_variants", "catalog"."listings", "catalog"."categories" CASCADE',
+      'TRUNCATE "catalog"."product_variants", "catalog"."products", "catalog"."listing_variants", "catalog"."listings", "catalog"."categories", "reviews"."reviews" CASCADE',
     );
     await importCatalog(prepareDemoCatalog(demoCatalog), {
       categories: new PrismaCategoryRepository(prisma),
@@ -579,6 +579,27 @@ describe("Fiches communes et offres (PostgreSQL, HTTP)", () => {
       .expect(409);
     expect(codeOf(partial.body)).toBe("FUSION_IMPOSSIBLE");
 
+    // Avis (S8-T01) : un client sur la cible seule, un sur le doublon seul, un sur les deux (le plus récent reste)
+    const [solo, both, other] = [randomUUID(), randomUUID(), randomUUID()];
+    const review = (listingId: string, accountId: string, rating: number, at: string) => ({
+      id: randomUUID(),
+      listingId,
+      accountId,
+      rating,
+      authorName: "Client T.",
+      status: "PUBLISHED" as const,
+      createdAt: new Date(at),
+      updatedAt: new Date(at),
+    });
+    await prisma.review.createMany({
+      data: [
+        review(target.listing.id, solo, 5, "2026-10-01T00:00:00Z"),
+        review(source.listing.id, other, 1, "2026-10-01T00:00:00Z"),
+        review(target.listing.id, both, 2, "2026-10-01T00:00:00Z"),
+        review(source.listing.id, both, 4, "2026-10-02T00:00:00Z"),
+      ],
+    });
+
     const merged = matches(
       ListingMergeResultSchema,
       (
@@ -592,6 +613,19 @@ describe("Fiches communes et offres (PostgreSQL, HTTP)", () => {
       ).body,
     );
     expect(merged).toMatchObject({ moved: 1, listing: { id: target.listing.id, offerCount: 2 } });
+    const onTarget = await prisma.review.findMany({
+      where: { listingId: target.listing.id },
+      orderBy: { rating: "asc" },
+    });
+    expect(onTarget.map((r) => [r.accountId, r.rating])).toEqual([
+      [other, 1],
+      [both, 4],
+      [solo, 5],
+    ]);
+    expect(await prisma.review.count({ where: { listingId: source.listing.id } })).toBe(0);
+    expect(
+      await prisma.listing.findUniqueOrThrow({ where: { id: target.listing.id } }),
+    ).toMatchObject({ reviewCount: 3, rating: 3.3 });
     // L'ancienne adresse mène à la cible ; le doublon disparaît des listes
     const page = await detail(source.listing.slug);
     expect(page).toMatchObject({ id: target.listing.id, slug: target.listing.slug, offerCount: 2 });
