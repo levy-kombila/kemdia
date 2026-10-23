@@ -204,9 +204,43 @@ export const ProductPageSchema = z
     pageSize: z.int().min(1),
     total: z.int().nonnegative(),
     totalPages: z.int().min(1),
+    correctedQuery: z
+      .string()
+      .max(100)
+      .optional()
+      .describe(
+        "S7.5-T06 : aucune fiche ne contenait les mots tapés ; résultats pour ces mots corrigés (« iphone » pour « ipohne »). Absent sinon, ou avec exact=1",
+      ),
   })
   .meta({ id: "ProductPage" });
 export type ProductPage = z.infer<typeof ProductPageSchema>;
+
+/** Suggestions pendant la frappe (S7.5-T06) : 4 produits, 2 rayons et 2 marques au plus. */
+export const SearchSuggestionsSchema = z
+  .object({
+    correctedQuery: z
+      .string()
+      .max(100)
+      .optional()
+      .describe("Mots corrigés quand les mots tapés ne trouvaient rien"),
+    products: z
+      .array(
+        z.object({
+          slug: z.string(),
+          title: z.string(),
+          image: z.string().nullable(),
+          price: fcfa.describe("Prix de l'offre mise en avant"),
+        }),
+      )
+      .max(4),
+    categories: z.array(z.object({ slug: z.string(), name: z.string() })).max(2),
+    brands: z.array(z.string()).max(2),
+  })
+  .meta({
+    id: "SearchSuggestions",
+    description: "Suggestions pendant la frappe : produits, rayons et marques",
+  });
+export type SearchSuggestions = z.infer<typeof SearchSuggestionsSchema>;
 
 export const VariantSchema = z
   .object({

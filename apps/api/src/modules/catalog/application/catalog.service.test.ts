@@ -238,4 +238,31 @@ describe("CatalogService", () => {
     }));
     await expect(service.checkAvailability(lines)).rejects.toThrow(RangeError);
   });
+
+  it("S7.5-T06 : corrige les mots qui ne trouvent rien, sauf en recherche exacte", async () => {
+    await service.searchProducts({ q: "Télpehone" });
+    expect(products.lastCriteria?.terms).toEqual(["telephone"]);
+    const result = await service.searchProducts({ q: "telpehone kemdia" });
+    expect(result.correctedQuery).toBe("telephone kemdia");
+    await service.searchProducts({ q: "telpehone", exact: "1" });
+    expect(products.lastCriteria?.terms).toEqual(["telpehone"]);
+    // Mots qui trouvent déjà quelque chose : inchangés, pas de correctedQuery
+    expect((await service.searchProducts({ q: "telephone" })).correctedQuery).toBeUndefined();
+    // Un mot sans remplaçant assez proche : aucune correction
+    expect(
+      (await service.searchProducts({ q: "telpehone xqzwvk" })).correctedQuery,
+    ).toBeUndefined();
+    await service.getFacets({ q: "telpehone" });
+    expect(products.lastCriteria?.terms).toEqual(["telephone"]);
+  });
+
+  it("S7.5-T06 : suggestions (rayons, marques), rien sous 2 lettres", async () => {
+    const s = await service.suggest("tele");
+    expect(s.categories.map((c) => c.slug)).toEqual(["telephones"]);
+    expect(s.brands).toEqual([]);
+    expect((await service.suggest("kemd")).brands).toEqual(["Kemdia"]);
+    expect((await service.suggest("kemdai")).correctedQuery).toBe("kemdia");
+    expect(await service.suggest("t")).toEqual({ products: [], categories: [], brands: [] });
+    expect(await service.suggest(42)).toEqual({ products: [], categories: [], brands: [] });
+  });
 });

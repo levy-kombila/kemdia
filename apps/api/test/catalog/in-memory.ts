@@ -12,6 +12,7 @@ import type {
 import type { Category } from "../../src/modules/catalog/domain/category.js";
 import type { Seller } from "../../src/modules/catalog/domain/listing.js";
 import type { Product } from "../../src/modules/catalog/domain/product.js";
+import { searchable } from "../../src/modules/catalog/domain/values.js";
 
 /** Dépôts en mémoire : testent l'application sans base de données (le vrai SQL est testé en intégration). */
 export class InMemoryCategories implements CategoryRepository {
@@ -96,6 +97,24 @@ export class InMemoryProducts implements ProductRepository {
       deals: 0,
       rating4: 0,
     });
+  }
+  /** Texte de recherche simplifié : titre et marque (la catégorie n'est pas connue ici). */
+  private textOf(p: Product): string {
+    return searchable(`${p.title} ${p.brand ?? ""}`);
+  }
+  private matching(criteria: ProductCriteria): Product[] {
+    return this.items.filter((p) => criteria.terms.every((t) => this.textOf(p).includes(t)));
+  }
+  count(criteria: ProductCriteria): Promise<number> {
+    return Promise.resolve(new Set(this.matching(criteria).map((p) => p.listingId)).size);
+  }
+  similarWords(_term: string, limit: number): Promise<string[]> {
+    const words = this.items.flatMap((p) => this.textOf(p).split(" "));
+    return Promise.resolve([...new Set(words)].slice(0, limit));
+  }
+  brands(criteria: ProductCriteria, limit: number): Promise<string[]> {
+    const brands = this.matching(criteria).flatMap((p) => (p.brand ? [p.brand] : []));
+    return Promise.resolve([...new Set(brands)].slice(0, limit));
   }
   save(product: Product): Promise<void> {
     this.items = [...this.items.filter((p) => p.id !== product.id), product];

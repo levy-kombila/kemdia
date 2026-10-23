@@ -23,6 +23,7 @@ import {
   FacetsSchema,
   ProductDetailSchema,
   ProductPageSchema,
+  SearchSuggestionsSchema,
 } from "@kemdia/contracts";
 import { testDatabaseUrl } from "./integration-db.js";
 
@@ -130,6 +131,66 @@ describe("API catalogue sur PostgreSQL (contrat)", () => {
     expect(promo.deals).toBe(data.products.filter((p) => p.oldPrice !== null).length);
     const list = await get("/api/v1/products?scope=promotions&pageSize=48").expect(200);
     expect(matches(ProductPageSchema, list.body, "promotions").total).toBe(promo.deals);
+  });
+
+  it("S7.5-T06 : recherche tolérante aux fautes de frappe (pg_trgm) et recherche exacte", async () => {
+    const list = async (url: string) =>
+      matches(ProductPageSchema, (await get(url).expect(200)).body, url);
+
+    // Inversion de deux lettres : « sennhieser » → « sennheiser »
+    const typo = await list("/api/v1/products?q=Sennhieser");
+    expect(typo.correctedQuery).toBe("sennheiser");
+    expect(typo.total).toBeGreaterThan(0);
+    expect(typo.items.every((p) => p.brand === "Sennheiser")).toBe(true);
+    // Lettre oubliée, mot gardé quand il est juste : « écuteurs beats » → « ecouteurs beats »
+    expect((await list("/api/v1/products?q=%C3%A9cuteurs%20beats")).correctedQuery).toBe(
+      "ecouteurs beats",
+    );
+    // Mots justes : aucune correction (le début d'un mot suffit)
+    const exact = await list("/api/v1/products?q=aspirateur");
+    expect(exact.correctedQuery).toBeUndefined();
+    expect(exact.total).toBeGreaterThan(0);
+    // Trop éloigné : aucun résultat plutôt qu'un résultat hors sujet
+    const none = await list("/api/v1/products?q=xqzwvk");
+    expect(none.total).toBe(0);
+    expect(none.correctedQuery).toBeUndefined();
+    // exact=1 : pas de correction
+    const asTyped = await list("/api/v1/products?q=sennhieser&exact=1");
+    expect(asTyped.total).toBe(0);
+    expect(asTyped.correctedQuery).toBeUndefined();
+    // Les compteurs suivent la même correction que la liste
+    const facets = matches(
+      FacetsSchema,
+      (await get("/api/v1/products/facets?q=sennhieser").expect(200)).body,
+      "compteurs corrigés",
+    );
+    expect(facets.prices.reduce((s, p) => s + p.count, 0)).toBe(typo.total);
+  });
+
+  it("S7.5-T06 : suggestions pendant la frappe (produits, rayons, marques)", async () => {
+    const suggest = async (q: string) =>
+      matches(
+        SearchSuggestionsSchema,
+        (await get(`/api/v1/products/suggestions?q=${encodeURIComponent(q)}`).expect(200)).body,
+        `suggestions ${q}`,
+      );
+    // Mot en cours de frappe
+    const senn = await suggest("senn");
+    expect(senn.products.length).toBeGreaterThan(0);
+    expect(senn.brands).toEqual(["Sennheiser"]);
+    // Rayons dont le nom contient le mot
+    const parfums = await suggest("parfum");
+    expect(parfums.categories.length).toBeGreaterThan(0);
+    expect(parfums.categories.every((c) => c.name.toLowerCase().includes("parfum"))).toBe(true);
+    // Avec une faute
+    expect((await suggest("sennhieser")).correctedQuery).toBe("sennheiser");
+    // Moins de 2 lettres : rien
+    expect(await suggest("s")).toEqual({ products: [], categories: [], brands: [] });
+    // Jamais plus de 8 suggestions
+    const many = await suggest("e");
+    expect(many.products.length + many.categories.length + many.brands.length).toBe(0);
+    const broad = await suggest("pro");
+    expect(broad.products.length + broad.categories.length + broad.brands.length).toBeLessThan(9);
   });
 
   it("disponibilité (BR-001) sur les stocks réels", async () => {

@@ -17,6 +17,7 @@ import {
   presentCategory,
   presentCategoryNode,
   presentProduct,
+  presentSuggestions,
 } from "./presenters.js";
 import { AvailabilityRequestSchema, type AvailabilityRequest } from "@kemdia/contracts";
 
@@ -45,6 +46,7 @@ function searchInput(query: Record<string, unknown>): ProductSearchInput {
     scope: first(query.scope),
     badge: first(query.badge),
     city: first(query.ville),
+    exact: first(query.exact),
   };
 }
 
@@ -77,10 +79,27 @@ export class CatalogController {
   @Get("products")
   @Header("Cache-Control", CACHE_PUBLIC)
   async products(@Query() query: Record<string, unknown>) {
-    const { items, page, pageSize, total, totalPages } = await this.catalog.searchProducts(
-      searchInput(query),
-    );
-    return { items, page, pageSize, total, totalPages };
+    const { items, page, pageSize, total, totalPages, correctedQuery } =
+      await this.catalog.searchProducts(searchInput(query));
+    return {
+      items,
+      page,
+      pageSize,
+      total,
+      totalPages,
+      ...(correctedQuery ? { correctedQuery } : {}),
+    };
+  }
+
+  /**
+   * Suggestions pendant la frappe (S7.5-T06) : appelée à chaque pause de la frappe, d'où une limite par adresse IP
+   * plus large que les écritures mais bornée (60 par minute).
+   */
+  @Get("products/suggestions")
+  @Header("Cache-Control", CACHE_PUBLIC)
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  async suggestions(@Query("q") q?: unknown) {
+    return presentSuggestions(await this.catalog.suggest(first(q)));
   }
 
   // Déclarée avant « products/:slug » : sinon « facets » serait pris pour l'adresse d'un produit

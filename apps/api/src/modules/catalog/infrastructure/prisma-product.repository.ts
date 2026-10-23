@@ -171,6 +171,50 @@ export class PrismaProductRepository implements ProductRepository {
     return { items, page: current, pageSize, total, totalPages };
   }
 
+  count(criteria: ProductCriteria): Promise<number> {
+    return this.prisma.listing.count({ where: whereOf(criteria) });
+  }
+
+  /**
+   * Recherche approchée (S7.5-T06, ADR-0053) : fiches visibles dont le texte contient un mot qui RESSEMBLE à `term`
+   * (opérateur `<%` de pg_trgm, servi par l'index trigrammes), puis les mots de ces fiches classés par ressemblance.
+   * Seuil abaissé à 0,3 pour cette seule transaction (`set_config(…, true)`) : une inversion de lettres
+   * (« ipohne ») casse beaucoup de trigrammes. Le choix final (distance d'édition) est fait par le domaine.
+   * Requête paramétrée : `term` n'est jamais concaténé au SQL.
+   */
+  async similarWords(term: string, limit: number): Promise<string[]> {
+    const rows = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT set_config('pg_trgm.word_similarity_threshold', '0.3', true)`;
+      return tx.$queryRaw<{ word: string }[]>`
+        SELECT w.word
+        FROM (
+          SELECT l.search_text
+          FROM catalog.listings l
+          WHERE l.status = 'PUBLISHED' AND l.merged_into_id IS NULL AND l.offer_count > 0
+            AND ${term} <% l.search_text
+          ORDER BY word_similarity(${term}, l.search_text) DESC, l.id
+          LIMIT 50
+        ) t
+        CROSS JOIN LATERAL unnest(string_to_array(t.search_text, ' ')) AS w(word)
+        WHERE length(w.word) BETWEEN 2 AND 30
+        GROUP BY w.word
+        ORDER BY max(similarity(w.word, ${term})) DESC, w.word
+        LIMIT ${limit}`;
+    });
+    return rows.map((r) => r.word);
+  }
+
+  async brands(criteria: ProductCriteria, limit: number): Promise<string[]> {
+    const rows = await this.prisma.listing.groupBy({
+      by: ["brand"],
+      where: { AND: [whereOf(criteria), { brand: { not: null } }] },
+      _count: { _all: true },
+      orderBy: [{ _count: { brand: "desc" } }, { brand: "asc" }],
+      take: limit,
+    });
+    return rows.flatMap((r) => (r.brand ? [r.brand] : []));
+  }
+
   async facets(criteria: ProductCriteria, priceRanges: readonly PriceRange[]): Promise<Facets> {
     const where = whereOf(criteria);
     const and = (extra: Prisma.ListingWhereInput): Prisma.ListingWhereInput => ({
