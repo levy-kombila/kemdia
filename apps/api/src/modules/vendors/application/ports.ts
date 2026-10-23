@@ -20,6 +20,11 @@ export interface ShopRepository {
   findByOwner(accountId: string): Promise<Shop | null>;
   /** Boutique par son adresse (import du catalogue, S8-T03). */
   findBySlug(slug: string): Promise<Shop | null>;
+  /**
+   * Import du catalogue (S8-T03) : verrou unique pour toute l'API jusqu'à la fin de la transaction ; `false` si un
+   * autre import le tient déjà (sans attendre).
+   */
+  tryLockCatalogImport(): Promise<boolean>;
   /** Lit la boutique et la verrouille jusqu'à la fin de la transaction (décisions concurrentes). */
   lockById(id: string): Promise<Shop | null>;
   /**

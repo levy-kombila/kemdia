@@ -264,7 +264,12 @@ export function parseCatalogImport(text: string, rules: ImportRules): ParsedImpo
       fail("prix", `montant entier en FCFA, de 1 à ${rules.priceMax.toLocaleString("fr-FR")}`);
     const rawCompare = get("prix_barre");
     const compareAtPrice = rawCompare ? parseAmount(rawCompare) : null;
-    if (rawCompare && (compareAtPrice === null || (price !== null && compareAtPrice <= price)))
+    if (
+      rawCompare &&
+      (compareAtPrice === null ||
+        compareAtPrice > rules.priceMax ||
+        (price !== null && compareAtPrice <= price))
+    )
       fail("prix_barre", "vide, ou montant entier plus élevé que le prix");
     const stockRaw = get("stock");
     const stock = /^\d{1,7}$/.test(stockRaw) ? Number(stockRaw) : null;

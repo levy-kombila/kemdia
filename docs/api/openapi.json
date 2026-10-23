@@ -13924,7 +13924,7 @@
             }
           },
           "409": {
-            "description": "`BOUTIQUE_OCCUPEE` : une boutique du fichier est en cours de modification",
+            "description": "`IMPORT_EN_COURS` (un seul import à la fois) ou `BOUTIQUE_OCCUPEE` (boutique du fichier en cours de modification)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -13953,8 +13953,28 @@
               }
             }
           },
+          "422": {
+            "description": "`IMPORT_TROP_LONG` : écriture de plus de 2 minutes, rien n'est importé (découper le fichier)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Trop de fichiers envoyés en même temps (voir l'en-tête Retry-After)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -14021,7 +14041,7 @@
             }
           },
           "409": {
-            "description": "`BOUTIQUE_OCCUPEE` : une boutique du fichier est en cours de modification",
+            "description": "`IMPORT_EN_COURS` (un seul import à la fois) ou `BOUTIQUE_OCCUPEE` (boutique du fichier en cours de modification)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -14050,8 +14070,28 @@
               }
             }
           },
+          "422": {
+            "description": "`IMPORT_TROP_LONG` : écriture de plus de 2 minutes, rien n'est importé (découper le fichier)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Trop de fichiers envoyés en même temps (voir l'en-tête Retry-After)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -18648,6 +18688,8 @@
               "KYC_INDISPONIBLE",
               "DOCUMENT_INTROUVABLE",
               "FICHIER_IMPORT_INVALIDE",
+              "IMPORT_EN_COURS",
+              "IMPORT_TROP_LONG",
               "FICHE_INTROUVABLE",
               "FICHE_PUBLIEE",
               "FICHE_NON_PUBLIEE",

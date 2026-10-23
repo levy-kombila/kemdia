@@ -709,6 +709,9 @@ export const VENDOR_ERROR_CODES = [
   "DOCUMENT_INTROUVABLE",
   // Import du catalogue (S8-T03) : corps qui n'est pas un fichier CSV en texte
   "FICHIER_IMPORT_INVALIDE",
+  // Un seul import à la fois ; écriture de plus de 2 minutes annulée (fichier à découper)
+  "IMPORT_EN_COURS",
+  "IMPORT_TROP_LONG",
   // Fiches communes et offres (S7.5-T02)
   "FICHE_INTROUVABLE",
   // La fiche est en ligne : seule l'équipe la modifie (le vendeur propose une correction)

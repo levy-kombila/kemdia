@@ -48,6 +48,23 @@ Choix du 2026-10-23 : options recommandées retenues sans être reposées (deman
    en tableau) ; relais `/equipe/import/fichier` (session et rôle vérifiés avant de lire le corps, 2 Mo lus en flux,
    un import à la fois, décodage UTF-8 puis Windows-1252).
 7. Contrat de l'API **2.7.0**.
+8. **Garde-fous issus de la relecture de sécurité** :
+   - **2 fichiers lus à la fois** au plus pour toute l'API, avant toute lecture du corps (comme les photos) ;
+   - **un seul import écrit à la fois** (verrou consultatif en base, sans attente : `IMPORT_EN_COURS`) ; une écriture
+     de plus de 2 minutes est annulée avec `IMPORT_TROP_LONG` (et non « boutique occupée ») ;
+   - **mêmes règles** pour la vérification et l'écriture : chaque produit est construit et vérifié par le catalogue
+     lui-même (texte nettoyé, au moins une lettre ou un chiffre, variantes distinctes après nettoyage, prix barré
+     plafonné) ; catégories lues **une fois** par fichier ;
+   - une référence d'import déjà prise devient une erreur claire (pas de nouveaux essais ni d'erreur 500) ;
+   - site : taille revérifiée **après** conversion en UTF-8 ; modèle enregistré avec le **BOM UTF-8** (accents bien
+     lus par Excel) ; compte rendu vidé des boutiques quand l'import est annulé.
+9. **Points acceptés** (écrits ici) :
+   - un membre de l'équipe Catalogue peut valider des produits qu'il a lui-même importés : l'import ne fait que
+     recopier le fichier du vendeur, et la modération reste tracée produit par produit ;
+   - une boutique peut dépasser sa limite de file de modération après un import : elle ne peut plus envoyer de
+     nouveau produit tant que l'équipe n'a pas avancé (la modération des produits importés passe en premier) ;
+   - textes commençant par `=`, `+`, `-` ou `@` acceptés : aucun export CSV n'existe ; à neutraliser le jour où il y
+     en aura un.
 
 ## Conséquences
 

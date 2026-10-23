@@ -4,6 +4,7 @@ import { TransactionContext } from "../../../database/transaction-context.js";
 import type { Prisma } from "../../../generated/prisma/client.js";
 import type {
   DerivedFields,
+  InsertOutcome,
   VendorProductCursor,
   VendorProductRecord,
   VendorProductRepository,
@@ -80,6 +81,11 @@ function isUniqueViolation(error: unknown): boolean {
   const meta = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown } } } })
     ?.meta;
   return code === "P2002" || meta?.driverAdapterError?.cause?.originalCode === "23505";
+}
+
+/** Index unique en cause (nom de la contrainte ou colonnes), tel que Prisma ou le pilote le rapportent. */
+function violatesImportReference(error: unknown): boolean {
+  return /import_reference|importReference/.test(JSON.stringify(error ?? null) + String(error));
 }
 
 /**
@@ -177,7 +183,7 @@ export class PrismaVendorProductRepository implements VendorProductRepository {
     record: VendorProductRecord,
     derived: DerivedFields,
     importReference: string | null = null,
-  ): Promise<boolean> {
+  ): Promise<InsertOutcome> {
     if (!this.tx.active) throw new Error("création d'un produit de vendeur hors transaction");
     const db = this.tx.db;
     try {
@@ -233,11 +239,14 @@ export class PrismaVendorProductRepository implements VendorProductRepository {
         },
       });
       await db.$executeRawUnsafe("RELEASE SAVEPOINT vendor_product_insert");
-      return true;
+      return "inserted";
     } catch (error) {
       if (isUniqueViolation(error)) {
         await db.$executeRawUnsafe("ROLLBACK TO SAVEPOINT vendor_product_insert");
-        return false;
+        // Référence d'import déjà prise : un nouvel essai n'y changerait rien (relecture S8-T03)
+        return importReference !== null && violatesImportReference(error)
+          ? "import_reference_taken"
+          : "slug_taken";
       }
       throw error;
     }

@@ -36,6 +36,13 @@ export class VendorsTransactionRunner implements VendorsTransaction {
         options?.timeoutMs ? { ...OPTIONS, timeout: options.timeoutMs } : OPTIONS,
       );
     } catch (error) {
+      // Transaction longue demandée (import du catalogue) et dépassée : ce n'est pas une boutique occupée
+      if (options?.timeoutMs && (error as { code?: unknown } | null)?.code === "P2028") {
+        throw new VendorsError(
+          "IMPORT_TROP_LONG",
+          "l'écriture a dépassé le temps permis : rien n'a été importé, découpez le fichier",
+        );
+      }
       if (isBusy(error)) {
         throw new VendorsError(
           "BOUTIQUE_OCCUPEE",

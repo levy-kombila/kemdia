@@ -20,6 +20,10 @@ export type VendorsErrorCode =
   | "BOUTIQUE_INACTIVE"
   /** Import du catalogue (S8-T03) : le corps n'est pas un fichier CSV (en-tête Content-Type text/csv). */
   | "FICHIER_IMPORT_INVALIDE"
+  /** Un autre import du catalogue est en cours (un seul à la fois pour toute l'API). */
+  | "IMPORT_EN_COURS"
+  /** L'écriture du fichier a dépassé 2 minutes : rien n'est importé, découper le fichier. */
+  | "IMPORT_TROP_LONG"
   /** Un modérateur ne décide jamais pour un produit de sa propre boutique. */
   | "PRODUIT_SUR_SOI_INTERDIT"
   /** Dossier de vérification mal rempli (champ en cause dans le message) — S6-T08 */

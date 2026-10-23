@@ -25,6 +25,7 @@ export { StockService, StockUnavailableError } from "./application/stock.service
 // Produits des vendeurs et modération (S6-T02)
 export {
   VendorCatalog,
+  type CatalogImportSession,
   type ListingEditInput,
   type OfferLineInput,
   type VendorProductInput,

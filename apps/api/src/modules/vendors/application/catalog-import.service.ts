@@ -3,6 +3,8 @@ import { CATALOG_IMPORT_LIMITS } from "@kemdia/contracts/constants";
 import { AuditLog, type AuditContext } from "../../audit/index.js";
 import {
   CatalogError,
+  type CatalogImportSession,
+  type VendorProductInput,
   MAX_PRICE_FCFA,
   MAX_STOCK,
   VENDOR_PRODUCT_RULES,
@@ -15,6 +17,7 @@ import {
   type ImportedProduct,
 } from "../domain/catalog-import.js";
 import type { Shop } from "../domain/shop.js";
+import { VendorsError } from "../domain/vendors-error.js";
 import {
   SHOP_REPOSITORY,
   VENDORS_TRANSACTION,
@@ -56,7 +59,7 @@ export interface CatalogImportReport {
   issueCount: number;
 }
 
-type CatalogPort = Pick<VendorCatalog, "importProduct" | "importedReferences" | "categoriesBySlug">;
+type CatalogPort = Pick<VendorCatalog, "importSession" | "importedReferences">;
 
 /** Erreur survenue pendant l'écriture : tout est annulé, le compte rendu la montre. */
 class ImportAborted extends Error {
@@ -93,7 +96,14 @@ export class CatalogImportService {
     try {
       return await this.tx.run(
         async () => {
-          // Boutiques verrouillées (toujours dans le même ordre) : une suspension ou un autre import attend la fin
+          // Un seul import à la fois pour toute l'API : une transaction longue garde une connexion à la base
+          if (!(await this.shops.tryLockCatalogImport())) {
+            throw new VendorsError(
+              "IMPORT_EN_COURS",
+              "un autre import du catalogue est en cours : réessayez dans quelques minutes",
+            );
+          }
+          // Boutiques verrouillées (toujours dans le même ordre) : une suspension attend la fin de l'import
           const shops = [...first.shops.values()].sort((a, b) => a.id.localeCompare(b.id));
           for (const shop of shops) {
             const locked = await this.shops.lockById(shop.id);
@@ -106,32 +116,16 @@ export class CatalogImportService {
             }
           }
           // Relu sous le verrou : un autre import a pu créer les mêmes références entre-temps
-          const { report, todo } = await this.prepare("import", csv);
-          if (!report.valid)
+          const { report, todo, session } = await this.prepare("import", csv);
+          if (!report.valid || !session) {
             throw new ImportAborted(
               report.issues[0] ?? { line: 0, column: null, message: "fichier refusé" },
             );
-          const now = this.clock();
+          }
           let created = 0;
-          for (const { product, shopId, categoryId } of todo) {
+          for (const { product, shopId, input } of todo) {
             try {
-              await this.catalog.importProduct(
-                shopId,
-                {
-                  title: product.title,
-                  description: product.description,
-                  brand: product.brand,
-                  categoryId,
-                  variants: product.variants.map((v) => ({
-                    name: v.name || "Standard",
-                    price: v.price,
-                    compareAtPrice: v.compareAtPrice,
-                    stock: v.stock,
-                  })),
-                },
-                product.reference,
-                now,
-              );
+              await session.create(shopId, input, product.reference);
               created += 1;
             } catch (error) {
               if (error instanceof CatalogError) {
@@ -165,7 +159,17 @@ export class CatalogImportService {
       );
     } catch (error) {
       if (error instanceof ImportAborted) {
-        return { ...first.report, valid: false, created: 0, issues: [error.issue], issueCount: 1 };
+        return {
+          ...first.report,
+          valid: false,
+          products: 0,
+          variants: 0,
+          alreadyImported: 0,
+          created: 0,
+          shops: [],
+          issues: [error.issue],
+          issueCount: 1,
+        };
       }
       throw error;
     }
@@ -178,7 +182,8 @@ export class CatalogImportService {
   ): Promise<{
     report: CatalogImportReport;
     shops: Map<string, Shop>;
-    todo: { product: ImportedProduct; shopId: string; categoryId: string }[];
+    todo: { product: ImportedProduct; shopId: string; input: VendorProductInput }[];
+    session: CatalogImportSession | null;
   }> {
     const parsed = parseCatalogImport(csv, IMPORT_RULES);
     const issues = [...parsed.issues];
@@ -197,21 +202,19 @@ export class CatalogImportService {
       if (shop?.kind === "kemdia") official.add(slug);
       else if (shop?.status === "active") shops.set(slug, shop);
     }
-    const categories: Map<string, { id: string; name: string }> = parsed.products.length
-      ? await this.catalog.categoriesBySlug()
-      : new Map<string, { id: string; name: string }>();
+    const session = parsed.products.length ? await this.catalog.importSession(this.clock()) : null;
     const done = new Map<string, Set<string>>();
     for (const [slug, shop] of shops) {
       const references = parsed.products.filter((p) => p.shop === slug).map((p) => p.reference);
       done.set(slug, await this.catalog.importedReferences(shop.id, references));
     }
 
-    const todo: { product: ImportedProduct; shopId: string; categoryId: string }[] = [];
+    const todo: { product: ImportedProduct; shopId: string; input: VendorProductInput }[] = [];
     let alreadyImported = 0;
     const perShop = new Map<string, number>();
     for (const product of parsed.products) {
       const shop = shops.get(product.shop);
-      const category = categories.get(product.category);
+      const categoryId = session?.categoryId(product.category) ?? null;
       if (!shop) {
         issue({
           line: product.line,
@@ -221,24 +224,32 @@ export class CatalogImportService {
             : `boutique « ${product.shop} » inconnue ou pas active`,
         });
       }
-      if (!category) {
+      if (!categoryId) {
         issue({
           line: product.line,
           column: "categorie",
           message: `catégorie « ${product.category} » inconnue`,
         });
       }
-      if (!shop || !category) continue;
+      if (!shop || !categoryId || !session) continue;
       if (done.get(product.shop)?.has(product.reference.toLowerCase())) {
         alreadyImported += 1;
         continue;
       }
-      todo.push({ product, shopId: shop.id, categoryId: category.id });
+      const input = toInput(product, categoryId);
+      // Mêmes règles que la création d'un produit (texte nettoyé, longueurs, prix) : ce qui passe ici s'écrira
+      const refused = session.check(shop.id, input);
+      if (refused) {
+        issue({ line: product.line, column: null, message: refused });
+        continue;
+      }
+      todo.push({ product, shopId: shop.id, input });
       perShop.set(product.shop, (perShop.get(product.shop) ?? 0) + 1);
     }
     const valid = issueCount === 0;
     return {
       shops,
+      session,
       todo: valid ? todo : [],
       report: {
         mode,
@@ -260,4 +271,19 @@ export class CatalogImportService {
       },
     };
   }
+}
+
+function toInput(product: ImportedProduct, categoryId: string): VendorProductInput {
+  return {
+    title: product.title,
+    description: product.description,
+    brand: product.brand,
+    categoryId,
+    variants: product.variants.map((v) => ({
+      name: v.name || "Standard",
+      price: v.price,
+      compareAtPrice: v.compareAtPrice,
+      stock: v.stock,
+    })),
+  };
 }

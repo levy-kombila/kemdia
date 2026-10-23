@@ -231,6 +231,22 @@ describe("Import du catalogue (PostgreSQL, HTTP)", () => {
     ).toBe(0);
   });
 
+  it("mêmes règles que la création d'un produit : un titre sans lettre ni chiffre est refusé dès la vérification", async () => {
+    const report = matches(
+      CatalogImportReportSchema,
+      (
+        await post(
+          "/api/v1/admin/catalog-import/check",
+          catalogToken,
+          [HEAD, `${shop};T1;!!!!!;${DESC};;${category};;1000;;1`].join("\n"),
+        ).expect(200)
+      ).body,
+    );
+    expect(report).toMatchObject({ valid: false, issueCount: 1 });
+    expect(report.issues[0]).toMatchObject({ line: 2, column: null });
+    expect(report.issues[0]?.message).toMatch(/lettre ou un chiffre/);
+  });
+
   it("boutique suspendue : refusée", async () => {
     const suspended = await partnerShop("SUSPENDED");
     const report = matches(

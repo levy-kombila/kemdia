@@ -20,9 +20,15 @@ const responses = (ok: string) => ({
   "403": problem(
     "`ACCES_REFUSE` (rôle Catalogue requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS`",
   ),
-  "409": problem("`BOUTIQUE_OCCUPEE` : une boutique du fichier est en cours de modification"),
+  "409": problem(
+    "`IMPORT_EN_COURS` (un seul import à la fois) ou `BOUTIQUE_OCCUPEE` (boutique du fichier en cours de modification)",
+  ),
   "413": problem("Fichier de plus de 2 Mo"),
   "415": problem("`FICHIER_IMPORT_INVALIDE` : corps absent ou pas en text/csv"),
+  "422": problem(
+    "`IMPORT_TROP_LONG` : écriture de plus de 2 minutes, rien n'est importé (découper le fichier)",
+  ),
+  "503": problem("Trop de fichiers envoyés en même temps (voir l'en-tête Retry-After)"),
   "429": problem("Trop de requêtes (voir l'en-tête Retry-After)"),
 });
 const bearer = [{ session: [] }];

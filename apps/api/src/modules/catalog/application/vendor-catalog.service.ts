@@ -80,6 +80,20 @@ export interface VendorVariantInput {
   stock: number;
 }
 
+/** Import du catalogue (S8-T03) : catégories lues une fois, vérification et création avec les mêmes règles. */
+export interface CatalogImportSession {
+  /** Identifiant d'une catégorie par son adresse, `null` si inconnue. */
+  categoryId(slug: string): string | null;
+  /** Message de la première règle non respectée, ou `null` : le produit serait créé tel quel. */
+  check(shopId: string, input: VendorProductInput): string | null;
+  /** Crée produit et fiche en attente de modération ; dans la transaction de l'import. */
+  create(
+    shopId: string,
+    input: VendorProductInput,
+    reference: string,
+  ): Promise<VendorProductRecord>;
+}
+
 export interface VendorProductInput extends VendorContentInput {
   variants: readonly VendorVariantInput[];
 }
@@ -158,17 +172,29 @@ export class VendorCatalog {
   }
 
   /**
-   * Import du catalogue par l'équipe (S8-T03, ADR-0058) : même création qu'un vendeur (produit et fiche en attente de
-   * modération), sans la limite de file d'attente d'une boutique, avec la référence du fichier (unique par
-   * boutique). À appeler dans la transaction de l'import.
+   * Import du catalogue par l'équipe (S8-T03, ADR-0058). Les catégories sont lues UNE fois pour tout le fichier ;
+   * `check` applique exactement les règles de la création (texte nettoyé, longueurs, prix, variantes) sans rien
+   * écrire ; `create` crée produit et fiche en attente de modération, sans la limite de file d'attente, avec la
+   * référence du fichier (unique par boutique). `create` s'appelle dans la transaction de l'import.
    */
-  importProduct(
-    shopId: string,
-    input: VendorProductInput,
-    reference: string,
-    now: Date,
-  ): Promise<VendorProductRecord> {
-    return this.createRecord(shopId, input, now, reference.toLowerCase());
+  async importSession(now: Date): Promise<CatalogImportSession> {
+    const tree = await this.tree();
+    const bySlug = new Map((await this.categories.findAll()).map((c) => [c.slug, c.id] as const));
+    return {
+      categoryId: (slug) => bySlug.get(slug) ?? null,
+      check: (shopId, input) => {
+        try {
+          const { record, categoryName } = this.buildRecord(shopId, input, now, tree);
+          derive(record, categoryName);
+          return null;
+        } catch (error) {
+          if (error instanceof CatalogError) return error.message;
+          throw error;
+        }
+      },
+      create: (shopId, input, reference) =>
+        this.createRecord(shopId, input, now, reference.toLowerCase(), tree),
+    };
   }
 
   /** Références d'import déjà présentes dans la boutique (en minuscules). */
@@ -176,22 +202,15 @@ export class VendorCatalog {
     return this.products.importedReferences(shopId, references);
   }
 
-  /** Catégories par adresse (import du catalogue). */
-  async categoriesBySlug(): Promise<Map<string, { id: string; name: string }>> {
-    const all = await this.categories.findAll();
-    return new Map(all.map((c) => [c.slug, { id: c.id, name: c.name }]));
-  }
-
-  private async createRecord(
+  /** Produit et fiche à créer, vérifiés par le domaine ; rien n'est écrit. */
+  private buildRecord(
     shopId: string,
     input: VendorProductInput,
     now: Date,
-    importReference: string | null,
-  ): Promise<VendorProductRecord> {
+    tree: CategoryTree,
+  ): { record: VendorProductRecord; categoryName: string } {
     const content = validateContent(input);
-    const tree = await this.tree();
     const categoryName = this.requireCategory(tree, content.categoryId);
-    if (importReference === null) await this.assertQueueRoom(shopId);
     if (input.variants.length < 1 || input.variants.length > VENDOR_PRODUCT_RULES.variantsMax) {
       throw new CatalogError(
         "PRODUIT_INVALIDE",
@@ -215,34 +234,59 @@ export class VendorCatalog {
       };
     });
     assertDistinctNames(variants);
+    const id = this.random.uuid();
+    const slug = vendorSlug(searchable(content.title), this.random.slugSuffix(6));
+    const moderation = onCreate(now);
+    const record: VendorProductRecord = {
+      id,
+      shopId,
+      // Fiche créée avec l'offre : même identifiant, même adresse ; elle suit l'offre jusqu'à sa publication
+      listingId: id,
+      listingSlug: slug,
+      listingStatus: moderation.status,
+      listingOwnerShopId: shopId,
+      listingVariants: variants.map((v) => ({
+        id: v.listingVariantId,
+        name: v.name,
+        attributes: v.attributes,
+      })),
+      slug,
+      ...content,
+      images: [],
+      ...moderation,
+      shopSuspended: false,
+      createdAt: now,
+      updatedAt: now,
+      variants,
+    };
+    return { record, categoryName };
+  }
+
+  private async createRecord(
+    shopId: string,
+    input: VendorProductInput,
+    now: Date,
+    importReference: string | null,
+    knownTree?: CategoryTree,
+  ): Promise<VendorProductRecord> {
+    const tree = knownTree ?? (await this.tree());
+    if (importReference === null) {
+      // Vérifié avant la file d'attente : même ordre d'erreurs qu'avant (contenu, catégorie, puis file)
+      this.requireCategory(tree, validateContent(input).categoryId);
+      await this.assertQueueRoom(shopId);
+    }
     for (let attempt = 0; attempt < SLUG_ATTEMPTS; attempt += 1) {
-      const id = this.random.uuid();
-      const slug = vendorSlug(searchable(content.title), this.random.slugSuffix(6));
-      const moderation = onCreate(now);
-      const record: VendorProductRecord = {
-        id,
-        shopId,
-        // Fiche créée avec l'offre : même identifiant, même adresse ; elle suit l'offre jusqu'à sa publication
-        listingId: id,
-        listingSlug: slug,
-        listingStatus: moderation.status,
-        listingOwnerShopId: shopId,
-        listingVariants: variants.map((v) => ({
-          id: v.listingVariantId,
-          name: v.name,
-          attributes: v.attributes,
-        })),
-        slug,
-        ...content,
-        images: [],
-        ...moderation,
-        shopSuspended: false,
-        createdAt: now,
-        updatedAt: now,
-        variants,
-      };
-      if (await this.products.insert(record, derive(record, categoryName), importReference))
-        return record;
+      // Nouveaux identifiants, adresse et références à chaque essai (une collision n'annule que cet essai)
+      const { record, categoryName } = this.buildRecord(shopId, input, now, tree);
+      const outcome = await this.products.insert(
+        record,
+        derive(record, categoryName),
+        importReference,
+      );
+      if (outcome === "inserted") return record;
+      if (outcome === "import_reference_taken") {
+        throw new CatalogError("PRODUIT_INVALIDE", "référence déjà importée dans cette boutique");
+      }
     }
     throw new Error("adresse de produit introuvable après plusieurs essais");
   }
@@ -593,7 +637,8 @@ export class VendorCatalog {
         updatedAt: now,
         variants,
       };
-      if (await this.products.insert(record, derive(record, categoryName))) return record;
+      if ((await this.products.insert(record, derive(record, categoryName))) === "inserted")
+        return record;
       // Refus d'unicité : l'adresse… ou une offre de la boutique arrivée entre-temps (relecture S7.5-T02)
       if (await this.products.findOffer(listing.id, shopId)) throw alreadySelling();
     }

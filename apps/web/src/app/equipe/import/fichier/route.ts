@@ -14,6 +14,7 @@ import { sessionToken, staffApi } from "@/lib/staff/staff";
  */
 const HEADERS = { "cache-control": "no-store", "x-content-type-options": "nosniff" } as const;
 let inFlight = 0;
+const TOO_BIG = "Fichier trop gros : 2 Mo au plus une fois enregistré en UTF-8 (découpez-le).";
 
 function reply(status: number, body: object) {
   return Response.json(body, { status, headers: HEADERS });
@@ -40,7 +41,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const announced = Number(request.headers.get("content-length"));
   if (Number.isFinite(announced) && announced > CATALOG_IMPORT_LIMITS.maxBytes)
-    return reply(413, { ok: false, message: "Fichier trop gros : 2 Mo au plus (découpez-le)." });
+    return reply(413, { ok: false, message: TOO_BIG });
   if (inFlight >= 1)
     return reply(503, { ok: false, message: "Un import est déjà en cours : patientez." });
 
@@ -53,6 +54,9 @@ export async function POST(request: Request): Promise<Response> {
     const text = bytes ? decodeCatalogFile(bytes) : null;
     if (!text)
       return reply(415, { ok: false, message: staffErrorMessage("FICHIER_IMPORT_INVALIDE") });
+    // Un fichier Windows-1252 grossit en UTF-8 (« é » : 1 → 2 octets) : l'API refuserait plus de 2 Mo
+    if (new TextEncoder().encode(text).length > CATALOG_IMPORT_LIMITS.maxBytes)
+      return reply(413, { ok: false, message: TOO_BIG });
     const result = await staffApi().importCatalog(token, mode, text);
     if (result.ok) return reply(200, { ok: true, report: result.data });
     if (result.code === "DEUX_FACTEURS_REQUIS")

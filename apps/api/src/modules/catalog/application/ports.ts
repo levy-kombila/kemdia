@@ -249,6 +249,9 @@ export interface VendorProductCursor {
   id: string;
 }
 
+/** Création d'un produit : faite, adresse ou référence déjà prise (l'essai seul est annulé, pas la transaction). */
+export type InsertOutcome = "inserted" | "slug_taken" | "import_reference_taken";
+
 export interface VendorProductRepository {
   findById(id: string): Promise<VendorProductRecord | null>;
   /** Lit le produit et le verrouille (ainsi que ses variantes) jusqu'à la fin de la transaction. */
@@ -262,7 +265,7 @@ export interface VendorProductRepository {
     record: VendorProductRecord,
     derived: DerivedFields,
     importReference?: string | null,
-  ): Promise<boolean>;
+  ): Promise<InsertOutcome>;
   /** Références d'import déjà présentes dans la boutique (comparées sans tenir compte de la casse). */
   importedReferences(shopId: string, references: readonly string[]): Promise<Set<string>>;
   /**

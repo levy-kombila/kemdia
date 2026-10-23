@@ -24,3 +24,5 @@ ignoredBuiltDependencies:
 overrides:
   mysql2: ^3.24.5
   deepmerge-ts: ^8.0.2
+  # GHSA-27r3-jxmh-p828 (2026-10-23) : body-parser < 2.4.0, déni de service ; express ne le relève pas encore
+  body-parser: ^2.4.0
