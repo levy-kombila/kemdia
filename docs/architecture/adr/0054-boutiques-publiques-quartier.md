@@ -35,7 +35,9 @@ Choix du propriétaire (2026-10-23) :
 2. **Ville et quartier vérifiés par l'application** (`shop-place.ts`) contre les listes de `@kemdia/contracts/delivery`
    (le domaine ne dépend pas du contrat) : à la demande d'ouverture et dans « Ma boutique ».
 3. **« Ma boutique »** : `PATCH /vendors/shop` (session, 10 par minute et par compte) change ville, quartier et
-   description, sans nouvel examen ; jamais le nom, l'adresse, le téléphone ni le statut (corps strict). Impossible
+   description, sans nouvel examen ; jamais le nom, l'adresse, le téléphone ni le statut (corps strict). La boutique
+   est relue **sous verrou de ligne**, comme pour une décision de l'équipe : une suspension simultanée n'est jamais
+   annulée. Impossible
    pour une boutique refusée (elle refait une demande) et pour la boutique Kemdia. Une boutique validée (active ou
    suspendue) met aussitôt à jour sa copie publique. Journal : `shop.profile_updated` (ville, quartier, ancienne
    ville, description changée ou non).
@@ -61,8 +63,13 @@ Choix du propriétaire (2026-10-23) :
 - Le vendeur corrige seul sa ville, son quartier et sa description ; le nom reste sous le contrôle de l'équipe.
 - Une ville hors liste (ancienne saisie libre) reste affichée telle quelle jusqu'à la prochaine modification du
   vendeur ; elle n'apparaît pas quand on filtre par une ville officielle.
-- Le site garde les réponses 60 s : une boutique suspendue peut rester visible jusqu'à une minute (ses produits, eux,
-  disparaissent des listes dès la suspension).
+- Les réponses des boutiques sont gardées 60 s au plus (`public, max-age=60`, sans copie périmée) : une boutique
+  suspendue peut rester visible jusqu'à une minute (ses produits, eux, disparaissent des listes dès la suspension).
+- Sur la page d'une boutique, le filtre et le tri par prix utilisent le prix « à partir de » de la fiche (toutes
+  boutiques), alors que la carte montre le prix de la boutique : un écart n'apparaît que si une autre boutique est
+  moins chère sur la même fiche.
+- `since` des boutiques existantes vient de la dernière décision connue (approximatif pour une boutique réactivée
+  avant la migration) ; ensuite il n'est plus jamais réécrit.
 - Nouvelle migration : `db:deploy` puis `db:check` après la fusion.
 
 ## Alternatives écartées

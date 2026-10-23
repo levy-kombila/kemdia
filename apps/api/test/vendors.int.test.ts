@@ -372,6 +372,8 @@ describe("Boutiques (PostgreSQL, HTTP)", () => {
     await decide(shop.id, "approve").expect(200);
 
     const page = await pub(`/api/v1/shops/${shop.slug}`).expect(200);
+    // Une suspension se voit en une minute au plus, même derrière un cache partagé
+    expect(page.headers["cache-control"]).toBe("public, max-age=60");
     const visible = matches(PublicShopSchema, page.body);
     expect(visible).toMatchObject({
       name: shop.name,

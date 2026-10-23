@@ -373,4 +373,26 @@ describe("ShopService : ville, quartier et « Ma boutique » (S7.5-T07)", () => 
       "STATUT_BOUTIQUE_INCOMPATIBLE",
     );
   });
+
+  it("relit la boutique sous verrou : une suspension faite au même instant n'est jamais annulée", async () => {
+    const { service, shops, listing } = setup();
+    const shop = await service.apply(AWA, APPLICATION, CTX);
+    await service.decide(admin, shop.id, "approve", null, CTX);
+    listing.length = 0;
+    // Entre la lecture et le verrou, l'équipe a suspendu la boutique
+    const read = shops.findByOwner.bind(shops);
+    shops.findByOwner = async (owner: string) => ({ ...(await read(owner))!, status: "active" });
+    shops.rows.set(shop.id, {
+      ...shops.rows.get(shop.id)!,
+      status: "suspended",
+      statusReason: "Articles contrefaits signalés",
+    });
+    const updated = await service.updateProfile(
+      AWA,
+      { city: "Oyem", neighborhood: "Centre", description: "Pagnes, wax et tissus de qualité" },
+      CTX,
+    );
+    expect(updated).toMatchObject({ status: "suspended", city: "Oyem" });
+    expect(shops.rows.get(shop.id)?.status).toBe("suspended");
+  });
 });

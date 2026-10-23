@@ -24,6 +24,11 @@ import { AvailabilityRequestSchema, type AvailabilityRequest } from "@kemdia/con
 
 /** Le catalogue change rarement : 60 s de cache côté client et relais (le site, un futur CDN). */
 const CACHE_PUBLIC = "public, max-age=60, stale-while-revalidate=300";
+/**
+ * Boutiques (S7.5-T07) : une suspension doit se voir vite, même derrière un futur CDN (relecture de sécurité) : pas de
+ * copie périmée servie au-delà de la minute.
+ */
+const CACHE_SHOPS = "public, max-age=60";
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /** Le paramètre de requête peut être répété (`?q=a&q=b`) : on garde la première valeur. */
@@ -116,7 +121,7 @@ export class CatalogController {
    * client (`quartier`), puis par nom ; `ville` limite à une ville.
    */
   @Get("shops")
-  @Header("Cache-Control", CACHE_PUBLIC)
+  @Header("Cache-Control", CACHE_SHOPS)
   async shops(
     @Query("ville") city?: unknown,
     @Query("quartier") neighborhood?: unknown,
@@ -132,7 +137,7 @@ export class CatalogController {
 
   /** Page publique d'une boutique active (ses produits : `GET /products?shop=`). */
   @Get("shops/:slug")
-  @Header("Cache-Control", CACHE_PUBLIC)
+  @Header("Cache-Control", CACHE_SHOPS)
   async shop(@Param("slug") slug: string) {
     const shop = await this.catalog.getShop(slug);
     if (!shop) throw new NotFoundException();

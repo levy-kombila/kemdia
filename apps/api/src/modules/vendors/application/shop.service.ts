@@ -144,7 +144,12 @@ export class ShopService {
     const now = this.clock();
     return this.tx.run(async () => {
       await this.shops.lockOwner(accountId);
-      const shop = await this.shops.findByOwner(accountId);
+      const owned = await this.shops.findByOwner(accountId);
+      if (!owned) throw notFound();
+      // Ligne verrouillée comme pour une décision de l'équipe (relecture de sécurité) : une suspension faite au même
+      // instant attend la fin de cette modification, ou celle-ci repart de la boutique déjà suspendue (jamais
+      // l'inverse : le statut n'est jamais réécrit à partir d'une lecture périmée)
+      const shop = await this.shops.lockById(owned.id);
       if (!shop) throw notFound();
       const next = updateProfile(shop, { ...place, description: input.description });
       if (!(await this.shops.update(next, now))) throw nameTaken();
