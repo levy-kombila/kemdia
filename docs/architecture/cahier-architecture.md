@@ -34,6 +34,7 @@
 | **4.23** | 2026-10-23 | S7.5   | Boutiques publiques (ADR-0054) : §3.28 (nouvelle) quartier des boutiques (listes de la livraison), copie publique enrichie `catalog.sellers`, « Ma boutique » (`PATCH /vendors/shop`), annuaire `GET /shops` (quartier du client d'abord), page `GET /shops/{slug}`, filtre `shop` des produits ; pages `/boutiques`, `/boutique/{slug}`, `/vendeur/boutique` ; contrat 2.3.0 |
 | **4.24** | 2026-10-23 | S7.5   | Photo de profil (ADR-0055) : §3.29 (nouvelle) table `identity.account_avatars`, `accounts.avatar_version`, routes `/auth/avatar` (envoi recadré sans métadonnées, lecture privée, retrait), `AccountView.avatar`, relais `/compte/photo`, initiales par défaut ; effacée avec le compte ; contrat 2.4.0                                                                       |
 | **4.25** | 2026-10-23 | S7.5   | Clôture du Sprint 7.5 (v0.8.1) : aucun changement d'architecture ; versions des paquets 0.8.1, contrat de l'API 2.4.0 inchangé                                                                                                                                                                                                                                                |
+| **4.26** | 2026-10-23 | S8     | Avis des clients (ADR-0056) : §3.30 (nouvelle) module `reviews` (schéma `reviews`), achat livré vérifié par les ports de catalog et orders, modération des commentaires par l'équipe Catalogue, note des fiches tirée des avis publiés ; contrat 2.5.0                                                                                                                        |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                                                                          |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                                                                                |
 | **3.7**  | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                                                                                                                   |
@@ -1171,6 +1172,22 @@ Décision : [ADR-0055](adr/0055-photo-de-profil.md). Migration `20261023170000_p
 Version de la photo dans `AccountView.avatar`. Site : relais `/compte/photo` (session, adresse versionnée, cache privé
 du navigateur seulement), initiales sur une couleur propre à la personne, photo dans l'en-tête et « Mon compte ».
 Effacée avec le compte ; présente dans la copie des données. Contrat de l'API : **2.4.0**.
+
+### 3.30 Avis des clients (S8-T01)
+
+Décision : [ADR-0056](adr/0056-avis-clients.md). Nouveau module **`reviews`** (schéma PostgreSQL `reviews`, migration
+`20261023200000_avis_clients`) : un avis par fiche et par compte, réservé à un client livré (ports publics
+`ListingRatings` de catalog et `OrdersPurchases` de orders).
+
+| Route (`/api/v1`)                              | Règle                                                                                                       |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `GET /products/{slug}/reviews`                 | Public : avis publiés (10 par page), moyenne et répartition ; prénom et initiale, « achat vérifié »         |
+| `GET/PUT/DELETE /products/{slug}/reviews/mine` | Session ; écriture réservée à un client livré (`ACHAT_REQUIS`) ; note seule publiée, commentaire en attente |
+| `GET /admin/reviews`, `POST …/{id}/publish     | reject`                                                                                                     | Rôle Catalogue + double authentification ; refus avec motif ; journal `review.published` / `review.rejected` |
+
+La note des fiches (`listings.rating`, `review_count`) est recalculée à partir des avis publiés dans la même transaction
+que chaque changement. Avis dans la copie des données et effacés avec le compte. Site : section « Avis clients » de la
+fiche, page `/equipe/avis`. Contrat de l'API : **2.5.0**.
 
 ## 4. Choix technologiques
 

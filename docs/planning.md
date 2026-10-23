@@ -260,6 +260,22 @@ Clôture (2026-10-23) : [rapport](rapports/2026-10-23_S7.5_cloture.md), version 
 
 Après la bêta : IA « kemdIA » (remplissage depuis la photo, pré-tri des produits), connexion avec Google, distance GPS.
 
+## S8 — Bêta fermée, puis lancement 🚧
+
+Décisions : [ADR-0056](architecture/adr/0056-avis-clients.md) (avis des clients).
+Choix du 2026-10-23 (ouverture) : commencer par **ce qui ne dépend pas du client** ; les tâches qui attendent ses
+réponses (transporteur n° 5, informations légales n° 10, commission n° 3, location du serveur) seront ajoutées à leur
+arrivée. Options recommandées retenues sans être reposées (ta demande du 2026-10-23), listées dans chaque PR.
+Choix du 2026-10-23 (S8-T01) : avis **réservés aux clients livrés** ; **note seule publiée tout de suite**,
+**commentaire relu** par l'équipe Catalogue ; prénom et **initiale** de l'auteur ; avis **effacés avec le compte**.
+
+| ID     | Tâche                                                                                                                                                                                                                         | Statut |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| S8-T01 | Avis des clients (FR-020) : un avis par fiche réservé aux clients livrés, note seule publiée, commentaire relu par l'équipe Catalogue, note de la fiche tirée des avis réels ; contrat 2.5.0 — ADR-0056 — Choix du 2026-10-23 | ✅     |
+| S8-T02 | Bêta fermée : accès sur invitation (vendeurs partenaires, testeurs) et « Signaler un problème »                                                                                                                               | ⏳     |
+| S8-T03 | Import du vrai catalogue (fichier des vendeurs partenaires et de l'équipe)                                                                                                                                                    | ⏳     |
+| S8-T04 | Accueil durablement sous 300 ms (dette S7-T03)                                                                                                                                                                                | ⏳     |
+
 ## S5 à S8 — grandes lignes
 
 - **S5 `orders` + `payments`** (détail ci-dessus) : S5-T01 a supprimé `accounts.failed_logins` / `locked_until` (étape 2 de l'ADR-0022) ;
