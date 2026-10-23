@@ -93,7 +93,7 @@ export const catalogPaths = {
       summary: "Annuaire des boutiques (S7.5-T07)",
       description:
         "Boutiques actives seulement, 24 par page : la boutique officielle d'abord, puis celles du quartier `quartier` (« près de chez moi »), puis par nom. Une valeur mal formée est ignorée.",
-      operationId: "listShops",
+      operationId: "listPublicShops",
       parameters: [
         {
           name: "ville",
@@ -126,7 +126,7 @@ export const catalogPaths = {
       summary: "Page publique d'une boutique (S7.5-T07)",
       description:
         "Boutique active seulement (inconnue, en attente ou suspendue : 404). Ses produits : `GET /products?shop={slug}`. Jamais de téléphone.",
-      operationId: "getShop",
+      operationId: "getPublicShop",
       parameters: [slugParam("Adresse de la boutique")],
       responses: {
         "200": json("PublicShop", "La boutique"),

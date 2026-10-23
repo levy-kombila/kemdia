@@ -23,6 +23,15 @@ describe("Description OpenAPI", () => {
     for (const ref of refs) expect(schemas, ref).toContain(ref);
   });
 
+  it("chaque opération a un identifiant unique (ZAP refuse les doublons)", () => {
+    const ids = Object.values(
+      document.paths as Record<string, Record<string, { operationId?: string }>>,
+    )
+      .flatMap((path) => Object.values(path).map((op) => op.operationId))
+      .filter(Boolean);
+    expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
+  });
+
   it("documente toutes les routes", () => {
     expect(Object.keys(document.paths as object).sort()).toEqual([
       "/api/health",
