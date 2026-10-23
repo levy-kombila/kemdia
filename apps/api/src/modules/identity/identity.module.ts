@@ -35,6 +35,7 @@ import {
   SIGNUP_TICKET_REPOSITORY,
   STAFF_DIRECTORY,
   KNOWN_DEVICE_REPOSITORY,
+  BETA_REPOSITORY,
   type IdentityOptions,
 } from "./application/ports.js";
 import { AesSecretBox } from "./infrastructure/aes-secret-box.js";
@@ -67,6 +68,9 @@ import { SupportService } from "./application/support.service.js";
 import { PrismaKnownDeviceRepository } from "./infrastructure/prisma-known-device.repository.js";
 import { PrismaStaffDirectory } from "./infrastructure/prisma-staff-directory.repository.js";
 import { SupportController } from "./interface/support.controller.js";
+import { BetaService } from "./application/beta.service.js";
+import { PrismaBetaRepository } from "./infrastructure/prisma-beta.repository.js";
+import { AdminBetaController, BetaStatusController } from "./interface/beta.controller.js";
 
 /**
  * Module identity (S4, ADR-0015) : comptes, codes à usage unique, sessions.
@@ -83,6 +87,9 @@ import { SupportController } from "./interface/support.controller.js";
     SecondFactorController,
     SupportController,
     AvatarController,
+    // Bêta fermée (S8-T02, ADR-0057)
+    BetaStatusController,
+    AdminBetaController,
   ],
   providers: [
     // Données personnelles (S7-T08) : copie, effacement — utilisé par le module privacy
@@ -100,6 +107,9 @@ import { SupportController } from "./interface/support.controller.js";
     { provide: STAFF_DIRECTORY, useClass: PrismaStaffDirectory },
     { provide: KNOWN_DEVICE_REPOSITORY, useClass: PrismaKnownDeviceRepository },
     { provide: ROLE_REPOSITORY, useClass: PrismaRoleRepository },
+    // Bêta fermée : réglage et invitations (S8-T02, ADR-0057)
+    BetaService,
+    { provide: BETA_REPOSITORY, useClass: PrismaBetaRepository },
     { provide: TRANSACTION_RUNNER, useClass: PrismaTransactionRunner },
     OtpService,
     SignupService,

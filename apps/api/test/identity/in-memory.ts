@@ -16,7 +16,14 @@ import {
   type GrantOutcome,
   type RoleRepository,
   type TransactionRunner,
+  type BetaInvitationCursor,
+  type BetaRepository,
 } from "../../src/modules/identity/application/ports.js";
+import {
+  invitationStatus,
+  type BetaInvitation,
+  type BetaSettings,
+} from "../../src/modules/identity/domain/beta-invitation.js";
 import type { AuditEntry } from "../../src/modules/audit/index.js";
 import type { StoredRole } from "../../src/modules/identity/domain/role.js";
 import {
@@ -357,3 +364,49 @@ export class RecordingAudit {
 
 /** Sans base : le travail s'exécute tel quel (les dépôts en mémoire n'ont pas de transaction). */
 export const directTransactions: TransactionRunner = { run: (work) => work() };
+
+/** Bêta fermée (S8-T02) : réglage et invitations en mémoire ; inscription ouverte au départ. */
+export class InMemoryBeta implements BetaRepository {
+  state: BetaSettings = { closed: false, updatedBy: null, updatedAt: null };
+  readonly rows = new Map<string, BetaInvitation>();
+
+  settings() {
+    return Promise.resolve({ ...this.state });
+  }
+  saveSettings(closed: boolean, updatedBy: string, now: Date) {
+    this.state = { closed, updatedBy, updatedAt: now };
+    return this.settings();
+  }
+  findByIdentifier(identifier: string) {
+    return Promise.resolve(
+      [...this.rows.values()].find((r) => r.identifier === identifier) ?? null,
+    );
+  }
+  findById(id: string) {
+    return Promise.resolve(this.rows.get(id) ?? null);
+  }
+  save(invitation: BetaInvitation) {
+    this.rows.set(invitation.id, { ...invitation });
+    return Promise.resolve();
+  }
+  markUsed(identifier: string, accountId: string, now: Date) {
+    const row = [...this.rows.values()].find((r) => r.identifier === identifier);
+    if (!row || invitationStatus(row, now) !== "active") return Promise.resolve(false);
+    row.usedAt = now;
+    row.usedBy = accountId;
+    return Promise.resolve(true);
+  }
+  revoke(id: string, now: Date) {
+    const row = this.rows.get(id);
+    if (!row || row.usedAt) return Promise.resolve(false);
+    row.revokedAt = now;
+    return Promise.resolve(true);
+  }
+  list(limit: number, after?: BetaInvitationCursor) {
+    const items = [...this.rows.values()]
+      .filter((r) => !after || r.createdAt < after.createdAt)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
+    return Promise.resolve({ items, next: null });
+  }
+}

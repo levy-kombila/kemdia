@@ -10,6 +10,7 @@ import {
   Truck,
 } from "lucide-react";
 import Link from "next/link";
+import { ReportProblemLink } from "@/components/feedback/ReportProblemLink";
 import { Logo } from "@/components/ui/Logo";
 import { INFO_PAGES, SITE, type InfoSlug } from "@/lib/site";
 
@@ -56,6 +57,10 @@ export function Footer() {
             </li>
             <li className="flex items-center gap-2">
               <Headset className="text-brand-500 size-4" aria-hidden /> 7j/7, de 8 h à 20 h
+            </li>
+            {/* Bêta (S8-T02) : bouton visible sur toutes les pages */}
+            <li>
+              <ReportProblemLink className="inline-flex items-center gap-2 rounded-full border border-white/20 px-3 py-1.5 font-semibold text-white hover:bg-white/10" />
             </li>
           </ul>
         </div>

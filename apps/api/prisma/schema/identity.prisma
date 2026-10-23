@@ -51,35 +51,38 @@ enum Role {
 /// Compte client (FR-001). Mot de passe : hachage Argon2id uniquement.
 model Account {
   /// BR-042 : identifiant public UUID
-  id                 String         @id @db.Uuid
-  firstName          String         @map("first_name") @db.VarChar(60)
-  lastName           String         @map("last_name") @db.VarChar(60)
-  email              String?        @unique @db.VarChar(254)
-  phone              String?        @unique @db.VarChar(13)
-  passwordHash       String         @map("password_hash") @db.VarChar(255)
-  passwordVersion    Int            @default(0) @map("password_version")
-  status             AccountStatus  @default(PENDING)
-  emailVerifiedAt    DateTime?      @map("email_verified_at") @db.Timestamptz(3)
-  phoneVerifiedAt    DateTime?      @map("phone_verified_at") @db.Timestamptz(3)
-  sessions           Session[]
-  resetTickets       ResetTicket[]
-  roles              AccountRole[]
-  secondFactor       SecondFactor?
-  recoveryCodes      RecoveryCode[]
-  knownDevices       KnownDevice[]
+  id                  String           @id @db.Uuid
+  firstName           String           @map("first_name") @db.VarChar(60)
+  lastName            String           @map("last_name") @db.VarChar(60)
+  email               String?          @unique @db.VarChar(254)
+  phone               String?          @unique @db.VarChar(13)
+  passwordHash        String           @map("password_hash") @db.VarChar(255)
+  passwordVersion     Int              @default(0) @map("password_version")
+  status              AccountStatus    @default(PENDING)
+  emailVerifiedAt     DateTime?        @map("email_verified_at") @db.Timestamptz(3)
+  phoneVerifiedAt     DateTime?        @map("phone_verified_at") @db.Timestamptz(3)
+  sessions            Session[]
+  resetTickets        ResetTicket[]
+  roles               AccountRole[]
+  secondFactor        SecondFactor?
+  recoveryCodes       RecoveryCode[]
+  knownDevices        KnownDevice[]
   /// Photo de profil (S7.5-T08) : version = 16 premiers caractères de son empreinte ; vide = initiales
-  avatarVersion      String?        @map("avatar_version") @db.Char(16)
-  avatar             AccountAvatar?
-  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  avatarVersion       String?          @map("avatar_version") @db.Char(16)
+  avatar              AccountAvatar?
+  /// Bêta fermée (S8-T02) : invitations envoyées (équipe) et celle qui a permis de créer ce compte
+  betaInvitationsSent BetaInvitation[] @relation("BetaInvitationSentBy")
+  betaInvitationUsed  BetaInvitation[] @relation("BetaInvitationUsedBy")
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
   /// Preuve du consentement (S7-T08, loi 001/2011 modifiée art. 72 et 74) : conditions acceptées, 18 ans ou plus
-  termsAcceptedAt    DateTime?      @map("terms_accepted_at") @db.Timestamptz(3)
-  adultConfirmedAt   DateTime?      @map("adult_confirmed_at") @db.Timestamptz(3)
+  termsAcceptedAt     DateTime?        @map("terms_accepted_at") @db.Timestamptz(3)
+  adultConfirmedAt    DateTime?        @map("adult_confirmed_at") @db.Timestamptz(3)
   /// Dernière connexion ou visite : compte inactif 3 ans → prévenu, puis effacé 30 jours après (S7-T08)
-  lastActiveAt       DateTime       @default(now()) @map("last_active_at") @db.Timestamptz(3)
-  inactivityNoticeAt DateTime?      @map("inactivity_notice_at") @db.Timestamptz(3)
+  lastActiveAt        DateTime         @default(now()) @map("last_active_at") @db.Timestamptz(3)
+  inactivityNoticeAt  DateTime?        @map("inactivity_notice_at") @db.Timestamptz(3)
   /// Compte effacé à la demande ou pour inactivité (S7-T08) : ni e-mail, ni téléphone, désactivé
-  deletedAt          DateTime?      @map("deleted_at") @db.Timestamptz(3)
+  deletedAt           DateTime?        @map("deleted_at") @db.Timestamptz(3)
 
   @@map("accounts")
   @@schema("identity")
@@ -256,5 +259,49 @@ model AccountAvatar {
   updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
 
   @@map("account_avatars")
+  @@schema("identity")
+}
+
+/// Bêta fermée (S8-T02, ADR-0057) : réglage unique (ligne 1). `closed` : seules les adresses invitées s'inscrivent.
+/// Les comptes déjà créés se connectent toujours.
+model BetaSettings {
+  id        Int      @id @db.SmallInt
+  closed    Boolean  @default(false)
+  updatedBy String?  @map("updated_by") @db.Uuid
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+
+  @@map("beta_settings")
+  @@schema("identity")
+}
+
+enum BetaInvitationKind {
+  PARTNER_VENDOR
+  TESTER
+
+  @@map("beta_invitation_kind")
+  @@schema("identity")
+}
+
+/// Invitation à la bêta fermée (S8-T02) : une ligne par adresse (relancer = repartir pour 30 jours). Elle sert une
+/// seule fois : le compte créé avec cette adresse la marque utilisée. Effacée avec ce compte.
+model BetaInvitation {
+  id         String             @id @db.Uuid
+  /// E-mail ou mobile normalisés, comme sur le compte
+  identifier String             @unique @db.VarChar(254)
+  kind       BetaInvitationKind
+  invitedBy  String?            @map("invited_by") @db.Uuid
+  inviter    Account?           @relation("BetaInvitationSentBy", fields: [invitedBy], references: [id], onDelete: SetNull)
+  usedBy     String?            @map("used_by") @db.Uuid
+  user       Account?           @relation("BetaInvitationUsedBy", fields: [usedBy], references: [id], onDelete: Cascade)
+  usedAt     DateTime?          @map("used_at") @db.Timestamptz(3)
+  revokedAt  DateTime?          @map("revoked_at") @db.Timestamptz(3)
+  expiresAt  DateTime           @map("expires_at") @db.Timestamptz(3)
+  /// Dernière invitation ou relance
+  createdAt  DateTime           @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt(sort: Desc), id(sort: Desc)])
+  @@index([usedBy])
+  @@index([invitedBy])
+  @@map("beta_invitations")
   @@schema("identity")
 }

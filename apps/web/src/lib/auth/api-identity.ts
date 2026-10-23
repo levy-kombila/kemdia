@@ -1,5 +1,6 @@
 import "server-only";
 import {
+  BetaStatusSchema,
   CLIENT_IP_HEADER,
   IDENTITY_ERROR_CODES,
   CurrentSessionSchema,
@@ -15,6 +16,7 @@ import {
   SignupStartedSchema,
   SignupVerifiedSchema,
   type AccountView,
+  type BetaStatus,
   type CurrentSession,
   type DeviceNotMeResult,
   type OpenedSession,
@@ -115,6 +117,8 @@ export function createIdentityApi(options: IdentityApiOptions) {
   }
 
   return {
+    /** Bêta fermée (S8-T02) : l'inscription est-elle réservée aux invités ? */
+    betaStatus: (): Promise<ApiResult<BetaStatus>> => call("GET", "/beta", BetaStatusSchema),
     signup: (input: SignupInput): Promise<ApiResult<SignupStarted>> =>
       call("POST", "/signup", SignupStartedSchema, { body: input }),
     verifySignup: (

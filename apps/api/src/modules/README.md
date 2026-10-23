@@ -1,7 +1,7 @@
 # Modules métier de l'API
 
 Un dossier par module ([ADR-0006](../../../../docs/architecture/adr/0006-monolithe-modulaire-7-modules.md)) :
-`catalog` (S3), `identity` et `notifications` (S4), `orders` et `payments` (S5), `vendors` (S6), `shipping` et `privacy` (S7), `reviews` (S8).
+`catalog` (S3), `identity` et `notifications` (S4), `orders` et `payments` (S5), `vendors` (S6), `shipping` et `privacy` (S7), `reviews` et `feedback` (S8).
 
 `privacy` (S7-T08, [ADR-0047](../../../../docs/architecture/adr/0047-donnees-personnelles-apdpvp.md)) n'a pas de
 données à lui : il assemble les classes `XxxPersonalData` que chaque module exporte (copie, empêchements, effacement)

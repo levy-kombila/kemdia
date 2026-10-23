@@ -60,7 +60,7 @@ const register = (identifier: string, id = uuid()) =>
 
 beforeEach(async () => {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "identity"."account_avatars", "identity"."known_devices", "identity"."recovery_codes", "identity"."second_factors", "identity"."reset_tickets", "identity"."login_guards", "identity"."sessions", "identity"."signup_tickets", "identity"."otp_challenges", "identity"."account_roles", "identity"."accounts"',
+    'TRUNCATE "identity"."account_avatars", "identity"."known_devices", "identity"."recovery_codes", "identity"."second_factors", "identity"."reset_tickets", "identity"."login_guards", "identity"."sessions", "identity"."signup_tickets", "identity"."otp_challenges", "identity"."account_roles", "identity"."beta_invitations", "identity"."accounts"',
   );
 });
 afterAll(() => prisma.$disconnect());

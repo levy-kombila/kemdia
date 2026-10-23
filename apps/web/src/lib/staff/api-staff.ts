@@ -1,5 +1,22 @@
 import "server-only";
 import {
+  AdminProblemReportPageSchema,
+  AdminProblemReportSchema,
+  BetaInvitationCreatedSchema,
+  BetaInvitationPageSchema,
+  BetaInvitationSchema,
+  BetaSettingsSchema,
+  LIST_CURSOR_PATTERN,
+  PROBLEM_ERROR_CODES,
+  type AdminProblemReport,
+  type AdminProblemReportPage,
+  type BetaInvitation,
+  type BetaInvitationCreated,
+  type BetaInvitationKind,
+  type BetaInvitationPage,
+  type BetaSettings,
+  type ProblemErrorCode,
+  type ProblemStatus,
   AdminReviewPageSchema,
   AdminReviewSchema,
   REVIEW_ERROR_CODES,
@@ -142,6 +159,8 @@ export type StaffFailureCode =
   | CouponErrorCode
   // Avis des clients (S8-T01)
   | ReviewErrorCode
+  // Signalements (S8-T02)
+  | ProblemErrorCode
   | "INDISPONIBLE";
 export type StaffFailure = { ok: false; code: StaffFailureCode; retryAfterSeconds?: number };
 export type StaffResult<T> = { ok: true; data: T } | StaffFailure;
@@ -165,6 +184,7 @@ const KNOWN_CODES: readonly StaffFailureCode[] = [
   ...PAYMENT_ERROR_CODES,
   ...COUPON_ERROR_CODES,
   ...REVIEW_ERROR_CODES,
+  ...PROBLEM_ERROR_CODES,
 ];
 /** Numéro de commande (« KMD-7F3K9Q ») : vérifié avant de construire l'adresse de l'API. */
 const ORDER_REFERENCE = /^KMD-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/;
@@ -498,6 +518,78 @@ export function createStaffApi(options: StaffApiOptions) {
             decision === "reject" ? { version, reason: reason ?? "" } : { version },
           )
         : Promise.resolve(notFound("AVIS_INTROUVABLE"));
+    },
+
+    // --- Bêta fermée (S8-T02, ADR-0057 ; administrateurs) ---
+    betaSettings: (token: string): Promise<StaffResult<BetaSettings>> =>
+      call("GET", "/admin/beta/settings", token, BetaSettingsSchema),
+    setBetaClosed: (token: string, closed: boolean): Promise<StaffResult<BetaSettings>> =>
+      call("PUT", "/admin/beta/settings", token, BetaSettingsSchema, { closed }),
+    betaInvitations: (
+      token: string,
+      params: { after?: string },
+    ): Promise<StaffResult<BetaInvitationPage>> => {
+      const query = new URLSearchParams({ limit: "50" });
+      if (params.after && LIST_CURSOR_PATTERN.test(params.after)) query.set("after", params.after);
+      return call(
+        "GET",
+        `/admin/beta/invitations?${query.toString()}`,
+        token,
+        BetaInvitationPageSchema,
+      );
+    },
+    inviteToBeta: (
+      token: string,
+      identifier: string,
+      kind: BetaInvitationKind,
+    ): Promise<StaffResult<BetaInvitationCreated>> =>
+      call("POST", "/admin/beta/invitations", token, BetaInvitationCreatedSchema, {
+        identifier,
+        kind,
+      }),
+    revokeBetaInvitation: (
+      token: string,
+      invitationId: string,
+    ): Promise<StaffResult<BetaInvitation>> => {
+      const invitation = id(invitationId);
+      return invitation
+        ? call(
+            "POST",
+            `/admin/beta/invitations/${invitation}/revoke`,
+            token,
+            BetaInvitationSchema,
+            {},
+          )
+        : Promise.resolve(notFound("INVITATION_INTROUVABLE"));
+    },
+
+    // --- Signalements (S8-T02 ; service client) ---
+    problems: (
+      token: string,
+      params: { status: ProblemStatus; after?: string },
+    ): Promise<StaffResult<AdminProblemReportPage>> => {
+      const query = new URLSearchParams({ status: params.status });
+      if (params.after && LIST_CURSOR_PATTERN.test(params.after)) query.set("after", params.after);
+      return call(
+        "GET",
+        `/admin/problems?${query.toString()}`,
+        token,
+        AdminProblemReportPageSchema,
+      );
+    },
+    setProblemStatus: (
+      token: string,
+      problemId: string,
+      status: ProblemStatus,
+      version: string,
+    ): Promise<StaffResult<AdminProblemReport>> => {
+      const problem = id(problemId);
+      return problem
+        ? call("POST", `/admin/problems/${problem}/status`, token, AdminProblemReportSchema, {
+            status,
+            version,
+          })
+        : Promise.resolve(notFound("SIGNALEMENT_INTROUVABLE"));
     },
 
     // --- Modération des produits (S6-T02, modérateurs et administrateurs) ---

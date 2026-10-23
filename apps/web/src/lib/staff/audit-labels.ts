@@ -31,6 +31,11 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<AuditAction, string>> = {
   "shop.profile_updated": "Boutique modifiée par le vendeur",
   "review.published": "Avis publié",
   "review.rejected": "Avis refusé",
+  // Bêta fermée et signalements (S8-T02)
+  "settings.beta_updated": "Inscription ouverte ou réservée aux invités",
+  "beta.invited": "Invitation à la bêta",
+  "beta.invitation_revoked": "Invitation annulée",
+  "problem.updated": "Signalement suivi",
   "product.submitted": "Produit envoyé à la modération",
   "product.approved": "Produit validé",
   "product.rejected": "Produit refusé",
@@ -90,4 +95,6 @@ export const AUDIT_TARGET_LABELS = {
   product: "produit",
   listing: "fiche",
   review: "avis",
+  invitation: "invitation",
+  problem: "signalement",
 } as const;

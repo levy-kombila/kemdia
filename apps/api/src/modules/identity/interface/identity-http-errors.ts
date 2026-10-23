@@ -38,6 +38,11 @@ const STATUS: Record<IdentityErrorCode, number> = {
   ALERTE_INVALIDE: HttpStatus.GONE,
   PHOTO_INVALIDE: HttpStatus.UNPROCESSABLE_ENTITY,
   PHOTO_ABSENTE: HttpStatus.NOT_FOUND,
+  // Bêta fermée (S8-T02)
+  INVITATION_REQUISE: HttpStatus.FORBIDDEN,
+  INVITATION_INTROUVABLE: HttpStatus.NOT_FOUND,
+  INVITATION_UTILISEE: HttpStatus.CONFLICT,
+  COMPTE_EXISTANT: HttpStatus.CONFLICT,
 };
 
 /** Exécute un cas d'utilisation ; une erreur métier devient une réponse HTTP avec son code. */

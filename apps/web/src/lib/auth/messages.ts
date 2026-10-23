@@ -42,6 +42,12 @@ const MESSAGES: Record<AuthErrorCode, string> = {
   PHOTO_INVALIDE:
     "Photo refusée : JPEG, PNG ou WebP de 5 Mo au plus, 200 pixels au moins de chaque côté.",
   PHOTO_ABSENTE: "Vous n'avez pas encore de photo de profil.",
+  // Bêta fermée (S8-T02)
+  INVITATION_REQUISE:
+    "Kemdia est en bêta fermée : seules les adresses invitées peuvent créer un compte. Utilisez l'adresse qui a reçu l'invitation (valable 30 jours).",
+  INVITATION_INTROUVABLE: "Invitation introuvable.",
+  INVITATION_UTILISEE: "Cette invitation a déjà servi : le compte existe, elle ne s'annule plus.",
+  COMPTE_EXISTANT: "Cette adresse a déjà un compte Kemdia : inutile de l'inviter.",
   // Double authentification de l'équipe (S6-T03) : écrans plus tard au S6, messages prêts
   MOT_DE_PASSE_INCORRECT: "Mot de passe incorrect.",
   DEUX_FACTEURS_INDISPONIBLE:

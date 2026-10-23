@@ -148,6 +148,31 @@ export function renderEmail(message: OtpMessage): Email {
     };
   }
 
+  if (message.kind === "beta-invitation") {
+    const until = message.expiresAt.toLocaleDateString("fr-FR", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "Africa/Libreville",
+    });
+    const subject = "Vous êtes invité à la bêta de Kemdia";
+    const lines = [
+      "L'équipe Kemdia vous invite à essayer le site avant son ouverture au public.",
+      `Créez votre compte avec CETTE adresse e-mail, avant le ${until} : « Créer un compte » sur le site. Un code de vérification vous sera envoyé.`,
+      "Pendant la bêta, le bouton « Signaler un problème » nous aide à corriger ce qui ne va pas.",
+      "Si vous ne connaissez pas Kemdia, ignorez cet e-mail : aucun compte n'est créé sans vous.",
+    ];
+    const button = message.link
+      ? `<p style="margin:0 0 16px"><a href="${escapeHtml(message.link)}" style="display:inline-block;background:#ea580c;color:#ffffff;padding:10px 16px;border-radius:999px;text-decoration:none;font-weight:700">Créer mon compte</a></p>`
+      : "";
+    return {
+      to: message.to,
+      subject,
+      text: ["Kemdia", "", ...lines, ...(message.link ? ["", message.link] : [])].join("\n"),
+      html: layout(subject, lines).replace("</div></body>", `${button}</div></body>`),
+    };
+  }
+
   if (message.kind === "password-changed") {
     const lines = [
       "Le mot de passe de votre compte Kemdia vient d'être modifié, et vos autres appareils ont été déconnectés.",

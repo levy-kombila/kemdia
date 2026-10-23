@@ -116,3 +116,14 @@ test("S8-T01 : avis clients sur la fiche produit — réservés aux clients livr
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Publier mon avis" })).toHaveCount(0);
 });
+
+test("S8-T02 : « Signaler un problème » — bouton sur chaque page, compte connecté exigé", async ({
+  page,
+}) => {
+  await page.goto("/boutiques");
+  await page.getByRole("link", { name: "Signaler un problème" }).click();
+  // Visiteur : connexion d'abord, puis retour au formulaire avec la page d'origine (chemin seulement)
+  await expect(page).toHaveURL(
+    /\/connexion\?retour=%2Fsignaler-un-probleme%3Fdepuis%3D%252Fboutiques$/,
+  );
+});

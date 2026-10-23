@@ -1,6 +1,15 @@
 import { z } from "zod";
 import {
   API_ERROR_CODES,
+  BETA_INVITATION_KINDS,
+  BETA_INVITATION_PAGE_DEFAULT,
+  BETA_INVITATION_PAGE_MAX,
+  BETA_INVITATION_STATUSES,
+  PROBLEM_CATEGORIES,
+  PROBLEM_LIMITS,
+  PROBLEM_PAGE_DEFAULT,
+  PROBLEM_PAGE_MAX,
+  PROBLEM_STATUSES,
   REVIEW_LIMITS,
   REVIEW_PAGE_DEFAULT,
   REVIEW_PAGE_MAX,
@@ -611,6 +620,9 @@ export const AccountDataExportSchema = z
     avis: z
       .array(z.record(z.string(), z.unknown()))
       .describe("Avis donnés sur des produits (S8-T01)"),
+    signalements: z
+      .array(z.record(z.string(), z.unknown()))
+      .describe("Problèmes signalés pendant la bêta (S8-T02)"),
   })
   .meta({
     id: "AccountDataExport",
@@ -754,6 +766,8 @@ export const AuditEventSchema = z
           "product",
           "listing",
           "review",
+          "invitation",
+          "problem",
         ]),
         id: uuid,
       })
@@ -2731,3 +2745,155 @@ export const ReviewRejectRequestSchema = z
 export type ReviewRejectRequest = z.infer<typeof ReviewRejectRequestSchema>;
 
 export const ReviewIdParamsSchema = z.strictObject({ reviewId: uuidInput });
+
+// --- Bêta fermée et « Signaler un problème » (S8-T02, ADR-0057) ---
+
+/** Public : l'inscription est-elle réservée aux personnes invitées ? */
+export const BetaStatusSchema = z
+  .object({
+    closed: z.boolean().describe("Vrai : seules les adresses invitées peuvent créer un compte"),
+  })
+  .meta({ id: "BetaStatus", description: "État de la bêta fermée" });
+export type BetaStatus = z.infer<typeof BetaStatusSchema>;
+
+export const BetaSettingsSchema = z
+  .object({
+    closed: z.boolean(),
+    updatedAt: z.iso.datetime().nullable().describe("Dernier changement ; null : jamais changé"),
+  })
+  .meta({ id: "BetaSettings", description: "Réglage de la bêta fermée (administrateur)" });
+export type BetaSettings = z.infer<typeof BetaSettingsSchema>;
+
+export const BetaSettingsRequestSchema = z
+  .strictObject({
+    closed: z.boolean().describe("Vrai : inscription sur invitation seulement"),
+  })
+  .meta({ id: "BetaSettingsRequest" });
+export type BetaSettingsRequest = z.infer<typeof BetaSettingsRequestSchema>;
+
+export const BetaInvitationRequestSchema = z
+  .strictObject({
+    identifier: z
+      .string()
+      .max(300)
+      .describe("Adresse e-mail ou mobile gabonais de la personne invitée"),
+    kind: z.enum(BETA_INVITATION_KINDS).describe("Vendeur partenaire ou testeur"),
+  })
+  .meta({ id: "BetaInvitationRequest", description: "Inviter quelqu'un à la bêta" });
+export type BetaInvitationRequest = z.infer<typeof BetaInvitationRequestSchema>;
+
+export const BetaInvitationSchema = z
+  .object({
+    id: uuid,
+    identifier: z.string().describe("Adresse e-mail ou numéro invité (normalisé)"),
+    kind: z.enum(BETA_INVITATION_KINDS),
+    status: z.enum(BETA_INVITATION_STATUSES),
+    expiresAt: z.iso.datetime(),
+    usedAt: z.iso.datetime().nullable().describe("Compte créé à cette date"),
+    createdAt: z.iso.datetime().describe("Dernière invitation (ou relance)"),
+  })
+  .meta({ id: "BetaInvitation" });
+export type BetaInvitation = z.infer<typeof BetaInvitationSchema>;
+
+export const BetaInvitationCreatedSchema = z
+  .object({
+    invitation: BetaInvitationSchema,
+    notified: z
+      .boolean()
+      .describe("Vrai : un e-mail d'invitation est parti ; faux : prévenir la personne soi-même"),
+  })
+  .meta({ id: "BetaInvitationCreated" });
+export type BetaInvitationCreated = z.infer<typeof BetaInvitationCreatedSchema>;
+
+export const BetaInvitationPageSchema = z
+  .object({ items: z.array(BetaInvitationSchema), nextCursor: z.string().nullable() })
+  .meta({
+    id: "BetaInvitationPage",
+    description: "Invitations, de la plus récente à la plus ancienne",
+  });
+export type BetaInvitationPage = z.infer<typeof BetaInvitationPageSchema>;
+
+/** Position opaque dans une liste (date et identifiant, en base64url). */
+export const LIST_CURSOR_PATTERN = /^[A-Za-z0-9_-]{20,120}$/;
+
+export const BetaInvitationListParamsSchema = z.strictObject({
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(BETA_INVITATION_PAGE_MAX)
+    .default(BETA_INVITATION_PAGE_DEFAULT),
+  after: z.string().regex(LIST_CURSOR_PATTERN).optional(),
+});
+export type BetaInvitationListParams = z.infer<typeof BetaInvitationListParamsSchema>;
+
+export const BetaInvitationIdParamsSchema = z.strictObject({ invitationId: uuidInput });
+
+/** « Signaler un problème » : envoyé par un compte connecté. */
+export const ProblemReportRequestSchema = z
+  .strictObject({
+    category: z.enum(PROBLEM_CATEGORIES),
+    message: z
+      .string()
+      .max(PROBLEM_LIMITS.messageMax * 2)
+      .describe(
+        `Ce qui s'est passé (${PROBLEM_LIMITS.messageMin} à ${PROBLEM_LIMITS.messageMax} caractères), sans mot de passe ni code`,
+      ),
+    page: z
+      .string()
+      .max(PROBLEM_LIMITS.pageMax * 2)
+      .nullable()
+      .optional()
+      .describe("Page du site concernée (chemin commençant par « / », sans paramètres)"),
+  })
+  .meta({ id: "ProblemReportRequest", description: "Signaler un problème" });
+export type ProblemReportRequest = z.infer<typeof ProblemReportRequestSchema>;
+
+export const ProblemReportReceiptSchema = z
+  .object({ id: uuid, createdAt: z.iso.datetime() })
+  .meta({ id: "ProblemReportReceipt", description: "Signalement reçu" });
+export type ProblemReportReceipt = z.infer<typeof ProblemReportReceiptSchema>;
+
+/** Signalement vu par le service client. */
+export const AdminProblemReportSchema = z
+  .object({
+    id: uuid,
+    category: z.enum(PROBLEM_CATEGORIES),
+    message: z.string(),
+    page: z.string().nullable(),
+    device: z.string().nullable().describe("Navigateur et système, résumés"),
+    status: z.enum(PROBLEM_STATUSES),
+    reporter: z
+      .object({
+        name: z.string().describe("Prénom et nom"),
+        email: z.string().nullable().describe("Adresse e-mail vérifiée, pour répondre"),
+      })
+      .nullable()
+      .describe("null : compte supprimé depuis"),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime().describe("Dernier changement : à renvoyer comme `version`"),
+  })
+  .meta({ id: "AdminProblemReport" });
+export type AdminProblemReport = z.infer<typeof AdminProblemReportSchema>;
+
+export const AdminProblemReportPageSchema = z
+  .object({ items: z.array(AdminProblemReportSchema), nextCursor: z.string().nullable() })
+  .meta({ id: "AdminProblemReportPage" });
+export type AdminProblemReportPage = z.infer<typeof AdminProblemReportPageSchema>;
+
+export const ProblemReportListParamsSchema = z.strictObject({
+  status: z.enum(PROBLEM_STATUSES).default("new"),
+  limit: z.coerce.number().int().min(1).max(PROBLEM_PAGE_MAX).default(PROBLEM_PAGE_DEFAULT),
+  after: z.string().regex(LIST_CURSOR_PATTERN).optional(),
+});
+export type ProblemReportListParams = z.infer<typeof ProblemReportListParamsSchema>;
+
+export const ProblemReportStatusRequestSchema = z
+  .strictObject({
+    status: z.enum(PROBLEM_STATUSES),
+    version: z.iso.datetime().describe("`updatedAt` lu : refus si le signalement a changé depuis"),
+  })
+  .meta({ id: "ProblemReportStatusRequest" });
+export type ProblemReportStatusRequest = z.infer<typeof ProblemReportStatusRequestSchema>;
+
+export const ProblemReportIdParamsSchema = z.strictObject({ problemId: uuidInput });

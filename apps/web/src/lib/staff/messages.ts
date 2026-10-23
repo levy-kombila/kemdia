@@ -6,6 +6,7 @@ import {
   type IdentityErrorCode,
   type PaymentErrorCode,
   type ReviewErrorCode,
+  type ProblemErrorCode,
   type ShippingErrorCode,
   type VendorErrorCode,
 } from "@kemdia/contracts/constants";
@@ -25,6 +26,7 @@ export type StaffMessageCode =
   | PaymentErrorCode
   | CouponErrorCode
   | ReviewErrorCode
+  | ProblemErrorCode
   | "INDISPONIBLE";
 
 /** Finance (S7.5-T05) : paiements, factures, remboursements, encaissements, codes promo. */
@@ -139,6 +141,18 @@ const REVIEW_MESSAGES: Record<ReviewErrorCode, string> = {
 const isReviewCode = (code: StaffMessageCode): code is ReviewErrorCode =>
   Object.hasOwn(REVIEW_MESSAGES, code);
 
+/** Signalements (S8-T02). */
+const PROBLEM_MESSAGES: Record<ProblemErrorCode, string> = {
+  SIGNALEMENT_INVALIDE: "Signalement refusé : décrivez le problème en 10 à 2 000 caractères.",
+  TROP_DE_SIGNALEMENTS: "Trop de signalements en attente pour ce compte.",
+  SIGNALEMENT_INTROUVABLE:
+    "Signalement introuvable : il a peut-être été effacé avec le compte de son auteur.",
+  SIGNALEMENT_MODIFIE:
+    "Ce signalement vient d'être modifié par un collègue. La page a été rechargée : vérifiez avant de recommencer.",
+};
+const isProblemCode = (code: StaffMessageCode): code is ProblemErrorCode =>
+  Object.hasOwn(PROBLEM_MESSAGES, code);
+
 const isIdentityCode = (value: string): value is IdentityErrorCode =>
   (IDENTITY_ERROR_CODES as readonly string[]).includes(value);
 
@@ -154,6 +168,7 @@ export function staffErrorMessage(code: StaffMessageCode, retryAfterSeconds?: nu
   if (isShippingCode(code)) return SHIPPING_MESSAGES[code];
   if (isFinanceCode(code)) return FINANCE_MESSAGES[code];
   if (isReviewCode(code)) return REVIEW_MESSAGES[code];
+  if (isProblemCode(code)) return PROBLEM_MESSAGES[code];
   // 2FA : un code faux n'a rien à voir avec un code reçu par e-mail
   if (code === "CODE_INVALIDE")
     return "Code incorrect. Saisissez le code à 6 chiffres affiché maintenant dans votre application, ou un code de secours.";
@@ -192,6 +207,16 @@ export const STAFF_NOTICES = {
   // Avis des clients (S8-T01)
   "avis-publie": "Avis publié : il compte maintenant dans la note du produit.",
   "avis-refuse": "Avis refusé : son auteur voit le motif et peut le corriger.",
+  // Bêta fermée et signalements (S8-T02)
+  "beta-fermee": "Inscription réservée aux invités : les comptes existants se connectent toujours.",
+  "beta-ouverte": "Inscription ouverte à tous.",
+  "invitation-envoyee": "Invitation enregistrée et envoyée par e-mail (valable 30 jours).",
+  "invitation-a-prevenir":
+    "Invitation enregistrée (valable 30 jours). Aucun e-mail possible pour cette adresse : prévenez la personne vous-même.",
+  "invitation-annulee": "Invitation annulée : cette adresse ne peut plus créer de compte.",
+  "signalement-en-cours": "Signalement pris en charge.",
+  "signalement-resolu": "Signalement résolu : il sera effacé dans 180 jours.",
+  "signalement-rouvert": "Signalement rouvert.",
   // Équipe (S7.5-T04)
   "role-accorde":
     "Rôle accordé : il s'applique dès la prochaine page (double authentification exigée).",
@@ -242,6 +267,7 @@ export function staffErrorFromParam(value: unknown): string | null {
     Object.hasOwn(SHIPPING_MESSAGES, value) ||
     Object.hasOwn(FINANCE_MESSAGES, value) ||
     Object.hasOwn(REVIEW_MESSAGES, value) ||
+    Object.hasOwn(PROBLEM_MESSAGES, value) ||
     isIdentityCode(value)
   )
     return staffErrorMessage(value as StaffMessageCode);

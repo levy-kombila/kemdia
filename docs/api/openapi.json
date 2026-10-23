@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "2.5.0",
+    "version": "2.6.0",
     "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.\n- Factures (S5-T06) : établies au paiement reçu, avoir à l'annulation, numéros par année sans trou, PDF et e-mail.\n- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo.\n- Boutiques (S6-T01) : un client demande à ouvrir sa boutique ; un administrateur la valide (rôle vendeur accordé), la refuse ou la suspend.\n- Double authentification (S6-T03) : obligatoire pour les modérateurs et administrateurs sur les routes d'équipe (`DEUX_FACTEURS_A_ACTIVER`, `DEUX_FACTEURS_REQUIS`).\n- Produits des vendeurs (S6-T02) : invisibles jusqu'à leur validation par la modération (BR-003) ; cachés si la boutique est suspendue.\n- Photos des vendeurs (S6-T04) : fichier envoyé tel quel (JPEG, PNG, WebP, 5 Mo), réencodé en WebP sans métadonnées ; publiques seulement pour un produit visible.\n- Commandes des vendeurs (S6-T07) : chaque boutique accepte ou refuse sa part dans les 24 h (BR-013) ; un refus ou l'absence de réponse annule la commande entière.\n- Données personnelles (S7-T08) : copie JSON, suppression du compte par le titulaire, comptes effacés après 3 ans sans connexion (prévenus 30 jours avant)."
   },
   "servers": [
@@ -47,6 +47,14 @@
     {
       "name": "Avis",
       "description": "Avis des clients sur les fiches (module reviews, S8-T01) : achat livré obligatoire, commentaires lus par l'équipe Catalogue"
+    },
+    {
+      "name": "Bêta",
+      "description": "Bêta fermée (S8-T02) : inscription réservée aux adresses invitées par l'administrateur, quand il le décide"
+    },
+    {
+      "name": "Signalements",
+      "description": "« Signaler un problème » (module feedback, S8-T02) : envoyé par un compte connecté, suivi par le service client"
     },
     {
       "name": "Livraisons",
@@ -13122,6 +13130,720 @@
           }
         }
       }
+    },
+    "/api/v1/auth/beta": {
+      "get": {
+        "tags": ["Bêta"],
+        "summary": "La création de compte est-elle réservée aux invités ?",
+        "description": "Public. Le site l'annonce sur la page d'inscription. Les comptes existants se connectent toujours.",
+        "operationId": "getBetaStatus",
+        "responses": {
+          "200": {
+            "description": "État de la bêta fermée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BetaStatus"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/beta/settings": {
+      "get": {
+        "tags": ["Bêta"],
+        "summary": "Réglage de la bêta fermée",
+        "operationId": "getBetaSettings",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Réglage actuel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BetaSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle Administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Bêta"],
+        "summary": "Ouvrir l'inscription à tous, ou la réserver aux invités",
+        "description": "Journalisé (`settings.beta_updated`).",
+        "operationId": "updateBetaSettings",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BetaSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Réglage enregistré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BetaSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle Administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/beta/invitations": {
+      "get": {
+        "tags": ["Bêta"],
+        "summary": "Invitations, de la plus récente à la plus ancienne",
+        "operationId": "listBetaInvitations",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "Position renvoyée par la page précédente (`nextCursor`)",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{20,120}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Une page d'invitations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BetaInvitationPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Paramètres invalides",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle Administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Bêta"],
+        "summary": "Inviter une adresse (ou relancer son invitation : 30 jours de plus)",
+        "description": "L'invitation est liée à l'adresse : la personne crée son compte avec elle, sans code à recopier. Un e-mail part quand c'est possible (`notified`). Journalisé (`beta.invited`, sans l'adresse).",
+        "operationId": "createBetaInvitation",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BetaInvitationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Invitation enregistrée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BetaInvitationCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle Administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`COMPTE_EXISTANT` : cette adresse a déjà un compte",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`IDENTIFIANT_INVALIDE` : ni e-mail, ni mobile gabonais",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/beta/invitations/{invitationId}/revoke": {
+      "post": {
+        "tags": ["Bêta"],
+        "summary": "Annuler une invitation pas encore utilisée",
+        "description": "Sans effet sur une invitation déjà annulée. Journalisé (`beta.invitation_revoked`).",
+        "operationId": "revokeBetaInvitation",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "invitationId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant de l'invitation",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invitation annulée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BetaInvitation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle Administrateur requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`INVITATION_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`INVITATION_UTILISEE` : le compte a déjà été créé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/feedback/problems": {
+      "post": {
+        "tags": ["Signalements"],
+        "summary": "Signaler un problème",
+        "description": "Compte connecté. Description de 10 à 2 000 caractères ; la page est réduite à son chemin (sans paramètres) ; l'appareil est résumé par l'API. 5 par minute et par compte, 20 signalements non résolus au plus.",
+        "operationId": "reportProblem",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProblemReportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Signalement reçu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemReportReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`SIGNALEMENT_INVALIDE` : description trop courte, trop longue ou interdite",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`TROP_DE_SIGNALEMENTS`, ou trop de requêtes (voir Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/problems": {
+      "get": {
+        "tags": ["Signalements"],
+        "summary": "Signalements à suivre, du plus ancien au plus récent",
+        "description": "Service client, avec la double authentification.",
+        "operationId": "listProblemReports",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["new", "in_progress", "resolved"],
+              "default": "new"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "Position renvoyée par la page précédente (`nextCursor`)",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{20,120}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Une page de signalements",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemReportPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Paramètres invalides",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle Service client requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/problems/{problemId}/status": {
+      "post": {
+        "tags": ["Signalements"],
+        "summary": "Faire avancer un signalement (en cours, résolu, rouvert)",
+        "description": "`version` : `updatedAt` lu ; refus (`SIGNALEMENT_MODIFIE`) si un collègue l'a changé depuis. Journalisé (`problem.updated`).",
+        "operationId": "updateProblemReportStatus",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "problemId",
+            "in": "path",
+            "required": true,
+            "description": "Identifiant du signalement",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProblemReportStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Signalement à jour",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps ou identifiant invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle Service client requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`SIGNALEMENT_INTROUVABLE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`SIGNALEMENT_MODIFIE`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -13192,6 +13914,17 @@
               "additionalProperties": {}
             },
             "description": "Avis donnés sur des produits (S8-T01)"
+          },
+          "signalements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            },
+            "description": "Problèmes signalés pendant la bêta (S8-T02)"
           }
         },
         "required": [
@@ -13203,7 +13936,8 @@
           "livraisons",
           "boutique",
           "journal",
-          "avis"
+          "avis",
+          "signalements"
         ],
         "additionalProperties": {},
         "description": "Copie des données personnelles du compte (droit d'accès et portabilité) : jamais de mot de passe, jeton, code ni photo de pièce d'identité"
@@ -13839,6 +14573,97 @@
         "additionalProperties": false,
         "description": "Fiches, de la plus récente à la plus ancienne"
       },
+      "AdminProblemReport": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "category": {
+            "type": "string",
+            "enum": ["bug", "display", "payment", "delivery", "other"]
+          },
+          "message": {
+            "type": "string"
+          },
+          "page": {
+            "type": ["string", "null"]
+          },
+          "device": {
+            "description": "Navigateur et système, résumés",
+            "type": ["string", "null"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["new", "in_progress", "resolved"]
+          },
+          "reporter": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Prénom et nom"
+                  },
+                  "email": {
+                    "description": "Adresse e-mail vérifiée, pour répondre",
+                    "type": ["string", "null"]
+                  }
+                },
+                "required": ["name", "email"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null : compte supprimé depuis"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "description": "Dernier changement : à renvoyer comme `version`"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "message",
+          "page",
+          "device",
+          "status",
+          "reporter",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "AdminProblemReportPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminProblemReport"
+            }
+          },
+          "nextCursor": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["items", "nextCursor"],
+        "additionalProperties": false
+      },
       "AdminReview": {
         "type": "object",
         "properties": {
@@ -14154,7 +14979,11 @@
               "invoice.downloaded",
               "invoice.resent",
               "device.new_login",
-              "device.not_me"
+              "device.not_me",
+              "settings.beta_updated",
+              "beta.invited",
+              "beta.invitation_revoked",
+              "problem.updated"
             ]
           },
           "actor": {
@@ -14204,7 +15033,9 @@
                       "shop",
                       "product",
                       "listing",
-                      "review"
+                      "review",
+                      "invitation",
+                      "problem"
                     ]
                   },
                   "id": {
@@ -14357,6 +15188,151 @@
         },
         "required": ["ok", "lines"],
         "additionalProperties": false
+      },
+      "BetaInvitation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "identifier": {
+            "type": "string",
+            "description": "Adresse e-mail ou numéro invité (normalisé)"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["partner_vendor", "tester"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "used", "expired", "revoked"]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "usedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Compte créé à cette date"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "description": "Dernière invitation (ou relance)"
+          }
+        },
+        "required": ["id", "identifier", "kind", "status", "expiresAt", "usedAt", "createdAt"],
+        "additionalProperties": false
+      },
+      "BetaInvitationCreated": {
+        "type": "object",
+        "properties": {
+          "invitation": {
+            "$ref": "#/components/schemas/BetaInvitation"
+          },
+          "notified": {
+            "type": "boolean",
+            "description": "Vrai : un e-mail d'invitation est parti ; faux : prévenir la personne soi-même"
+          }
+        },
+        "required": ["invitation", "notified"],
+        "additionalProperties": false
+      },
+      "BetaInvitationPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BetaInvitation"
+            }
+          },
+          "nextCursor": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["items", "nextCursor"],
+        "additionalProperties": false,
+        "description": "Invitations, de la plus récente à la plus ancienne"
+      },
+      "BetaInvitationRequest": {
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Adresse e-mail ou mobile gabonais de la personne invitée"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["partner_vendor", "tester"],
+            "description": "Vendeur partenaire ou testeur"
+          }
+        },
+        "required": ["identifier", "kind"],
+        "additionalProperties": false,
+        "description": "Inviter quelqu'un à la bêta"
+      },
+      "BetaSettings": {
+        "type": "object",
+        "properties": {
+          "closed": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Dernier changement ; null : jamais changé"
+          }
+        },
+        "required": ["closed", "updatedAt"],
+        "additionalProperties": false,
+        "description": "Réglage de la bêta fermée (administrateur)"
+      },
+      "BetaSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "closed": {
+            "type": "boolean",
+            "description": "Vrai : inscription sur invitation seulement"
+          }
+        },
+        "required": ["closed"],
+        "additionalProperties": false
+      },
+      "BetaStatus": {
+        "type": "object",
+        "properties": {
+          "closed": {
+            "type": "boolean",
+            "description": "Vrai : seules les adresses invitées peuvent créer un compte"
+          }
+        },
+        "required": ["closed"],
+        "additionalProperties": false,
+        "description": "État de la bêta fermée"
       },
       "BillingSettings": {
         "type": "object",
@@ -17250,6 +18226,10 @@
               "ALERTE_INVALIDE",
               "PHOTO_INVALIDE",
               "PHOTO_ABSENTE",
+              "INVITATION_REQUISE",
+              "INVITATION_INTROUVABLE",
+              "INVITATION_UTILISEE",
+              "COMPTE_EXISTANT",
               "PANIER_PLEIN",
               "PRODUIT_INDISPONIBLE",
               "VARIANTE_INCONNUE",
@@ -17341,7 +18321,11 @@
               "ACHAT_REQUIS",
               "AVIS_INTROUVABLE",
               "AVIS_DEJA_TRAITE",
-              "AVIS_MODIFIE"
+              "AVIS_MODIFIE",
+              "SIGNALEMENT_INVALIDE",
+              "TROP_DE_SIGNALEMENTS",
+              "SIGNALEMENT_INTROUVABLE",
+              "SIGNALEMENT_MODIFIE"
             ]
           },
           "requestId": {
@@ -17352,6 +18336,71 @@
         "required": ["type", "title", "status"],
         "additionalProperties": false,
         "description": "Erreur au format Problem Details (RFC 9457)"
+      },
+      "ProblemReportReceipt": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Identifiant UUID (BR-042)"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": ["id", "createdAt"],
+        "additionalProperties": false,
+        "description": "Signalement reçu"
+      },
+      "ProblemReportRequest": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": ["bug", "display", "payment", "delivery", "other"]
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "Ce qui s'est passé (10 à 2000 caractères), sans mot de passe ni code"
+          },
+          "page": {
+            "description": "Page du site concernée (chemin commençant par « / », sans paramètres)",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 400
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["category", "message"],
+        "additionalProperties": false,
+        "description": "Signaler un problème"
+      },
+      "ProblemReportStatusRequest": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["new", "in_progress", "resolved"]
+          },
+          "version": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "description": "`updatedAt` lu : refus si le signalement a changé depuis"
+          }
+        },
+        "required": ["status", "version"],
+        "additionalProperties": false
       },
       "ProductApproval": {
         "type": "object",

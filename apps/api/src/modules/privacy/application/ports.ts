@@ -11,6 +11,8 @@ export interface CollectedData {
   journal: Record<string, unknown>;
   /** Avis donnés sur des produits (S8-T01) */
   avis: Record<string, unknown>[];
+  /** Problèmes signalés pendant la bêta (S8-T02) */
+  signalements: Record<string, unknown>[];
 }
 
 /** État d'un compte relu et VERROUILLÉ dans la transaction d'effacement (absent ou déjà effacé : `null`). */

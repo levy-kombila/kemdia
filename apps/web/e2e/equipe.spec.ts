@@ -260,6 +260,9 @@ test.describe("espace de l'équipe : parcours complet", () => {
       ["/equipe/reglages", "Réglages"],
       // Avis clients (S8-T01) : l'administrateur a aussi le rôle Catalogue
       ["/equipe/avis", "Avis clients"],
+      // Bêta fermée et signalements (S8-T02)
+      ["/equipe/beta", "Bêta fermée"],
+      ["/equipe/signalements", "Signalements"],
       // Le journal en dernier : la suite du test le filtre
       ["/equipe/journal", "Journal"],
     ] as const) {

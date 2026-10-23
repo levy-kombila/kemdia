@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { AuditPersonalData } from "../../audit/index.js";
+import { FeedbackPersonalData } from "../../feedback/index.js";
 import { IdentityPersonalData } from "../../identity/index.js";
 import { OrdersPersonalData } from "../../orders/index.js";
 import { PaymentsPersonalData } from "../../payments/index.js";
@@ -27,6 +28,7 @@ export class ModulesPersonalData implements PersonalDataStore {
     private readonly vendors: VendorsPersonalData,
     private readonly audit: AuditPersonalData,
     private readonly reviews: ReviewsPersonalData,
+    private readonly feedback: FeedbackPersonalData,
   ) {}
 
   /** Compte puis panier (même ordre partout : pas d'interblocage avec la création d'une commande). */
@@ -55,6 +57,7 @@ export class ModulesPersonalData implements PersonalDataStore {
       livraisons: await this.shipping.export(references),
       boutique: await this.vendors.export(accountId),
       avis: await this.reviews.export(accountId),
+      signalements: await this.feedback.export(accountId),
       journal: await this.audit.export(accountId),
     };
   }
@@ -68,6 +71,8 @@ export class ModulesPersonalData implements PersonalDataStore {
     await this.vendors.erase(accountId);
     // Avis (S8-T01) : retirés, note des fiches recalculée
     await this.reviews.erase(accountId);
+    // Signalements (S8-T02) : effacés
+    await this.feedback.erase(accountId);
     await this.identity.erase(accountId, now);
   }
 

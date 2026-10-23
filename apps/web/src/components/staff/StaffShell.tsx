@@ -16,6 +16,8 @@ import {
   Truck,
   Users,
   MessageSquare,
+  Bug,
+  Ticket,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -32,6 +34,8 @@ export type StaffSection =
   | "fiches"
   | "avis"
   | "clients"
+  | "signalements"
+  | "beta"
   | "utilisateurs"
   | "factures"
   | "encaissements"
@@ -75,6 +79,15 @@ const LINKS: {
     role: "logistics",
   },
   { id: "clients", label: "Clients", href: "/equipe/clients", icon: LifeBuoy, role: "support" },
+  // Bêta fermée (S8-T02, ADR-0057)
+  {
+    id: "signalements",
+    label: "Signalements",
+    href: "/equipe/signalements",
+    icon: Bug,
+    role: "support",
+  },
+  { id: "beta", label: "Bêta fermée", href: "/equipe/beta", icon: Ticket, role: "admin" },
   // Finance (S7.5-T05, ADR-0052)
   { id: "factures", label: "Factures", href: "/equipe/factures", icon: FileText, role: "finance" },
   {

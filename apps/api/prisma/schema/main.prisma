@@ -12,5 +12,5 @@ generator client {
 datasource db {
   provider = "postgresql"
   // Un schéma PostgreSQL par module : ajouter ici le schéma de chaque nouveau module
-  schemas  = ["audit", "catalog", "identity", "orders", "payments", "reviews", "shipping", "vendors"]
+  schemas  = ["audit", "catalog", "feedback", "identity", "orders", "payments", "reviews", "shipping", "vendors"]
 }

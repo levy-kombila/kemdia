@@ -19,6 +19,8 @@ export { SupportService } from "./application/support.service.js";
 export { SecondFactorService } from "./application/second-factor.service.js";
 export { AccountDirectory, type AccountContact } from "./application/account-directory.service.js";
 export { ROLES, hasRole, type Role } from "./domain/role.js";
+/** Appareil résumé à partir de listes fixes (« Chrome sur Android ») : signalements (S8-T02) */
+export { describeDevice } from "./domain/device.js";
 export type { AccountView } from "./domain/account.js";
 export type { Identifier, OtpChannel } from "./domain/identifier.js";
 export { IdentityError, type IdentityErrorCode } from "./domain/identity-error.js";
