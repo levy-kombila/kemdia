@@ -102,14 +102,14 @@ vérifiés ; architecture respectée (portes `index.ts`, domaine sans framework)
 ## 5. Qualité
 
 - Format et lint sur tout le dépôt, typecheck et build : ✓.
-- API : **RESULTAT_API tests unitaires** ✓, dont invitations (adresse normalisée, journal sans l'adresse, mobile sans
+- API : **651 tests unitaires** ✓, dont invitations (adresse normalisée, journal sans l'adresse, mobile sans
   e-mail, compte existant, relance et annulation, pas d'e-mail en rafale) et inscription en bêta fermée (refus sans
   invitation même pour un compte existant, invitation utilisée, invitation expirée pendant l'inscription),
   signalements (description, page réduite, inversions refusées, limite de 20, version lue).
-- API : **RESULTAT_INT tests d'intégration** sur une vraie base neuve ✓, dont `beta.int.test.ts` (réglage public et
+- API : **251 tests d'intégration** sur une vraie base neuve ✓, dont `beta.int.test.ts` (réglage public et
   réservé à l'administrateur, parcours d'invitation jusqu'au compte, annulation puis relance, invitations simultanées,
   signalement suivi par le service client, contrainte SQL du chemin, copie et effacement).
-- Site : **RESULTAT_WEB tests** ✓ ; contrat : **RESULTAT_CONTRAT tests** ✓ ; description OpenAPI régénérée
+- Site : **491 tests** ✓ ; contrat : **34 tests** ✓ ; description OpenAPI régénérée
   (contrat 2.6.0).
 - Bout en bout (CI) : bouton « Signaler un problème » (connexion exigée, page d'origine gardée), pages
   `/equipe/beta` et `/equipe/signalements` avec l'accessibilité.
