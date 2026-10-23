@@ -59,9 +59,13 @@ const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
  * commandes des vendeurs (S6-T07, ADR-0038) par le port public `VendorOrders` du module orders ; vérification des
  * vendeurs, KYC (S6-T08, ADR-0039), chiffrée par la clé KYC_ENCRYPTION_KEY.
  */
+import { CatalogImportService } from "./application/catalog-import.service.js";
+import { CatalogImportController } from "./interface/catalog-import.controller.js";
 @Module({
   imports: [IdentityModule, AuditModule, CatalogModule, OrdersModule, ReviewsModule],
   controllers: [
+    // Import du vrai catalogue (S8-T03, ADR-0058)
+    CatalogImportController,
     ShopController,
     AdminShopController,
     VendorProductController,
@@ -81,6 +85,7 @@ const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
     VendorsPersonalData,
     ShopService,
     VendorProductService,
+    CatalogImportService,
     ProductModerationService,
     ListingAdminService,
     // Fusion de fiches : les avis suivent (S8-T01)

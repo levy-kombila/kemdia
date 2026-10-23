@@ -82,6 +82,9 @@ const SHIPPING_MESSAGES: Record<
 };
 
 const VENDOR_MESSAGES: Record<VendorErrorCode, string> = {
+  // Import du catalogue (S8-T03)
+  FICHIER_IMPORT_INVALIDE:
+    "Fichier refusé : choisissez le fichier CSV (texte UTF-8, 2 Mo au plus).",
   // Vérification des vendeurs (S6-T08)
   KYC_INVALIDE: "Motif refusé : 5 à 300 caractères.",
   KYC_INTROUVABLE: "Aucun dossier envoyé pour cette boutique.",
@@ -217,6 +220,9 @@ export const STAFF_NOTICES = {
   "signalement-en-cours": "Signalement pris en charge.",
   "signalement-resolu": "Signalement résolu : il sera effacé dans 180 jours.",
   "signalement-rouvert": "Signalement rouvert.",
+  // Import du catalogue (S8-T03)
+  "import-fait":
+    "Catalogue importé : les produits attendent la modération (photos à ajouter par chaque boutique).",
   // Équipe (S7.5-T04)
   "role-accorde":
     "Rôle accordé : il s'applique dès la prochaine page (double authentification exigée).",

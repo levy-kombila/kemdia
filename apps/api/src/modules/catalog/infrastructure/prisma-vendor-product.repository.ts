@@ -165,7 +165,19 @@ export class PrismaVendorProductRepository implements VendorProductRepository {
     throw new Error("offre déplacée pendant son verrouillage");
   }
 
-  async insert(record: VendorProductRecord, derived: DerivedFields): Promise<boolean> {
+  async importedReferences(shopId: string, references: readonly string[]): Promise<Set<string>> {
+    if (references.length === 0) return new Set();
+    const rows = await this.tx.db.$queryRaw<{ ref: string }[]>`
+      SELECT lower("import_reference") AS ref FROM "catalog"."products"
+      WHERE "shop_id" = ${shopId}::uuid AND lower("import_reference") = ANY(${references.map((r) => r.toLowerCase())}::text[])`;
+    return new Set(rows.map((r) => r.ref));
+  }
+
+  async insert(
+    record: VendorProductRecord,
+    derived: DerivedFields,
+    importReference: string | null = null,
+  ): Promise<boolean> {
     if (!this.tx.active) throw new Error("création d'un produit de vendeur hors transaction");
     const db = this.tx.db;
     try {
@@ -199,6 +211,7 @@ export class PrismaVendorProductRepository implements VendorProductRepository {
           shopId: record.shopId,
           listingId: record.listingId,
           slug: record.slug,
+          importReference,
           createdAt: record.createdAt,
           // Recopiés de la fiche par la base ; présents ici parce que les colonnes sont obligatoires
           ...content(record, derived),

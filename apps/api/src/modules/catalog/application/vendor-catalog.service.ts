@@ -153,11 +153,45 @@ export class VendorCatalog {
     private readonly corrections: ListingCorrectionRepository,
   ) {}
 
-  async create(shopId: string, input: VendorProductInput, now: Date): Promise<VendorProductRecord> {
+  create(shopId: string, input: VendorProductInput, now: Date): Promise<VendorProductRecord> {
+    return this.createRecord(shopId, input, now, null);
+  }
+
+  /**
+   * Import du catalogue par l'équipe (S8-T03, ADR-0058) : même création qu'un vendeur (produit et fiche en attente de
+   * modération), sans la limite de file d'attente d'une boutique, avec la référence du fichier (unique par
+   * boutique). À appeler dans la transaction de l'import.
+   */
+  importProduct(
+    shopId: string,
+    input: VendorProductInput,
+    reference: string,
+    now: Date,
+  ): Promise<VendorProductRecord> {
+    return this.createRecord(shopId, input, now, reference.toLowerCase());
+  }
+
+  /** Références d'import déjà présentes dans la boutique (en minuscules). */
+  importedReferences(shopId: string, references: readonly string[]): Promise<Set<string>> {
+    return this.products.importedReferences(shopId, references);
+  }
+
+  /** Catégories par adresse (import du catalogue). */
+  async categoriesBySlug(): Promise<Map<string, { id: string; name: string }>> {
+    const all = await this.categories.findAll();
+    return new Map(all.map((c) => [c.slug, { id: c.id, name: c.name }]));
+  }
+
+  private async createRecord(
+    shopId: string,
+    input: VendorProductInput,
+    now: Date,
+    importReference: string | null,
+  ): Promise<VendorProductRecord> {
     const content = validateContent(input);
     const tree = await this.tree();
     const categoryName = this.requireCategory(tree, content.categoryId);
-    await this.assertQueueRoom(shopId);
+    if (importReference === null) await this.assertQueueRoom(shopId);
     if (input.variants.length < 1 || input.variants.length > VENDOR_PRODUCT_RULES.variantsMax) {
       throw new CatalogError(
         "PRODUIT_INVALIDE",
@@ -207,7 +241,8 @@ export class VendorCatalog {
         updatedAt: now,
         variants,
       };
-      if (await this.products.insert(record, derive(record, categoryName))) return record;
+      if (await this.products.insert(record, derive(record, categoryName), importReference))
+        return record;
     }
     throw new Error("adresse de produit introuvable après plusieurs essais");
   }

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "2.6.0",
+    "version": "2.7.0",
     "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.\n- Factures (S5-T06) : établies au paiement reçu, avoir à l'annulation, numéros par année sans trou, PDF et e-mail.\n- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo.\n- Boutiques (S6-T01) : un client demande à ouvrir sa boutique ; un administrateur la valide (rôle vendeur accordé), la refuse ou la suspend.\n- Double authentification (S6-T03) : obligatoire pour les modérateurs et administrateurs sur les routes d'équipe (`DEUX_FACTEURS_A_ACTIVER`, `DEUX_FACTEURS_REQUIS`).\n- Produits des vendeurs (S6-T02) : invisibles jusqu'à leur validation par la modération (BR-003) ; cachés si la boutique est suspendue.\n- Photos des vendeurs (S6-T04) : fichier envoyé tel quel (JPEG, PNG, WebP, 5 Mo), réencodé en WebP sans métadonnées ; publiques seulement pour un produit visible.\n- Commandes des vendeurs (S6-T07) : chaque boutique accepte ou refuse sa part dans les 24 h (BR-013) ; un refus ou l'absence de réponse annule la commande entière.\n- Données personnelles (S7-T08) : copie JSON, suppression du compte par le titulaire, comptes effacés après 3 ans sans connexion (prévenus 30 jours avant)."
   },
   "servers": [
@@ -51,6 +51,10 @@
     {
       "name": "Bêta",
       "description": "Bêta fermée (S8-T02) : inscription réservée aux adresses invitées par l'administrateur, quand il le décide"
+    },
+    {
+      "name": "Import du catalogue",
+      "description": "Vrai catalogue importé par l'équipe Catalogue depuis un fichier CSV (S8-T03) : vérification, puis import tout ou rien"
     },
     {
       "name": "Signalements",
@@ -13864,6 +13868,200 @@
           }
         }
       }
+    },
+    "/api/v1/admin/catalog-import/check": {
+      "post": {
+        "tags": ["Import du catalogue"],
+        "summary": "Vérifier un fichier du catalogue, sans rien écrire",
+        "description": "Toutes les erreurs (ligne, colonne, message ; les 100 premières), les boutiques et catégories inconnues, les références déjà importées (ignorées).",
+        "operationId": "checkCatalogImport",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Le fichier CSV lui-même (UTF-8, séparateur « ; » ou « , », 2 Mo et 1 000 lignes au plus). En-têtes : boutique, reference, titre, description, marque, categorie, variante, prix, prix_barre, stock.",
+          "content": {
+            "text/csv": {
+              "schema": {
+                "type": "string",
+                "maxLength": 2097152
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Compte rendu de la vérification",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogImportReport"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle Catalogue requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`BOUTIQUE_OCCUPEE` : une boutique du fichier est en cours de modification",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Fichier de plus de 2 Mo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "`FICHIER_IMPORT_INVALIDE` : corps absent ou pas en text/csv",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/catalog-import": {
+      "post": {
+        "tags": ["Import du catalogue"],
+        "summary": "Importer un fichier du catalogue : tout ou rien",
+        "description": "Revérifie tout, puis crée les produits dans une seule transaction, en attente de modération (photos ajoutées ensuite par la boutique). Rien n'est écrit s'il reste une erreur (`valid: false`). Journalisé (`catalog.imported`).",
+        "operationId": "importCatalog",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Le fichier CSV lui-même (UTF-8, séparateur « ; » ou « , », 2 Mo et 1 000 lignes au plus). En-têtes : boutique, reference, titre, description, marque, categorie, variante, prix, prix_barre, stock.",
+          "content": {
+            "text/csv": {
+              "schema": {
+                "type": "string",
+                "maxLength": 2097152
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Compte rendu de l'import",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogImportReport"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCES_REFUSE` (rôle Catalogue requis) ou `DEUX_FACTEURS_A_ACTIVER` / `DEUX_FACTEURS_REQUIS`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`BOUTIQUE_OCCUPEE` : une boutique du fichier est en cours de modification",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Fichier de plus de 2 Mo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "`FICHIER_IMPORT_INVALIDE` : corps absent ou pas en text/csv",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de requêtes (voir l'en-tête Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -15003,7 +15201,8 @@
               "settings.beta_updated",
               "beta.invited",
               "beta.invitation_revoked",
-              "problem.updated"
+              "problem.updated",
+              "catalog.imported"
             ]
           },
           "actor": {
@@ -15773,6 +15972,135 @@
         "required": ["items"],
         "additionalProperties": false,
         "description": "Espèces à encaisser (100 au plus) : livrées d'abord, puis les plus anciennes"
+      },
+      "CatalogImportIssue": {
+        "type": "object",
+        "properties": {
+          "line": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Ligne du fichier (1 = en-têtes) ; 0 : le fichier entier"
+          },
+          "column": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "boutique",
+                  "reference",
+                  "titre",
+                  "description",
+                  "marque",
+                  "categorie",
+                  "variante",
+                  "prix",
+                  "prix_barre",
+                  "stock"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["line", "column", "message"],
+        "additionalProperties": false
+      },
+      "CatalogImportReport": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": ["check", "import"],
+            "description": "check : rien n'est écrit ; import : écrit si tout est valable"
+          },
+          "valid": {
+            "type": "boolean",
+            "description": "Aucune erreur : le fichier peut être importé tel quel"
+          },
+          "rows": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Lignes sous les en-têtes"
+          },
+          "products": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Produits nouveaux (lignes regroupées par boutique et référence)"
+          },
+          "variants": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "alreadyImported": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Produits dont la référence existe déjà dans la boutique : ignorés"
+          },
+          "created": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Produits créés (mode import), en attente de modération"
+          },
+          "shops": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "slug": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "products": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["slug", "name", "products"],
+              "additionalProperties": false
+            }
+          },
+          "issues": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogImportIssue"
+            }
+          },
+          "issueCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Erreurs au total (les 100 premières sont détaillées)"
+          }
+        },
+        "required": [
+          "mode",
+          "valid",
+          "rows",
+          "products",
+          "variants",
+          "alreadyImported",
+          "created",
+          "shops",
+          "issues",
+          "issueCount"
+        ],
+        "additionalProperties": false,
+        "description": "Compte rendu de la vérification ou de l'import"
       },
       "Category": {
         "type": "object",
@@ -18319,6 +18647,7 @@
               "STATUT_KYC_INCOMPATIBLE",
               "KYC_INDISPONIBLE",
               "DOCUMENT_INTROUVABLE",
+              "FICHIER_IMPORT_INVALIDE",
               "FICHE_INTROUVABLE",
               "FICHE_PUBLIEE",
               "FICHE_NON_PUBLIEE",

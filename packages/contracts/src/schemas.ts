@@ -1,6 +1,9 @@
 import { z } from "zod";
 import {
   API_ERROR_CODES,
+  CATALOG_IMPORT_COLUMNS,
+  CATALOG_IMPORT_LIMITS,
+  CATALOG_IMPORT_MODES,
   BETA_INVITATION_KINDS,
   BETA_INVITATION_PAGE_DEFAULT,
   BETA_INVITATION_PAGE_MAX,
@@ -2897,3 +2900,49 @@ export const ProblemReportStatusRequestSchema = z
 export type ProblemReportStatusRequest = z.infer<typeof ProblemReportStatusRequestSchema>;
 
 export const ProblemReportIdParamsSchema = z.strictObject({ problemId: uuidInput });
+
+// --- Import du vrai catalogue (S8-T03, ADR-0058) ---
+
+export const CatalogImportIssueSchema = z
+  .object({
+    line: z.int().nonnegative().describe("Ligne du fichier (1 = en-têtes) ; 0 : le fichier entier"),
+    column: z.enum(CATALOG_IMPORT_COLUMNS).nullable(),
+    message: z.string(),
+  })
+  .meta({ id: "CatalogImportIssue" });
+export type CatalogImportIssue = z.infer<typeof CatalogImportIssueSchema>;
+
+export const CatalogImportReportSchema = z
+  .object({
+    mode: z
+      .enum(CATALOG_IMPORT_MODES)
+      .describe("check : rien n'est écrit ; import : écrit si tout est valable"),
+    valid: z.boolean().describe("Aucune erreur : le fichier peut être importé tel quel"),
+    rows: z.int().nonnegative().describe("Lignes sous les en-têtes"),
+    products: z
+      .int()
+      .nonnegative()
+      .describe("Produits nouveaux (lignes regroupées par boutique et référence)"),
+    variants: z.int().nonnegative(),
+    alreadyImported: z
+      .int()
+      .nonnegative()
+      .describe("Produits dont la référence existe déjà dans la boutique : ignorés"),
+    created: z
+      .int()
+      .nonnegative()
+      .describe("Produits créés (mode import), en attente de modération"),
+    shops: z.array(
+      z.object({ slug: z.string(), name: z.string(), products: z.int().nonnegative() }),
+    ),
+    issues: z.array(CatalogImportIssueSchema).max(CATALOG_IMPORT_LIMITS.errorsMax),
+    issueCount: z
+      .int()
+      .nonnegative()
+      .describe("Erreurs au total (les 100 premières sont détaillées)"),
+  })
+  .meta({
+    id: "CatalogImportReport",
+    description: "Compte rendu de la vérification ou de l'import",
+  });
+export type CatalogImportReport = z.infer<typeof CatalogImportReportSchema>;

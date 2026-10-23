@@ -26,12 +26,15 @@ function isBusy(error: unknown): boolean {
 export class VendorsTransactionRunner implements VendorsTransaction {
   constructor(private readonly tx: TransactionContext) {}
 
-  async run<T>(work: () => Promise<T>): Promise<T> {
+  async run<T>(work: () => Promise<T>, options?: { timeoutMs?: number }): Promise<T> {
     try {
-      return await this.tx.run(async () => {
-        await this.tx.db.$executeRawUnsafe(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'`);
-        return work();
-      }, OPTIONS);
+      return await this.tx.run(
+        async () => {
+          await this.tx.db.$executeRawUnsafe(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'`);
+          return work();
+        },
+        options?.timeoutMs ? { ...OPTIONS, timeout: options.timeoutMs } : OPTIONS,
+      );
     } catch (error) {
       if (isBusy(error)) {
         throw new VendorsError(

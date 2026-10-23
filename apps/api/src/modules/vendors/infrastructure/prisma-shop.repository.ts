@@ -85,6 +85,11 @@ export class PrismaShopRepository implements ShopRepository {
     return row ? toShop(row) : null;
   }
 
+  async findBySlug(slug: string): Promise<Shop | null> {
+    const row = await this.tx.db.shop.findUnique({ where: { slug } });
+    return row ? toShop(row) : null;
+  }
+
   async lockById(id: string): Promise<Shop | null> {
     const rows = await this.tx.db.$queryRaw<{ id: string }[]>`
       SELECT "id" FROM "vendors"."shops" WHERE "id" = ${id}::uuid FOR UPDATE`;

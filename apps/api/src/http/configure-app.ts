@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
+  CATALOG_IMPORT_LIMITS,
   PRODUCT_IMAGE_LIMITS,
   PRODUCT_IMAGE_TYPES,
   SESSION_TOKEN_PATTERN,
@@ -32,6 +33,22 @@ const IMAGE_TYPES: readonly string[] = PRODUCT_IMAGE_TYPES;
 
 const hasSessionToken = (header: string | undefined): boolean =>
   !!header && header.startsWith("Bearer ") && SESSION_TOKEN_PATTERN.test(header.slice(7));
+
+/**
+ * Import du catalogue par l'équipe (S8-T03) : `POST /api/v1/admin/catalog-import` ou `…/check`, corps = le fichier CSV
+ * (texte UTF-8, 2 Mo au plus). Lu en texte SEULEMENT à cette adresse et pour ce type ; la route revérifie tout.
+ */
+const CATALOG_IMPORT_PATH = /^\/api\/v1\/admin\/catalog-import(?:\/check)?\/?(?:\?.*)?$/;
+
+export function isCatalogImport(req: IncomingMessage): boolean {
+  const type = (req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
+  return (
+    req.method === "POST" &&
+    CATALOG_IMPORT_PATH.test(req.url ?? "") &&
+    type === "text/csv" &&
+    hasSessionToken(req.headers.authorization)
+  );
+}
 
 export function isImageUpload(req: IncomingMessage): boolean {
   const type = (req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
@@ -115,6 +132,12 @@ export function configureApp(app: NestExpressApplication, config: AppConfig): vo
   } as NestExpressBodyParserOptions);
   // Photos de produits : corps binaire, à une seule adresse (voir isImageUpload)
   app.useBodyParser("raw", { type: isImageUpload, limit: PRODUCT_IMAGE_LIMITS.maxUploadBytes });
+  // Fichier du catalogue (S8-T03) : texte, à deux adresses seulement (voir isCatalogImport)
+  app.useBodyParser("text", {
+    type: isCatalogImport,
+    limit: CATALOG_IMPORT_LIMITS.maxBytes,
+    defaultCharset: "utf-8",
+  });
   // Qui appelle : visiteur transmis par le site (clé interne) ou adresse directe (S4-T07)
   app.use(clientMiddleware(config));
 

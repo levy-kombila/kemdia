@@ -1,5 +1,8 @@
 import "server-only";
 import {
+  CatalogImportReportSchema,
+  type CatalogImportMode,
+  type CatalogImportReport,
   AdminProblemReportPageSchema,
   AdminProblemReportSchema,
   BetaInvitationCreatedSchema,
@@ -226,21 +229,24 @@ export function createStaffApi(options: StaffApiOptions) {
     token: string,
     schema: z.ZodType<T>,
     body?: object,
+    extra: { csv?: string; timeoutMs?: number } = {},
   ): Promise<StaffResult<T>> {
     // Un jeton mal formé n'est même pas envoyé
     if (!SESSION_TOKEN_PATTERN.test(token)) return { ok: false, code: "SESSION_INVALIDE" };
     const headers = await headersFor(token, "application/json");
     if (body) headers["content-type"] = "application/json";
+    // Fichier du catalogue (S8-T03) : envoyé tel quel, en texte
+    if (extra.csv !== undefined) headers["content-type"] = "text/csv; charset=utf-8";
 
     let response: Response;
     try {
       response = await doFetch(`${options.url}/api/v1${path}`, {
         method,
         headers,
-        body: body ? JSON.stringify(body) : undefined,
+        body: extra.csv ?? (body ? JSON.stringify(body) : undefined),
         cache: "no-store",
         redirect: "error",
-        signal: AbortSignal.timeout(options.timeoutMs),
+        signal: AbortSignal.timeout(extra.timeoutMs ?? options.timeoutMs),
       });
     } catch (error) {
       const timeout = error instanceof DOMException && error.name === "TimeoutError";
@@ -562,6 +568,22 @@ export function createStaffApi(options: StaffApiOptions) {
           )
         : Promise.resolve(notFound("INVITATION_INTROUVABLE"));
     },
+
+    // --- Import du catalogue (S8-T03, ADR-0058 ; équipe Catalogue) ---
+    /** Vérifier (rien n'est écrit) ou importer un fichier CSV ; l'import peut durer jusqu'à 2 minutes. */
+    importCatalog: (
+      token: string,
+      mode: CatalogImportMode,
+      csv: string,
+    ): Promise<StaffResult<CatalogImportReport>> =>
+      call(
+        "POST",
+        mode === "check" ? "/admin/catalog-import/check" : "/admin/catalog-import",
+        token,
+        CatalogImportReportSchema,
+        undefined,
+        { csv, timeoutMs: 150_000 },
+      ),
 
     // --- Signalements (S8-T02 ; service client) ---
     problems: (

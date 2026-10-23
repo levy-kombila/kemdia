@@ -263,6 +263,8 @@ test.describe("espace de l'équipe : parcours complet", () => {
       // Bêta fermée et signalements (S8-T02)
       ["/equipe/beta", "Bêta fermée"],
       ["/equipe/signalements", "Signalements"],
+      // Import du catalogue (S8-T03) : l'administrateur a aussi le rôle Catalogue
+      ["/equipe/import", "Import du catalogue"],
       // Le journal en dernier : la suite du test le filtre
       ["/equipe/journal", "Journal"],
     ] as const) {

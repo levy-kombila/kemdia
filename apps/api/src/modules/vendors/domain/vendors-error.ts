@@ -18,6 +18,8 @@ export type VendorsErrorCode =
   // Produits des vendeurs et modération (S6-T02)
   /** Le compte n'a pas de boutique active (en attente, refusée, suspendue ou aucune). */
   | "BOUTIQUE_INACTIVE"
+  /** Import du catalogue (S8-T03) : le corps n'est pas un fichier CSV (en-tête Content-Type text/csv). */
+  | "FICHIER_IMPORT_INVALIDE"
   /** Un modérateur ne décide jamais pour un produit de sa propre boutique. */
   | "PRODUIT_SUR_SOI_INTERDIT"
   /** Dossier de vérification mal rempli (champ en cause dans le message) — S6-T08 */

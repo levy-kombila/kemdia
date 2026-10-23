@@ -163,6 +163,8 @@ export const AUDIT_ACTIONS = [
   "beta.invitation_revoked",
   /** Signalement d'un problème suivi par le service client (détails : from, to) — S8-T02 */
   "problem.updated",
+  /** Fichier du catalogue importé par l'équipe Catalogue : produits en attente de modération (détails : products, variants, shops, skipped) — S8-T03 */
+  "catalog.imported",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
