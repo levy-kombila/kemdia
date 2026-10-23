@@ -35,6 +35,7 @@
 | **4.24** | 2026-10-23 | S7.5   | Photo de profil (ADR-0055) : §3.29 (nouvelle) table `identity.account_avatars`, `accounts.avatar_version`, routes `/auth/avatar` (envoi recadré sans métadonnées, lecture privée, retrait), `AccountView.avatar`, relais `/compte/photo`, initiales par défaut ; effacée avec le compte ; contrat 2.4.0                                                                       |
 | **4.25** | 2026-10-23 | S7.5   | Clôture du Sprint 7.5 (v0.8.1) : aucun changement d'architecture ; versions des paquets 0.8.1, contrat de l'API 2.4.0 inchangé                                                                                                                                                                                                                                                |
 | **4.26** | 2026-10-23 | S8     | Avis des clients (ADR-0056) : §3.30 (nouvelle) module `reviews` (schéma `reviews`), achat livré vérifié par les ports de catalog et orders, modération des commentaires par l'équipe Catalogue, note des fiches tirée des avis publiés ; contrat 2.5.0                                                                                                                        |
+| **4.27** | 2026-10-23 | S8     | Bêta fermée et signalements (ADR-0057) : §3.31 (nouvelle) réglage `identity.beta_settings` et invitations `identity.beta_invitations` (inscription réservée aux adresses invitées, vérifiée avant l'existence du compte), module `feedback` (schéma `feedback`) « Signaler un problème » suivi par le service client ; contrat 2.6.0                                          |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                                                                          |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                                                                                |
 | **3.7**  | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                                                                                                                   |
@@ -1189,6 +1190,27 @@ La note des fiches (`listings.rating`, `review_count`) est recalculée à partir
 que chaque changement, **fiche verrouillée** d'abord (avis simultanés). Une **fusion de fiches** déplace les avis vers la
 cible (le plus récent d'un même client reste). Une fiche retirée de la vente laisse son auteur voir et retirer son avis. Avis dans la copie des données et effacés avec le compte. Site : section « Avis clients » de la
 fiche, page `/equipe/avis`. Contrat de l'API : **2.5.0**.
+
+### 3.31 Bêta fermée et « Signaler un problème » (S8-T02)
+
+Décision : [ADR-0057](adr/0057-beta-fermee-signalements.md). Migration `20261023230000_beta_fermee` : réglage unique
+`identity.beta_settings` (ouvert au départ), invitations `identity.beta_invitations` (une ligne par adresse, 30 jours,
+une seule utilisation), nouveau module **`feedback`** (schéma `feedback`, table `problem_reports`).
+
+| Route (`/api/v1`)                                          | Règle                                                                                                                                                      |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /auth/beta`                                           | Public : l'inscription est-elle réservée aux invités ?                                                                                                     |
+| `GET/PUT /admin/beta/settings`                             | Administrateur + double authentification ; journal `settings.beta_updated`                                                                                 |
+| `GET/POST /admin/beta/invitations`, `POST …/{id}/revoke`   | Administrateur + double authentification ; adresse déjà inscrite `COMPTE_EXISTANT` ; invitation utilisée `INVITATION_UTILISEE` ; journal sans l'adresse    |
+| `POST /auth/signup`, `POST /auth/signup/verify` (changées) | Inscription réservée : invitation valable exigée (`INVITATION_REQUISE`) **avant** de regarder si l'adresse a un compte ; revérifiée au code, puis utilisée |
+| `POST /feedback/problems`                                  | Session ; 5 par minute ; 20 non résolus par compte ; page réduite à son chemin ; appareil résumé par l'API                                                 |
+| `GET /admin/problems`, `POST …/{id}/status`                | Service client + double authentification ; décision sur la version lue (`SIGNALEMENT_MODIFIE`) ; journal `problem.updated`                                 |
+
+Les invitations restent dans `identity` (l'inscription en dépend ; un module à part créerait une dépendance
+circulaire). Invitation utilisée et signalements dans la copie des données, effacés avec le compte ; ménage des
+invitations mortes (30 jours) et des signalements résolus (180 jours). Site : annonce sur « Créer un compte », bouton
+« Signaler un problème » dans le pied de page (`/signaler-un-probleme`, connexion exigée), pages `/equipe/beta` et
+`/equipe/signalements`. Contrat de l'API : **2.6.0**.
 
 ## 4. Choix technologiques
 
