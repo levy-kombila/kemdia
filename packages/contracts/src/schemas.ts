@@ -2707,8 +2707,19 @@ export const ReviewListParamsSchema = z.strictObject({
 });
 export type ReviewListParams = z.infer<typeof ReviewListParamsSchema>;
 
+/** Version lue par l'équipe (le champ `date` de l'avis) : refus 409 `AVIS_MODIFIE` si l'auteur l'a changé depuis. */
+const reviewReadVersion = z.iso
+  .datetime()
+  .describe("Champ `date` de l'avis tel que lu par l'équipe (409 `AVIS_MODIFIE` s'il a changé)");
+
+export const ReviewPublishRequestSchema = z
+  .strictObject({ version: reviewReadVersion })
+  .meta({ id: "ReviewPublishRequest" });
+export type ReviewPublishRequest = z.infer<typeof ReviewPublishRequestSchema>;
+
 export const ReviewRejectRequestSchema = z
   .strictObject({
+    version: reviewReadVersion,
     reason: z
       .string()
       .max(REVIEW_LIMITS.reasonMax * 2)

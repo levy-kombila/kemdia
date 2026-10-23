@@ -78,12 +78,12 @@ export class ReviewService {
 
   /** L'avis du compte sur cette fiche, et s'il peut en donner un. */
   async mine(slug: string, accountId: string): Promise<MyReview> {
-    const listing = await this.listings.findPublished(slug);
-    if (!listing) throw notFound();
-    const [review, bought] = await Promise.all([
-      this.reviews.findMine(listing.listingId, accountId),
-      this.purchases.hasDelivered(accountId, listing.offerIds),
-    ]);
+    // Fiche plus en ligne : son avis reste visible et retirable, mais plus modifiable
+    const any = await this.listings.findAny(slug);
+    if (!any) throw notFound();
+    const review = await this.reviews.findMine(any.listingId, accountId);
+    const listing = any.published ? await this.listings.findPublished(slug) : null;
+    const bought = listing ? await this.purchases.hasDelivered(accountId, listing.offerIds) : false;
     return { canReview: bought, review };
   }
 
@@ -103,6 +103,7 @@ export class ReviewService {
     }
     const now = this.clock();
     return this.tx.run(async () => {
+      await this.listings.lock(listing.listingId);
       const previous = await this.reviews.findMine(listing.listingId, author.accountId);
       const review = writeReview(
         previous,
@@ -124,9 +125,11 @@ export class ReviewService {
 
   /** Retire son avis. */
   async remove(slug: string, accountId: string): Promise<void> {
-    const listing = await this.listings.findPublished(slug);
+    // Même si la fiche n'est plus en ligne : chacun peut toujours retirer son avis (relecture de sécurité)
+    const listing = await this.listings.findAny(slug);
     if (!listing) throw notFound();
     await this.tx.run(async () => {
+      await this.listings.lock(listing.listingId);
       if (!(await this.reviews.delete(listing.listingId, accountId))) {
         throw new ReviewsError("AVIS_INTROUVABLE", "vous n'avez pas d'avis sur ce produit");
       }
@@ -160,13 +163,18 @@ export class ReviewService {
     reviewId: string,
     decision: ReviewDecision,
     reason: string | null,
+    readVersion: string,
     context: AuditContext,
   ): Promise<Review> {
     const now = this.clock();
     return this.tx.run(async () => {
+      // La fiche d'abord, puis l'avis : même ordre de verrous qu'une écriture de l'auteur (pas d'interblocage)
+      const found = await this.reviews.findById(reviewId);
+      if (!found) throw new ReviewsError("AVIS_INTROUVABLE", "avis introuvable");
+      await this.listings.lock(found.listingId);
       const review = await this.reviews.lockById(reviewId);
       if (!review) throw new ReviewsError("AVIS_INTROUVABLE", "avis introuvable");
-      const next = moderate(review, decision, { staffId, reason, now });
+      const next = moderate(review, decision, { staffId, reason, now, readVersion });
       await this.reviews.save(next);
       await this.refreshRating(next.listingId);
       await this.audit.record({

@@ -1179,14 +1179,15 @@ Décision : [ADR-0056](adr/0056-avis-clients.md). Nouveau module **`reviews`** (
 `20261023200000_avis_clients`) : un avis par fiche et par compte, réservé à un client livré (ports publics
 `ListingRatings` de catalog et `OrdersPurchases` de orders).
 
-| Route (`/api/v1`)                              | Règle                                                                                                       |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `GET /products/{slug}/reviews`                 | Public : avis publiés (10 par page), moyenne et répartition ; prénom et initiale, « achat vérifié »         |
-| `GET/PUT/DELETE /products/{slug}/reviews/mine` | Session ; écriture réservée à un client livré (`ACHAT_REQUIS`) ; note seule publiée, commentaire en attente |
-| `GET /admin/reviews`, `POST …/{id}/publish     | reject`                                                                                                     | Rôle Catalogue + double authentification ; refus avec motif ; journal `review.published` / `review.rejected` |
+| Route (`/api/v1`)                                         | Règle                                                                                                                                                             |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /products/{slug}/reviews`                            | Public : avis publiés (10 par page), moyenne et répartition ; prénom et initiale, « achat vérifié »                                                               |
+| `GET/PUT/DELETE /products/{slug}/reviews/mine`            | Session ; écriture réservée à un client livré (`ACHAT_REQUIS`) ; note seule publiée, commentaire en attente                                                       |
+| `GET /admin/reviews`, `POST …/{id}/publish` ou `…/reject` | Rôle Catalogue + double authentification ; décision sur la version lue (`AVIS_MODIFIE` sinon) ; refus avec motif ; journal `review.published` / `review.rejected` |
 
 La note des fiches (`listings.rating`, `review_count`) est recalculée à partir des avis publiés dans la même transaction
-que chaque changement. Avis dans la copie des données et effacés avec le compte. Site : section « Avis clients » de la
+que chaque changement, **fiche verrouillée** d'abord (avis simultanés). Une **fusion de fiches** déplace les avis vers la
+cible (le plus récent d'un même client reste). Une fiche retirée de la vente laisse son auteur voir et retirer son avis. Avis dans la copie des données et effacés avec le compte. Site : section « Avis clients » de la
 fiche, page `/equipe/avis`. Contrat de l'API : **2.5.0**.
 
 ## 4. Choix technologiques

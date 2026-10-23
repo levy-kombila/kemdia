@@ -20,6 +20,9 @@ class Memory implements ReviewRepository {
         null,
     );
   }
+  findById(id: string) {
+    return this.lockById(id);
+  }
   lockById(id: string) {
     return Promise.resolve([...this.rows.values()].find((r) => r.id === id) ?? null);
   }
@@ -60,6 +63,7 @@ class Memory implements ReviewRepository {
 function setup(bought = true) {
   const repo = new Memory();
   const ratings: [string, number, number][] = [];
+  const locks: string[] = [];
   const audit: { action: string }[] = [];
   let ids = 0;
   const service = new ReviewService(
@@ -69,6 +73,9 @@ function setup(bought = true) {
         Promise.resolve(
           slug === "pagne" ? { listingId: LISTING, title: "Pagne", offerIds: ["o1"] } : null,
         ),
+      findAny: (slug) =>
+        Promise.resolve(slug === "pagne" ? { listingId: LISTING, published: true } : null),
+      lock: (id) => Promise.resolve(void locks.push(id)),
       describe: () => Promise.resolve(new Map([[LISTING, { title: "Pagne", slug: "pagne" }]])),
       setRating: (id, avg, count) => Promise.resolve(void ratings.push([id, avg, count])),
     },
@@ -78,7 +85,7 @@ function setup(bought = true) {
     { record: (entry) => Promise.resolve(void audit.push(entry)) },
   );
   service.clock = () => new Date("2026-10-23T10:00:00.000Z");
-  return { service, repo, ratings, audit };
+  return { service, repo, ratings, audit, locks };
 }
 const codeOf = (p: Promise<unknown>) =>
   p.then(
@@ -119,11 +126,12 @@ describe("ReviewService (S8-T01)", () => {
       comment: "Excellent, je recommande.",
     });
     expect(repo.rows.size).toBe(1);
-    const published = await service.decide(STAFF, review.id, "publish", null, CTX);
+    const seen = review.updatedAt.toISOString();
+    const published = await service.decide(STAFF, review.id, "publish", null, seen, CTX);
     expect(published.status).toBe("published");
     expect(ratings.at(-1)).toEqual([LISTING, 5, 1]);
     expect(audit.map((a) => a.action)).toEqual(["review.published"]);
-    expect(await codeOf(service.decide(STAFF, review.id, "reject", "Hors sujet", CTX))).toBe(
+    expect(await codeOf(service.decide(STAFF, review.id, "reject", "Hors sujet", seen, CTX))).toBe(
       "AVIS_DEJA_TRAITE",
     );
     await service.write("pagne", AWA, { rating: 3 });
@@ -131,9 +139,11 @@ describe("ReviewService (S8-T01)", () => {
   });
 
   it("retrait : note recalculée ; rien à retirer → AVIS_INTROUVABLE", async () => {
-    const { service, ratings } = setup();
+    const { service, ratings, locks } = setup();
     await service.write("pagne", AWA, { rating: 4 });
     await service.remove("pagne", AWA.accountId);
+    // Fiche verrouillée avant chaque recalcul (changements simultanés)
+    expect(locks).toEqual([LISTING, LISTING]);
     expect(ratings.at(-1)).toEqual([LISTING, 0, 0]);
     expect(await codeOf(service.remove("pagne", AWA.accountId))).toBe("AVIS_INTROUVABLE");
   });

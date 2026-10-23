@@ -83,6 +83,7 @@ export default async function ReviewsPage({
               <div className="flex flex-wrap items-start gap-3">
                 <form action={publishReviewAction}>
                   <input type="hidden" name="reviewId" value={r.id} />
+                  <input type="hidden" name="version" value={r.date} />
                   <button
                     type="submit"
                     className="bg-brand-600 hover:bg-brand-700 rounded-full px-4 py-2 text-sm font-semibold text-white"
@@ -92,6 +93,7 @@ export default async function ReviewsPage({
                 </form>
                 <form action={rejectReviewAction} className="flex min-w-64 flex-1 flex-wrap gap-2">
                   <input type="hidden" name="reviewId" value={r.id} />
+                  <input type="hidden" name="version" value={r.date} />
                   <label className="sr-only" htmlFor={`motif-${r.id}`}>
                     Motif du refus
                   </label>
@@ -101,7 +103,7 @@ export default async function ReviewsPage({
                     required
                     minLength={5}
                     maxLength={300}
-                    placeholder="Motif montré au client (5 à 300 caractères)"
+                    placeholder="Motif montré au client (5 à 300 caractères, sans donnée personnelle)"
                     className={inputClass + " min-w-48 flex-1"}
                   />
                   <button

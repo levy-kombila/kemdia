@@ -12923,6 +12923,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewPublishRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Avis publié",
@@ -12930,6 +12940,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AdminReview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps invalide",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -12965,7 +12985,7 @@
             }
           },
           "409": {
-            "description": "`AVIS_DEJA_TRAITE` : l'avis n'attend plus de décision",
+            "description": "`AVIS_DEJA_TRAITE` : l'avis n'attend plus de décision ; `AVIS_MODIFIE` : l'auteur l'a modifié depuis la lecture",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -13071,7 +13091,7 @@
             }
           },
           "409": {
-            "description": "`AVIS_DEJA_TRAITE` : l'avis n'attend plus de décision",
+            "description": "`AVIS_DEJA_TRAITE` : l'avis n'attend plus de décision ; `AVIS_MODIFIE` : l'auteur l'a modifié depuis la lecture",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -17320,7 +17340,8 @@
               "AVIS_INVALIDE",
               "ACHAT_REQUIS",
               "AVIS_INTROUVABLE",
-              "AVIS_DEJA_TRAITE"
+              "AVIS_DEJA_TRAITE",
+              "AVIS_MODIFIE"
             ]
           },
           "requestId": {
@@ -18093,16 +18114,35 @@
         "additionalProperties": false,
         "description": "Avis publiés d'une fiche, 10 par page"
       },
+      "ReviewPublishRequest": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "description": "Champ `date` de l'avis tel que lu par l'équipe (409 `AVIS_MODIFIE` s'il a changé)"
+          }
+        },
+        "required": ["version"],
+        "additionalProperties": false
+      },
       "ReviewRejectRequest": {
         "type": "object",
         "properties": {
+          "version": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "description": "Champ `date` de l'avis tel que lu par l'équipe (409 `AVIS_MODIFIE` s'il a changé)"
+          },
           "reason": {
             "type": "string",
             "maxLength": 600,
             "description": "Motif montré à l'auteur (5 à 300 caractères)"
           }
         },
-        "required": ["reason"],
+        "required": ["version", "reason"],
         "additionalProperties": false
       },
       "ReviewRequest": {

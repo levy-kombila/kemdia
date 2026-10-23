@@ -43,6 +43,14 @@ Choix du 2026-10-23 : options recommandées retenues sans être reposées (deman
    pour le client livré (étoiles au clavier, commentaire facultatif, état et motif d'un refus), page de l'équipe
    `/equipe/avis`.
 7. **Données personnelles** : avis dans la copie (`avis`), effacés avec le compte.
+8. **Garde-fous issus de la relecture de sécurité** :
+   - l'équipe décide **sur la version lue** : `publish` et `reject` reçoivent `version` (le champ `date` de l'avis) ;
+     si l'auteur l'a modifié entre-temps, refus 409 `AVIS_MODIFIE` (même principe que `PRODUIT_MODIFIE`) ;
+   - **verrou de la fiche** (`SELECT … FOR UPDATE`) avant tout changement d'avis et le recalcul de sa note : deux avis
+     simultanés sur la même fiche ne font plus perdre une note (ordre des verrous : fiche puis avis) ;
+   - **fusion de fiches** : les avis de la fiche fusionnée rejoignent la cible (un client présent sur les deux garde
+     l'avis le plus récent), notes des deux fiches recalculées, dans la transaction de la fusion ;
+   - **fiche retirée de la vente** : son auteur voit et retire toujours son avis (plus de modification possible).
 
 ## Conséquences
 

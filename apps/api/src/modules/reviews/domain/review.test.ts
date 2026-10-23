@@ -71,8 +71,17 @@ describe("avis des clients : règles (S8-T01)", () => {
       { ...base, rating: 5, comment: "Excellent, je recommande." },
       NOW,
     );
-    const by = { staffId: "44444444-4444-4444-8444-444444444444", reason: null, now: NOW };
+    const by = {
+      staffId: "44444444-4444-4444-8444-444444444444",
+      reason: null,
+      now: NOW,
+      readVersion: NOW.toISOString(),
+    };
     expect(moderate(pending, "publish", by).status).toBe("published");
+    // L'auteur a modifié son avis après la lecture de l'équipe : décision refusée
+    expect(
+      code(() => moderate(pending, "publish", { ...by, readVersion: "2026-01-01T00:00:00.000Z" })),
+    ).toBe("AVIS_MODIFIE");
     expect(code(() => moderate(pending, "reject", by))).toBe("AVIS_INVALIDE");
     const rejected: Review = moderate(pending, "reject", { ...by, reason: "Propos hors sujet" });
     expect(rejected).toMatchObject({ status: "rejected", rejectReason: "Propos hors sujet" });

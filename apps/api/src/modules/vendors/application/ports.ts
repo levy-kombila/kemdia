@@ -5,6 +5,8 @@ import type { Shop, ShopStatus } from "../domain/shop.js";
 
 export const SHOP_REPOSITORY = Symbol("SHOP_REPOSITORY");
 export const VENDORS_TRANSACTION = Symbol("VENDORS_TRANSACTION");
+/** Avis des clients d'une fiche fusionnée (module reviews, S8-T01). */
+export const LISTING_REVIEWS = Symbol("LISTING_REVIEWS");
 export const VENDORS_RANDOM = Symbol("VENDORS_RANDOM");
 
 /** Position dans la file des boutiques (ordre : demande la plus ancienne d'abord). */
@@ -156,4 +158,9 @@ export interface KycBox {
 /** Photo de pièce : format vérifié, réencodée en WebP sans métadonnées (ni EXIF ni position GPS). */
 export interface KycImageProcessor {
   process(bytes: Uint8Array): Promise<Uint8Array>;
+}
+
+/** Fusion de fiches : les avis de la fiche fusionnée rejoignent la cible, notes recalculées (S8-T01). */
+export interface ListingReviews {
+  moveReviews(sourceId: string, targetId: string): Promise<void>;
 }

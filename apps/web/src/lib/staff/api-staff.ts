@@ -484,16 +484,18 @@ export function createStaffApi(options: StaffApiOptions) {
       token: string,
       reviewId: string,
       decision: "publish" | "reject",
+      version: string,
       reason?: string,
     ): Promise<StaffResult<AdminReview>> => {
       const review = id(reviewId);
+      // `version` : date de l'avis lu par l'équipe ; l'API refuse (AVIS_MODIFIE) si l'auteur l'a changé depuis
       return review
         ? call(
             "POST",
             `/admin/reviews/${review}/${decision}`,
             token,
             AdminReviewSchema,
-            decision === "reject" ? { reason: reason ?? "" } : {},
+            decision === "reject" ? { version, reason: reason ?? "" } : { version },
           )
         : Promise.resolve(notFound("AVIS_INTROUVABLE"));
     },

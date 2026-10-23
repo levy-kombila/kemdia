@@ -14,6 +14,8 @@ export interface ReviewCursor {
 /** Avis rangés (schéma `reviews`) ; les écritures rejoignent la transaction en cours. */
 export interface ReviewRepository {
   findMine(listingId: string, accountId: string): Promise<Review | null>;
+  /** Lit un avis sans le verrouiller (pour verrouiller d'abord sa fiche). */
+  findById(id: string): Promise<Review | null>;
   /** Lit et verrouille un avis jusqu'à la fin de la transaction (décisions concurrentes). */
   lockById(id: string): Promise<Review | null>;
   /** Crée ou remplace l'avis (un par compte et par fiche). */
@@ -45,6 +47,10 @@ export interface ReviewListings {
   findPublished(
     slug: string,
   ): Promise<{ listingId: string; title: string; offerIds: string[] } | null>;
+  /** Fiche par son adresse quel que soit son état, en suivant une fusion (voir ou retirer son avis). */
+  findAny(slug: string): Promise<{ listingId: string; published: boolean } | null>;
+  /** Verrouille la fiche jusqu'à la fin de la transaction (changements d'avis simultanés). */
+  lock(listingId: string): Promise<void>;
   /** Titre et adresse de fiches (file de l'équipe), même non publiées. */
   describe(listingIds: readonly string[]): Promise<Map<string, { title: string; slug: string }>>;
   /** Note moyenne et nombre d'avis publiés, montrés sur les cartes et la fiche. */

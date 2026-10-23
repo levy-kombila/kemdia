@@ -9,6 +9,7 @@ export const REVIEWS_ERROR_STATUS: Record<ReviewsErrorCode, number> = {
   PRODUIT_INTROUVABLE: HttpStatus.NOT_FOUND,
   AVIS_INTROUVABLE: HttpStatus.NOT_FOUND,
   AVIS_DEJA_TRAITE: HttpStatus.CONFLICT,
+  AVIS_MODIFIE: HttpStatus.CONFLICT,
 };
 
 const capitalize = (message: string) => message.charAt(0).toUpperCase() + message.slice(1);

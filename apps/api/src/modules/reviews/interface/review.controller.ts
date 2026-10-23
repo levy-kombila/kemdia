@@ -17,6 +17,7 @@ import type { Request } from "express";
 import {
   ReviewIdParamsSchema,
   ReviewListParamsSchema,
+  ReviewPublishRequestSchema,
   ReviewRejectRequestSchema,
   ReviewRequestSchema,
   type AdminReview,
@@ -24,6 +25,7 @@ import {
   type MyReview,
   type ReviewListParams,
   type ReviewPage,
+  type ReviewPublishRequest,
   type ReviewRejectRequest,
   type ReviewRequest,
 } from "@kemdia/contracts";
@@ -139,6 +141,7 @@ export class AdminReviewController {
   async publish(
     @CurrentSession() session: AuthenticatedSession,
     @Param({ schema: ReviewIdParamsSchema }) params: { reviewId: string },
+    @Body({ schema: ReviewPublishRequestSchema }) body: ReviewPublishRequest,
     @Req() req: Request,
   ): Promise<AdminReview> {
     const review = await withReviewsErrors(() =>
@@ -147,6 +150,7 @@ export class AdminReviewController {
         params.reviewId,
         "publish",
         null,
+        body.version,
         auditContextOf(req),
       ),
     );
@@ -168,6 +172,7 @@ export class AdminReviewController {
         params.reviewId,
         "reject",
         body.reason,
+        body.version,
         auditContextOf(req),
       ),
     );

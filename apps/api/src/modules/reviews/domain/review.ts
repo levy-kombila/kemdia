@@ -41,7 +41,8 @@ const invalid = (message: string) => new ReviewsError("AVIS_INVALIDE", message);
 
 // Caractères de contrôle (sauf le saut de ligne) et caractères invisibles de mise en forme : jamais utiles
 const CONTROL = /[^\P{Cc}\n]/gu;
-const INVISIBLE = /\p{Cf}/gu;
+// Le liant sans chasse (U+200D) reste : il compose certains émojis
+const INVISIBLE = /(?!\u200d)\p{Cf}/gu;
 
 /** Texte nettoyé : caractères invisibles retirés, espaces resserrés, 2 sauts de ligne de suite au plus. */
 export function cleanText(raw: string): string {
@@ -139,10 +140,17 @@ export type ReviewDecision = "publish" | "reject";
 export function moderate(
   review: Review,
   decision: ReviewDecision,
-  by: { staffId: string; reason: string | null; now: Date },
+  by: { staffId: string; reason: string | null; now: Date; readVersion: string },
 ): Review {
   if (review.status !== "pending") {
     throw new ReviewsError("AVIS_DEJA_TRAITE", "cet avis n'attend plus de décision");
+  }
+  // L'équipe décide sur le texte qu'elle a lu, jamais sur une version modifiée entre-temps (relecture de sécurité)
+  if (review.updatedAt.toISOString() !== by.readVersion) {
+    throw new ReviewsError(
+      "AVIS_MODIFIE",
+      "l'auteur a modifié cet avis depuis que vous l'avez lu : relisez-le avant de décider",
+    );
   }
   if (decision === "publish") {
     return { ...review, status: "published", reviewedBy: by.staffId, reviewedAt: by.now };

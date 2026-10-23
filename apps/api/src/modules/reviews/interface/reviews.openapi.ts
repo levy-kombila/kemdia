@@ -154,11 +154,18 @@ export const reviewsPaths = {
       operationId: "publishReview",
       security: bearer,
       parameters: [reviewId],
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("ReviewPublishRequest") } },
+      },
       responses: {
         "200": json("AdminReview", "Avis publié"),
+        "400": problem("Corps invalide"),
         ...staff,
         "404": problem("`AVIS_INTROUVABLE`"),
-        "409": problem("`AVIS_DEJA_TRAITE` : l'avis n'attend plus de décision"),
+        "409": problem(
+          "`AVIS_DEJA_TRAITE` : l'avis n'attend plus de décision ; `AVIS_MODIFIE` : l'auteur l'a modifié depuis la lecture",
+        ),
       },
     },
   },
@@ -179,7 +186,9 @@ export const reviewsPaths = {
         "400": problem("Corps invalide"),
         ...staff,
         "404": problem("`AVIS_INTROUVABLE`"),
-        "409": problem("`AVIS_DEJA_TRAITE` : l'avis n'attend plus de décision"),
+        "409": problem(
+          "`AVIS_DEJA_TRAITE` : l'avis n'attend plus de décision ; `AVIS_MODIFIE` : l'auteur l'a modifié depuis la lecture",
+        ),
         "422": problem("`AVIS_INVALIDE` : motif trop court ou trop long"),
       },
     },

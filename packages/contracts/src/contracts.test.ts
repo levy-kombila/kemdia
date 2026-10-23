@@ -224,6 +224,7 @@ describe("schémas", () => {
       "ResetResendRequest",
       "ResetStarted",
       "ReviewPage",
+      "ReviewPublishRequest",
       "ReviewRejectRequest",
       "ReviewRequest",
       "ReviewSummary",

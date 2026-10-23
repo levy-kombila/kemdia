@@ -132,8 +132,9 @@ const REVIEW_MESSAGES: Record<ReviewErrorCode, string> = {
   AVIS_INVALIDE: "Motif refusé : écrivez de 5 à 300 caractères.",
   ACHAT_REQUIS: "Seuls les clients qui ont reçu ce produit peuvent donner leur avis.",
   AVIS_INTROUVABLE: "Avis introuvable : il a peut-être été retiré par son auteur.",
-  AVIS_DEJA_TRAITE:
-    "Cet avis a déjà été traité (ou modifié par son auteur). La page a été rechargée.",
+  AVIS_DEJA_TRAITE: "Cet avis a déjà été traité. La page a été rechargée.",
+  AVIS_MODIFIE:
+    "Le client a modifié son avis pendant votre lecture : relisez le nouveau texte avant de décider.",
 };
 const isReviewCode = (code: StaffMessageCode): code is ReviewErrorCode =>
   Object.hasOwn(REVIEW_MESSAGES, code);

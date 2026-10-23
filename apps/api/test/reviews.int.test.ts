@@ -244,10 +244,14 @@ describe("Avis des clients (PostgreSQL, HTTP)", () => {
 
     // Refus sans motif : refusé ; avec motif : refusé et tracé
     await call("post", `/api/v1/admin/reviews/${pending.id}/reject`, staff.token)
-      .send({ reason: "" })
+      .send({ version: pending.date, reason: "" })
       .expect(422);
+    // Sans la version lue : corps invalide
+    await call("post", `/api/v1/admin/reviews/${pending.id}/publish`, staff.token)
+      .send({})
+      .expect(400);
     await call("post", `/api/v1/admin/reviews/${pending.id}/reject`, staff.token)
-      .send({ reason: "Merci de décrire le produit lui-même" })
+      .send({ version: pending.date, reason: "Merci de décrire le produit lui-même" })
       .expect(200);
     const mine = matches(
       MyReviewSchema,
@@ -259,8 +263,11 @@ describe("Avis des clients (PostgreSQL, HTTP)", () => {
     });
     expect(
       codeOf(
-        (await call("post", `/api/v1/admin/reviews/${pending.id}/publish`, staff.token).expect(409))
-          .body,
+        (
+          await call("post", `/api/v1/admin/reviews/${pending.id}/publish`, staff.token)
+            .send({ version: pending.date })
+            .expect(409)
+        ).body,
       ),
     ).toBe("AVIS_DEJA_TRAITE");
     const event = await prisma.auditEvent.findFirst({
@@ -272,11 +279,50 @@ describe("Avis des clients (PostgreSQL, HTTP)", () => {
     await call("put", `/api/v1/products/${slug}/reviews/mine`, bob.token)
       .send({ rating: 2, comment: "Tissu correct mais couleurs ternes." })
       .expect(200);
-    await call("post", `/api/v1/admin/reviews/${pending.id}/publish`, staff.token).expect(200);
+    const read = matches(
+      AdminReviewPageSchema,
+      (await call("get", "/api/v1/admin/reviews", staff.token).expect(200)).body,
+    ).items.find((r) => r.id === pending.id)!;
+    // L'auteur modifie son texte pendant que l'équipe le lit : la décision sur l'ancien texte est refusée
+    await call("put", `/api/v1/products/${slug}/reviews/mine`, bob.token)
+      .send({ rating: 2, comment: "Texte changé après la lecture de l'équipe." })
+      .expect(200);
+    expect(
+      codeOf(
+        (
+          await call("post", `/api/v1/admin/reviews/${pending.id}/publish`, staff.token)
+            .send({ version: read.date })
+            .expect(409)
+        ).body,
+      ),
+    ).toBe("AVIS_MODIFIE");
+    expect(await listing()).toMatchObject({ reviewCount: before.reviewCount });
+    const reread = matches(
+      AdminReviewPageSchema,
+      (await call("get", "/api/v1/admin/reviews", staff.token).expect(200)).body,
+    ).items.find((r) => r.id === pending.id)!;
+    expect(reread.comment).toBe("Texte changé après la lecture de l'équipe.");
+    await call("post", `/api/v1/admin/reviews/${pending.id}/publish`, staff.token)
+      .send({ version: reread.date })
+      .expect(200);
     expect(await listing()).toMatchObject({ reviewCount: before.reviewCount + 1 });
 
-    // Retrait par l'auteur : la note de la fiche suit
-    await call("delete", `/api/v1/products/${slug}/reviews/mine`, bob.token).expect(204);
+    // Fiche retirée de la vente : l'avis reste visible et retirable par son auteur, plus modifiable
+    await prisma.listing.update({ where: { id: listingId }, data: { status: "ARCHIVED" } });
+    try {
+      const offline = matches(
+        MyReviewSchema,
+        (await call("get", `/api/v1/products/${slug}/reviews/mine`, bob.token).expect(200)).body,
+      );
+      expect(offline).toMatchObject({ canReview: false, review: { status: "published" } });
+      await call("put", `/api/v1/products/${slug}/reviews/mine`, bob.token)
+        .send({ rating: 5 })
+        .expect(404);
+      // Retrait par l'auteur : la note de la fiche suit
+      await call("delete", `/api/v1/products/${slug}/reviews/mine`, bob.token).expect(204);
+    } finally {
+      await prisma.listing.update({ where: { id: listingId }, data: { status: "PUBLISHED" } });
+    }
     expect(await listing()).toMatchObject({ reviewCount: before.reviewCount });
     await call("delete", `/api/v1/products/${slug}/reviews/mine`, bob.token).expect(404);
   });

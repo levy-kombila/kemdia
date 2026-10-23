@@ -110,7 +110,9 @@ export function createReviewsApi(options: ReviewsApiOptions) {
       const hit = cache.get(path);
       if (hit && hit.expires > now()) return { ok: true, data: hit.value };
       const result = await call("GET", path, ReviewPageSchema);
-      if (result.ok) {
+      // Gardée seulement si l'API a servi la page demandée : une page au-delà de la dernière (ramenée par l'API)
+      // ne remplit pas la mémoire (relecture de sécurité S8-T01)
+      if (result.ok && result.data.page === page) {
         if (cache.size >= MAX_CACHE) cache.delete(cache.keys().next().value as string);
         cache.set(path, { expires: now() + CACHE_MS, value: result.data });
       }

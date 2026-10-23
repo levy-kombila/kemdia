@@ -766,6 +766,7 @@ export const REVIEW_ERROR_CODES = [
   "ACHAT_REQUIS",
   "AVIS_INTROUVABLE",
   "AVIS_DEJA_TRAITE",
+  "AVIS_MODIFIE",
 ] as const;
 export type ReviewErrorCode = (typeof REVIEW_ERROR_CODES)[number];
 

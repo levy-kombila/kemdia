@@ -14,6 +14,7 @@ import {
 import { ReviewService } from "./application/review.service.js";
 import { PrismaReviewRepository } from "./infrastructure/prisma-review.repository.js";
 import { ReviewsPersonalData } from "./infrastructure/reviews-personal-data.js";
+import { ReviewsListingMerge } from "./infrastructure/reviews-listing-merge.js";
 import { ReviewsTransactionRunner } from "./infrastructure/reviews-transaction.js";
 import { AdminReviewController, ReviewController } from "./interface/review.controller.js";
 
@@ -27,12 +28,13 @@ import { AdminReviewController, ReviewController } from "./interface/review.cont
   providers: [
     ReviewService,
     ReviewsPersonalData,
+    ReviewsListingMerge,
     { provide: REVIEW_REPOSITORY, useClass: PrismaReviewRepository },
     { provide: REVIEW_LISTINGS, useExisting: ListingRatings },
     { provide: REVIEW_PURCHASES, useExisting: OrdersPurchases },
     { provide: REVIEWS_TRANSACTION, useClass: ReviewsTransactionRunner },
     { provide: REVIEWS_RANDOM, useValue: { uuid: () => randomUUID() } },
   ],
-  exports: [ReviewsPersonalData],
+  exports: [ReviewsPersonalData, ReviewsListingMerge],
 })
 export class ReviewsModule {}

@@ -23,6 +23,37 @@ export class ListingRatings {
       : null;
   }
 
+  /**
+   * Fiche par son adresse quel que soit son état (en suivant une fusion) : pour voir ou retirer son avis même si la
+   * fiche n'est plus en ligne (relecture de sécurité S8-T01). `published` : en ligne et non fusionnée.
+   */
+  async findAny(slug: string): Promise<{ listingId: string; published: boolean } | null> {
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 120) return null;
+    let row = await this.tx.db.listing.findUnique({
+      where: { slug },
+      select: { id: true, status: true, mergedIntoId: true },
+    });
+    // Une seule étape de fusion suffit : une fiche cible n'est jamais elle-même fusionnée (catalog)
+    if (row?.mergedIntoId) {
+      row = await this.tx.db.listing.findUnique({
+        where: { id: row.mergedIntoId },
+        select: { id: true, status: true, mergedIntoId: true },
+      });
+    }
+    return row
+      ? { listingId: row.id, published: row.status === "PUBLISHED" && row.mergedIntoId === null }
+      : null;
+  }
+
+  /**
+   * Verrouille la fiche jusqu'à la fin de la transaction : deux changements d'avis simultanés sur la même fiche
+   * s'attendent, et le second recalcule la note en voyant le premier (relecture de sécurité S8-T01).
+   */
+  async lock(listingId: string): Promise<void> {
+    await this.tx.db.$queryRaw`
+      SELECT "id" FROM "catalog"."listings" WHERE "id" = ${listingId}::uuid FOR UPDATE`;
+  }
+
   async describe(
     listingIds: readonly string[],
   ): Promise<Map<string, { title: string; slug: string }>> {

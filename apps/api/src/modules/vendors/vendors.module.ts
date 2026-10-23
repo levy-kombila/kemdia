@@ -7,6 +7,7 @@ import { AuditModule } from "../audit/index.js";
 import { CatalogModule, VendorCatalog } from "../catalog/index.js";
 import { IdentityModule } from "../identity/index.js";
 import { OrdersModule } from "../orders/index.js";
+import { ReviewsListingMerge, ReviewsModule } from "../reviews/index.js";
 import { Logger } from "@nestjs/common";
 import { KycService } from "./application/kyc.service.js";
 import { AesKycBox } from "./infrastructure/kyc-box.js";
@@ -18,6 +19,7 @@ import {
   KYC_BOX,
   KYC_IMAGE_PROCESSOR,
   KYC_REPOSITORY,
+  LISTING_REVIEWS,
   SHOP_LISTING,
   SHOP_REPOSITORY,
   VENDOR_ORDER_MAILER,
@@ -58,7 +60,7 @@ const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
  * vendeurs, KYC (S6-T08, ADR-0039), chiffrée par la clé KYC_ENCRYPTION_KEY.
  */
 @Module({
-  imports: [IdentityModule, AuditModule, CatalogModule, OrdersModule],
+  imports: [IdentityModule, AuditModule, CatalogModule, OrdersModule, ReviewsModule],
   controllers: [
     ShopController,
     AdminShopController,
@@ -81,6 +83,8 @@ const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
     VendorProductService,
     ProductModerationService,
     ListingAdminService,
+    // Fusion de fiches : les avis suivent (S8-T01)
+    { provide: LISTING_REVIEWS, useExisting: ReviewsListingMerge },
     // Commandes des vendeurs (S6-T07) : décisions, e-mail « nouvelle commande »
     VendorOrderService,
     VendorOrderNotifier,

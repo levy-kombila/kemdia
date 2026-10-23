@@ -9,7 +9,9 @@ export type ReviewsErrorCode =
   /** Pas (ou plus) d'avis à cet endroit. */
   | "AVIS_INTROUVABLE"
   /** Décision impossible : l'avis n'attend plus l'équipe. */
-  | "AVIS_DEJA_TRAITE";
+  | "AVIS_DEJA_TRAITE"
+  /** L'auteur a modifié son avis depuis que l'équipe l'a lu : relire avant de décider. */
+  | "AVIS_MODIFIE";
 
 export class ReviewsError extends Error {
   constructor(

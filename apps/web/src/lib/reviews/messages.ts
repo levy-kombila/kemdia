@@ -7,6 +7,7 @@ export const REVIEW_MESSAGES: Record<ReviewFailureCode, string> = {
   ACHAT_REQUIS: "Seuls les clients qui ont reçu ce produit peuvent donner leur avis.",
   AVIS_INTROUVABLE: "Vous n'avez pas d'avis sur ce produit.",
   AVIS_DEJA_TRAITE: "Cet avis a déjà été traité.",
+  AVIS_MODIFIE: "Cet avis a été modifié entre-temps.",
   PRODUIT_INTROUVABLE: "Ce produit n'est plus en ligne.",
   SESSION_INVALIDE: "Votre session a expiré : reconnectez-vous.",
   TROP_DE_REQUETES: "Trop d'essais : patientez une minute.",

@@ -37,6 +37,7 @@ export class ReviewsPersonalData {
     const listingIds = await this.reviews.deleteOfAccount(accountId);
     // L'une après l'autre : une transaction n'exécute qu'une requête à la fois
     for (const listingId of listingIds) {
+      await this.listings.lock(listingId);
       const { count, average } = averageOf((await this.reviews.summary(listingId)).distribution);
       await this.listings.setRating(listingId, average, count);
     }

@@ -34,6 +34,11 @@ export class PrismaReviewRepository implements ReviewRepository {
     return row ? toReview(row) : null;
   }
 
+  async findById(id: string): Promise<Review | null> {
+    const row = await this.tx.db.review.findUnique({ where: { id } });
+    return row ? toReview(row) : null;
+  }
+
   async lockById(id: string): Promise<Review | null> {
     const rows = await this.tx.db.$queryRaw<{ id: string }[]>`
       SELECT "id" FROM "reviews"."reviews" WHERE "id" = ${id}::uuid FOR UPDATE`;
