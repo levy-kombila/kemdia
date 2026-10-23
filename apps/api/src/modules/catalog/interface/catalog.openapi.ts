@@ -87,6 +87,54 @@ export const catalogPaths = {
       responses: { "200": json("SearchSuggestions", "Suggestions"), "429": tooMany },
     },
   },
+  "/api/v1/shops": {
+    get: {
+      tags: ["Catalogue"],
+      summary: "Annuaire des boutiques (S7.5-T07)",
+      description:
+        "Boutiques actives seulement, 24 par page : la boutique officielle d'abord, puis celles du quartier `quartier` (« près de chez moi »), puis par nom. Une valeur mal formée est ignorée.",
+      operationId: "listPublicShops",
+      parameters: [
+        {
+          name: "ville",
+          in: "query",
+          required: false,
+          description: "Ville (nom de la liste de la livraison)",
+          schema: { type: "string", maxLength: 60 },
+        },
+        {
+          name: "quartier",
+          in: "query",
+          required: false,
+          description: "Quartier du client : ses boutiques d'abord (avec `ville`)",
+          schema: { type: "string", maxLength: 80 },
+        },
+        {
+          name: "page",
+          in: "query",
+          required: false,
+          description: "Page (à partir de 1)",
+          schema: { type: "integer", minimum: 1, default: 1 },
+        },
+      ],
+      responses: { "200": json("PublicShopPage", "Une page de boutiques"), "429": tooMany },
+    },
+  },
+  "/api/v1/shops/{slug}": {
+    get: {
+      tags: ["Catalogue"],
+      summary: "Page publique d'une boutique (S7.5-T07)",
+      description:
+        "Boutique active seulement (inconnue, en attente ou suspendue : 404). Ses produits : `GET /products?shop={slug}`. Jamais de téléphone.",
+      operationId: "getPublicShop",
+      parameters: [slugParam("Adresse de la boutique")],
+      responses: {
+        "200": json("PublicShop", "La boutique"),
+        "404": problem("Boutique inconnue ou pas active"),
+        "429": tooMany,
+      },
+    },
+  },
   "/api/v1/products/{slug}": {
     get: {
       tags: ["Catalogue"],

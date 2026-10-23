@@ -3,11 +3,13 @@ import type {
   Category as CategoryDto,
   CategoryNode as CategoryNodeDto,
   ProductDetail,
+  PublicShop as PublicShopDto,
   SearchSuggestions as SearchSuggestionsDto,
 } from "@kemdia/contracts";
 import type { AvailabilityResult, SearchSuggestions } from "../application/catalog.service.js";
 import type { Category, CategoryNode } from "../domain/category.js";
 import type { ListingOffers } from "../domain/listing.js";
+import type { PublicShop } from "../application/ports.js";
 
 /** Transforme les objets du domaine en JSON public : seuls les champs prévus sortent (rien d'interne). */
 
@@ -114,5 +116,19 @@ export function presentSuggestions(s: SearchSuggestions): SearchSuggestionsDto {
     })),
     categories: s.categories.map((c) => ({ slug: c.slug, name: c.name })),
     brands: s.brands,
+  };
+}
+
+/** Boutique publique (S7.5-T07) : jamais l'identifiant interne, le téléphone ni le propriétaire. */
+export function presentPublicShop(shop: PublicShop): PublicShopDto {
+  return {
+    slug: shop.slug,
+    name: shop.name,
+    city: shop.city,
+    neighborhood: shop.neighborhood,
+    description: shop.description,
+    official: shop.official,
+    since: shop.since.toISOString(),
+    productCount: shop.productCount,
   };
 }

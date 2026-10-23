@@ -187,7 +187,11 @@ export default async function ProductPage({ params, searchParams }: Props) {
               <>
                 <dt className="text-ink-500">Vendu par</dt>
                 <dd className="font-medium">
-                  {seller.name} ({seller.city})
+                  {/* Page publique de la boutique (S7.5-T07) */}
+                  <Link href={`/boutique/${seller.slug}`} className="text-brand-700 underline">
+                    {seller.name}
+                  </Link>{" "}
+                  ({seller.city})
                 </dd>
               </>
             )}

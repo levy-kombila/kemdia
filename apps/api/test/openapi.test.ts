@@ -23,6 +23,15 @@ describe("Description OpenAPI", () => {
     for (const ref of refs) expect(schemas, ref).toContain(ref);
   });
 
+  it("chaque opération a un identifiant unique (ZAP refuse les doublons)", () => {
+    const ids = Object.values(
+      document.paths as Record<string, Record<string, { operationId?: string }>>,
+    )
+      .flatMap((path) => Object.values(path).map((op) => op.operationId))
+      .filter(Boolean);
+    expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
+  });
+
   it("documente toutes les routes", () => {
     expect(Object.keys(document.paths as object).sort()).toEqual([
       "/api/health",
@@ -119,6 +128,8 @@ describe("Description OpenAPI", () => {
       "/api/v1/sandbox/mobile-money/requests",
       "/api/v1/sandbox/mobile-money/requests/{paymentId}",
       "/api/v1/shipping/tariffs",
+      "/api/v1/shops",
+      "/api/v1/shops/{slug}",
       "/api/v1/support/accounts/lookup",
       "/api/v1/support/accounts/{accountId}/orders",
       "/api/v1/support/accounts/{accountId}/orders/{reference}",

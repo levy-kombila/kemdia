@@ -1,5 +1,6 @@
 // Lu aussi par le navigateur : seulement les constantes du contrat (pas de Zod)
 import { SHOP_LIMITS, VENDOR_PRODUCT_LIMITS } from "@kemdia/contracts/constants";
+import { CITIES, OTHER_NEIGHBORHOOD } from "@kemdia/contracts/delivery";
 import { normalizeGabonPhone } from "@/lib/auth/validation";
 import { isUuid } from "./images";
 
@@ -44,28 +45,89 @@ export function parseAmount(value: unknown, max = PRICE_MAX): number | null {
 
 // --- Demande de boutique ---
 
-export type ShopRequestFields = "name" | "city" | "phone" | "description";
+export type ShopRequestFields = "name" | "city" | "neighborhood" | "phone" | "description";
 export type ShopRequestInput = Record<ShopRequestFields, string>;
 export type ShopRequestCheck =
   | { ok: true; value: ShopRequestInput }
   | { ok: false; errors: Partial<Record<ShopRequestFields, string>> };
 
+/**
+ * Ville et quartier d'une boutique (S7.5-T07) : listes officielles de la livraison. Quartier vide ou « Autre
+ * quartier » : non précisé (envoyé vide). Les mêmes règles sont revérifiées par l'API.
+ */
+export function checkShopPlace(
+  rawCity: unknown,
+  rawNeighborhood: unknown,
+): {
+  city: string;
+  neighborhood: string;
+  errors: Partial<Record<"city" | "neighborhood", string>>;
+} {
+  const cityName = clean(str(rawCity, 200) ?? "");
+  const quarter = clean(str(rawNeighborhood, 200) ?? "");
+  const city = CITIES.find((c) => c.name === cityName);
+  if (!city)
+    return {
+      city: cityName,
+      neighborhood: "",
+      errors: { city: "Choisissez la ville dans la liste." },
+    };
+  if (!quarter || quarter === OTHER_NEIGHBORHOOD)
+    return { city: city.name, neighborhood: "", errors: {} };
+  if (!city.neighborhoods.includes(quarter))
+    return {
+      city: city.name,
+      neighborhood: "",
+      errors: { neighborhood: `Choisissez un quartier de ${city.name} dans la liste.` },
+    };
+  return { city: city.name, neighborhood: quarter, errors: {} };
+}
+
 export function checkShopRequest(input: unknown): ShopRequestCheck {
   const raw = (input ?? {}) as Record<string, unknown>;
   const S = SHOP_LIMITS;
   const name = clean(str(raw.name, 200) ?? "");
-  const city = clean(str(raw.city, 200) ?? "");
+  const place = checkShopPlace(raw.city, raw.neighborhood);
   const description = clean(str(raw.description, 2000) ?? "");
   const phone = normalizeGabonPhone(str(raw.phone, 30) ?? "");
-  const errors: Partial<Record<ShopRequestFields, string>> = {};
+  const errors: Partial<Record<ShopRequestFields, string>> = { ...place.errors };
   if (!between(name, S.nameMin, S.nameMax))
     errors.name = `Nom de la boutique : ${S.nameMin} à ${S.nameMax} caractères.`;
-  if (!between(city, S.cityMin, S.cityMax)) errors.city = "Indiquez la ville de la boutique.";
   if (!phone) errors.phone = "Mobile gabonais attendu : 06… (Moov) ou 07… (Airtel).";
   if (!between(description, S.descriptionMin, S.descriptionMax))
     errors.description = `Décrivez ce que vous vendez : ${S.descriptionMin} à ${S.descriptionMax} caractères.`;
   if (Object.keys(errors).length > 0 || !phone) return { ok: false, errors };
-  return { ok: true, value: { name, city, phone: phone.value, description } };
+  return {
+    ok: true,
+    value: {
+      name,
+      city: place.city,
+      neighborhood: place.neighborhood,
+      phone: phone.value,
+      description,
+    },
+  };
+}
+
+// --- « Ma boutique » (S7.5-T07) : ville, quartier, description ---
+
+export type ShopProfileFields = "city" | "neighborhood" | "description";
+export type ShopProfileInput = Record<ShopProfileFields, string>;
+
+export function checkShopProfile(
+  input: unknown,
+):
+  | { ok: true; value: ShopProfileInput }
+  | { ok: false; errors: Partial<Record<ShopProfileFields, string>> } {
+  const raw = (input ?? {}) as Record<string, unknown>;
+  const S = SHOP_LIMITS;
+  const place = checkShopPlace(raw.city, raw.neighborhood);
+  const description = clean(str(raw.description, 2000) ?? "");
+  const errors: Partial<Record<ShopProfileFields, string>> = { ...place.errors };
+  if (!between(description, S.descriptionMin, S.descriptionMax))
+    errors.description = `Décrivez ce que vous vendez : ${S.descriptionMin} à ${S.descriptionMax} caractères.`;
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return { ok: true, value: { city: place.city, neighborhood: place.neighborhood, description } };
 }
 
 // --- Produit ---

@@ -16,6 +16,18 @@ export interface Seller {
   city: string;
 }
 
+/** Copie publique complète d'une boutique, tenue par le module vendors (S7.5-T07) : page publique et annuaire. */
+export interface SellerProfile extends Seller {
+  neighborhood: string | null;
+  description: string;
+  /** Boutique Kemdia (« Boutique officielle »). */
+  official: boolean;
+  /** Validée et non suspendue : seule une boutique active est montrée. */
+  active: boolean;
+  /** Date de la première validation. */
+  since: Date;
+}
+
 /** Contenu public d'une fiche. */
 export interface ListingContent {
   id: string;

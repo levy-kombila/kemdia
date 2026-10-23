@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { MAX_AVAILABILITY_LINES, MAX_QUERY_LENGTH } from "@kemdia/contracts/constants";
 import { CategoryTree, type Category, type CategoryNode } from "../domain/category.js";
 import { ListingOffers } from "../domain/listing.js";
@@ -16,6 +16,9 @@ import {
   type ProductCriteria,
   type ProductRepository,
   type ProductSummary,
+  type PublicShop,
+  type PublicShops,
+  PUBLIC_SHOPS,
 } from "./ports.js";
 import {
   parseCity,
@@ -27,6 +30,19 @@ import {
 
 /** Durée pendant laquelle l'arborescence est gardée en mémoire (elle change rarement). */
 export const CATEGORY_CACHE_MS = 60_000;
+
+/** Annuaire des boutiques (S7.5-T07) : 24 par page, 100 pages au plus. */
+export const SHOP_PAGE_SIZE = 24;
+const MAX_SHOP_PAGE = 100;
+/** Adresse d'une boutique (même règle que la base : vendors.shops_slug_check). */
+const SHOP_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** Quartier passé dans l'adresse : 2 à 80 caractères, lettres, chiffres, espaces et ponctuation simple. */
+function parsePlaceName(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const text = value.trim();
+  return /^[\p{L}0-9][\p{L}0-9 '’.()-]{1,79}$/u.test(text) ? text : undefined;
+}
 
 /** Suggestions pendant la frappe (S7.5-T06) : 8 au plus en tout. */
 export const SUGGESTION_LIMITS = { products: 4, categories: 2, brands: 2 } as const;
@@ -101,7 +117,34 @@ export class CatalogService {
   constructor(
     @Inject(CATEGORY_REPOSITORY) private readonly categories: CategoryRepository,
     @Inject(PRODUCT_REPOSITORY) private readonly products: ProductRepository,
+    // Boutiques publiques (S7.5-T07) ; facultatif dans les tests qui ne s'en servent pas
+    @Optional() @Inject(PUBLIC_SHOPS) private readonly shops: PublicShops | null = null,
   ) {}
+
+  /**
+   * Annuaire des boutiques (S7.5-T07) : boutiques actives, la boutique officielle d'abord, puis celles du quartier du
+   * client, puis par nom. Une ville ou un quartier mal formé est ignoré (jamais d'erreur).
+   */
+  async listShops(input: { city?: unknown; neighborhood?: unknown; page?: unknown }) {
+    const city = parseCity(input.city);
+    const neighborhood = city ? parsePlaceName(input.neighborhood) : undefined;
+    const page =
+      typeof input.page === "string" && /^\d{1,4}$/.test(input.page) ? Number(input.page) : 1;
+    if (!this.shops)
+      return { items: [], page: 1, pageSize: SHOP_PAGE_SIZE, total: 0, totalPages: 1 };
+    return this.shops.list({
+      ...(city ? { city } : {}),
+      ...(neighborhood ? { neighborhood } : {}),
+      page: Math.min(Math.max(page, 1), MAX_SHOP_PAGE),
+      pageSize: SHOP_PAGE_SIZE,
+    });
+  }
+
+  /** Page publique d'une boutique (S7.5-T07) : `null` si l'adresse est inconnue ou la boutique pas active. */
+  async getShop(slug: string): Promise<PublicShop | null> {
+    if (!SHOP_SLUG.test(slug) || !this.shops) return null;
+    return this.shops.findActiveBySlug(slug);
+  }
 
   async categoryTree(): Promise<CategoryTree> {
     const time = this.clock();
@@ -245,9 +288,16 @@ export class CatalogService {
       inStock: false,
       onlyDeals: search.promotionsOnly,
       ...(criteria.badge ? { badge: criteria.badge } : {}),
+      ...(criteria.shopId ? { shopId: criteria.shopId } : {}),
     };
     // Même recherche il y a moins de 30 s (la liste puis ses compteurs, une page suivante…) : même réponse
-    const key = JSON.stringify([base.categoryIds ?? null, base.terms, base.onlyDeals, base.badge]);
+    const key = JSON.stringify([
+      base.categoryIds ?? null,
+      base.terms,
+      base.onlyDeals,
+      base.badge,
+      base.shopId ?? null,
+    ]);
     const now = this.clock();
     const known = this.corrections.get(key);
     if (known && known.expires > now) return known.terms;
@@ -352,6 +402,13 @@ export class CatalogService {
   }
 
   private async criteria(search: ProductSearch): Promise<ProductCriteria | null> {
+    // Page d'une boutique (S7.5-T07) : boutique inconnue ou pas active → liste vide
+    let shopId: string | undefined;
+    if (search.shopSlug) {
+      const shop = await this.getShop(search.shopSlug);
+      if (!shop) return null;
+      shopId = shop.shopId;
+    }
     let categoryIds: string[] | undefined;
     if (search.categorySlug) {
       const tree = await this.categoryTree();
@@ -370,6 +427,7 @@ export class CatalogService {
       onlyDeals: search.onlyDeals || search.promotionsOnly,
       ...(search.minRating !== undefined ? { minRating: search.minRating } : {}),
       ...(search.badge ? { badge: search.badge } : {}),
+      ...(shopId ? { shopId } : {}),
     };
   }
 }

@@ -19,6 +19,7 @@ const NOW = new Date("2026-10-15T20:00:00.000Z");
 const APPLICATION = {
   name: "  Chez   Ali Électronique ",
   city: " Libreville ",
+  neighborhood: null,
   phone: "077 12 34 56",
   description: "Téléphones, chargeurs et accessoires d'origine, garantis 6 mois.",
 };
@@ -49,6 +50,7 @@ describe("Demande de boutique (S6-T01)", () => {
       nameKey: "chez aii eiectronique",
       slugBase: "chez-ali-electronique",
       city: "Libreville",
+      neighborhood: null,
       contactPhone: "+241077123456",
       description: "Téléphones, chargeurs et accessoires d'origine, garantis 6 mois.",
     });

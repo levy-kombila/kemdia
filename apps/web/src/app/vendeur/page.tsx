@@ -110,7 +110,10 @@ export default async function VendorHomePage({
           )}
           <dl className="text-ink-700 grid gap-1 text-sm sm:grid-cols-[8rem_1fr]">
             <dt className="font-semibold">Ville</dt>
-            <dd>{shop.city}</dd>
+            <dd>
+              {shop.city}
+              {shop.neighborhood ? ` — ${shop.neighborhood}` : ""}
+            </dd>
             <dt className="font-semibold">Mobile</dt>
             <dd>{shop.phone ? formatGabonPhone(shop.phone) : "—"}</dd>
           </dl>
@@ -123,6 +126,7 @@ export default async function VendorHomePage({
               initial={{
                 name: shop.name,
                 city: shop.city,
+                neighborhood: shop.neighborhood ?? "",
                 phone: shop.phone ? formatGabonPhone(shop.phone) : "",
                 description: shop.description,
               }}
@@ -157,6 +161,10 @@ export default async function VendorHomePage({
     <VendorShell section="accueil" menu title={shop.name} notice={notice} error={error}>
       <p className="text-ink-500 flex items-center gap-2 text-sm">
         <StatusBadge tone="ok">Boutique active</StatusBadge> {shop.city}
+        {shop.neighborhood ? ` — ${shop.neighborhood}` : ""} ·{" "}
+        <Link href={`/boutique/${shop.slug}`} className="text-brand-700 underline">
+          Voir ma page publique
+        </Link>
       </p>
       {!page.ok && (
         <FormAlert>

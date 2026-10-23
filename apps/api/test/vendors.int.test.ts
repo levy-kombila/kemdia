@@ -12,6 +12,9 @@ import {
   AdminShopSchema,
   KEMDIA_SHOP_ID,
   ProblemDetailsSchema,
+  ProductPageSchema,
+  PublicShopPageSchema,
+  PublicShopSchema,
   ShopSchema,
 } from "@kemdia/contracts";
 import { AppModule } from "../src/app.module.js";
@@ -347,5 +350,98 @@ describe("Boutiques (PostgreSQL, HTTP)", () => {
       ),
     ).rejects.toThrow();
     expect(await prisma.shop.count({ where: { ownerAccountId: client.accountId } })).toBe(0);
+  });
+
+  it("S7.5-T07 : « Ma boutique », page publique et annuaire (quartier d'abord), sans téléphone", async () => {
+    const patch = (body: object, token = client.token) =>
+      request(app.getHttpServer())
+        .patch("/api/v1/vendors/shop")
+        .set("X-Kemdia-Internal-Key", INTERNAL_KEY)
+        .set("Authorization", `Bearer ${token}`)
+        .send(body);
+    const pub = (url: string) =>
+      request(app.getHttpServer()).get(url).set("X-Kemdia-Internal-Key", INTERNAL_KEY);
+
+    const shop = matches(
+      ShopSchema,
+      (await apply({ ...application(), neighborhood: "Akébé" }).expect(201)).body,
+    );
+    expect(shop).toMatchObject({ city: "Libreville", neighborhood: "Akébé" });
+    // En attente : pas de page publique
+    await pub(`/api/v1/shops/${shop.slug}`).expect(404);
+    await decide(shop.id, "approve").expect(200);
+
+    const page = await pub(`/api/v1/shops/${shop.slug}`).expect(200);
+    // Une suspension se voit en une minute au plus, même derrière un cache partagé
+    expect(page.headers["cache-control"]).toBe("public, max-age=60");
+    const visible = matches(PublicShopSchema, page.body);
+    expect(visible).toMatchObject({
+      name: shop.name,
+      neighborhood: "Akébé",
+      official: false,
+      productCount: 0,
+    });
+    // Ni téléphone, ni propriétaire, ni identifiant interne
+    expect(JSON.stringify(page.body)).not.toMatch(/phone|owner|"id"|\+241/);
+
+    // Le vendeur change de quartier : la page publique suit, le journal le garde
+    const updated = matches(
+      ShopSchema,
+      (
+        await patch({
+          city: "Libreville",
+          neighborhood: "Glass",
+          description: "Pagnes, robes et chemises cousus sur commande à Glass.",
+        }).expect(200)
+      ).body,
+    );
+    expect(updated).toMatchObject({ name: shop.name, neighborhood: "Glass" });
+    expect(
+      matches(PublicShopSchema, (await pub(`/api/v1/shops/${shop.slug}`).expect(200)).body)
+        .neighborhood,
+    ).toBe("Glass");
+    expect((await auditOf(shop.id)).map((e) => e.action)).toContain("shop.profile_updated");
+    // Ville hors liste, nom non modifiable, quartier hors liste
+    await patch({ city: "Atlantis", description: "Pagnes, robes et chemises cousus." }).expect(422);
+    await patch({
+      city: "Libreville",
+      name: "Autre",
+      description: "Pagnes, robes et chemises.",
+    }).expect(400);
+    await patch({
+      city: "Oyem",
+      neighborhood: "Glass",
+      description: "Pagnes, robes et chemises.",
+    }).expect(422);
+
+    // Annuaire : boutique officielle d'abord, puis celles du quartier du client
+    const list = matches(
+      PublicShopPageSchema,
+      (await pub("/api/v1/shops?ville=Libreville&quartier=Glass").expect(200)).body,
+    );
+    expect(list.items[0]).toMatchObject({ slug: "kemdia", official: true });
+    expect(list.items[0]!.productCount).toBeGreaterThan(0);
+    expect(list.items[1]?.slug).toBe(shop.slug);
+    expect(list.items.every((s) => s.city === "Libreville")).toBe(true);
+
+    // Produits d'une boutique : prix et stock de SON offre
+    const kemdiaProducts = matches(
+      ProductPageSchema,
+      (await pub("/api/v1/products?shop=kemdia&pageSize=5").expect(200)).body,
+    );
+    expect(kemdiaProducts.total).toBe(list.items[0]!.productCount);
+
+    // Suspendue : plus de page publique, plus de produits listés
+    await decide(shop.id, "suspend", "Articles contrefaits signalés").expect(200);
+    await pub(`/api/v1/shops/${shop.slug}`).expect(404);
+    expect(
+      matches(ProductPageSchema, (await pub(`/api/v1/products?shop=${shop.slug}`).expect(200)).body)
+        .total,
+    ).toBe(0);
+    const after = matches(
+      PublicShopPageSchema,
+      (await pub("/api/v1/shops?ville=Libreville").expect(200)).body,
+    );
+    expect(after.items.map((s) => s.slug)).not.toContain(shop.slug);
   });
 });

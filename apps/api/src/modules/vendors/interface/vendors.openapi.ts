@@ -111,6 +111,29 @@ export const vendorsPaths = {
         "404": problem("`BOUTIQUE_INTROUVABLE` : aucune demande pour ce compte"),
       },
     },
+    patch: {
+      tags: ["Boutiques"],
+      summary: "« Ma boutique » : ville, quartier et description (S7.5-T07)",
+      description:
+        "Le vendeur change lui-même ville et quartier (listes de la livraison) et description, sans nouvel examen ; jamais le nom. Boutique validée : sa page publique change aussitôt. Tracé au journal (`shop.profile_updated`).",
+      operationId: "updateMyShop",
+      security: bearer,
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("ShopProfileRequest") } },
+      },
+      responses: {
+        "200": json("Shop", "La boutique à jour"),
+        "400": problem("Corps invalide"),
+        ...sessionErrors,
+        "404": problem("`BOUTIQUE_INTROUVABLE` : aucune boutique pour ce compte"),
+        "409": problem("`STATUT_BOUTIQUE_INCOMPATIBLE` : boutique refusée (refaire une demande)"),
+        "422": problem(
+          "`BOUTIQUE_INVALIDE` : ville ou quartier hors liste, description trop courte ou trop longue",
+        ),
+        "429": problem("Plus de 10 modifications par minute pour ce compte (`TROP_DE_REQUETES`)"),
+      },
+    },
   },
   "/api/v1/admin/shops": {
     get: {

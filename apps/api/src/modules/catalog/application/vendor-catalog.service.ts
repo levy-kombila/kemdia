@@ -12,7 +12,7 @@ import {
   onOfferCreate,
   onOfferRestore,
   onOfferWithdraw,
-  type Seller,
+  type SellerProfile,
 } from "../domain/listing.js";
 import { Product, type ProductStatus } from "../domain/product.js";
 import {
@@ -471,8 +471,8 @@ export class VendorCatalog {
     return this.products.setShopSuspended(shopId, suspended);
   }
 
-  /** Nom, adresse et ville de la boutique, montrés à côté de ses offres (module vendors, S7.5-T02). */
-  syncSeller(shopId: string, seller: Seller): Promise<void> {
+  /** Copie publique de la boutique : à côté de ses offres (S7.5-T02) et sur sa page (S7.5-T07), module vendors. */
+  syncSeller(shopId: string, seller: SellerProfile): Promise<void> {
     return this.sellers.save(shopId, seller);
   }
 

@@ -5,18 +5,21 @@ import {
   decide,
   newShop,
   resubmit,
+  updateProfile,
   validateApplication,
   type Shop,
   type ShopDecision,
   type ShopStatus,
 } from "../domain/shop.js";
 import { VendorsError } from "../domain/vendors-error.js";
+import { resolveShopPlace } from "./shop-place.js";
 import {
   SHOP_LISTING,
   SHOP_REPOSITORY,
   VENDORS_RANDOM,
   VENDORS_TRANSACTION,
   type ShopCursor,
+  type SellerProfile,
   type ShopListing,
   type ShopRepository,
   type VendorsRandom,
@@ -32,7 +35,15 @@ export interface ShopActor {
 export interface ShopApplicationInput {
   name: string;
   city: string;
+  /** Quartier de la liste officielle (S7.5-T07) ; vide ou « Autre quartier » : non précisé. */
+  neighborhood?: string | null;
   phone: string;
+  description: string;
+}
+
+export interface ShopProfileInput {
+  city: string;
+  neighborhood?: string | null;
   description: string;
 }
 
@@ -89,7 +100,9 @@ export class ShopService {
     input: ShopApplicationInput,
     context: AuditContext,
   ): Promise<Shop> {
-    const application = validateApplication(input);
+    // Ville et quartier des listes officielles (S7.5-T07) : la demande est refusée sinon
+    const place = resolveShopPlace(input.city, input.neighborhood);
+    const application = validateApplication({ ...input, ...place });
     const now = this.clock();
     return this.tx.run(async () => {
       await this.shops.lockOwner(accountId);
@@ -115,6 +128,47 @@ export class ShopService {
         context,
       });
       return shop;
+    });
+  }
+
+  /**
+   * « Ma boutique » (S7.5-T07) : le vendeur change ville, quartier et description, sans nouvel examen. Une boutique
+   * déjà validée (active ou suspendue) met aussitôt à jour sa copie publique dans le catalogue. Tracé au journal.
+   */
+  async updateProfile(
+    accountId: string,
+    input: ShopProfileInput,
+    context: AuditContext,
+  ): Promise<Shop> {
+    const place = resolveShopPlace(input.city, input.neighborhood);
+    const now = this.clock();
+    return this.tx.run(async () => {
+      await this.shops.lockOwner(accountId);
+      const owned = await this.shops.findByOwner(accountId);
+      if (!owned) throw notFound();
+      // Ligne verrouillée comme pour une décision de l'équipe (relecture de sécurité) : une suspension faite au même
+      // instant attend la fin de cette modification, ou celle-ci repart de la boutique déjà suspendue (jamais
+      // l'inverse : le statut n'est jamais réécrit à partir d'une lecture périmée)
+      const shop = await this.shops.lockById(owned.id);
+      if (!shop) throw notFound();
+      const next = updateProfile(shop, { ...place, description: input.description });
+      if (!(await this.shops.update(next, now))) throw nameTaken();
+      if (next.status === "active" || next.status === "suspended") {
+        await this.listing.syncSeller(next.id, sellerOf(next));
+      }
+      await this.audit.record({
+        action: "shop.profile_updated",
+        actor: { type: "account", id: accountId },
+        target: { type: "shop", id: shop.id },
+        details: {
+          city: next.city,
+          ...(next.neighborhood ? { neighborhood: next.neighborhood } : {}),
+          ...(next.city !== shop.city ? { previousCity: shop.city } : {}),
+          descriptionChanged: next.description !== shop.description ? "oui" : "non",
+        },
+        context,
+      });
+      return next;
     });
   }
 
@@ -159,11 +213,7 @@ export class ShopService {
       if (decision !== "reject") {
         await this.listing.setShopSuspended(shop.id, decision === "suspend");
         // Nom, adresse et ville à côté de ses offres (S7.5-T02) : ceux validés par l'équipe
-        await this.listing.syncSeller(shop.id, {
-          name: next.name,
-          slug: next.slug,
-          city: next.city,
-        });
+        await this.listing.syncSeller(shop.id, sellerOf(next));
       }
       await this.audit.record({
         action: AUDIT_ACTION[decision],
@@ -222,4 +272,21 @@ export class ShopService {
     }
     throw nameTaken();
   }
+}
+
+/**
+ * Copie publique de la boutique dans le catalogue (S7.5-T02, S7.5-T07) : ce que les clients voient. Le téléphone n'y
+ * est jamais (choix du 2026-10-23 : les achats passent par Kemdia).
+ */
+function sellerOf(shop: Shop): SellerProfile {
+  return {
+    name: shop.name,
+    slug: shop.slug,
+    city: shop.city,
+    neighborhood: shop.neighborhood,
+    description: shop.description,
+    official: shop.kind === "kemdia",
+    active: shop.status === "active",
+    since: shop.reviewedAt ?? shop.submittedAt,
+  };
 }

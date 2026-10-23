@@ -35,6 +35,7 @@ const shopOf = (status: ShopStatus, owner = AWA): Shop => ({
   nameKey: "chez awa",
   slug: "chez-awa",
   city: "Libreville",
+  neighborhood: null,
   contactPhone: "+241066123456",
   description: "Pagnes et robes cousus à Libreville.",
   status,

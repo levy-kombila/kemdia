@@ -233,6 +233,8 @@ export const AUDIT_ACTIONS = [
   "shop.approved",
   "shop.rejected",
   "shop.suspended",
+  // « Ma boutique » : ville, quartier, description (S7.5-T07)
+  "shop.profile_updated",
   // Produits des vendeurs et modération (S6-T02)
   "product.submitted",
   "product.approved",

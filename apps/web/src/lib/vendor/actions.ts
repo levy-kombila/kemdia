@@ -8,6 +8,7 @@ import { forgetSession } from "@/lib/auth/session";
 import type { VendorFailure } from "./api-vendor";
 import {
   checkContent,
+  checkShopProfile,
   checkShopRequest,
   checkVariants,
   parseAmount,
@@ -64,6 +65,20 @@ export async function applyShopAction(input: unknown): Promise<{ ok: true } | Ve
       return invalid({ name: vendorErrorMessage(result.code) });
     return failure(token, result);
   }
+  return { ok: true };
+}
+
+/** « Ma boutique » (S7.5-T07) : ville, quartier et description ; le nom ne change pas ici. */
+export async function updateShopProfileAction(
+  input: unknown,
+): Promise<{ ok: true } | VendorFormFailure> {
+  const token = await sessionToken();
+  if (!token) return signedOut;
+  const checked = checkShopProfile(input);
+  if (!checked.ok) return invalid(checked.errors);
+  const result = await vendorApi().updateShop(token, checked.value);
+  if (!result.ok) return failure(token, result);
+  // La page publique de la boutique et l'annuaire se mettent à jour (cache du site : 60 s au plus)
   return { ok: true };
 }
 

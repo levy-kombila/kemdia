@@ -127,12 +127,22 @@ model ListingCorrection {
 /// Boutique telle que le catalogue l'affiche à côté d'une offre (S7.5-T02) : copie tenue par le module vendors
 /// (validation, suspension, réactivation), pour ne jamais lire ses tables.
 model Seller {
-  shopId    String   @id @map("shop_id") @db.Uuid
-  name      String   @db.VarChar(60)
-  slug      String   @db.VarChar(80)
-  city      String   @db.VarChar(60)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  shopId       String   @id @map("shop_id") @db.Uuid
+  name         String   @db.VarChar(60)
+  slug         String   @unique @db.VarChar(80)
+  city         String   @db.VarChar(60)
+  /// Quartier (liste officielle de la livraison) ; vide si non choisi (S7.5-T07)
+  neighborhood String?  @db.VarChar(80)
+  description  String   @default("") @db.VarChar(500)
+  /// Boutique Kemdia (« Boutique officielle »)
+  official     Boolean  @default(false)
+  /// Validée et non suspendue : seule une boutique active a une page publique
+  active       Boolean  @default(true)
+  /// Date de validation (« vend sur Kemdia depuis… »)
+  since        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  @@index([active, city])
   @@map("sellers")
   @@schema("catalog")
 }

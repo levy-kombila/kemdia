@@ -40,6 +40,8 @@ export interface ProductSearchInput {
   city?: unknown;
   /** « 1 » : mots cherchés tels quels, sans correction des fautes de frappe (S7.5-T06). */
   exact?: unknown;
+  /** Adresse d'une boutique (S7.5-T07) : seulement les fiches où elle a une offre visible. */
+  shop?: unknown;
 }
 
 export interface ProductSearch {
@@ -59,6 +61,7 @@ export interface ProductSearch {
   city?: string;
   /** Pas de correction des fautes de frappe (lien « chercher exactement … »). */
   exact: boolean;
+  shopSlug?: string;
 }
 
 const integer = (value: unknown): number | undefined => {
@@ -112,6 +115,9 @@ export function parseProductSearch(input: ProductSearchInput): ProductSearch {
     ...(BADGES.includes(input.badge as Badge) ? { badge: input.badge as Badge } : {}),
     ...(city ? { city } : {}),
     exact: flag(input.exact),
+    ...(typeof input.shop === "string" && /^[a-z0-9-]{1,80}$/.test(input.shop)
+      ? { shopSlug: input.shop }
+      : {}),
   };
 }
 

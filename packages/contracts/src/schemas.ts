@@ -1474,7 +1474,16 @@ export const ShopApplicationRequestSchema = z
     name: shopText(SHOP_LIMITS.nameMax).describe(
       `Nom de la boutique (${SHOP_LIMITS.nameMin} à ${SHOP_LIMITS.nameMax} caractères, unique, sans « Kemdia »)`,
     ),
-    city: shopText(SHOP_LIMITS.cityMax).describe("Ville où se trouve la boutique"),
+    city: shopText(SHOP_LIMITS.cityMax).describe(
+      "Ville de la boutique, choisie dans la liste de la livraison (S7.5-T07)",
+    ),
+    neighborhood: z
+      .string()
+      .max(80)
+      .optional()
+      .describe(
+        "Quartier de la liste de la ville ; vide ou « Autre quartier » : non précisé (S7.5-T07)",
+      ),
     phone: z.string().max(30).describe("Mobile gabonais de contact (06… ou 07…)"),
     description: shopText(SHOP_LIMITS.descriptionMax).describe(
       `Ce que vend la boutique (${SHOP_LIMITS.descriptionMin} à ${SHOP_LIMITS.descriptionMax} caractères)`,
@@ -1493,6 +1502,7 @@ const shopFields = {
   name: z.string(),
   slug,
   city: z.string(),
+  neighborhood: z.string().nullable().describe("Quartier (S7.5-T07) ; vide : non précisé"),
   description: z.string(),
   status: z.enum(SHOP_STATUSES),
   statusReason: z
@@ -1507,6 +1517,48 @@ export const ShopSchema = z
   .object({ ...shopFields, phone: z.string().nullable().describe("Mobile de contact") })
   .meta({ id: "Shop", description: "La boutique du compte connecté" });
 export type Shop = z.infer<typeof ShopSchema>;
+
+/** « Ma boutique » (S7.5-T07) : ce que le vendeur change lui-même, sans nouvel examen (jamais le nom). */
+export const ShopProfileRequestSchema = z
+  .strictObject({
+    city: shopText(SHOP_LIMITS.cityMax).describe("Ville, choisie dans la liste de la livraison"),
+    neighborhood: z
+      .string()
+      .max(80)
+      .optional()
+      .describe("Quartier de la liste de la ville ; vide ou « Autre quartier » : non précisé"),
+    description: shopText(SHOP_LIMITS.descriptionMax).describe(
+      `Ce que vend la boutique (${SHOP_LIMITS.descriptionMin} à ${SHOP_LIMITS.descriptionMax} caractères)`,
+    ),
+  })
+  .meta({ id: "ShopProfileRequest", description: "Ville, quartier et description de sa boutique" });
+export type ShopProfileRequest = z.infer<typeof ShopProfileRequestSchema>;
+
+/** Boutique vue par tout le monde (S7.5-T07) : ni téléphone, ni propriétaire, ni identifiant interne. */
+export const PublicShopSchema = z
+  .object({
+    slug,
+    name: z.string(),
+    city: z.string(),
+    neighborhood: z.string().nullable(),
+    description: z.string(),
+    official: z.boolean().describe("Boutique Kemdia (« Boutique officielle »)"),
+    since: z.iso.datetime().describe("Vend sur Kemdia depuis (première validation)"),
+    productCount: z.int().nonnegative().describe("Produits en vente (fiches visibles)"),
+  })
+  .meta({ id: "PublicShop", description: "Boutique publique (annuaire et page de la boutique)" });
+export type PublicShop = z.infer<typeof PublicShopSchema>;
+
+export const PublicShopPageSchema = z
+  .object({
+    items: z.array(PublicShopSchema),
+    page: z.int().min(1),
+    pageSize: z.int().min(1),
+    total: z.int().nonnegative(),
+    totalPages: z.int().min(1),
+  })
+  .meta({ id: "PublicShopPage", description: "Une page de l'annuaire des boutiques" });
+export type PublicShopPage = z.infer<typeof PublicShopPageSchema>;
 
 export const AdminShopSchema = z
   .object({

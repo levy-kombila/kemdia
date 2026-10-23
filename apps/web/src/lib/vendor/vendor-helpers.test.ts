@@ -23,6 +23,7 @@ describe("demande de boutique", () => {
       value: {
         name: "Couture Nzé",
         city: "Oyem",
+        neighborhood: "",
         phone: "+241077987654",
         description: "Robes et chemises cousues à la main.",
       },
@@ -173,5 +174,33 @@ describe("catégories proposées", () => {
     ]);
     expect(categoryLabel(tree, "c")).toBe("Mode › Pagnes › Wax");
     expect(categoryLabel(tree, "z")).toBeNull();
+  });
+});
+
+describe("ville, quartier et « Ma boutique » (S7.5-T07)", () => {
+  it("listes officielles : ville et quartier de la ville ; « Autre quartier » = vide", async () => {
+    const { checkShopPlace, checkShopProfile } = await import("./forms");
+    expect(checkShopPlace("Libreville", "Akébé")).toEqual({
+      city: "Libreville",
+      neighborhood: "Akébé",
+      errors: {},
+    });
+    expect(checkShopPlace("Libreville", "Autre quartier").neighborhood).toBe("");
+    expect(checkShopPlace("Atlantis", "").errors.city).toBeDefined();
+    expect(checkShopPlace("Oyem", "Akébé").errors.neighborhood).toBeDefined();
+    expect(
+      checkShopProfile({
+        city: "Oyem",
+        neighborhood: "",
+        description: "Robes et chemises cousues.",
+      }),
+    ).toEqual({
+      ok: true,
+      value: { city: "Oyem", neighborhood: "", description: "Robes et chemises cousues." },
+    });
+    expect(checkShopProfile({ city: "Oyem", description: "Court" })).toMatchObject({
+      ok: false,
+      errors: { description: expect.any(String) },
+    });
   });
 });

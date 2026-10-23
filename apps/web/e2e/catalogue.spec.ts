@@ -75,3 +75,31 @@ test("accueil : les cartes du bas de page, rendues interactives à l'approche, f
     grid.getByRole("button", { name: `Retirer « ${title} » des favoris` }),
   ).toHaveAttribute("aria-pressed", "true");
 });
+
+test("S7.5-T07 : annuaire des boutiques, page publique et lien depuis la fiche produit", async ({
+  page,
+}) => {
+  await page.goto("/boutiques?ville=Libreville&quartier=Glass");
+  await expect(
+    page.getByRole("heading", { name: "Boutiques près de chez moi", level: 1 }),
+  ).toBeVisible();
+  // La boutique officielle reste en tête de l'annuaire
+  const kemdia = page.getByRole("link", { name: /Kemdia.*Boutique officielle/ }).first();
+  await expect(kemdia).toBeVisible();
+  await kemdia.click();
+  await expect(page).toHaveURL(/\/boutique\/kemdia$/);
+  await expect(page.getByRole("heading", { name: /Kemdia/, level: 1 })).toBeVisible();
+  await expect(page.getByText(/Vend sur Kemdia depuis/)).toBeVisible();
+  // Ses produits, triables et paginés comme une catégorie ; jamais de téléphone
+  await expect(page.locator("a[href^='/produit/']").first()).toBeVisible();
+  await expect(page.locator("main header").first()).not.toContainText(/\+241|0[67]\d \d{2} \d{2}/);
+
+  // Fiche produit : « Vendu par » mène à la page de la boutique
+  await page.locator("a[href^='/produit/']").first().click();
+  await page.locator("a[href='/boutique/kemdia']").first().click();
+  await expect(page).toHaveURL(/\/boutique\/kemdia$/);
+
+  // Boutique inconnue : page introuvable
+  const missing = await page.goto("/boutique/boutique-qui-n-existe-pas");
+  expect(missing?.status()).toBe(404);
+});

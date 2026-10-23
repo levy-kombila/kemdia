@@ -17,12 +17,18 @@ import {
   presentCategory,
   presentCategoryNode,
   presentProduct,
+  presentPublicShop,
   presentSuggestions,
 } from "./presenters.js";
 import { AvailabilityRequestSchema, type AvailabilityRequest } from "@kemdia/contracts";
 
 /** Le catalogue change rarement : 60 s de cache côté client et relais (le site, un futur CDN). */
 const CACHE_PUBLIC = "public, max-age=60, stale-while-revalidate=300";
+/**
+ * Boutiques (S7.5-T07) : une suspension doit se voir vite, même derrière un futur CDN (relecture de sécurité) : pas de
+ * copie périmée servie au-delà de la minute.
+ */
+const CACHE_SHOPS = "public, max-age=60";
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /** Le paramètre de requête peut être répété (`?q=a&q=b`) : on garde la première valeur. */
@@ -47,6 +53,7 @@ function searchInput(query: Record<string, unknown>): ProductSearchInput {
     badge: first(query.badge),
     city: first(query.ville),
     exact: first(query.exact),
+    shop: first(query.shop),
   };
 }
 
@@ -107,6 +114,34 @@ export class CatalogController {
   @Header("Cache-Control", CACHE_PUBLIC)
   facets(@Query() query: Record<string, unknown>) {
     return this.catalog.getFacets(searchInput(query));
+  }
+
+  /**
+   * Annuaire des boutiques (S7.5-T07) : boutiques actives, la boutique officielle d'abord, puis celles du quartier du
+   * client (`quartier`), puis par nom ; `ville` limite à une ville.
+   */
+  @Get("shops")
+  @Header("Cache-Control", CACHE_SHOPS)
+  async shops(
+    @Query("ville") city?: unknown,
+    @Query("quartier") neighborhood?: unknown,
+    @Query("page") page?: unknown,
+  ) {
+    const result = await this.catalog.listShops({
+      city: first(city),
+      neighborhood: first(neighborhood),
+      page: first(page),
+    });
+    return { ...result, items: result.items.map(presentPublicShop) };
+  }
+
+  /** Page publique d'une boutique active (ses produits : `GET /products?shop=`). */
+  @Get("shops/:slug")
+  @Header("Cache-Control", CACHE_SHOPS)
+  async shop(@Param("slug") slug: string) {
+    const shop = await this.catalog.getShop(slug);
+    if (!shop) throw new NotFoundException();
+    return presentPublicShop(shop);
   }
 
   @Get("products/:slug")

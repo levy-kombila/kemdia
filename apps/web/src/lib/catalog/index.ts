@@ -8,6 +8,8 @@ import {
   type ProductPage,
   type ProductQuery,
   type ProductSummary,
+  type PublicShop,
+  type PublicShopPage,
 } from "@kemdia/contracts";
 import { connection } from "next/server";
 import { catalogSource } from "@/lib/config/server-config";
@@ -41,7 +43,30 @@ async function catalog(): Promise<CatalogPort> {
 }
 
 export { CatalogUnavailableError } from "./port";
-export type { Category, CategoryNode, CategoryView, ProductDetail, ProductPage, ProductSummary };
+export type {
+  Category,
+  CategoryNode,
+  CategoryView,
+  ProductDetail,
+  ProductPage,
+  ProductSummary,
+  PublicShop,
+  PublicShopPage,
+};
+
+/** Annuaire des boutiques (S7.5-T07). */
+export async function getShops(query: {
+  city?: string;
+  neighborhood?: string;
+  page?: number;
+}): Promise<PublicShopPage> {
+  return (await catalog()).shops(query);
+}
+
+/** Page publique d'une boutique (S7.5-T07) : `null` si inconnue ou pas active. */
+export async function getShop(slug: string): Promise<PublicShop | null> {
+  return (await catalog()).shop(slug);
+}
 
 export type ListingFacets = {
   brands: { name: string; count: number }[];

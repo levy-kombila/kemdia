@@ -41,6 +41,8 @@ export interface Shop {
   nameKey: string | null;
   slug: string;
   city: string;
+  /** Quartier (liste officielle de la livraison, S7.5-T07) ; `null` : « Autre quartier » ou pas encore choisi. */
+  neighborhood: string | null;
   contactPhone: string | null;
   description: string;
   status: ShopStatus;
@@ -57,6 +59,7 @@ export interface ShopApplication {
   nameKey: string;
   slugBase: string;
   city: string;
+  neighborhood: string | null;
   contactPhone: string;
   description: string;
 }
@@ -147,6 +150,8 @@ function requireLength(value: string, min: number, max: number, label: string): 
 export function validateApplication(input: {
   name: string;
   city: string;
+  /** Déjà vérifié par l'application (liste officielle des quartiers de la ville). */
+  neighborhood?: string | null;
   phone: string;
   description: string;
 }): ShopApplication {
@@ -187,7 +192,15 @@ export function validateApplication(input: {
     SHOP_RULES.descriptionMax,
     "la description",
   );
-  return { name, nameKey, slugBase: slugOf(plainKey), city, contactPhone, description };
+  return {
+    name,
+    nameKey,
+    slugBase: slugOf(plainKey),
+    city,
+    neighborhood: input.neighborhood ?? null,
+    contactPhone,
+    description,
+  };
 }
 
 /** Motif d'un refus ou d'une suspension (montré au vendeur). */
@@ -211,6 +224,7 @@ export function newShop(
     nameKey: application.nameKey,
     slug,
     city: application.city,
+    neighborhood: application.neighborhood,
     contactPhone: application.contactPhone,
     description: application.description,
     status: "pending",
@@ -236,6 +250,7 @@ export function resubmit(shop: Shop, application: ShopApplication, slug: string,
     nameKey: application.nameKey,
     slug,
     city: application.city,
+    neighborhood: application.neighborhood,
     contactPhone: application.contactPhone,
     description: application.description,
     status: "pending",
@@ -245,6 +260,41 @@ export function resubmit(shop: Shop, application: ShopApplication, slug: string,
     reviewedAt: null,
     submittedAt: now,
   };
+}
+
+/** Ce que le vendeur change lui-même dans « Ma boutique » (S7.5-T07) : jamais le nom, l'adresse ni le téléphone. */
+export interface ShopProfile {
+  /** Ville et quartier déjà vérifiés par l'application (listes officielles de la livraison). */
+  city: string;
+  neighborhood: string | null;
+  description: string;
+}
+
+/**
+ * Le vendeur met à jour ville, quartier et description, sans nouvel examen (choix du 2026-10-23) : le nom, qui fait
+ * l'identité de la boutique aux yeux des clients, ne change pas ici. Impossible pour une boutique refusée (elle refait
+ * une demande) et pour la boutique Kemdia (pas de propriétaire).
+ */
+export function updateProfile(shop: Shop, profile: ShopProfile): Shop {
+  if (shop.kind === "kemdia" || shop.status === "rejected") {
+    throw new VendorsError(
+      "STATUT_BOUTIQUE_INCOMPATIBLE",
+      `action impossible : la boutique est « ${STATUS_LABELS[shop.status]} »`,
+    );
+  }
+  const city = requireLength(
+    cleanLine(profile.city),
+    SHOP_RULES.cityMin,
+    SHOP_RULES.cityMax,
+    "la ville",
+  );
+  const description = requireLength(
+    cleanText(profile.description),
+    SHOP_RULES.descriptionMin,
+    SHOP_RULES.descriptionMax,
+    "la description",
+  );
+  return { ...shop, city, neighborhood: profile.neighborhood, description };
 }
 
 export type ShopDecision = "approve" | "reject" | "suspend";

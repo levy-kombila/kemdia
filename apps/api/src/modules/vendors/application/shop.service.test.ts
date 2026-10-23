@@ -14,6 +14,7 @@ const admin: ShopActor = { accountId: ADMIN, roles: ["client", "admin"] };
 const APPLICATION = {
   name: "Chez Ali",
   city: "Libreville",
+  neighborhood: null,
   phone: "077 12 34 56",
   description: "Téléphones et accessoires d'origine, garantis six mois.",
 };
@@ -288,5 +289,110 @@ describe("ShopService : décisions de l'administration (S6-T01)", () => {
     expect(await codeOf(service.decide(admin, shop.id, "suspend", "Motif valable", CTX))).toBe(
       "STATUT_BOUTIQUE_INCOMPATIBLE",
     );
+  });
+});
+
+describe("ShopService : ville, quartier et « Ma boutique » (S7.5-T07)", () => {
+  it("ville et quartier des listes officielles ; « Autre quartier » = non précisé", async () => {
+    const { service } = setup();
+    expect(await codeOf(service.apply(AWA, { ...APPLICATION, city: "Ville inventée" }, CTX))).toBe(
+      "BOUTIQUE_INVALIDE",
+    );
+    expect(
+      await codeOf(
+        service.apply(AWA, { ...APPLICATION, city: "Libreville", neighborhood: "Nulle part" }, CTX),
+      ),
+    ).toBe("BOUTIQUE_INVALIDE");
+    const shop = await service.apply(
+      AWA,
+      { ...APPLICATION, city: "Libreville", neighborhood: "Akébé" },
+      CTX,
+    );
+    expect(shop).toMatchObject({ city: "Libreville", neighborhood: "Akébé" });
+    const other = await service.apply(
+      BOB,
+      { ...APPLICATION, name: "Chez Bob", city: "Oyem", neighborhood: "Autre quartier" },
+      CTX,
+    );
+    expect(other.neighborhood).toBeNull();
+  });
+
+  it("le vendeur change ville, quartier et description ; copie publique et journal à jour", async () => {
+    const { service, audit, listing } = setup();
+    const shop = await service.apply(AWA, APPLICATION, CTX);
+    // En attente : modifiable, mais pas encore de copie publique
+    await service.updateProfile(
+      AWA,
+      {
+        city: "Libreville",
+        neighborhood: "Akébé",
+        description: "Pagnes, wax et tissus de qualité",
+      },
+      CTX,
+    );
+    expect(listing).toEqual([]);
+    await service.decide(admin, shop.id, "approve", null, CTX);
+    listing.length = 0;
+    const updated = await service.updateProfile(
+      AWA,
+      {
+        city: "Port-Gentil",
+        neighborhood: "Mandji",
+        description: "Pagnes, wax et tissus de qualité",
+      },
+      CTX,
+    );
+    expect(updated).toMatchObject({
+      city: "Port-Gentil",
+      neighborhood: "Mandji",
+      name: "Chez Ali",
+    });
+    expect(listing).toEqual([`vendeur ${shop.id} Chez Ali (Port-Gentil)`]);
+    expect(audit.at(-1)).toMatchObject({
+      action: "shop.profile_updated",
+      actor: { type: "account", id: AWA },
+      details: {
+        city: "Port-Gentil",
+        neighborhood: "Mandji",
+        previousCity: "Libreville",
+        descriptionChanged: "non",
+      },
+    });
+  });
+
+  it("refusé pour une boutique refusée ou inconnue, et pour une description trop courte", async () => {
+    const { service } = setup();
+    const profile = { city: "Libreville", description: "Pagnes, wax et tissus de qualité" };
+    expect(await codeOf(service.updateProfile(AWA, profile, CTX))).toBe("BOUTIQUE_INTROUVABLE");
+    const shop = await service.apply(AWA, APPLICATION, CTX);
+    expect(
+      await codeOf(service.updateProfile(AWA, { ...profile, description: "Court" }, CTX)),
+    ).toBe("BOUTIQUE_INVALIDE");
+    await service.decide(admin, shop.id, "reject", "Pièces manquantes", CTX);
+    expect(await codeOf(service.updateProfile(AWA, profile, CTX))).toBe(
+      "STATUT_BOUTIQUE_INCOMPATIBLE",
+    );
+  });
+
+  it("relit la boutique sous verrou : une suspension faite au même instant n'est jamais annulée", async () => {
+    const { service, shops, listing } = setup();
+    const shop = await service.apply(AWA, APPLICATION, CTX);
+    await service.decide(admin, shop.id, "approve", null, CTX);
+    listing.length = 0;
+    // Entre la lecture et le verrou, l'équipe a suspendu la boutique
+    const read = shops.findByOwner.bind(shops);
+    shops.findByOwner = async (owner: string) => ({ ...(await read(owner))!, status: "active" });
+    shops.rows.set(shop.id, {
+      ...shops.rows.get(shop.id)!,
+      status: "suspended",
+      statusReason: "Articles contrefaits signalés",
+    });
+    const updated = await service.updateProfile(
+      AWA,
+      { city: "Oyem", neighborhood: "Centre", description: "Pagnes, wax et tissus de qualité" },
+      CTX,
+    );
+    expect(updated).toMatchObject({ status: "suspended", city: "Oyem" });
+    expect(shops.rows.get(shop.id)?.status).toBe("suspended");
   });
 });

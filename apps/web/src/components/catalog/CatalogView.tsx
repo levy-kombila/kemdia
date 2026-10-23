@@ -21,7 +21,7 @@ type Props = {
   /** Paramètres propres à la page à conserver (ex. q) */
   baseParams?: Record<string, string>;
   /** Sélection de la page : catégorie, recherche ou promotions (les filtres viennent de l'URL) */
-  query: Pick<ProductQuery, "category" | "q" | "scope" | "exact">;
+  query: Pick<ProductQuery, "category" | "q" | "scope" | "exact" | "shop">;
   searchParams: Record<string, string | string[] | undefined>;
   /** Bloc affiché en haut de la colonne de gauche (ex. sous-rayons) */
   sideTop?: ReactNode;

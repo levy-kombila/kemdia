@@ -1,11 +1,19 @@
-import { ClipboardList, LayoutDashboard, Package, PackagePlus, ShieldCheck } from "lucide-react";
+import {
+  ClipboardList,
+  LayoutDashboard,
+  Package,
+  PackagePlus,
+  ShieldCheck,
+  Store,
+} from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Breadcrumbs, type Crumb } from "@/components/catalog/Breadcrumbs";
 import { FormAlert } from "@/components/ui/Field";
 import { cn } from "@/lib/cn";
 
-export type VendorSection = "accueil" | "commandes" | "produits" | "nouveau" | "verification";
+export type VendorSection =
+  "accueil" | "commandes" | "produits" | "nouveau" | "verification" | "boutique";
 
 const LINKS: { id: VendorSection; label: string; href: string; icon: typeof Package }[] = [
   { id: "accueil", label: "Tableau de bord", href: "/vendeur", icon: LayoutDashboard },
@@ -18,6 +26,7 @@ const LINKS: { id: VendorSection; label: string; href: string; icon: typeof Pack
     icon: PackagePlus,
   },
   { id: "verification", label: "Vérification", href: "/vendeur/verification", icon: ShieldCheck },
+  { id: "boutique", label: "Ma boutique", href: "/vendeur/boutique", icon: Store },
 ];
 
 /**

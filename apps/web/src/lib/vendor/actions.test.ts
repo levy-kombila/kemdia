@@ -33,6 +33,7 @@ vi.mock("@/lib/config/server-config", () => ({
 }));
 const api = vi.hoisted(() => ({
   applyShop: vi.fn(),
+  updateShop: vi.fn(),
   createProduct: vi.fn(),
   updateContent: vi.fn(),
   updateVariant: vi.fn(),
@@ -103,7 +104,11 @@ describe("demande de boutique", () => {
     expect(api.applyShop).not.toHaveBeenCalled();
     api.applyShop.mockResolvedValue({ ok: true, data: {} });
     expect(await actions.applyShopAction(REQUEST)).toEqual({ ok: true });
-    expect(api.applyShop).toHaveBeenCalledWith(TOKEN, { ...REQUEST, phone: "+241077987654" });
+    expect(api.applyShop).toHaveBeenCalledWith(TOKEN, {
+      ...REQUEST,
+      neighborhood: "",
+      phone: "+241077987654",
+    });
   });
 
   it("nom pris : signalé sur le champ ; sans session : rien n'est appelé", async () => {
@@ -440,5 +445,30 @@ describe("fiches et offres (S7.5-T03)", () => {
       PRODUCT,
       "La batterie fait 5 000 mAh.",
     );
+  });
+});
+
+describe("« Ma boutique » (S7.5-T07)", () => {
+  it("revérifiée avant l'API, puis envoyée", async () => {
+    expect(
+      await actions.updateShopProfileAction({
+        city: "Atlantis",
+        description: "Robes et chemises cousues.",
+      }),
+    ).toMatchObject({ ok: false, errors: { city: expect.any(String) } });
+    expect(api.updateShop).not.toHaveBeenCalled();
+    api.updateShop.mockResolvedValue({ ok: true, data: {} });
+    expect(
+      await actions.updateShopProfileAction({
+        city: "Libreville",
+        neighborhood: "Glass",
+        description: "Robes et chemises cousues.",
+      }),
+    ).toEqual({ ok: true });
+    expect(api.updateShop).toHaveBeenCalledWith(TOKEN, {
+      city: "Libreville",
+      neighborhood: "Glass",
+      description: "Robes et chemises cousues.",
+    });
   });
 });

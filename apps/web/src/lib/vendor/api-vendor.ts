@@ -24,6 +24,7 @@ import {
   type OrderErrorCode,
   type Shop,
   type ShopApplicationRequest,
+  type ShopProfileRequest,
   type ListingCorrection,
   type OfferLine,
   type VendorErrorCode,
@@ -206,6 +207,9 @@ export function createVendorApi(options: VendorApiOptions) {
       call("GET", "/vendors/shop", token, ShopSchema),
     applyShop: (token: string, request: ShopApplicationRequest): Promise<VendorResult<Shop>> =>
       call("POST", "/vendors/shop", token, ShopSchema, { json: request }),
+    // « Ma boutique » (S7.5-T07) : ville, quartier, description
+    updateShop: (token: string, request: ShopProfileRequest): Promise<VendorResult<Shop>> =>
+      call("PATCH", "/vendors/shop", token, ShopSchema, { json: request }),
 
     // --- Produits (S6-T02) ---
     products: (
