@@ -99,6 +99,13 @@ adresses normalisées pareil pour l'invitation et le compte (et contrôlé par l
 navigateur ; journal sans adresse ni message ; copie et effacement des données ; requêtes paramétrées et curseurs
 vérifiés ; architecture respectée (portes `index.ts`, domaine sans framework).
 
+### Corrections après la première CI
+
+| Problème relevé                                                                                                                                                   | Correction                                                                                                                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Audit des dépendances : faille **haute** publiée le jour même dans Zod (`< 4.6.6`, mémoire épuisée par une collection trop grande, GHSA-mrhx-c7xc-m3w5)           | Zod **4.6.5 → 4.6.7** (API, site, contrat) ; `pnpm audit --prod` à nouveau sans faille ; description OpenAPI inchangée ; tous les tests relancés ✓ |
+| Accessibilité sur mobile : le bouton rendait le pied de page plus haut que la place réservée avant son affichage (74rem) ; sa dernière ligne paraissait sans fond | Place réservée portée de 68rem à **74rem** ; bouton sur fond blanc opaque (contraste indépendant de ce qu'il y a derrière)                         |
+
 ## 5. Qualité
 
 - Format et lint sur tout le dépôt, typecheck et build : ✓.
