@@ -9,32 +9,33 @@ Mobile Money (Moov, Airtel) et paiement à la livraison, lancement visé **fin 2
 
 ## Vue d'ensemble
 
-| Sprint    | Objectif                                                                                                | Statut      |
-| --------- | ------------------------------------------------------------------------------------------------------- | ----------- |
-| **S0**    | Décision de réécriture, choix de la stack, poste de travail                                             | ✅ Terminé  |
-| **S1**    | Fondations frontend + DevOps (CI/CD, sécurité, démo publique)                                           | ✅ Terminé  |
-| **S2**    | Intégration du KSAD + finitions frontend (comptes, tunnel de commande, filtres, tests E2E)              | ✅ Terminé  |
-| **S3**    | Backend NestJS + PostgreSQL, module `catalog`, site branché sur l'API                                   | ✅ Terminé  |
-| **S4**    | Module `identity` : comptes par e-mail ou téléphone (OTP), sécurité de connexion                        | ✅ Terminé  |
-| **S5**    | Modules `orders` + `payments` : commande, Mobile Money, paiement à la livraison                         | ✅ Terminé  |
-| **S6**    | Module `vendors` + back-office : boutiques, KYC, modération, commissions                                | ✅ Terminé  |
-| **S7**    | Module `shipping` (transporteur) + préproduction (serveur, surveillance, sauvegardes, test d'intrusion) | ✅ Terminé  |
-| **S7.5**  | Sprint correctif : CI plus rapide, écrans d'administration reportés, remarques du propriétaire          | 🚧 En cours |
-| **S8**    | Bêta fermée (vendeurs partenaires + testeurs) puis lancement Gabon 🇬🇦                                   | ⏳          |
-| Après MVP | Affiliation, application mobile, suivi GPS, Kemdia Pay v2                                               | —           |
+| Sprint    | Objectif                                                                                                | Statut     |
+| --------- | ------------------------------------------------------------------------------------------------------- | ---------- |
+| **S0**    | Décision de réécriture, choix de la stack, poste de travail                                             | ✅ Terminé |
+| **S1**    | Fondations frontend + DevOps (CI/CD, sécurité, démo publique)                                           | ✅ Terminé |
+| **S2**    | Intégration du KSAD + finitions frontend (comptes, tunnel de commande, filtres, tests E2E)              | ✅ Terminé |
+| **S3**    | Backend NestJS + PostgreSQL, module `catalog`, site branché sur l'API                                   | ✅ Terminé |
+| **S4**    | Module `identity` : comptes par e-mail ou téléphone (OTP), sécurité de connexion                        | ✅ Terminé |
+| **S5**    | Modules `orders` + `payments` : commande, Mobile Money, paiement à la livraison                         | ✅ Terminé |
+| **S6**    | Module `vendors` + back-office : boutiques, KYC, modération, commissions                                | ✅ Terminé |
+| **S7**    | Module `shipping` (transporteur) + préproduction (serveur, surveillance, sauvegardes, test d'intrusion) | ✅ Terminé |
+| **S7.5**  | Sprint correctif : CI plus rapide, écrans d'administration reportés, remarques du propriétaire          | ✅ Terminé |
+| **S8**    | Bêta fermée (vendeurs partenaires + testeurs) puis lancement Gabon 🇬🇦                                   | ⏳         |
+| Après MVP | Affiliation, application mobile, suivi GPS, Kemdia Pay v2                                               | —          |
 
 ### Jalons
 
-| Jalon  | Contenu                                                                                              | Visé                       |
-| ------ | ---------------------------------------------------------------------------------------------------- | -------------------------- |
-| v0.1.0 | Site vitrine + CI/CD + démo publique                                                                 | ✅ S1                      |
-| v0.2.0 | Parcours client complet en démonstration : compte, commande, favoris, partage, tests de bout en bout | ✅ S2                      |
-| v0.3.0 | Catalogue servi par l'API et PostgreSQL                                                              | ✅ S3                      |
-| v0.4.0 | Comptes clients sécurisés : inscription par code, sessions, rôles, journal d'audit, CSRF/CSP/limites | ✅ S4                      |
-| v0.5.0 | Premier achat de bout en bout en environnement de test (Mobile Money _sandbox_)                      | ✅ S5                      |
-| v0.7.0 | Vendeurs partenaires opérationnels                                                                   | ✅ S6                      |
-| v0.8.0 | Préproduction prête : livraisons, serveur, sauvegardes, surveillance, test d'intrusion, APDPVP       | ✅ S7                      |
-| v1.0.0 | Lancement public                                                                                     | S8 (fin 2027 au plus tard) |
+| Jalon  | Contenu                                                                                                               | Visé                       |
+| ------ | --------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| v0.1.0 | Site vitrine + CI/CD + démo publique                                                                                  | ✅ S1                      |
+| v0.2.0 | Parcours client complet en démonstration : compte, commande, favoris, partage, tests de bout en bout                  | ✅ S2                      |
+| v0.3.0 | Catalogue servi par l'API et PostgreSQL                                                                               | ✅ S3                      |
+| v0.4.0 | Comptes clients sécurisés : inscription par code, sessions, rôles, journal d'audit, CSRF/CSP/limites                  | ✅ S4                      |
+| v0.5.0 | Premier achat de bout en bout en environnement de test (Mobile Money _sandbox_)                                       | ✅ S5                      |
+| v0.7.0 | Vendeurs partenaires opérationnels                                                                                    | ✅ S6                      |
+| v0.8.0 | Préproduction prête : livraisons, serveur, sauvegardes, surveillance, test d'intrusion, APDPVP                        | ✅ S7                      |
+| v0.8.1 | Sprint correctif : CI rapide, fiche commune et offres, rôles d'équipe, Finance, recherche, boutiques, photo de profil | ✅ S7.5                    |
+| v1.0.0 | Lancement public                                                                                                      | S8 (fin 2027 au plus tard) |
 
 ### Actions hors code (équipe Kemdia) — à lancer tôt
 
@@ -211,7 +212,7 @@ Choix du 2026-10-19 (S7-T08) : suppression du compte **par effacement après mot
 
 Clôture (2026-10-19) : [rapport](rapports/2026-10-19_S7_cloture.md), version **v0.8.0**. **Reporté** : S7-T09 (écrans d'administration) au S7.5 ; accueil « durablement sous 300 ms » (S7-T03 partiel, médiane CI 289 ms) ; vrai transporteur (question n° 5), informations légales (question n° 10), location du serveur et pentest externe (à discuter avec le client).
 
-## S7.5 — Sprint correctif 🚧
+## S7.5 — Sprint correctif ✅
 
 Décisions : [ADR-0048](architecture/adr/0048-ci-parallele.md) (CI plus rapide), [ADR-0049](architecture/adr/0049-fiches-communes-offres.md) (fiche commune et offres), [ADR-0050](architecture/adr/0050-ecrans-fiches-offres.md) (écrans et propositions de correction), [ADR-0051](architecture/adr/0051-roles-equipe-utilisateurs.md) (rôles de l'équipe, Utilisateurs, appareils), [ADR-0052](architecture/adr/0052-ecrans-finance-journal.md) (écrans de la Finance et journal).
 Choix du 2026-10-19 (ouverture) : **S7 clôturé sans S7-T09**, repris au S7.5 ; CI : l'image Docker n'attend plus les
@@ -254,6 +255,8 @@ titulaire**, **initiales** par défaut, **carré de 256 px sans métadonnées**,
 | S7.5-T06b | Sécurité : Next.js 16.3.8 → 16.4.2 (2 failles critiques d'exécution de code à distance et 1 déni de service, publiées le 2026-10-23) ; audit des dépendances de production à nouveau sans faille — Choix du 2026-10-23                                                                                                                                                                                                                                            | ✅     |
 | S7.5-T07  | Boutiques : page publique (infos + produits avec SON prix, sans téléphone), annuaire `/boutiques` (ville de livraison, quartier du client d'abord, boutique officielle en tête), quartier (listes de la livraison), « Ma boutique » (ville, quartier, description sans nouvel examen ; nom fixé), liens depuis la fiche produit ; contrat 2.3.0 — ADR-0054 — Choix du 2026-10-23                                                                                  | ✅     |
 | S7.5-T08  | Photo de profil : téléversée (recadrée en carré, sans métadonnées), visible seulement par le titulaire, initiales sur une couleur propre par défaut, dans l'en-tête et « Mon compte » (ajouter, changer, retirer), effacée avec le compte ; contrat 2.4.0 — ADR-0055 — Choix du 2026-10-23                                                                                                                                                                        | ✅     |
+
+Clôture (2026-10-23) : [rapport](rapports/2026-10-23_S7.5_cloture.md), version **v0.8.1** (contrat de l'API 2.4.0). **Reporté** : boutiques dans les suggestions de recherche ; caches en mémoire à déplacer avant plusieurs instances ; photos vers un stockage objet ; questions client n° 3, 5 et 10 ; location du serveur et pentest externe.
 
 Après la bêta : IA « kemdIA » (remplissage depuis la photo, pré-tri des produits), connexion avec Google, distance GPS.
 
