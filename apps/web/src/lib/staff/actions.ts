@@ -2,6 +2,10 @@
 
 import {
   ADMIN_ASSIGNABLE_ROLES,
+  BETA_INVITATION_KINDS,
+  PROBLEM_STATUSES,
+  type BetaInvitationKind,
+  type ProblemStatus,
   COUPON_KINDS,
   INVOICE_NUMBER_PATTERN,
   OTP_CODE_PATTERN,
@@ -669,4 +673,80 @@ export async function rejectReviewAction(form: FormData): Promise<never> {
   const result = await staffApi().decideReview(token, reviewId, "reject", version, reason);
   if (!result.ok) return afterFailure(token, result, REVIEWS_PAGE);
   redirect(`${REVIEWS_PAGE}?ok=avis-refuse`);
+}
+
+// --- Bêta fermée (S8-T02, ADR-0057 ; administrateurs) ---
+
+const BETA_PAGE = "/equipe/beta";
+
+/** Ouvrir l'inscription à tous, ou la réserver aux adresses invitées. */
+export async function setBetaClosedAction(form: FormData): Promise<never> {
+  const closed = field(form, "closed", 5);
+  if (closed !== "true" && closed !== "false") redirect(BETA_PAGE);
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(BETA_PAGE)}`);
+  const result = await staffApi().setBetaClosed(token, closed === "true");
+  if (!result.ok) return afterFailure(token, result, BETA_PAGE);
+  redirect(`${BETA_PAGE}?ok=${result.data.closed ? "beta-fermee" : "beta-ouverte"}`);
+}
+
+/** Inviter une adresse e-mail ou un mobile (revérifiés et normalisés par l'API). */
+export async function inviteToBetaAction(form: FormData): Promise<never> {
+  const identifier = field(form, "identifier", 300)?.trim() ?? "";
+  const kind = field(form, "kind", 20);
+  if (
+    identifier.length < 3 ||
+    !kind ||
+    !(BETA_INVITATION_KINDS as readonly string[]).includes(kind)
+  )
+    redirect(`${BETA_PAGE}?erreur=IDENTIFIANT_INVALIDE`);
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(BETA_PAGE)}`);
+  const result = await staffApi().inviteToBeta(token, identifier, kind as BetaInvitationKind);
+  if (!result.ok) return afterFailure(token, result, BETA_PAGE);
+  redirect(
+    `${BETA_PAGE}?ok=${result.data.notified ? "invitation-envoyee" : "invitation-a-prevenir"}`,
+  );
+}
+
+/** Annuler une invitation pas encore utilisée. */
+export async function revokeBetaInvitationAction(form: FormData): Promise<never> {
+  const invitationId = field(form, "invitationId", 36);
+  if (!invitationId || !UUID.test(invitationId)) redirect(BETA_PAGE);
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(BETA_PAGE)}`);
+  const result = await staffApi().revokeBetaInvitation(token, invitationId);
+  if (!result.ok) return afterFailure(token, result, BETA_PAGE);
+  redirect(`${BETA_PAGE}?ok=invitation-annulee`);
+}
+
+// --- Signalements (S8-T02 ; service client) ---
+
+const PROBLEMS_PAGE = "/equipe/signalements";
+const PROBLEM_NOTICES: Record<ProblemStatus, StaffNotice> = {
+  new: "signalement-rouvert",
+  in_progress: "signalement-en-cours",
+  resolved: "signalement-resolu",
+};
+
+/** Faire avancer un signalement ; refusé par l'API si un collègue l'a changé depuis la lecture (`version`). */
+export async function setProblemStatusAction(form: FormData): Promise<never> {
+  const problemId = field(form, "problemId", 36);
+  const status = field(form, "status", 20);
+  const version = field(form, "version", 30);
+  if (
+    !problemId ||
+    !UUID.test(problemId) ||
+    !status ||
+    !(PROBLEM_STATUSES as readonly string[]).includes(status) ||
+    !version ||
+    !ISO_DATE.test(version)
+  )
+    redirect(PROBLEMS_PAGE);
+  const token = await sessionToken();
+  if (!token) redirect(`/connexion?retour=${encodeURIComponent(PROBLEMS_PAGE)}`);
+  const to = status as ProblemStatus;
+  const result = await staffApi().setProblemStatus(token, problemId, to, version);
+  if (!result.ok) return afterFailure(token, result, PROBLEMS_PAGE);
+  redirect(`${PROBLEMS_PAGE}?ok=${PROBLEM_NOTICES[to]}`);
 }

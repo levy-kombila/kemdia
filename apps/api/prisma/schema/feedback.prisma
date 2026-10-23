@@ -1,0 +1,46 @@
+// Module feedback (S8-T02, ADR-0057) : « Signaler un problème » pendant la bêta. Chaque modèle de ce fichier porte
+// @@schema("feedback"). Les comptes (identity) sont désignés par leur UUID.
+
+enum ProblemCategory {
+  BUG
+  DISPLAY
+  PAYMENT
+  DELIVERY
+  OTHER
+
+  @@map("problem_category")
+  @@schema("feedback")
+}
+
+enum ProblemStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+
+  @@map("problem_status")
+  @@schema("feedback")
+}
+
+/// Problème signalé par un compte connecté ; lu et suivi par le service client. Effacé avec le compte, et 180 jours
+/// après sa résolution.
+model ProblemReport {
+  id        String          @id @db.Uuid
+  /// Compte de l'auteur (identity.accounts)
+  accountId String          @map("account_id") @db.Uuid
+  category  ProblemCategory
+  /// 10 à 2 000 caractères
+  message   String          @db.VarChar(2000)
+  /// Chemin de la page (sans paramètres)
+  page      String?         @db.VarChar(200)
+  /// Navigateur et système, résumés par l'API
+  device    String?         @db.VarChar(120)
+  status    ProblemStatus
+  handledBy String?         @map("handled_by") @db.Uuid
+  createdAt DateTime        @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime        @map("updated_at") @db.Timestamptz(3)
+
+  @@index([status, createdAt, id])
+  @@index([accountId, status])
+  @@map("problem_reports")
+  @@schema("feedback")
+}

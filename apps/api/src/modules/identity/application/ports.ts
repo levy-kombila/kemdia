@@ -7,6 +7,7 @@ import type { Session } from "../domain/session.js";
 import type { ResetTicket } from "../domain/reset-ticket.js";
 import type { SignupTicket } from "../domain/signup-ticket.js";
 import type { StoredRole } from "../domain/role.js";
+import type { BetaInvitation, BetaSettings } from "../domain/beta-invitation.js";
 
 /**
  * Ports du module identity (architecture hexagonale) : ce dont les cas d'utilisation ont besoin,
@@ -28,6 +29,8 @@ export const ROLE_REPOSITORY = Symbol("ROLE_REPOSITORY");
 export const TRANSACTION_RUNNER = Symbol("TRANSACTION_RUNNER");
 export const STAFF_DIRECTORY = Symbol("STAFF_DIRECTORY");
 export const KNOWN_DEVICE_REPOSITORY = Symbol("KNOWN_DEVICE_REPOSITORY");
+/** Bêta fermée (S8-T02) : réglage et invitations. */
+export const BETA_REPOSITORY = Symbol("BETA_REPOSITORY");
 /** Facultatif : tirage du code et de l'identifiant du défi, remplacé dans les tests. */
 export const OTP_RANDOM = Symbol("OTP_RANDOM");
 
@@ -71,6 +74,33 @@ export interface OtpChallengeRepository {
   claimAttempt(id: string, now: Date): Promise<number | null>;
   /** Marque le défi utilisé, une seule fois : `false` s'il l'était déjà (deux bons essais simultanés). */
   consume(id: string, now: Date): Promise<boolean>;
+}
+
+export interface BetaInvitationCursor {
+  createdAt: Date;
+  id: string;
+}
+
+/** Bêta fermée (S8-T02, ADR-0057) : réglage unique et invitations (une ligne par adresse). */
+export interface BetaRepository {
+  settings(): Promise<BetaSettings>;
+  saveSettings(closed: boolean, updatedBy: string, now: Date): Promise<BetaSettings>;
+  findByIdentifier(identifier: string): Promise<BetaInvitation | null>;
+  findById(id: string): Promise<BetaInvitation | null>;
+  /** Crée l'invitation, ou remplace celle de la même adresse (relance). */
+  save(invitation: BetaInvitation): Promise<void>;
+  /**
+   * Marque utilisée l'invitation encore valable de cette adresse ; `false` s'il n'y en a pas (jamais invitée,
+   * expirée, annulée ou déjà utilisée).
+   */
+  markUsed(identifier: string, accountId: string, now: Date): Promise<boolean>;
+  /** Annule une invitation pas encore utilisée ; `false` si elle a été utilisée entre-temps. */
+  revoke(id: string, now: Date): Promise<boolean>;
+  /** De la plus récente à la plus ancienne, `limit` au plus. */
+  list(
+    limit: number,
+    after?: BetaInvitationCursor,
+  ): Promise<{ items: BetaInvitation[]; next: BetaInvitationCursor | null }>;
 }
 
 export interface SignupTicketRepository {
@@ -182,6 +212,8 @@ export type OtpMessage = {
   | { kind: "inactivity-warning"; deleteOn: Date }
   /** Connexion depuis un appareil inconnu (S7.5-T04) ; `link` : « ce n'est pas moi » (absent sans adresse du site) */
   | { kind: "new-device"; device: string; at: Date; link: string | null }
+  /** Invitation à la bêta fermée (S8-T02) ; `link` : page d'inscription (absent sans adresse du site) */
+  | { kind: "beta-invitation"; expiresAt: Date; link: string | null }
 );
 
 /** Envoi des messages : console (développement), e-mail (S4-T02), SMS (quand le client aura choisi un fournisseur). */

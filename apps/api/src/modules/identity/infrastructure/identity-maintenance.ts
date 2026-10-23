@@ -22,36 +22,46 @@ export class PrismaIdentityMaintenance implements IdentityMaintenance {
   async purgeExpired(now: Date): Promise<Record<string, number>> {
     const dayAgo = new Date(now.getTime() - DAY_MS);
     const yearAgo = new Date(now.getTime() - KNOWN_DEVICE_RETENTION_DAYS * DAY_MS);
-    const [sessions, codes, tickets, resets, guards, devices] = await this.prisma.$transaction([
-      // Sessions expirées, ou fermées depuis plus d'un jour
-      this.prisma.session.deleteMany({
-        where: { OR: [{ expiresAt: { lt: now } }, { revokedAt: { lt: dayAgo } }] },
-      }),
-      // Codes de plus d'un jour (les limites d'envoi ne regardent que la dernière heure)
-      this.prisma.otpChallenge.deleteMany({ where: { createdAt: { lt: dayAgo } } }),
-      this.prisma.signupTicket.deleteMany({ where: { expiresAt: { lt: now } } }),
-      this.prisma.resetTicket.deleteMany({ where: { expiresAt: { lt: now } } }),
-      // Compteurs d'essais inactifs depuis un jour et non bloqués
-      this.prisma.loginGuard.deleteMany({
-        where: {
-          updatedAt: { lt: dayAgo },
-          OR: [{ lockedUntil: null }, { lockedUntil: { lt: now } }],
-        },
-      }),
-      // Appareils pas revus depuis un an (cookie expiré) et sans lien « ce n'est pas moi » valable (S7.5-T04)
-      this.prisma.knownDevice.deleteMany({
-        where: {
-          lastSeenAt: { lt: yearAgo },
-          OR: [{ alertExpiresAt: null }, { alertExpiresAt: { lt: now } }],
-        },
-      }),
-    ]);
+    const monthAgo = new Date(now.getTime() - 30 * DAY_MS);
+    const [sessions, codes, tickets, resets, guards, devices, invitations] =
+      await this.prisma.$transaction([
+        // Sessions expirées, ou fermées depuis plus d'un jour
+        this.prisma.session.deleteMany({
+          where: { OR: [{ expiresAt: { lt: now } }, { revokedAt: { lt: dayAgo } }] },
+        }),
+        // Codes de plus d'un jour (les limites d'envoi ne regardent que la dernière heure)
+        this.prisma.otpChallenge.deleteMany({ where: { createdAt: { lt: dayAgo } } }),
+        this.prisma.signupTicket.deleteMany({ where: { expiresAt: { lt: now } } }),
+        this.prisma.resetTicket.deleteMany({ where: { expiresAt: { lt: now } } }),
+        // Compteurs d'essais inactifs depuis un jour et non bloqués
+        this.prisma.loginGuard.deleteMany({
+          where: {
+            updatedAt: { lt: dayAgo },
+            OR: [{ lockedUntil: null }, { lockedUntil: { lt: now } }],
+          },
+        }),
+        // Appareils pas revus depuis un an (cookie expiré) et sans lien « ce n'est pas moi » valable (S7.5-T04)
+        this.prisma.knownDevice.deleteMany({
+          where: {
+            lastSeenAt: { lt: yearAgo },
+            OR: [{ alertExpiresAt: null }, { alertExpiresAt: { lt: now } }],
+          },
+        }),
+        // Invitations à la bêta jamais utilisées, expirées ou annulées depuis 30 jours (S8-T02) : l'adresse s'en va
+        this.prisma.betaInvitation.deleteMany({
+          where: {
+            usedAt: null,
+            OR: [{ expiresAt: { lt: monthAgo } }, { revokedAt: { lt: monthAgo } }],
+          },
+        }),
+      ]);
     return {
       sessions: sessions.count,
       codes: codes.count,
       tickets: tickets.count + resets.count,
       compteurs: guards.count,
       appareils: devices.count,
+      invitations: invitations.count,
     };
   }
 }

@@ -30,6 +30,7 @@ import {
   ROLE_REPOSITORY,
   SIGNUP_TICKET_REPOSITORY,
   TRANSACTION_RUNNER,
+  BETA_REPOSITORY,
 } from "../src/modules/identity/application/ports.js";
 import { AUDIT_REPOSITORY } from "../src/modules/audit/application/ports.js";
 import { InMemoryAuditEvents } from "./audit/in-memory.js";
@@ -45,6 +46,7 @@ import {
   InMemoryRoles,
   RecordingOtpSender,
   directTransactions,
+  InMemoryBeta,
   fakeHasher,
 } from "./identity/in-memory.js";
 
@@ -111,6 +113,8 @@ describe("API identité — inscription (HTTP)", () => {
       .useValue(new InMemoryRoles(accounts))
       .overrideProvider(TRANSACTION_RUNNER)
       .useValue(directTransactions)
+      .overrideProvider(BETA_REPOSITORY)
+      .useValue(new InMemoryBeta())
       .overrideProvider(AUDIT_REPOSITORY)
       .useValue(new InMemoryAuditEvents())
       .compile();

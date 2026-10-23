@@ -10,6 +10,7 @@ import {
   Truck,
 } from "lucide-react";
 import Link from "next/link";
+import { ReportProblemLink } from "@/components/feedback/ReportProblemLink";
 import { Logo } from "@/components/ui/Logo";
 import { INFO_PAGES, SITE, type InfoSlug } from "@/lib/site";
 
@@ -28,8 +29,10 @@ const BADGES = [
 
 export function Footer() {
   return (
-    // Hors écran à l'ouverture de toutes les pages : mise en page calculée à l'approche (S3-T08)
-    <footer className="bg-ink-900 mt-16 text-white/70 [contain-intrinsic-size:auto_68rem] [content-visibility:auto]">
+    // Hors écran à l'ouverture de toutes les pages : mise en page calculée à l'approche (S3-T08). Hauteur réservée
+    // au moins égale à celle du pied de page sur mobile (74rem depuis le bouton « Signaler un problème », S8-T02) :
+    // sinon sa dernière ligne déborde de la place réservée et paraît sans fond (contraste refusé par axe)
+    <footer className="bg-ink-900 mt-16 text-white/70 [contain-intrinsic-size:auto_74rem] [content-visibility:auto]">
       <div className="border-b border-white/10">
         <div className="container-page grid grid-cols-2 gap-4 py-6 md:grid-cols-4">
           {BADGES.map(({ icon: Icon, text }) => (
@@ -56,6 +59,11 @@ export function Footer() {
             </li>
             <li className="flex items-center gap-2">
               <Headset className="text-brand-500 size-4" aria-hidden /> 7j/7, de 8 h à 20 h
+            </li>
+            {/* Bêta (S8-T02) : bouton visible sur toutes les pages. Fond opaque : le contraste ne dépend pas de ce qu'il y
+                a derrière (pied de page hors écran sur mobile, vu par axe) */}
+            <li>
+              <ReportProblemLink className="text-ink-900 hover:bg-ink-100 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 font-semibold" />
             </li>
           </ul>
         </div>

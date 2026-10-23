@@ -63,6 +63,9 @@ export const identityPaths = {
       responses: {
         "202": json("SignupStarted", "Code envoyé (ou alerte au titulaire)"),
         "400": invalidBody,
+        "403": problem(
+          "`INVITATION_REQUISE` : bêta fermée, adresse sans invitation valable (S8-T02)",
+        ),
         "422": problem(
           "`IDENTIFIANT_INVALIDE`, `NOM_INVALIDE`, `MOT_DE_PASSE_FAIBLE` ou `CANAL_INDISPONIBLE`",
         ),
@@ -84,6 +87,9 @@ export const identityPaths = {
           "Compte actif et session ouverte (jeton à garder dans un cookie HttpOnly)",
         ),
         "400": invalidBody,
+        "403": problem(
+          "`INVITATION_REQUISE` : invitation annulée ou expirée, ou inscription fermée, pendant l'inscription (S8-T02)",
+        ),
         "410": expired,
         "422": problem("`CODE_INVALIDE` : code incorrect (chaque essai compte)"),
         "429": tooMany,

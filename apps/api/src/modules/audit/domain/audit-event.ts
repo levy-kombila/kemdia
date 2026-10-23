@@ -155,6 +155,14 @@ export const AUDIT_ACTIONS = [
   "device.new_login",
   /** Lien « ce n'est pas moi » utilisé : sessions fermées, mot de passe bloqué (détails : sessions) — S7.5-T04 */
   "device.not_me",
+  /** Inscription ouverte à tous ou réservée aux invités, par un administrateur (détails : state = open / closed) — S8-T02 */
+  "settings.beta_updated",
+  /** Adresse invitée à la bêta, ou invitation relancée (détails : kind, channel, renewed ; jamais l'adresse) — S8-T02 */
+  "beta.invited",
+  /** Invitation annulée avant d'avoir servi (détails : kind) — S8-T02 */
+  "beta.invitation_revoked",
+  /** Signalement d'un problème suivi par le service client (détails : from, to) — S8-T02 */
+  "problem.updated",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -175,6 +183,10 @@ export const AUDIT_TARGET_TYPES = [
   "listing",
   /** Avis d'un client (S8-T01) */
   "review",
+  /** Invitation à la bêta fermée (S8-T02) */
+  "invitation",
+  /** Problème signalé pendant la bêta (S8-T02) */
+  "problem",
 ] as const;
 export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];
 

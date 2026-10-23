@@ -45,7 +45,16 @@ export type IdentityErrorCode =
   /** Fichier refusé : format, poids ou dimensions (détail dans le message). */
   | "PHOTO_INVALIDE"
   /** Pas de photo de profil sur ce compte. */
-  | "PHOTO_ABSENTE";
+  | "PHOTO_ABSENTE"
+  // Bêta fermée (S8-T02, ADR-0057)
+  /** Inscription fermée : cette adresse n'a pas d'invitation valable (jamais invitée, expirée, annulée). */
+  | "INVITATION_REQUISE"
+  /** Invitation inconnue. */
+  | "INVITATION_INTROUVABLE"
+  /** Invitation déjà utilisée : elle ne s'annule plus. */
+  | "INVITATION_UTILISEE"
+  /** Inviter une adresse qui a déjà un compte. */
+  | "COMPTE_EXISTANT";
 
 /** Une règle de l'identité n'est pas respectée. Le message est lisible par un humain, en français. */
 export class IdentityError extends Error {

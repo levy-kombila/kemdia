@@ -10,6 +10,7 @@ import {
   hashSignupTicket,
   type SignupTicket,
 } from "../domain/signup-ticket.js";
+import { BetaService } from "./beta.service.js";
 import { OtpService, type IssuedOtp } from "./otp.service.js";
 import { DeviceService } from "./device.service.js";
 import { SessionService, type OpenedSession } from "./session.service.js";
@@ -58,6 +59,9 @@ export class SignupService {
     @Inject(IDENTITY_CLOCK) private readonly clock: Clock,
     private readonly otp: OtpService,
     private readonly sessions: SessionService,
+    // Obligatoire : un câblage oublié ne doit jamais rouvrir l'inscription en silence (relecture S8-T02)
+    @Inject(BetaService)
+    private readonly beta: Pick<BetaService, "assertMaySignUp" | "afterSignup">,
     @Optional()
     @Inject(DeviceService)
     private readonly devices?: Pick<DeviceService, "afterSignup">,
@@ -69,6 +73,8 @@ export class SignupService {
     assertValidNames(input.firstName, input.lastName);
     assertStrongPassword(input.password);
     this.otp.assertChannelAvailable(identifier);
+    // Bêta fermée (S8-T02) : invitation valable exigée, AVANT de regarder si l'adresse a un compte (pas d'énumération)
+    await this.beta.assertMaySignUp(identifier);
 
     const passwordHash = await this.hasher.hash(input.password);
     const exists = (await this.accounts.findByIdentifier(identifier)) !== null;
@@ -125,6 +131,8 @@ export class SignupService {
     // Ticket leurre : même un code deviné par chance ne valide rien
     if (!found.registration) throw new IdentityError("CODE_INVALIDE", "code incorrect");
 
+    // L'invitation a pu être annulée (ou l'inscription fermée) depuis le début de l'inscription
+    await this.beta.assertMaySignUp(identifier);
     const now = this.clock.now();
     const account = Account.register({ id: randomUUID(), identifier, now, ...found.registration });
     account.markVerified(identifier, now);
@@ -136,6 +144,7 @@ export class SignupService {
       throw error;
     }
     await this.tickets.deleteForDestination(found.destination);
+    await this.beta.afterSignup(identifier, account.id);
     const opened = await this.sessions.open(account, userAgent);
     // L'appareil qui vient de créer le compte est retenu sans avis (S7.5-T04) : le suivant en recevra un
     await this.devices?.afterSignup(account, device, userAgent);

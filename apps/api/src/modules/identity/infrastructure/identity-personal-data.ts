@@ -94,8 +94,16 @@ export class IdentityPersonalData {
       where: { accountId },
       select: { updatedAt: true, image: true },
     });
+    // Invitation à la bêta qui a permis de créer ce compte (S8-T02)
+    const invitation = await db.betaInvitation.findFirst({
+      where: { usedBy: accountId },
+      select: { kind: true, createdAt: true, usedAt: true },
+    });
     return {
       compte: account,
+      invitationBeta: invitation
+        ? { genre: invitation.kind, invitee: invitation.createdAt, utilisee: invitation.usedAt }
+        : null,
       roles,
       appareils: sessions,
       appareilsReconnus: known,
@@ -139,6 +147,10 @@ export class IdentityPersonalData {
       where: { OR: [{ accountId }, { destination: { in: identifiers } }] },
     });
     await db.signupTicket.deleteMany({ where: { destination: { in: identifiers } } });
+    // Invitation à la bêta (S8-T02) : celle du compte et toute autre au nom de ses adresses
+    await db.betaInvitation.deleteMany({
+      where: { OR: [{ usedBy: accountId }, { identifier: { in: identifiers } }] },
+    });
     await db.otpChallenge.deleteMany({ where: { destination: { in: identifiers } } });
     await db.loginGuard.deleteMany({
       where: {

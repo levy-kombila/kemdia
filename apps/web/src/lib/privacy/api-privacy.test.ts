@@ -16,6 +16,7 @@ const EXPORT = {
   boutique: { boutique: null },
   journal: { evenements: [] },
   avis: [],
+  signalements: [],
 };
 
 function api(response: Response | Error) {

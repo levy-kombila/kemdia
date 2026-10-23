@@ -104,6 +104,11 @@ export const IDENTITY_ERROR_CODES = [
   // Photo de profil (S7.5-T08)
   "PHOTO_INVALIDE",
   "PHOTO_ABSENTE",
+  // Bêta fermée (S8-T02) : inscription sur invitation
+  "INVITATION_REQUISE",
+  "INVITATION_INTROUVABLE",
+  "INVITATION_UTILISEE",
+  "COMPTE_EXISTANT",
 ] as const;
 export type IdentityErrorCode = (typeof IDENTITY_ERROR_CODES)[number];
 
@@ -300,6 +305,11 @@ export const AUDIT_ACTIONS = [
   // Appareils (S7.5-T04)
   "device.new_login",
   "device.not_me",
+  // Bêta fermée et signalements (S8-T02)
+  "settings.beta_updated",
+  "beta.invited",
+  "beta.invitation_revoked",
+  "problem.updated",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** Lignes par page du journal d'audit. */
@@ -783,6 +793,61 @@ export const REVIEW_STATUSES = ["pending", "published", "rejected"] as const;
 export const REVIEW_PAGE_DEFAULT = 30;
 export const REVIEW_PAGE_MAX = 100;
 
+// --- Bêta fermée et « Signaler un problème » (S8-T02, ADR-0057) ---
+
+/** Pour qui est l'invitation : un vendeur partenaire ou un testeur (les deux s'inscrivent comme clients). */
+export const BETA_INVITATION_KINDS = ["partner_vendor", "tester"] as const;
+export type BetaInvitationKind = (typeof BETA_INVITATION_KINDS)[number];
+export const BETA_INVITATION_KIND_LABELS: Readonly<Record<BetaInvitationKind, string>> = {
+  partner_vendor: "Vendeur partenaire",
+  tester: "Testeur",
+};
+/** active : utilisable ; used : compte créé ; expired : plus de 30 jours ; revoked : annulée par l'équipe. */
+export const BETA_INVITATION_STATUSES = ["active", "used", "expired", "revoked"] as const;
+export type BetaInvitationStatus = (typeof BETA_INVITATION_STATUSES)[number];
+/** Une invitation vaut 30 jours ; l'inviter de nouveau repart pour 30 jours. */
+export const BETA_INVITATION_TTL_DAYS = 30;
+export const BETA_INVITATION_PAGE_DEFAULT = 50;
+export const BETA_INVITATION_PAGE_MAX = 100;
+
+/** Signalements : genre du problème. */
+export const PROBLEM_CATEGORIES = ["bug", "display", "payment", "delivery", "other"] as const;
+export type ProblemCategory = (typeof PROBLEM_CATEGORIES)[number];
+export const PROBLEM_CATEGORY_LABELS: Readonly<Record<ProblemCategory, string>> = {
+  bug: "Quelque chose ne marche pas",
+  display: "Affichage ou texte",
+  payment: "Paiement",
+  delivery: "Commande ou livraison",
+  other: "Autre",
+};
+export const PROBLEM_STATUSES = ["new", "in_progress", "resolved"] as const;
+export type ProblemStatus = (typeof PROBLEM_STATUSES)[number];
+export const PROBLEM_STATUS_LABELS: Readonly<Record<ProblemStatus, string>> = {
+  new: "Nouveau",
+  in_progress: "En cours",
+  resolved: "Résolu",
+};
+/**
+ * Description de 10 à 2 000 caractères ; page (chemin du site, sans paramètres) de 200 au plus ; 20 signalements non
+ * résolus au plus par compte ; un signalement résolu est effacé 180 jours après (minimisation, ADR-0047).
+ */
+export const PROBLEM_LIMITS = {
+  messageMin: 10,
+  messageMax: 2000,
+  pageMax: 200,
+  openPerAccount: 20,
+  resolvedRetentionDays: 180,
+} as const;
+export const PROBLEM_PAGE_DEFAULT = 30;
+export const PROBLEM_PAGE_MAX = 100;
+export const PROBLEM_ERROR_CODES = [
+  "SIGNALEMENT_INVALIDE",
+  "TROP_DE_SIGNALEMENTS",
+  "SIGNALEMENT_INTROUVABLE",
+  "SIGNALEMENT_MODIFIE",
+] as const;
+export type ProblemErrorCode = (typeof PROBLEM_ERROR_CODES)[number];
+
 /** Ce qui empêche de supprimer son compte maintenant (409). */
 export const PRIVACY_ERROR_CODES = [
   // Commande pas encore livrée, annulée ou remboursée : il faut pouvoir livrer, rembourser, répondre
@@ -809,6 +874,7 @@ export const API_ERROR_CODES = [
   ...SHIPPING_ERROR_CODES,
   ...PRIVACY_ERROR_CODES,
   ...REVIEW_ERROR_CODES,
+  ...PROBLEM_ERROR_CODES,
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
 

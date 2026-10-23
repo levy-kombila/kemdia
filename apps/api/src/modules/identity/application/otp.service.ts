@@ -206,6 +206,20 @@ export class OtpService {
     this.deliver({ kind: "new-device", ...notice, channel, to: identifier.value }, identifier);
   }
 
+  /**
+   * Invitation à la bêta fermée (S8-T02). `true` si un message part (canal disponible : l'e-mail aujourd'hui) ;
+   * `false` : l'équipe prévient la personne elle-même.
+   */
+  notifyBetaInvitation(
+    identifier: Identifier,
+    notice: { expiresAt: Date; link: string | null },
+  ): boolean {
+    const channel = channelOf(identifier);
+    if (!this.availableChannels().includes(channel)) return false;
+    this.deliver({ kind: "beta-invitation", ...notice, channel, to: identifier.value }, identifier);
+    return true;
+  }
+
   /** Avis de sécurité de la double authentification (S6-T03) : activation, nouveaux codes, blocage, remise à zéro. */
   notifySecondFactor(identifier: Identifier, event: SecondFactorEvent): void {
     const channel = channelOf(identifier);
