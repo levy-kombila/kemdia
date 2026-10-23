@@ -23,7 +23,7 @@ export const FEEDBACK_MESSAGES: Record<FeedbackFailureCode, string> = {
 export function pageFrom(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const path = raw.split(/[?#]/, 1)[0] ?? "";
-  return /^\/(?!\/)[^\s\\\u0000-\u001f\u007f]{0,199}$/.test(path) ? path : null;
+  return /^\/(?!\/)[^\s\\\u0000-\u001f\u007f-\u009f]{0,199}$/.test(path) ? path : null;
 }
 
 export type CheckedProblem =

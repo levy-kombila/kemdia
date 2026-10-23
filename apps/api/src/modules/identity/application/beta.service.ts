@@ -30,6 +30,9 @@ const required = () =>
     "INVITATION_REQUISE",
     "Kemdia est en bêta fermée : seules les adresses invitées peuvent créer un compte",
   );
+/** Une relance moins d'une heure après la précédente n'envoie pas de nouvel e-mail (pas d'envois en rafale). */
+export const INVITATION_RESEND_DELAY_MS = 60 * 60_000;
+
 const notFound = () => new IdentityError("INVITATION_INTROUVABLE", "invitation introuvable");
 
 /**
@@ -85,9 +88,14 @@ export class BetaService {
   ): Promise<{ invitation: BetaInvitation; notified: boolean }> {
     const identifier = requireIdentifier(rawIdentifier);
     if (await this.accounts.findByIdentifier(identifier)) throw alreadyRegistered();
+    let recentlySent = false;
     const invitation = await this.tx.run(async () => {
       const previous = await this.beta.findByIdentifier(identifier.value);
       if (previous?.usedAt) throw alreadyRegistered();
+      recentlySent =
+        previous !== null &&
+        !previous.revokedAt &&
+        this.clock.now().getTime() - previous.createdAt.getTime() < INVITATION_RESEND_DELAY_MS;
       const next = issueInvitation({
         id: previous?.id ?? randomUUID(),
         identifier: identifier.value,
@@ -107,10 +115,9 @@ export class BetaService {
       return next;
     });
     const link = this.options.siteUrl ? `${this.options.siteUrl}/inscription` : null;
-    const notified = this.otp.notifyBetaInvitation(identifier, {
-      expiresAt: invitation.expiresAt,
-      link,
-    });
+    const notified =
+      !recentlySent &&
+      this.otp.notifyBetaInvitation(identifier, { expiresAt: invitation.expiresAt, link });
     return { invitation, notified };
   }
 

@@ -75,10 +75,15 @@ export class ProblemService {
     next: ProblemCursor | null;
   }> {
     const page = await this.problems.list(query);
+    // Un auteur lu une seule fois par page (souvent plusieurs signalements du même testeur) ; l'un après l'autre :
+    // 100 au plus, et la base garde peu de connexions
+    const reporters = new Map<string, Reporter | null>();
     const items = [];
-    // L'un après l'autre : 100 au plus, et la base garde peu de connexions
     for (const report of page.items) {
-      items.push({ report, reporter: await this.reporterOf(report.accountId) });
+      if (!reporters.has(report.accountId)) {
+        reporters.set(report.accountId, await this.reporterOf(report.accountId));
+      }
+      items.push({ report, reporter: reporters.get(report.accountId) ?? null });
     }
     return { items, next: page.next };
   }

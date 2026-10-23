@@ -34,11 +34,14 @@ export interface ProblemReport {
   updatedAt: Date;
 }
 
-/** Caractères de contrôle (sauf retour à la ligne et tabulation) : refusés dans la description. */
+/**
+ * Caractères de contrôle (sauf retour à la ligne et tabulation) et inversions du sens d'écriture (texte trompeur
+ * pour le service client) : refusés dans la description.
+ */
 // eslint-disable-next-line no-control-regex
-const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
+const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/;
 // eslint-disable-next-line no-control-regex
-const PAGE = /^\/(?!\/)[^?#\s\u0000-\u001f\u007f\\]{0,199}$/;
+const PAGE = /^\/(?!\/)[^?#\s\u0000-\u001f\u007f-\u009f\\]{0,199}$/;
 
 /**
  * Page concernée : un chemin du site seulement. Paramètres et ancre sont retirés (ils peuvent contenir un jeton ou

@@ -60,7 +60,6 @@ function setup(options: { siteUrl?: string | null; channels?: ("email" | "sms")[
     clock,
     otp,
     new SessionService(new InMemorySessions(), accounts, clock, audit, directTransactions),
-    undefined,
     beta,
   );
   return { accounts, audit, clock, sender, repo, beta, signup };
@@ -176,6 +175,15 @@ describe("Bêta fermée : invitations (S8-T02)", () => {
     await expect(beta.revoke(ADMIN, invitation.id, NO_REQUEST)).rejects.toMatchObject({
       code: "INVITATION_UTILISEE",
     });
+  });
+
+  it("relance dans l'heure : invitation prolongée, mais pas de nouvel e-mail (pas d'envois en rafale)", async () => {
+    const { beta, clock } = setup();
+    expect((await beta.invite(ADMIN, "awa@exemple.ga", "tester", NO_REQUEST)).notified).toBe(true);
+    clock.advance(10 * 60_000);
+    expect((await beta.invite(ADMIN, "awa@exemple.ga", "tester", NO_REQUEST)).notified).toBe(false);
+    clock.advance(60 * 60_000);
+    expect((await beta.invite(ADMIN, "awa@exemple.ga", "tester", NO_REQUEST)).notified).toBe(true);
   });
 
   it("ouvrir ou fermer l'inscription est journalisé", async () => {

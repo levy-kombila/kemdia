@@ -52,6 +52,7 @@ function setup() {
     clock,
     otp,
     new SessionService(sessions, accounts, clock, audit, directTransactions),
+    { assertMaySignUp: () => Promise.resolve(), afterSignup: () => Promise.resolve() },
   );
   const account = () => [...accounts.rows.values()][0];
   return { service, accounts, tickets, challenges, sender, clock, otp, account, sessions };

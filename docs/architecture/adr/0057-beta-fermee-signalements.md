@@ -62,7 +62,28 @@ Choix du 2026-10-23 : options recommandées retenues sans être reposées (deman
 7. **Site** : annonce sur « Créer un compte » quand l'inscription est réservée ; bouton « Signaler un problème » dans le
    pied de page (emporte le chemin de la page) vers `/signaler-un-probleme` (connexion exigée) ; pages de l'équipe
    `/equipe/beta` (administrateur) et `/equipe/signalements` (service client).
-8. Contrat de l'API **2.6.0** (7 routes nouvelles).
+8. Contrat de l'API **2.6.0** (7 routes nouvelles ; `POST /auth/signup` et `/signup/verify` documentent le 403).
+9. **Garde-fous issus de la relecture de sécurité** :
+   - invitations : 30 requêtes par minute et par visiteur sur `/admin/beta/*`, 10 invitations par minute et par
+     compte ; une relance **moins d'une heure** après la précédente prolonge l'invitation **sans** renvoyer d'e-mail
+     (`notified: false`) ;
+   - le contrôle d'invitation est une dépendance **obligatoire** de l'inscription : un câblage oublié ne rouvre
+     jamais l'inscription en silence ;
+   - deux invitations simultanées de la même adresse donnent une seule ligne (écriture par l'adresse unique) ;
+   - description d'un signalement : inversions du sens d'écriture et contrôles C1 (U+0080–U+009F) refusés ; même
+     règle pour le chemin de page que la contrainte SQL ;
+   - file du service client : chaque auteur lu une seule fois par page ;
+   - réglage jamais changé : pas de fausse date « changé le ».
+10. **Risques acceptés** (écrits ici) :
+    - une adresse peut savoir si **elle-même** (ou une adresse qu'elle connaît) est invitée : 403 sans invitation,
+      code envoyé sinon. La bannière publique annonce déjà la bêta, l'information est peu sensible et freinée par les
+      limites par visiteur ; un ticket leurre aurait rendu le refus incompréhensible pour un invité honnête ;
+    - compte créé et invitation marquée utilisée ne sont pas dans une même transaction (le dépôt des comptes n'utilise
+      pas la transaction partagée, et la clé étrangère `used_by` exige le compte d'abord) : une annulation à la
+      milliseconde près peut laisser un compte créé ; une invitation ne crée jamais deux comptes (adresse unique) ;
+    - la limite de 20 signalements non résolus peut être dépassée de quelques unités par des envois simultanés
+      (5 par minute au plus) ;
+    - un signalement jamais résolu reste jusqu'à l'effacement du compte (à revoir à la fin de la bêta).
 
 ## Conséquences
 

@@ -128,6 +128,13 @@ describe("Bêta fermée et signalements (PostgreSQL, HTTP)", () => {
       ),
     ).toBe("ACCES_REFUSE");
     const admin = await openSession("ADMIN");
+    // Jamais changé depuis la migration : pas de date « changé le »
+    expect(
+      matches(
+        BetaSettingsSchema,
+        (await call("get", "/api/v1/admin/beta/settings", admin.token).expect(200)).body,
+      ),
+    ).toEqual({ closed: false, updatedAt: null });
     expect((await setClosed(admin, true)).closed).toBe(true);
     expect(
       matches(BetaStatusSchema, (await call("get", "/api/v1/auth/beta").expect(200)).body),
@@ -323,6 +330,19 @@ describe("Bêta fermée et signalements (PostgreSQL, HTTP)", () => {
     ]);
     await tx.run(() => data.erase(awa.accountId));
     expect(await prisma.problemReport.count({ where: { accountId: awa.accountId } })).toBe(0);
+  });
+
+  it("deux invitations simultanées de la même adresse : une seule ligne, pas d'erreur", async () => {
+    const admin = await openSession("ADMIN");
+    const email = `double.${randomUUID()}@exemple.ga`;
+    const send = () =>
+      call("post", "/api/v1/admin/beta/invitations", admin.token).send({
+        identifier: email,
+        kind: "tester",
+      });
+    const [a, b] = await Promise.all([send(), send()]);
+    expect([a.status, b.status]).toEqual([201, 201]);
+    expect(await prisma.betaInvitation.count({ where: { identifier: email } })).toBe(1);
   });
 
   it("la base refuse un chemin qui mène à un autre site", async () => {

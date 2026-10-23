@@ -26,6 +26,11 @@ describe("Signalement (S8-T02)", () => {
     expect(() => newProblemReport({ ...base, message: "ça plante\u0000 ici" })).toThrow(
       /interdits/,
     );
+    // Inversion du sens d'écriture : texte trompeur pour le service client
+    expect(() =>
+      newProblemReport({ ...base, message: "Commande \u202e321 ok tout va bien" }),
+    ).toThrow(/interdits/);
+    expect(normalizePage("/a\u0085b")).toBeNull();
     // Retours à la ligne permis
     expect(newProblemReport({ ...base, message: "Ligne 1\nLigne 2\tok" }).message).toContain("\n");
   });

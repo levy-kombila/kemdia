@@ -214,7 +214,10 @@ describe("inscription (PostgreSQL)", () => {
     return {
       clock,
       sender,
-      service: new SignupService(accounts, tickets, fakeHasher, clock, otp, sessionService),
+      service: new SignupService(accounts, tickets, fakeHasher, clock, otp, sessionService, {
+        assertMaySignUp: () => Promise.resolve(),
+        afterSignup: () => Promise.resolve(),
+      }),
     };
   };
   const INPUT = {

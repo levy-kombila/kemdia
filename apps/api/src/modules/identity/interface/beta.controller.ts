@@ -11,6 +11,7 @@ import {
   Query,
   Req,
 } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import type { Request } from "express";
 import {
   BetaInvitationIdParamsSchema,
@@ -37,7 +38,7 @@ import {
 } from "../domain/beta-invitation.js";
 import { withIdentityErrors } from "./identity-http-errors.js";
 import { Authorize } from "./role.guard.js";
-import { CurrentSession } from "./session.guard.js";
+import { AccountRateLimit, CurrentSession } from "./session.guard.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -93,6 +94,8 @@ export class BetaStatusController {
 /** Bêta fermée (`/api/v1/admin/beta`) : administrateur avec la double authentification (S8-T02, ADR-0057). */
 @Controller("admin/beta")
 @Authorize("admin", { secondFactor: true })
+// Même limite par visiteur que les autres routes d'administration (relecture de sécurité S8-T02)
+@Throttle({ default: { limit: 30, ttl: 60_000 } })
 export class AdminBetaController {
   constructor(private readonly beta: BetaService) {}
 
@@ -132,6 +135,7 @@ export class AdminBetaController {
   /** Inviter une adresse, ou relancer son invitation (30 jours de plus). */
   @Post("invitations")
   @HttpCode(HttpStatus.CREATED)
+  @AccountRateLimit(10)
   @Header("Cache-Control", "no-store")
   async invite(
     @CurrentSession() session: AuthenticatedSession,

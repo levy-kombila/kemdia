@@ -4,4 +4,3 @@
 export { FeedbackModule } from "./feedback.module.js";
 /** Données personnelles du module : copie et effacement, pour le module privacy */
 export { FeedbackPersonalData } from "./infrastructure/feedback-personal-data.js";
-export { FEEDBACK_ERROR_STATUS } from "./interface/feedback-http-errors.js";

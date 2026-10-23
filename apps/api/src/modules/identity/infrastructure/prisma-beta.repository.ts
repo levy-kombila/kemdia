@@ -35,7 +35,12 @@ export class PrismaBetaRepository implements BetaRepository {
     const row = await this.tx.db.betaSettings.findUnique({ where: { id: SETTINGS_ID } });
     // Ligne absente (base plus ancienne que la migration) : inscription ouverte, comme avant
     if (!row) return { closed: false, updatedBy: null, updatedAt: null };
-    return { closed: row.closed, updatedBy: row.updatedBy, updatedAt: row.updatedAt };
+    // Jamais changé par personne (ligne de la migration) : pas de date à montrer
+    return {
+      closed: row.closed,
+      updatedBy: row.updatedBy,
+      updatedAt: row.updatedBy ? row.updatedAt : null,
+    };
   }
 
   async saveSettings(closed: boolean, updatedBy: string, now: Date): Promise<BetaSettings> {
@@ -68,8 +73,9 @@ export class PrismaBetaRepository implements BetaRepository {
       expiresAt: invitation.expiresAt,
       createdAt: invitation.createdAt,
     };
+    // Par l'adresse (unique) : deux invitations simultanées de la même adresse donnent une seule ligne, pas une erreur
     await this.tx.db.betaInvitation.upsert({
-      where: { id: invitation.id },
+      where: { identifier: invitation.identifier },
       create: { id: invitation.id, ...data },
       update: data,
     });
