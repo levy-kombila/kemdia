@@ -131,10 +131,15 @@ export class PrismaProductRepository implements ProductRepository {
         isNew: true,
       },
     });
-    // Offres visibles des fiches de la page, en une requête : l'offre mise en avant de chaque carte
+    // Offres visibles des fiches de la page, en une requête : l'offre mise en avant de chaque carte. Page d'une
+    // boutique (S7.5-T07) : seulement SON offre (son prix, son stock).
     const offers = rows.length
       ? await this.prisma.product.findMany({
-          where: { listingId: { in: rows.map((r) => r.id) }, ...VISIBLE_OFFER },
+          where: {
+            listingId: { in: rows.map((r) => r.id) },
+            ...VISIBLE_OFFER,
+            ...(criteria.shopId ? { shopId: criteria.shopId } : {}),
+          },
           include: {
             ...productWithVariants,
             variants: { where: { isActive: true }, orderBy: [{ position: "asc" }, { id: "asc" }] },
@@ -244,7 +249,21 @@ export class PrismaProductRepository implements ProductRepository {
         _count: { _all: true },
         orderBy: { brand: "asc" },
       }),
-      this.prisma.listing.count({ where: and(IN_STOCK) }),
+      this.prisma.listing.count({
+        where: and(
+          criteria.shopId
+            ? {
+                offers: {
+                  some: {
+                    ...VISIBLE_OFFER,
+                    shopId: criteria.shopId,
+                    variants: { some: AVAILABLE_VARIANT },
+                  },
+                },
+              }
+            : IN_STOCK,
+        ),
+      }),
       this.prisma.listing.count({ where: and({ compareAtPrice: { not: null } }) }),
       this.prisma.listing.count({ where: and({ rating: { gte: 4 } }) }),
       ...priceRanges.map((range) =>
@@ -380,11 +399,23 @@ function whereOf(c: ProductCriteria): Prisma.ListingWhereInput {
         }
       : {}),
     ...(c.brands.length ? { brand: { in: [...c.brands] } } : {}),
-    ...(c.inStock ? IN_STOCK : {}),
+    // Page d'une boutique (S7.5-T07) : « en stock » se lit sur SON offre
+    ...(c.inStock && !c.shopId ? IN_STOCK : {}),
     // Le prix barré est toujours supérieur au prix (contrainte SQL) : « en promotion » = prix barré présent
     ...(c.onlyDeals ? { compareAtPrice: { not: null } } : {}),
     ...(c.minRating !== undefined ? { rating: { gte: c.minRating } } : {}),
     ...(c.badge ? BADGE_FILTERS[c.badge] : {}),
+    ...(c.shopId
+      ? {
+          offers: {
+            some: {
+              ...VISIBLE_OFFER,
+              shopId: c.shopId,
+              ...(c.inStock ? { variants: { some: AVAILABLE_VARIANT } } : {}),
+            },
+          },
+        }
+      : {}),
   };
 }
 

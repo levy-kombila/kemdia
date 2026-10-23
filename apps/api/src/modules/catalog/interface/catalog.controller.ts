@@ -17,6 +17,7 @@ import {
   presentCategory,
   presentCategoryNode,
   presentProduct,
+  presentPublicShop,
   presentSuggestions,
 } from "./presenters.js";
 import { AvailabilityRequestSchema, type AvailabilityRequest } from "@kemdia/contracts";
@@ -47,6 +48,7 @@ function searchInput(query: Record<string, unknown>): ProductSearchInput {
     badge: first(query.badge),
     city: first(query.ville),
     exact: first(query.exact),
+    shop: first(query.shop),
   };
 }
 
@@ -107,6 +109,34 @@ export class CatalogController {
   @Header("Cache-Control", CACHE_PUBLIC)
   facets(@Query() query: Record<string, unknown>) {
     return this.catalog.getFacets(searchInput(query));
+  }
+
+  /**
+   * Annuaire des boutiques (S7.5-T07) : boutiques actives, la boutique officielle d'abord, puis celles du quartier du
+   * client (`quartier`), puis par nom ; `ville` limite à une ville.
+   */
+  @Get("shops")
+  @Header("Cache-Control", CACHE_PUBLIC)
+  async shops(
+    @Query("ville") city?: unknown,
+    @Query("quartier") neighborhood?: unknown,
+    @Query("page") page?: unknown,
+  ) {
+    const result = await this.catalog.listShops({
+      city: first(city),
+      neighborhood: first(neighborhood),
+      page: first(page),
+    });
+    return { ...result, items: result.items.map(presentPublicShop) };
+  }
+
+  /** Page publique d'une boutique active (ses produits : `GET /products?shop=`). */
+  @Get("shops/:slug")
+  @Header("Cache-Control", CACHE_PUBLIC)
+  async shop(@Param("slug") slug: string) {
+    const shop = await this.catalog.getShop(slug);
+    if (!shop) throw new NotFoundException();
+    return presentPublicShop(shop);
   }
 
   @Get("products/:slug")

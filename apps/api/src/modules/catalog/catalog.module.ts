@@ -12,10 +12,12 @@ import {
   LISTING_REPOSITORY,
   LISTING_CORRECTION_REPOSITORY,
   SELLER_DIRECTORY,
+  PUBLIC_SHOPS,
 } from "./application/ports.js";
 import { VendorCatalog } from "./application/vendor-catalog.service.js";
 import { PrismaVendorProductRepository } from "./infrastructure/prisma-vendor-product.repository.js";
 import { PrismaListingRepository } from "./infrastructure/prisma-listing.repository.js";
+import { PrismaPublicShopsRepository } from "./infrastructure/prisma-public-shops.repository.js";
 import { PrismaListingCorrectionRepository } from "./infrastructure/prisma-listing-correction.repository.js";
 import { PrismaProductImageStore } from "./infrastructure/prisma-product-image.store.js";
 import { SharpImageProcessor } from "./infrastructure/sharp-image-processor.js";
@@ -44,6 +46,8 @@ function pick(alphabet: string, size: number): string {
     { provide: STOCK_REPOSITORY, useClass: PrismaStockRepository },
     { provide: CATEGORY_REPOSITORY, useClass: PrismaCategoryRepository },
     { provide: PRODUCT_REPOSITORY, useClass: PrismaProductRepository },
+    // Annuaire et pages publiques des boutiques (S7.5-T07)
+    { provide: PUBLIC_SHOPS, useClass: PrismaPublicShopsRepository },
     // Produits des vendeurs et modération (S6-T02) : utilisé par le module vendors, qui décide des droits
     VendorCatalog,
     // Photos des produits (S6-T04) : réencodage sharp, rangement PostgreSQL (port remplaçable)

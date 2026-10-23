@@ -119,6 +119,8 @@ describe("Description OpenAPI", () => {
       "/api/v1/sandbox/mobile-money/requests",
       "/api/v1/sandbox/mobile-money/requests/{paymentId}",
       "/api/v1/shipping/tariffs",
+      "/api/v1/shops",
+      "/api/v1/shops/{slug}",
       "/api/v1/support/accounts/lookup",
       "/api/v1/support/accounts/{accountId}/orders",
       "/api/v1/support/accounts/{accountId}/orders/{reference}",

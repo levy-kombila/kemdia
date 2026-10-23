@@ -12,6 +12,7 @@ function common(shop: Shop) {
     name: shop.name,
     slug: shop.slug,
     city: shop.city,
+    neighborhood: shop.neighborhood,
     description: shop.description,
     status: shop.status,
     statusReason: shop.statusReason,

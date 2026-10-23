@@ -24,6 +24,8 @@ export interface ProductQuery {
   ville?: string;
   /** S7.5-T06 : mots cherchés tels quels, sans correction des fautes de frappe. */
   exact?: boolean;
+  /** S7.5-T07 : adresse d'une boutique (sa page publique) ; prix et stock de SON offre. */
+  shop?: string;
 }
 
 /** Paramètres d'URL dans un ordre fixe (même requête → même adresse : utile pour le cache). */
@@ -47,6 +49,7 @@ export function productQueryParams(query: ProductQuery): URLSearchParams {
   set("badge", query.badge);
   set("ville", query.ville?.trim());
   set("exact", query.exact ? "1" : undefined);
+  set("shop", query.shop);
   return params;
 }
 
@@ -116,5 +119,11 @@ export const PRODUCT_QUERY_PARAMETERS = [
     description:
       "S7.5-T06 : « 1 » cherche les mots tels quels ; sinon, si aucune fiche ne les contient, ils sont corrigés (fautes de frappe)",
     schema: { type: "string", enum: ["1"] },
+  },
+  {
+    name: "shop",
+    description:
+      "S7.5-T07 : adresse d'une boutique active ; seulement ses produits, avec le prix et le stock de SON offre",
+    schema: { type: "string", maxLength: 80 },
   },
 ] as const;

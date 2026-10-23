@@ -6,6 +6,8 @@ import {
   INTERNAL_KEY_HEADER,
   ProductDetailSchema,
   ProductPageSchema,
+  PublicShopPageSchema,
+  PublicShopSchema,
   SLUG_PATTERN,
   productQueryParams,
 } from "@kemdia/contracts";
@@ -134,6 +136,18 @@ export function createApiCatalog(options: ApiCatalogOptions): CatalogPort {
     },
     facets(query) {
       return required(withQuery("/products/facets", productQueryParams(query)), FacetsSchema);
+    },
+    shops(query) {
+      const params = new URLSearchParams();
+      if (query.city) params.set("ville", query.city.slice(0, 60));
+      if (query.city && query.neighborhood) params.set("quartier", query.neighborhood.slice(0, 80));
+      if (query.page && query.page > 1) params.set("page", String(query.page));
+      return required(withQuery("/shops", params), PublicShopPageSchema);
+    },
+    shop(slug) {
+      // Adresse validée avant de la mettre dans l'URL de l'API
+      if (!SLUG_PATTERN.test(slug) || slug.length > 80) return Promise.resolve(null);
+      return get(`/shops/${slug}`, PublicShopSchema);
     },
     product(slug, city) {
       if (!SLUG_PATTERN.test(slug) || slug.length > 120) return Promise.resolve(null);

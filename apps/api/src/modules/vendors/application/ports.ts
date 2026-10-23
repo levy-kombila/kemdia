@@ -45,10 +45,24 @@ export interface ShopRepository {
 
 /** Produits d'une boutique dans le catalogue : cachés à la suspension, montrés à la réactivation (S6-T02). */
 export const SHOP_LISTING = Symbol("SHOP_LISTING");
+export interface SellerProfile {
+  name: string;
+  slug: string;
+  city: string;
+  neighborhood: string | null;
+  description: string;
+  official: boolean;
+  active: boolean;
+  since: Date;
+}
+
 export interface ShopListing {
   setShopSuspended(shopId: string, suspended: boolean): Promise<number>;
-  /** Nom, adresse et ville de la boutique montrés à côté de ses offres (S7.5-T02). */
-  syncSeller(shopId: string, seller: { name: string; slug: string; city: string }): Promise<void>;
+  /**
+   * Copie publique de la boutique dans le catalogue : à côté de ses offres (S7.5-T02) et sur sa page publique
+   * (S7.5-T07). La date `since` n'est retenue qu'à la création de la copie (première validation).
+   */
+  syncSeller(shopId: string, seller: SellerProfile): Promise<void>;
 }
 
 /** Transaction de la base, partagée avec le module identity (rôle) et le journal d'audit. */

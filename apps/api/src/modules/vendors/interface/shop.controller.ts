@@ -1,9 +1,11 @@
-import { Body, Controller, Get, Header, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Header, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
 import {
   ShopApplicationRequestSchema,
+  ShopProfileRequestSchema,
   type Shop,
   type ShopApplicationRequest,
+  type ShopProfileRequest,
 } from "@kemdia/contracts";
 import { auditContextOf } from "../../audit/index.js";
 import {
@@ -39,6 +41,24 @@ export class ShopController {
     return presentShop(
       await withVendorsErrors(() =>
         this.shops.apply(session.account.id, body, auditContextOf(req)),
+      ),
+    );
+  }
+
+  /**
+   * « Ma boutique » (S7.5-T07) : ville, quartier et description, sans nouvel examen ; jamais le nom. Tracé au journal.
+   */
+  @Patch()
+  @Header("Cache-Control", "no-store")
+  @AccountRateLimit(10)
+  async updateProfile(
+    @CurrentSession() session: AuthenticatedSession,
+    @Body({ schema: ShopProfileRequestSchema }) body: ShopProfileRequest,
+    @Req() req: Request,
+  ): Promise<Shop> {
+    return presentShop(
+      await withVendorsErrors(() =>
+        this.shops.updateProfile(session.account.id, body, auditContextOf(req)),
       ),
     );
   }

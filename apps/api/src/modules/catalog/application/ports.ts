@@ -1,6 +1,11 @@
 import { PRICE_RANGES, type Badge, type SortKey } from "@kemdia/contracts/constants";
 import type { Category } from "../domain/category.js";
-import type { ListingContent, ListingVariantInfo, Seller } from "../domain/listing.js";
+import type {
+  ListingContent,
+  ListingVariantInfo,
+  Seller,
+  SellerProfile,
+} from "../domain/listing.js";
 import type { ImageSize, ProcessedImage } from "../domain/product-image.js";
 import type { Product, ProductStatus } from "../domain/product.js";
 
@@ -34,6 +39,8 @@ export interface ProductCriteria {
   onlyDeals: boolean;
   minRating?: number;
   badge?: Badge;
+  /** S7.5-T07 : fiches dont cette boutique a une offre visible (page publique de la boutique). */
+  shopId?: string;
 }
 
 /**
@@ -385,7 +392,32 @@ export const SELLER_DIRECTORY = Symbol("SellerDirectory");
 
 /** Boutiques vues du catalogue (S7.5-T02) : copie tenue par le module vendors. */
 export interface SellerDirectory {
-  save(shopId: string, seller: Seller): Promise<void>;
+  /** Crée ou met à jour la copie ; `since` n'est retenu qu'à la création (première validation). */
+  save(shopId: string, seller: SellerProfile): Promise<void>;
+}
+
+export const PUBLIC_SHOPS = Symbol("PublicShops");
+
+/** Boutique publique (S7.5-T07) : sa copie et le nombre de produits visibles qu'elle vend. */
+export interface PublicShop extends SellerProfile {
+  shopId: string;
+  productCount: number;
+}
+
+/** Annuaire et pages publiques des boutiques (S7.5-T07), lus dans la copie du catalogue. */
+export interface PublicShops {
+  /**
+   * Boutiques actives, la boutique officielle d'abord, puis celles du quartier `neighborhood` (s'il est donné), puis
+   * par nom ; `city` limite à une ville.
+   */
+  list(query: {
+    city?: string;
+    neighborhood?: string;
+    page: number;
+    pageSize: number;
+  }): Promise<Page<PublicShop>>;
+  /** Boutique ACTIVE par son adresse ; `null` sinon (inconnue, en attente, suspendue). */
+  findActiveBySlug(slug: string): Promise<PublicShop | null>;
 }
 
 /** Champs calculés à partir du domaine : prix « à partir de » et texte de recherche. */

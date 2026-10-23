@@ -53,6 +53,8 @@ export const AUDIT_ACTIONS = [
   "shop.rejected",
   /** Boutique suspendue ; le rôle vendeur est retiré à part (détails : name, from, to, reason) — S6-T01 */
   "shop.suspended",
+  /** « Ma boutique » : le vendeur change ville, quartier ou description (détails : city, neighborhood, previousCity, descriptionChanged) — S7.5-T07 */
+  "shop.profile_updated",
   /** Produit d'un vendeur envoyé en modération : création, contenu modifié, remise en vente, photo ajoutée (détails : title, reason, from ; image et sha256 pour une photo, S6-T04) — S6-T02 */
   "product.submitted",
   /** Produit validé par la modération (détails : title, from, to) — S6-T02 */

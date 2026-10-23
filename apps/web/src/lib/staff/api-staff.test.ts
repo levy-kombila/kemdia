@@ -14,6 +14,7 @@ const ADMIN_SHOP = {
   name: "Atelier Nzé",
   slug: "atelier-nze",
   city: "Libreville",
+  neighborhood: null,
   description: "Pagnes et tissus wax de qualité.",
   status: "pending",
   statusReason: null,

@@ -8,7 +8,7 @@ import type {
   ListingVariantRecord,
   SellerDirectory,
 } from "../application/ports.js";
-import type { Seller } from "../domain/listing.js";
+import type { SellerProfile } from "../domain/listing.js";
 import type { ProductStatus } from "../domain/product.js";
 
 const withVariants = {
@@ -178,11 +178,13 @@ export class PrismaListingRepository implements ListingRepository, SellerDirecto
     });
   }
 
-  async save(shopId: string, seller: Seller): Promise<void> {
+  async save(shopId: string, seller: SellerProfile): Promise<void> {
+    const { since, ...rest } = seller;
     await this.tx.db.seller.upsert({
       where: { shopId },
-      create: { shopId, ...seller },
-      update: seller,
+      create: { shopId, ...rest, since },
+      // La date de première validation ne bouge plus (une réactivation ne la remet pas à zéro)
+      update: rest,
     });
   }
 }

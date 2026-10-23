@@ -79,7 +79,8 @@ test.describe("espace vendeur : parcours", () => {
     await expect(form.getByLabel("Nom de la boutique")).toHaveAttribute("aria-invalid", "true");
 
     await form.getByLabel("Nom de la boutique").fill("Couture Sansboutique E2E");
-    await form.getByLabel("Ville", { exact: true }).fill("Oyem");
+    await form.getByRole("combobox", { name: "Ville" }).selectOption("Oyem");
+    await form.getByRole("combobox", { name: "Quartier" }).selectOption("Mvengue");
     await form.getByLabel("Mobile de contact").fill("077 98 76 54");
     await form
       .getByLabel("Ce que vous vendez")

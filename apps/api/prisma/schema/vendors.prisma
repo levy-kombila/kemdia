@@ -37,6 +37,8 @@ model Shop {
   nameKey        String?    @unique @map("name_key") @db.VarChar(60)
   slug           String     @unique @db.VarChar(80)
   city           String     @db.VarChar(60)
+  /// Quartier (liste officielle de la livraison, S7.5-T07) ; vide = « Autre quartier » ou pas encore choisi
+  neighborhood   String?    @db.VarChar(80)
   /// Mobile gabonais de contact, forme « +241077123456 » ; vide pour la boutique Kemdia
   contactPhone   String?    @map("contact_phone") @db.VarChar(16)
   description    String     @default("") @db.VarChar(500)

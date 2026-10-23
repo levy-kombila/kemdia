@@ -1,4 +1,5 @@
 import { Store } from "lucide-react";
+import Link from "next/link";
 import { AddToCartButton } from "@/components/product/AddToCartButton";
 import { Price } from "@/components/ui/Price";
 import type { ProductDetail, Variant } from "@/lib/types";
@@ -25,7 +26,16 @@ export function OtherSellers({ product, variant }: { product: ProductDetail; var
           <li key={offer.offerId} className="flex flex-wrap items-center gap-3 py-3">
             <Store className="text-ink-500 size-5 shrink-0" aria-hidden />
             <div className="min-w-0 flex-1">
-              <p className="font-semibold">{offer.seller?.name ?? "Boutique partenaire"}</p>
+              <p className="font-semibold">
+                {offer.seller ? (
+                  // Page publique de la boutique (S7.5-T07)
+                  <Link href={`/boutique/${offer.seller.slug}`} className="hover:underline">
+                    {offer.seller.name}
+                  </Link>
+                ) : (
+                  "Boutique partenaire"
+                )}
+              </p>
               <p className="text-ink-500 text-sm">
                 {offer.seller?.city ?? "Gabon"} ·{" "}
                 {line.maxQuantity > 0 ? (

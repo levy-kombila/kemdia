@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 import { Field, FormAlert, SubmitButton, TextAreaField } from "@/components/ui/Field";
 import { applyShopAction } from "@/lib/vendor/actions";
+import { ShopPlaceFields } from "./ShopPlaceFields";
 import {
   checkShopRequest,
   type ShopRequestFields,
@@ -30,6 +31,7 @@ export function ShopRequestForm({
   const [values, setValues] = useState<ShopRequestInput>({
     name: initial?.name ?? "",
     city: initial?.city ?? "",
+    neighborhood: initial?.neighborhood ?? "",
     phone: initial?.phone ?? "",
     description: initial?.description ?? "",
   });
@@ -94,16 +96,11 @@ export function ShopRequestForm({
         hint="Visible des clients. Le mot « Kemdia » n'est pas permis."
         required
       />
-      <Field
-        label="Ville"
-        name="city"
-        autoComplete="address-level2"
-        maxLength={S.cityMax}
-        placeholder="Libreville"
-        value={values.city}
-        onChange={(e) => set("city")(e.target.value)}
-        error={errors.city}
-        required
+      <ShopPlaceFields
+        city={values.city}
+        neighborhood={values.neighborhood}
+        onChange={(place) => setValues((v) => ({ ...v, ...place }))}
+        errors={{ city: errors.city, neighborhood: errors.neighborhood }}
       />
       <Field
         label="Mobile de contact"

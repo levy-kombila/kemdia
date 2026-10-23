@@ -5,6 +5,8 @@ import type {
   ProductDetail,
   ProductPage,
   ProductQuery,
+  PublicShop,
+  PublicShopPage,
 } from "@kemdia/contracts";
 
 /**
@@ -23,6 +25,10 @@ export interface CatalogPort {
   /** `null` si le produit n'existe pas ou n'est pas publié. */
   /** `city` : nom de la ville du client (S7.5-T03), qui départage deux offres au même prix. */
   product(slug: string, city?: string): Promise<ProductDetail | null>;
+  /** Annuaire des boutiques actives (S7.5-T07) : officielle d'abord, puis le quartier du client, puis par nom. */
+  shops(query: { city?: string; neighborhood?: string; page?: number }): Promise<PublicShopPage>;
+  /** `null` si la boutique est inconnue ou pas active. */
+  shop(slug: string): Promise<PublicShop | null>;
 }
 
 /** L'API ne répond pas, répond une erreur ou une réponse non conforme au contrat. */
