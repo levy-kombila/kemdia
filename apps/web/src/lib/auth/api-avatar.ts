@@ -6,6 +6,7 @@ import {
   SESSION_TOKEN_PATTERN,
 } from "@kemdia/contracts";
 import { log } from "@/lib/log";
+import { readAtMost } from "@/lib/orders/api-orders";
 
 /**
  * Photo de profil (S7.5-T08, ADR-0055) côté serveur du site : relais vers `/api/v1/auth/avatar` avec la clé interne,
@@ -97,7 +98,12 @@ export function createAvatarApi(options: AvatarApiOptions) {
       if (!response?.ok) return failure(response, "GET");
       const etag = response.headers.get("etag") ?? "";
       const type = response.headers.get("content-type");
-      const bytes = new Uint8Array(await response.arrayBuffer());
+      // Lu en flux et arrêté au-delà de 256 Ko (relecture de sécurité)
+      const bytes = await readAtMost(response, MAX_IMAGE_BYTES).catch(() => null);
+      if (!bytes) {
+        log.error("identité", "/avatar GET : réponse trop grande");
+        return { ok: false, code: "INDISPONIBLE" };
+      }
       // Rien d'autre qu'un petit WebP n'est relayé
       const webp =
         bytes.length >= 12 &&

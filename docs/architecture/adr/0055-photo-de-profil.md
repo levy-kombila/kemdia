@@ -35,12 +35,13 @@ sont donc retenues ici et listées pour qu'il les valide à la lecture de la PR 
    - `DELETE` : retrait (les initiales reviennent).
      La version est dans `AccountView.avatar` (session, connexion).
 3. **Site** : relais `/compte/photo` (GET/POST/DELETE) avec le cookie de session et l'adresse du visiteur ; l'adresse
-   de la photo contient sa version (`?v=…`), gardée par le navigateur du titulaire seulement (`private, immutable`) ;
+   de la photo contient sa version (`?v=…`) ; si elle correspond à la photo servie, le navigateur du titulaire la garde
+   **une journée** (`private, max-age=86400`), sinon il la revalide à chaque fois ;
    la mémoire des sessions du site est oubliée après un changement (l'en-tête suit tout de suite). Les requêtes qui
    modifient passent par le contrôle d'origine du site. Composants `Avatar` (photo ou initiales) et `AvatarEditor`
    (« Ajouter / Changer la photo », « Retirer »), photo réduite dans le navigateur avant l'envoi.
 4. **Données personnelles** : effacée avec le compte (photo et version) ; la copie des données indique
-   `photoDeProfil: { presente, depuis }`.
+   `photoDeProfil: { presente, depuis, image }` (la photo elle-même, en WebP base64 : droit d'accès et portabilité).
 5. **Contrat 2.4.0** : routes `/auth/avatar`, champ `avatar` de `AccountView`, codes `PHOTO_INVALIDE` et
    `PHOTO_ABSENTE`, constantes `AVATAR_LIMITS`.
 

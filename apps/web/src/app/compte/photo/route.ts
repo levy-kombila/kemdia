@@ -35,8 +35,9 @@ const STATUS = {
 
 async function context(request: Request) {
   const token = (await cookies()).get(SESSION_COOKIE)?.value ?? null;
+  // Même règle que les autres relais connectés : sans réglage, pas d'adresse (la limite par compte s'applique)
   const ipHeader = clientIpHeaderName();
-  const ip = (ipHeader ? visitorIp(request.headers, ipHeader) : null) ?? UNKNOWN_VISITOR;
+  const ip = ipHeader ? (visitorIp(request.headers, ipHeader) ?? UNKNOWN_VISITOR) : null;
   return { token, api: createAvatarApi({ ...catalogSource(), visitorIp: ip }) };
 }
 
@@ -49,8 +50,12 @@ export async function GET(request: Request): Promise<Response> {
   if (!token) return new Response(null, { status: 404, headers: NO_STORE });
   const result = await api.read(token, request.headers.get("if-none-match"));
   if (!result.ok) return new Response(null, { status: STATUS[result.code], headers: NO_STORE });
-  // Adresse versionnée (?v=…) : gardée un an par le navigateur du titulaire seulement (jamais par un relais partagé)
-  const cache = "private, max-age=31536000, immutable";
+  // Adresse versionnée (?v=…) qui correspond à la photo servie : gardée UNE JOURNÉE par le navigateur du titulaire
+  // seulement (jamais par un relais partagé ; pas plus longtemps sur un poste partagé). Version périmée ou absente :
+  // revalidée à chaque fois (relecture de sécurité).
+  const wanted = new URL(request.url).searchParams.get("v");
+  const current = result.data.etag.slice(1, 17);
+  const cache = wanted && wanted === current ? "private, max-age=86400" : "private, no-cache";
   const headers = { ...NO_STORE, "cache-control": cache, etag: result.data.etag, vary: "Cookie" };
   if (result.data.notModified) return new Response(null, { status: 304, headers });
   return new Response(Buffer.from(result.data.bytes), {

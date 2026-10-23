@@ -56,6 +56,8 @@ export class AvatarController {
 
   /** La photo (WebP, 256 px). Gardée par le navigateur du titulaire seulement (`private`), revalidée par ETag. */
   @Get()
+  // Erreurs (pas de photo, session) : jamais gardées ; la photo elle-même remplace cet en-tête
+  @Header("Cache-Control", "no-store")
   @AccountRateLimit(120)
   async read(
     @CurrentSession() session: AuthenticatedSession,

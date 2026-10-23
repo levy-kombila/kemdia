@@ -111,8 +111,9 @@ describe("Photo de profil (PostgreSQL, HTTP)", () => {
       .set("If-None-Match", photo.headers.etag as string)
       .expect(304);
 
-    // Chacun sa photo : Bob n'en a pas
-    await as(bob.token).get("/api/v1/auth/avatar").expect(404);
+    // Chacun sa photo : Bob n'en a pas (erreur jamais gardée en cache)
+    const none = await as(bob.token).get("/api/v1/auth/avatar").expect(404);
+    expect(none.headers["cache-control"]).toBe("no-store");
     // Sans session : refusé
     await request(app.getHttpServer())
       .get("/api/v1/auth/avatar")
@@ -174,8 +175,11 @@ describe("Photo de profil (PostgreSQL, HTTP)", () => {
       .toBuffer();
     await as(awa.token).upload(jpeg).expect(200);
     const data = new IdentityPersonalData(app.get(TransactionContext));
-    const copy = (await data.export(awa.accountId)) as { photoDeProfil: { presente: boolean } };
+    const copy = (await data.export(awa.accountId)) as {
+      photoDeProfil: { presente: boolean; image: string };
+    };
     expect(copy.photoDeProfil.presente).toBe(true);
+    expect(copy.photoDeProfil.image).toMatch(/^data:image\/webp;base64,UklGR/);
     await app.get(TransactionContext).run(() => data.erase(awa.accountId, new Date()));
     expect(await prisma.accountAvatar.count({ where: { accountId: awa.accountId } })).toBe(0);
     const account = await prisma.account.findUniqueOrThrow({ where: { id: awa.accountId } });

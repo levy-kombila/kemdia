@@ -89,10 +89,10 @@ export class IdentityPersonalData {
       where: { accountId },
       select: { enabledAt: true },
     });
-    // Photo de profil (S7.5-T08) : sa présence et sa date (la photo elle-même se voit dans « Mon compte »)
+    // Photo de profil (S7.5-T08) : la photo elle-même (WebP, 256 Ko au plus) — droit d'accès et portabilité
     const avatar = await db.accountAvatar.findUnique({
       where: { accountId },
-      select: { updatedAt: true },
+      select: { updatedAt: true, image: true },
     });
     return {
       compte: account,
@@ -103,7 +103,13 @@ export class IdentityPersonalData {
         activee: Boolean(factor?.enabledAt),
         depuis: factor?.enabledAt ?? null,
       },
-      photoDeProfil: { presente: avatar !== null, depuis: avatar?.updatedAt ?? null },
+      photoDeProfil: avatar
+        ? {
+            presente: true,
+            depuis: avatar.updatedAt,
+            image: `data:image/webp;base64,${Buffer.from(avatar.image).toString("base64")}`,
+          }
+        : { presente: false, depuis: null, image: null },
     };
   }
 
