@@ -3,8 +3,9 @@ import type {
   Category as CategoryDto,
   CategoryNode as CategoryNodeDto,
   ProductDetail,
+  SearchSuggestions as SearchSuggestionsDto,
 } from "@kemdia/contracts";
-import type { AvailabilityResult } from "../application/catalog.service.js";
+import type { AvailabilityResult, SearchSuggestions } from "../application/catalog.service.js";
 import type { Category, CategoryNode } from "../domain/category.js";
 import type { ListingOffers } from "../domain/listing.js";
 
@@ -98,5 +99,20 @@ export function presentAvailability(results: AvailabilityResult[]): Availability
             ...(r.available !== undefined ? { available: r.available } : {}),
           },
     ),
+  };
+}
+
+/** Suggestions (S7.5-T06) : de quoi afficher une ligne, rien de plus (ni stock, ni identifiants internes). */
+export function presentSuggestions(s: SearchSuggestions): SearchSuggestionsDto {
+  return {
+    ...(s.correctedQuery ? { correctedQuery: s.correctedQuery } : {}),
+    products: s.products.map((p) => ({
+      slug: p.slug,
+      title: p.title,
+      image: p.image,
+      price: p.price,
+    })),
+    categories: s.categories.map((c) => ({ slug: c.slug, name: c.name })),
+    brands: s.brands,
   };
 }

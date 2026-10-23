@@ -220,6 +220,7 @@ describe("schémas", () => {
       "SandboxDecisionRequest",
       "SandboxPaymentRequest",
       "SandboxPaymentRequestPage",
+      "SearchSuggestions",
       "SecondFactorCodeRequest",
       "SecondFactorEnabled",
       "SecondFactorSetup",

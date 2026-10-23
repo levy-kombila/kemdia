@@ -21,7 +21,7 @@ type Props = {
   /** Paramètres propres à la page à conserver (ex. q) */
   baseParams?: Record<string, string>;
   /** Sélection de la page : catégorie, recherche ou promotions (les filtres viennent de l'URL) */
-  query: Pick<ProductQuery, "category" | "q" | "scope">;
+  query: Pick<ProductQuery, "category" | "q" | "scope" | "exact">;
   searchParams: Record<string, string | string[] | undefined>;
   /** Bloc affiché en haut de la colonne de gauche (ex. sous-rayons) */
   sideTop?: ReactNode;
@@ -149,6 +149,20 @@ export async function CatalogView({
             </ul>
           )}
         </div>
+
+        {result.correctedQuery && query.q && (
+          // S7.5-T06 : les mots tapés ne trouvaient rien ; résultats pour les mots corrigés (textes échappés par React)
+          <p role="status" className="bg-brand-50 text-ink-700 mb-3 rounded-xl px-4 py-2.5 text-sm">
+            Aucun résultat pour « {query.q} ». Résultats pour «{" "}
+            <strong className="text-ink-900">{result.correctedQuery}</strong> ».{" "}
+            <Link
+              href={`${basePath}?${new URLSearchParams({ ...baseParams, q: query.q, exact: "1" }).toString()}`}
+              className="text-brand-700 underline"
+            >
+              Chercher exactement « {query.q} »
+            </Link>
+          </p>
+        )}
 
         {result.total === 0 && active === 0 && emptyState ? (
           emptyState

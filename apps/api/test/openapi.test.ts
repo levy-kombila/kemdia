@@ -114,6 +114,7 @@ describe("Description OpenAPI", () => {
       "/api/v1/product-images/{imageId}/{size}",
       "/api/v1/products",
       "/api/v1/products/facets",
+      "/api/v1/products/suggestions",
       "/api/v1/products/{slug}",
       "/api/v1/sandbox/mobile-money/requests",
       "/api/v1/sandbox/mobile-money/requests/{paymentId}",

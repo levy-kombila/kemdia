@@ -51,7 +51,7 @@ export const catalogPaths = {
       tags: ["Catalogue"],
       summary: "Liste paginée : catégorie (sous-catégories comprises), recherche, filtres, tri",
       description:
-        "Seuls les produits publiés sont listés. Une valeur invalide est ignorée (jamais d'erreur) ; une catégorie inconnue donne une liste vide.",
+        "Seuls les produits publiés sont listés. Une valeur invalide est ignorée (jamais d'erreur) ; une catégorie inconnue donne une liste vide. S7.5-T06 : si aucune fiche ne contient les mots cherchés, ils sont corrigés (fautes de frappe) et `correctedQuery` l'indique ; `exact=1` l'empêche.",
       operationId: "searchProducts",
       parameters: queryParams,
       responses: { "200": json("ProductPage", "Une page de produits"), "429": tooMany },
@@ -66,6 +66,25 @@ export const catalogPaths = {
       operationId: "productFacets",
       parameters: queryParams,
       responses: { "200": json("Facets", "Compteurs"), "429": tooMany },
+    },
+  },
+  "/api/v1/products/suggestions": {
+    get: {
+      tags: ["Catalogue"],
+      summary: "Suggestions pendant la frappe : produits, rayons et marques (S7.5-T06)",
+      description:
+        "8 suggestions au plus (4 produits, 2 rayons, 2 marques) contenant les mots tapés ; le dernier mot peut être incomplet. Moins de 2 lettres : listes vides. Si les mots ne trouvent rien, ils sont corrigés comme dans la liste (`correctedQuery`). Limité à 20 appels par minute par adresse (60 par visiteur quand le site relaie).",
+      operationId: "searchSuggestions",
+      parameters: [
+        {
+          name: "q",
+          in: "query",
+          required: false,
+          description: "Texte tapé (100 caractères au plus)",
+          schema: { type: "string", maxLength: 100 },
+        },
+      ],
+      responses: { "200": json("SearchSuggestions", "Suggestions"), "429": tooMany },
     },
   },
   "/api/v1/products/{slug}": {

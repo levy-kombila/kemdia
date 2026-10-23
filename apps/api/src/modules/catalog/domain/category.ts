@@ -108,6 +108,19 @@ export class CategoryTree {
     }
   }
 
+  /** Toutes les catégories, rayon par rayon (racines puis leurs enfants, dans l'ordre d'affichage). */
+  get all(): Category[] {
+    const out: Category[] = [];
+    const walk = (parent: string | null) => {
+      for (const c of this.children(parent)) {
+        out.push(c);
+        walk(c.id);
+      }
+    };
+    walk(null);
+    return out;
+  }
+
   get size(): number {
     return this.byId.size;
   }
