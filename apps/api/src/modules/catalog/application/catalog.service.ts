@@ -1,7 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { MAX_AVAILABILITY_LINES } from "@kemdia/contracts/constants";
+import { MAX_AVAILABILITY_LINES, MAX_QUERY_LENGTH } from "@kemdia/contracts/constants";
 import { CategoryTree, type Category, type CategoryNode } from "../domain/category.js";
 import { ListingOffers } from "../domain/listing.js";
+import { closestWord } from "../domain/spelling.js";
+import { searchable } from "../domain/values.js";
 import type { Orderability } from "../domain/product.js";
 import {
   CATEGORY_REPOSITORY,
@@ -18,12 +20,36 @@ import {
 import {
   parseCity,
   parseProductSearch,
+  searchTerms,
   type ProductSearch,
   type ProductSearchInput,
 } from "./product-search.js";
 
 /** Durée pendant laquelle l'arborescence est gardée en mémoire (elle change rarement). */
 export const CATEGORY_CACHE_MS = 60_000;
+
+/** Suggestions pendant la frappe (S7.5-T06) : 8 au plus en tout. */
+export const SUGGESTION_LIMITS = { products: 4, categories: 2, brands: 2 } as const;
+/** Il faut au moins 2 lettres ou chiffres pour proposer des suggestions. */
+export const MIN_SUGGESTION_LENGTH = 2;
+/** Mots proches demandés à la base pour corriger un mot. */
+const SIMILAR_WORDS = 30;
+/** Une correction est gardée 30 s (la liste et ses compteurs ne la paient qu'une fois). */
+export const CORRECTION_CACHE_MS = 30_000;
+const MAX_CORRECTIONS_KEPT = 500;
+/**
+ * Corrections cherchées en base par minute, tous visiteurs confondus (relecture de sécurité S7.5-T06) : la page de
+ * résultats est relayée par le site sans limite par visiteur ; au-delà, la recherche se fait telle quelle.
+ */
+export const CORRECTION_BUDGET_PER_MINUTE = 120;
+
+export interface SearchSuggestions {
+  /** Mots corrigés (« iphone » pour « ipohne ») ; absent si rien n'a été corrigé. */
+  correctedQuery?: string;
+  products: ProductSummary[];
+  categories: Category[];
+  brands: string[];
+}
 
 /** Un panier ne dépasse pas ce nombre de lignes (protection contre les requêtes démesurées). */
 export { MAX_AVAILABILITY_LINES };
@@ -66,6 +92,9 @@ export type DescribedLine = AvailabilityResult & { variant: VariantSnapshot | nu
 @Injectable()
 export class CatalogService {
   private tree: { value: CategoryTree; loadedAt: number } | null = null;
+  /** Corrections récentes (S7.5-T06), en mémoire : une seule instance au MVP. */
+  private readonly corrections = new Map<string, { terms: readonly string[]; expires: number }>();
+  private correctionWindow = { start: 0, used: 0 };
   /** Horloge (remplaçable dans les tests). */
   clock: () => number = Date.now;
 
@@ -120,19 +149,20 @@ export class CatalogService {
   /** Liste paginée : catégorie (et sous-catégories), recherche, filtres, tri. Catégorie inconnue → liste vide. */
   async searchProducts(
     input: ProductSearchInput,
-  ): Promise<Page<ProductSummary> & { search: ProductSearch }> {
+  ): Promise<Page<ProductSummary> & { search: ProductSearch; correctedQuery?: string }> {
     const search = parseProductSearch(input);
     const criteria = await this.criteria(search);
     if (!criteria)
       return { items: [], page: 1, pageSize: search.pageSize, total: 0, totalPages: 1, search };
+    const terms = await this.resolveTerms(search, criteria);
     const page = await this.products.search(
-      criteria,
+      { ...criteria, terms },
       search.sort,
       search.page,
       search.pageSize,
       search.city ?? null,
     );
-    return { ...page, search };
+    return { ...page, search, ...corrected(search.terms, terms) };
   }
 
   /** Compteurs des filtres pour la même catégorie / recherche, filtres non appliqués. */
@@ -158,7 +188,100 @@ export class CatalogService {
         deals: 0,
         rating4: 0,
       };
-    return this.products.facets(criteria, priceRanges.slice(0, 10));
+    const terms = await this.resolveTerms(search, criteria);
+    return this.products.facets({ ...criteria, terms }, priceRanges.slice(0, 10));
+  }
+
+  /**
+   * Suggestions pendant la frappe (S7.5-T06) : quelques produits, rayons et marques qui contiennent les mots tapés
+   * (le dernier mot peut être incomplet : « sams » trouve « samsung »), avec la même correction des fautes que la
+   * recherche. Moins de 2 lettres : rien.
+   */
+  async suggest(q: unknown): Promise<SearchSuggestions> {
+    const typed = searchTerms(q);
+    if (typed.join("").length < MIN_SUGGESTION_LENGTH)
+      return { products: [], categories: [], brands: [] };
+    const base: ProductCriteria = { terms: typed, brands: [], inStock: false, onlyDeals: false };
+    const terms = await this.resolveTerms(
+      { terms: typed, exact: false, promotionsOnly: false },
+      base,
+    );
+    const criteria = { ...base, terms };
+    const [page, brands, tree] = await Promise.all([
+      this.products.search(criteria, "pertinence", 1, SUGGESTION_LIMITS.products),
+      this.products.brands(criteria, 20),
+      this.categoryTree(),
+    ]);
+    const matches = (text: string) => {
+      const words = searchable(text);
+      return terms.every((t) => words.includes(t));
+    };
+    return {
+      ...corrected(typed, terms),
+      products: page.items,
+      categories: tree.all.filter((c) => matches(c.name)).slice(0, SUGGESTION_LIMITS.categories),
+      // Une marque n'est proposée que si son NOM correspond à un mot tapé (pas toutes les marques des résultats)
+      brands: brands
+        .filter((b) => terms.some((t) => searchable(b).includes(t)))
+        .slice(0, SUGGESTION_LIMITS.brands),
+    };
+  }
+
+  /**
+   * Recherche tolérante aux fautes (S7.5-T06, ADR-0053) : si les mots tapés ne trouvent AUCUNE fiche (catégorie et
+   * sélection de la page comprises, filtres du client non compris : la décision est la même pour la liste et pour les
+   * compteurs), chaque mot est remplacé par le mot le plus proche du catalogue. Mots inchangés si la recherche
+   * exacte est demandée, si un mot ne trouve aucun remplaçant assez proche, ou si rien ne change.
+   */
+  private async resolveTerms(
+    search: Pick<ProductSearch, "terms" | "exact" | "promotionsOnly">,
+    criteria: ProductCriteria,
+  ): Promise<readonly string[]> {
+    if (!search.terms.length || search.exact) return search.terms;
+    const base: ProductCriteria = {
+      ...(criteria.categoryIds ? { categoryIds: criteria.categoryIds } : {}),
+      terms: search.terms,
+      brands: [],
+      inStock: false,
+      onlyDeals: search.promotionsOnly,
+      ...(criteria.badge ? { badge: criteria.badge } : {}),
+    };
+    // Même recherche il y a moins de 30 s (la liste puis ses compteurs, une page suivante…) : même réponse
+    const key = JSON.stringify([base.categoryIds ?? null, base.terms, base.onlyDeals, base.badge]);
+    const now = this.clock();
+    const known = this.corrections.get(key);
+    if (known && known.expires > now) return known.terms;
+    const terms = await this.correct(base, now);
+    if (this.corrections.size >= MAX_CORRECTIONS_KEPT) {
+      for (const [k, v] of this.corrections) if (v.expires <= now) this.corrections.delete(k);
+      if (this.corrections.size >= MAX_CORRECTIONS_KEPT)
+        this.corrections.delete(this.corrections.keys().next().value as string);
+    }
+    this.corrections.set(key, { terms, expires: now + CORRECTION_CACHE_MS });
+    return terms;
+  }
+
+  private async correct(base: ProductCriteria, now: number): Promise<readonly string[]> {
+    const typed = base.terms;
+    if ((await this.products.count(base)) > 0) return typed;
+    // Budget commun à tous les visiteurs (relecture de sécurité) : au-delà, recherche telle quelle
+    if (now - this.correctionWindow.start >= 60_000)
+      this.correctionWindow = { start: now, used: 0 };
+    if (this.correctionWindow.used >= CORRECTION_BUDGET_PER_MINUTE) return typed;
+    this.correctionWindow.used++;
+    const found = await this.products.similarWords(typed, SIMILAR_WORDS);
+    const replacements = typed.map((term) => {
+      const info = found.get(term);
+      // Mot déjà présent dans le catalogue : jamais « corrigé » vers un autre
+      if (info?.present) return term;
+      return info ? closestWord(term, info.words) : null;
+    });
+    if (replacements.some((r) => r === null)) return typed;
+    const terms = [...new Set(replacements as string[])];
+    // Inchangé, ou plus long que le texte qu'on accepte (le contrat le refuserait) : recherche telle quelle
+    if (terms.join(" ") === typed.join(" ") || terms.join(" ").length > MAX_QUERY_LENGTH)
+      return typed;
+    return terms;
   }
 
   /**
@@ -249,4 +372,9 @@ export class CatalogService {
       ...(search.badge ? { badge: search.badge } : {}),
     };
   }
+}
+
+/** `correctedQuery` seulement si les mots ont été corrigés. */
+function corrected(typed: readonly string[], used: readonly string[]): { correctedQuery?: string } {
+  return typed === used ? {} : { correctedQuery: used.join(" ") };
 }

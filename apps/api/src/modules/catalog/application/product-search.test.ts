@@ -18,6 +18,7 @@ describe("parseProductSearch — validation des recherches (leçon MED-13)", () 
       inStock: false,
       onlyDeals: false,
       promotionsOnly: false,
+      exact: false,
     });
   });
 
@@ -49,6 +50,7 @@ describe("parseProductSearch — validation des recherches (leçon MED-13)", () 
       onlyDeals: true,
       minRating: 4,
       promotionsOnly: false,
+      exact: false,
     });
   });
 
@@ -73,6 +75,7 @@ describe("parseProductSearch — validation des recherches (leçon MED-13)", () 
       inStock: false,
       onlyDeals: false,
       promotionsOnly: false,
+      exact: false,
     });
   });
 

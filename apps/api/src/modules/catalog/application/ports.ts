@@ -118,6 +118,19 @@ export interface ProductRepository {
     city?: string | null,
   ): Promise<Page<ProductSummary>>;
   facets(criteria: ProductCriteria, priceRanges: readonly PriceRange[]): Promise<Facets>;
+  /** Nombre de fiches visibles qui répondent aux critères (S7.5-T06 : faut-il corriger la recherche ?). */
+  count(criteria: ProductCriteria): Promise<number>;
+  /**
+   * Recherche tolérante aux fautes (S7.5-T06), en UNE requête pour tous les mots : pour chaque mot, s'il figure déjà
+   * dans le texte d'une fiche visible (`present`) et les mots de ces fiches qui lui ressemblent (trigrammes), du plus
+   * au moins ressemblant, `limit` au plus (cherchés seulement pour les mots de 3 à 30 lettres).
+   */
+  similarWords(
+    terms: readonly string[],
+    limit: number,
+  ): Promise<Map<string, { present: boolean; words: string[] }>>;
+  /** Marques des fiches visibles qui répondent aux critères, les plus représentées d'abord (suggestions). */
+  brands(criteria: ProductCriteria, limit: number): Promise<string[]>;
   /**
    * Crée ou met à jour une fiche de la boutique qui l'a créée (catalogue Kemdia importé) ET son offre : même
    * identifiant et même adresse, une déclinaison par variante. En une seule transaction.

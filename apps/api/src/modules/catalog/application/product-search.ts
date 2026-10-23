@@ -38,6 +38,8 @@ export interface ProductSearchInput {
   badge?: unknown;
   /** Ville du client (S7.5-T02) : à prix égal, l'offre d'une boutique de cette ville est mise en avant. */
   city?: unknown;
+  /** « 1 » : mots cherchés tels quels, sans correction des fautes de frappe (S7.5-T06). */
+  exact?: unknown;
 }
 
 export interface ProductSearch {
@@ -55,6 +57,8 @@ export interface ProductSearch {
   promotionsOnly: boolean;
   badge?: Badge;
   city?: string;
+  /** Pas de correction des fautes de frappe (lien « chercher exactement … »). */
+  exact: boolean;
 }
 
 const integer = (value: unknown): number | undefined => {
@@ -65,8 +69,7 @@ const clamp = (n: number, min: number, max: number) => Math.min(Math.max(n, min)
 const flag = (value: unknown) => value === true || value === "1" || value === "true";
 
 export function parseProductSearch(input: ProductSearchInput): ProductSearch {
-  const q = typeof input.q === "string" ? input.q.slice(0, MAX_QUERY_LENGTH) : "";
-  const terms = [...new Set(searchable(q).split(" ").filter(Boolean))].slice(0, MAX_TERMS);
+  const terms = searchTerms(input.q);
 
   const brandList = Array.isArray(input.brands)
     ? input.brands
@@ -108,7 +111,14 @@ export function parseProductSearch(input: ProductSearchInput): ProductSearch {
     promotionsOnly: input.scope === "promotions",
     ...(BADGES.includes(input.badge as Badge) ? { badge: input.badge as Badge } : {}),
     ...(city ? { city } : {}),
+    exact: flag(input.exact),
   };
+}
+
+/** Mots d'un texte tapé : normalisés (`searchable`), sans doublon, `MAX_TERMS` au plus. */
+export function searchTerms(q: unknown): string[] {
+  const text = typeof q === "string" ? q.slice(0, MAX_QUERY_LENGTH) : "";
+  return [...new Set(searchable(text).split(" ").filter(Boolean))].slice(0, MAX_TERMS);
 }
 
 /** Ville du client : 2 à 60 caractères, lettres, espaces, tirets et apostrophes (ne sert qu'à départager deux offres). */

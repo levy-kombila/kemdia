@@ -22,6 +22,8 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 export default async function SearchPage({ searchParams }: Props) {
   const sp = await searchParams;
   const q = parseQuery(first(sp.q));
+  // S7.5-T06 : « exact=1 » (lien « chercher exactement ») désactive la correction des fautes de frappe
+  const exact = first(sp.exact) === "1";
   const [highlights, bestsellers] = await Promise.all([
     getCategoryHighlights(12),
     getBestsellers(8),
@@ -64,8 +66,8 @@ export default async function SearchPage({ searchParams }: Props) {
       </header>
       <CatalogView
         basePath="/recherche"
-        baseParams={q ? { q } : {}}
-        query={{ q }}
+        baseParams={q ? { q, ...(exact ? { exact: "1" } : {}) } : {}}
+        query={{ q, exact }}
         searchParams={sp}
         emptyState={empty}
       />
