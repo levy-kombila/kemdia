@@ -1,6 +1,7 @@
 import { CircleUser, Heart, LogOut, MapPin, MonitorSmartphone, Package } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AvatarEditor } from "@/components/account/AvatarEditor";
 import { ChangePasswordForm } from "@/components/account/ChangePasswordForm";
 import { PrivacySection } from "@/components/account/PrivacySection";
 import { RoleList } from "@/components/account/RoleList";
@@ -109,11 +110,14 @@ function SignedIn({
         </FormAlert>
       )}
       <section aria-labelledby="identite" className="rounded-xl bg-white p-6 sm:p-8">
-        <div className="flex items-center gap-4">
-          <span className="bg-brand-50 text-brand-700 flex size-14 shrink-0 items-center justify-center rounded-full text-xl font-extrabold">
-            {account.firstName.slice(0, 1).toUpperCase()}
-          </span>
-          <div className="min-w-0">
+        <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+          {/* Photo de profil ou initiales (S7.5-T08) */}
+          <AvatarEditor
+            firstName={account.firstName}
+            lastName={account.lastName}
+            version={account.avatar}
+          />
+          <div className="min-w-0 text-center sm:text-left">
             <h1 id="identite" className="truncate text-2xl font-extrabold">
               {account.firstName} {account.lastName}
             </h1>

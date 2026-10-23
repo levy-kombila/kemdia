@@ -25,9 +25,9 @@ export const WEBHOOK_PATH_PREFIX = "/api/v1/webhooks/";
  * (JPEG, PNG ou WebP, 5 Mo au plus). Lu en binaire SEULEMENT à cette adresse et pour ces types : toutes les autres
  * routes gardent la limite JSON de 100 ko. Le contenu est revérifié par l'API (premiers octets, décodage).
  */
-// Photos des produits (S6-T04) et des pièces du dossier de vérification (S6-T08)
+// Photos des produits (S6-T04), pièces du dossier de vérification (S6-T08) et photo de profil (S7.5-T08)
 const IMAGE_UPLOAD_PATH =
-  /^\/api\/v1\/vendors\/(?:products\/[^/?#]+\/images|kyc\/documents\/[a-z_]{2,10})\/?(?:\?.*)?$/;
+  /^\/api\/v1\/(?:vendors\/(?:products\/[^/?#]+\/images|kyc\/documents\/[a-z_]{2,10})|auth\/avatar)\/?(?:\?.*)?$/;
 const IMAGE_TYPES: readonly string[] = PRODUCT_IMAGE_TYPES;
 
 const hasSessionToken = (header: string | undefined): boolean =>

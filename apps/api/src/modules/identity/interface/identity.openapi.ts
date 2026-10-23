@@ -139,6 +139,69 @@ export const identityPaths = {
       },
     },
   },
+  "/api/v1/auth/avatar": {
+    post: {
+      tags: ["Identité"],
+      summary: "Photo de profil : envoyer (S7.5-T08)",
+      description:
+        "Corps = le fichier (`image/jpeg`, `image/png` ou `image/webp`, 5 Mo au plus, 200 px au moins de chaque côté). Recadrée au centre en carré de 256 px, réencodée en WebP SANS métadonnées. Visible seulement par le titulaire. 10 envois par minute.",
+      operationId: "uploadAvatar",
+      security: bearer,
+      requestBody: {
+        required: true,
+        content: {
+          "image/jpeg": { schema: { type: "string", format: "binary" } },
+          "image/png": { schema: { type: "string", format: "binary" } },
+          "image/webp": { schema: { type: "string", format: "binary" } },
+        },
+      },
+      responses: {
+        "200": {
+          description: "Nouvelle version de la photo (aussi dans `account.avatar`)",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["avatar"],
+                properties: { avatar: { type: "string", pattern: "^[0-9a-f]{16}$" } },
+              },
+            },
+          },
+        },
+        "401": sessionRefused,
+        "415": problem("Corps qui n'est pas une image (`PHOTO_INVALIDE`)"),
+        "422": problem("`PHOTO_INVALIDE` : format, poids ou dimensions (détail dans le message)"),
+        "429": tooMany,
+      },
+    },
+    get: {
+      tags: ["Identité"],
+      summary: "Photo de profil : la voir (titulaire seulement)",
+      description:
+        "WebP 256 × 256. `Cache-Control: private, no-cache` et `ETag` (304 si inchangée).",
+      operationId: "getAvatar",
+      security: bearer,
+      responses: {
+        "200": { description: "La photo", content: { "image/webp": {} } },
+        "304": { description: "Inchangée" },
+        "401": sessionRefused,
+        "404": problem("`PHOTO_ABSENTE` : pas de photo (le site affiche les initiales)"),
+        "429": tooMany,
+      },
+    },
+    delete: {
+      tags: ["Identité"],
+      summary: "Photo de profil : la retirer (les initiales reviennent)",
+      operationId: "deleteAvatar",
+      security: bearer,
+      responses: {
+        "204": { description: "Photo retirée" },
+        "401": sessionRefused,
+        "404": problem("`PHOTO_ABSENTE` : pas de photo"),
+        "429": tooMany,
+      },
+    },
+  },
   "/api/v1/auth/logout": {
     post: {
       tags: ["Identité"],

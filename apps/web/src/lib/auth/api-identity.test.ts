@@ -11,6 +11,7 @@ const ACCOUNT = {
   email: "awa@exemple.ga",
   phone: null,
   roles: ["client"],
+  avatar: null,
 };
 const OPENED = { token: TOKEN, expiresAt: "2026-11-07T10:00:00.000Z", account: ACCOUNT };
 

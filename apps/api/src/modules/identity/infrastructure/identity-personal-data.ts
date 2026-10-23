@@ -89,6 +89,11 @@ export class IdentityPersonalData {
       where: { accountId },
       select: { enabledAt: true },
     });
+    // Photo de profil (S7.5-T08) : la photo elle-même (WebP, 256 Ko au plus) — droit d'accès et portabilité
+    const avatar = await db.accountAvatar.findUnique({
+      where: { accountId },
+      select: { updatedAt: true, image: true },
+    });
     return {
       compte: account,
       roles,
@@ -98,6 +103,13 @@ export class IdentityPersonalData {
         activee: Boolean(factor?.enabledAt),
         depuis: factor?.enabledAt ?? null,
       },
+      photoDeProfil: avatar
+        ? {
+            presente: true,
+            depuis: avatar.updatedAt,
+            image: `data:image/webp;base64,${Buffer.from(avatar.image).toString("base64")}`,
+          }
+        : { presente: false, depuis: null, image: null },
     };
   }
 
@@ -121,6 +133,8 @@ export class IdentityPersonalData {
     await db.accountRole.deleteMany({ where: { accountId } });
     // Appareils connus (S7.5-T04) : empreintes et liens « ce n'est pas moi » partent avec le compte
     await db.knownDevice.deleteMany({ where: { accountId } });
+    // Photo de profil (S7.5-T08) : effacée avec le compte
+    await db.accountAvatar.deleteMany({ where: { accountId } });
     await db.resetTicket.deleteMany({
       where: { OR: [{ accountId }, { destination: { in: identifiers } }] },
     });
@@ -147,6 +161,7 @@ export class IdentityPersonalData {
         passwordHash: "effacé",
         passwordVersion: { increment: 1 },
         inactivityNoticeAt: null,
+        avatarVersion: null,
         deletedAt: now,
       },
     });

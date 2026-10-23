@@ -103,6 +103,7 @@ async function setup(options: { box?: SecretBox } = {}) {
           email: "ada@exemple.ga",
           phone: null,
           roles,
+          avatar: null,
         },
       };
     };

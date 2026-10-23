@@ -40,7 +40,12 @@ export type IdentityErrorCode =
   /** Motif d'une désactivation trop court ou trop long. */
   | "MOTIF_INVALIDE"
   /** Lien « ce n'est pas moi » inconnu, déjà utilisé ou expiré. */
-  | "ALERTE_INVALIDE";
+  | "ALERTE_INVALIDE"
+  // Photo de profil (S7.5-T08, ADR-0055)
+  /** Fichier refusé : format, poids ou dimensions (détail dans le message). */
+  | "PHOTO_INVALIDE"
+  /** Pas de photo de profil sur ce compte. */
+  | "PHOTO_ABSENTE";
 
 /** Une règle de l'identité n'est pas respectée. Le message est lisible par un humain, en français. */
 export class IdentityError extends Error {

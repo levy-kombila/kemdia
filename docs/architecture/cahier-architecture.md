@@ -32,6 +32,7 @@
 | **4.21** | 2026-10-23 | S7.5   | Recherche (ADR-0053) : §3.27 (nouvelle) extension pg_trgm et index trigrammes, correction des fautes de frappe si rien ne correspond (`correctedQuery`, `exact=1`), suggestions pendant la frappe (route `GET /products/suggestions`, relais du site) ; contrat 2.2.0                                                                                                         |
 | **4.22** | 2026-10-23 | S7.5   | Sécurité (S7.5-T06b) : §4 Next.js 16.3 → **16.4** (16.4.2 : failles critiques corrigées)                                                                                                                                                                                                                                                                                      |
 | **4.23** | 2026-10-23 | S7.5   | Boutiques publiques (ADR-0054) : §3.28 (nouvelle) quartier des boutiques (listes de la livraison), copie publique enrichie `catalog.sellers`, « Ma boutique » (`PATCH /vendors/shop`), annuaire `GET /shops` (quartier du client d'abord), page `GET /shops/{slug}`, filtre `shop` des produits ; pages `/boutiques`, `/boutique/{slug}`, `/vendeur/boutique` ; contrat 2.3.0 |
+| **4.24** | 2026-10-23 | S7.5   | Photo de profil (ADR-0055) : §3.29 (nouvelle) table `identity.account_avatars`, `accounts.avatar_version`, routes `/auth/avatar` (envoi recadré sans métadonnées, lecture privée, retrait), `AccountView.avatar`, relais `/compte/photo`, initiales par défaut ; effacée avec le compte ; contrat 2.4.0                                                                       |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                                                                          |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                                                                                |
 | **3.7**  | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                                                                                                                   |
@@ -1154,6 +1155,21 @@ La copie publique est tenue par le module vendors à chaque décision et à chaq
 fois, à la première validation) ; le catalogue ne lit jamais les tables de vendors. Site : `/boutiques` (ville du
 cookie `kemdia_ville` par défaut, puis quartier), `/boutique/{slug}`, `/vendeur/boutique`, listes de ville et de
 quartier dans la demande d'ouverture, liens depuis la fiche produit. Contrat de l'API : **2.3.0**.
+
+### 3.29 Photo de profil (S7.5-T08)
+
+Décision : [ADR-0055](adr/0055-photo-de-profil.md). Migration `20261023170000_photo_profil` : `identity.account_avatars`
+(carré WebP de 256 px, 256 Ko au plus) et `identity.accounts.avatar_version`.
+
+| Route (`/api/v1`)     | Règle                                                                                                                   |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `POST /auth/avatar`   | Corps = le fichier (JPEG, PNG, WebP ; 5 Mo ; 200 px) ; recadré au centre, réencodé sans métadonnées ; 10/min par compte |
+| `GET /auth/avatar`    | La photo du compte connecté seulement ; `private, no-cache` + `ETag`                                                    |
+| `DELETE /auth/avatar` | Retrait ; les initiales reviennent                                                                                      |
+
+Version de la photo dans `AccountView.avatar`. Site : relais `/compte/photo` (session, adresse versionnée, cache privé
+du navigateur seulement), initiales sur une couleur propre à la personne, photo dans l'en-tête et « Mon compte ».
+Effacée avec le compte ; présente dans la copie des données. Contrat de l'API : **2.4.0**.
 
 ## 4. Choix technologiques
 

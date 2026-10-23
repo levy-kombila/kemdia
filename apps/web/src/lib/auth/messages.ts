@@ -38,6 +38,10 @@ const MESSAGES: Record<AuthErrorCode, string> = {
   ALERTE_INVALIDE:
     "Ce lien n'est plus valable (déjà utilisé ou plus vieux de 7 jours). Changez votre mot de passe par prudence.",
   TROP_DE_REQUETES: "Trop de demandes. Patientez un instant avant de réessayer.",
+  // Photo de profil (S7.5-T08)
+  PHOTO_INVALIDE:
+    "Photo refusée : JPEG, PNG ou WebP de 5 Mo au plus, 200 pixels au moins de chaque côté.",
+  PHOTO_ABSENTE: "Vous n'avez pas encore de photo de profil.",
   // Double authentification de l'équipe (S6-T03) : écrans plus tard au S6, messages prêts
   MOT_DE_PASSE_INCORRECT: "Mot de passe incorrect.",
   DEUX_FACTEURS_INDISPONIBLE:

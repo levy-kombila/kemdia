@@ -348,7 +348,14 @@ describe("rôles et journal d'audit (S4-T06)", () => {
   });
 
   it("compte : rôles connus seulement", () => {
-    const account = { id, firstName: "Awa", lastName: "Ndong", email: null, phone: null };
+    const account = {
+      id,
+      firstName: "Awa",
+      lastName: "Ndong",
+      email: null,
+      phone: null,
+      avatar: null,
+    };
     expect(AccountViewSchema.safeParse({ ...account, roles: ["client", "admin"] }).success).toBe(
       true,
     );

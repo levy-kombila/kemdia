@@ -13,6 +13,7 @@ const OK = {
       email: "awa@exemple.ga",
       phone: null,
       roles: ["client" as const],
+      avatar: null,
     },
   },
 };

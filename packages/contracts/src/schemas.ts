@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   API_ERROR_CODES,
+  AVATAR_VERSION_PATTERN,
   LISTING_CORRECTION_LIMITS,
   PRIVACY_ERROR_CODES,
   AVAILABILITY_REASONS,
@@ -447,6 +448,13 @@ export const AccountViewSchema = z
       .array(z.enum(ROLES))
       .describe(
         "Rôles cumulables (S4-T06) : toujours « client », puis vendor, catalog, logistics, finance, support, admin",
+      ),
+    avatar: z
+      .string()
+      .regex(AVATAR_VERSION_PATTERN)
+      .nullable()
+      .describe(
+        "S7.5-T08 : version de la photo de profil (change à chaque nouvelle photo) ; null : pas de photo, initiales",
       ),
   })
   .meta({ id: "AccountView", description: "Le compte de la personne connectée" });

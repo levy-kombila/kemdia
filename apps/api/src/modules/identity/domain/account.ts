@@ -27,6 +27,8 @@ export interface AccountProps {
   /** Rôles enregistrés (S4-T06) ; jamais écrits par `AccountRepository.save` (voir RoleRepository) */
   roles: readonly StoredRole[];
   createdAt: Date;
+  /** Photo de profil (S7.5-T08) ; jamais écrite par `AccountRepository.save` (voir AvatarStore). */
+  avatarVersion?: string | null;
 }
 
 const invalidName = () =>
@@ -48,6 +50,8 @@ export interface AccountView {
   phone: string | null;
   /** Toujours `client`, puis les rôles enregistrés (S4-T06) */
   roles: Role[];
+  /** Version de la photo de profil (S7.5-T08) ; `null` : initiales. */
+  avatar: string | null;
 }
 
 /** Ce que l'administration voit d'un compte (S4-T06) : jamais le hachage ni les compteurs. */
@@ -84,12 +88,17 @@ export class Account {
       phoneVerifiedAt: null,
       roles: [],
       createdAt: input.now,
+      avatarVersion: null,
     });
   }
 
   /** Reconstruit un compte lu en base (aucune règle rejouée : la base les garantit déjà). */
   static restore(props: AccountProps): Account {
-    return new Account({ ...props, roles: STORED_ROLES.filter((r) => props.roles.includes(r)) });
+    return new Account({
+      ...props,
+      roles: STORED_ROLES.filter((r) => props.roles.includes(r)),
+      avatarVersion: props.avatarVersion ?? null,
+    });
   }
 
   get id(): string {
@@ -156,6 +165,7 @@ export class Account {
       email: this.props.email,
       phone: this.props.phone,
       roles: this.roles,
+      avatar: this.props.avatarVersion ?? null,
     };
   }
 

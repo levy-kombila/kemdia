@@ -156,6 +156,17 @@ export async function clearStaleSessionAction(): Promise<void> {
 
 // --- Inscription ---
 
+/**
+ * Photo de profil changée (S7.5-T08) : la mémoire des sessions des PAGES (10 s) oublie ce compte, pour que l'en-tête et
+ * « Mon compte » montrent tout de suite la nouvelle photo. Le relais `/compte/photo` (gestionnaire de route) n'a pas la
+ * même mémoire que le rendu des pages : c'est une action serveur, appelée par le navigateur après l'envoi, qui le fait.
+ * Ne change rien d'autre (aucun effet si personne n'est connecté).
+ */
+export async function refreshSessionAction(): Promise<void> {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (token) forgetSession(token);
+}
+
 export async function signupAction(input: unknown): Promise<AuthResult<CodeSent>> {
   const data = (typeof input === "object" && input !== null ? input : {}) as Partial<
     Record<keyof SignupInput, unknown>
