@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API Kemdia",
-    "version": "2.3.0",
+    "version": "2.4.0",
     "description": "API de la plateforme e-commerce Kemdia (Gabon). Montants en FCFA entiers (BR-004), identifiants UUID (BR-042).\n\n- Erreurs : format Problem Details (RFC 9457), message en français, identifiant de requête.\n- Limitation de débit : par adresse IP et par minute ; en cas de dépassement, 429 et en-tête `Retry-After`.\n- Cache : les lectures du catalogue peuvent être gardées 60 s (`Cache-Control`).\n- Erreurs métier : champ `code` stable (ex. `CODE_INVALIDE`), à utiliser plutôt que le texte du message.\n- Rôles (S4-T06) : `client`, `vendor`, `moderator`, `admin`, cumulables ; voir le tag Administration.\n- Limites par compte (S4-T07) : sur chaque route connectée (120/min par défaut), 429 `TROP_DE_REQUETES` + `Retry-After`.\n- Le serveur du site transmet l'adresse du visiteur (`X-Kemdia-Client-IP`), crue seulement avec sa clé interne.\n- Panier (S5-T01) : un panier par compte connecté, revérifié dans le catalogue à chaque réponse ; jamais de prix reçu du site.\n- Commandes (S5-T02) : créées depuis le panier du compte, stock réservé dans la même transaction, idempotentes (`idempotencyKey`).\n- Coupons (S5-T03) : un par commande, sur les articles seulement, utilisation comptée avec la commande et rendue si elle est annulée.\n- Paiements (S5-T04) : Mobile Money en 3 essais au plus ; paiement à la livraison réglé par l'administrateur ; remboursements suivis à la main.\n- Factures (S5-T06) : établies au paiement reçu, avoir à l'annulation, numéros par année sans trou, PDF et e-mail.\n- Notifications de l'opérateur (S5-T05) : signées (HMAC-SHA256, 5 minutes), rejeu ignoré ; bac à sable avec téléphone simulé en local et en démo.\n- Boutiques (S6-T01) : un client demande à ouvrir sa boutique ; un administrateur la valide (rôle vendeur accordé), la refuse ou la suspend.\n- Double authentification (S6-T03) : obligatoire pour les modérateurs et administrateurs sur les routes d'équipe (`DEUX_FACTEURS_A_ACTIVER`, `DEUX_FACTEURS_REQUIS`).\n- Produits des vendeurs (S6-T02) : invisibles jusqu'à leur validation par la modération (BR-003) ; cachés si la boutique est suspendue.\n- Photos des vendeurs (S6-T04) : fichier envoyé tel quel (JPEG, PNG, WebP, 5 Mo), réencodé en WebP sans métadonnées ; publiques seulement pour un produit visible.\n- Commandes des vendeurs (S6-T07) : chaque boutique accepte ou refuse sa part dans les 24 h (BR-013) ; un refus ou l'absence de réponse annule la commande entière.\n- Données personnelles (S7-T08) : copie JSON, suppression du compte par le titulaire, comptes effacés après 3 ans sans connexion (prévenus 30 jours avant)."
   },
   "servers": [
@@ -1274,6 +1274,222 @@
           },
           "401": {
             "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de demandes : `ENVOI_TROP_RAPPROCHE` (60 s entre deux codes), `TROP_D_ENVOIS` (5 par heure), `TROP_D_ESSAIS` (5 essais : redemander un code) ou limite par adresse IP",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes avant de réessayer (limites d'envoi et par adresse IP ; absent pour `TROP_D_ESSAIS`)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/avatar": {
+      "post": {
+        "tags": ["Identité"],
+        "summary": "Photo de profil : envoyer (S7.5-T08)",
+        "description": "Corps = le fichier (`image/jpeg`, `image/png` ou `image/webp`, 5 Mo au plus, 200 px au moins de chaque côté). Recadrée au centre en carré de 256 px, réencodée en WebP SANS métadonnées. Visible seulement par le titulaire. 10 envois par minute.",
+        "operationId": "uploadAvatar",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Nouvelle version de la photo (aussi dans `account.avatar`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["avatar"],
+                  "properties": {
+                    "avatar": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{16}$"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Corps qui n'est pas une image (`PHOTO_INVALIDE`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`PHOTO_INVALIDE` : format, poids ou dimensions (détail dans le message)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de demandes : `ENVOI_TROP_RAPPROCHE` (60 s entre deux codes), `TROP_D_ENVOIS` (5 par heure), `TROP_D_ESSAIS` (5 essais : redemander un code) ou limite par adresse IP",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes avant de réessayer (limites d'envoi et par adresse IP ; absent pour `TROP_D_ESSAIS`)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Identité"],
+        "summary": "Photo de profil : la voir (titulaire seulement)",
+        "description": "WebP 256 × 256. `Cache-Control: private, no-cache` et `ETag` (304 si inchangée).",
+        "operationId": "getAvatar",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "La photo",
+            "content": {
+              "image/webp": {}
+            }
+          },
+          "304": {
+            "description": "Inchangée"
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`PHOTO_ABSENTE` : pas de photo (le site affiche les initiales)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de demandes : `ENVOI_TROP_RAPPROCHE` (60 s entre deux codes), `TROP_D_ENVOIS` (5 par heure), `TROP_D_ESSAIS` (5 essais : redemander un code) ou limite par adresse IP",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes avant de réessayer (limites d'envoi et par adresse IP ; absent pour `TROP_D_ESSAIS`)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Identité"],
+        "summary": "Photo de profil : la retirer (les initiales reviennent)",
+        "operationId": "deleteAvatar",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Photo retirée"
+          },
+          "401": {
+            "description": "`SESSION_INVALIDE` : jeton absent, inconnu, expiré ou fermé",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`PHOTO_ABSENTE` : pas de photo",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -12430,9 +12646,21 @@
               "enum": ["client", "vendor", "catalog", "logistics", "finance", "support", "admin"]
             },
             "description": "Rôles cumulables (S4-T06) : toujours « client », puis vendor, catalog, logistics, finance, support, admin"
+          },
+          "avatar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{16}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "S7.5-T08 : version de la photo de profil (change à chaque nouvelle photo) ; null : pas de photo, initiales"
           }
         },
-        "required": ["id", "firstName", "lastName", "email", "phone", "roles"],
+        "required": ["id", "firstName", "lastName", "email", "phone", "roles", "avatar"],
         "additionalProperties": false,
         "description": "Le compte de la personne connectée"
       },
@@ -12466,6 +12694,18 @@
             },
             "description": "Rôles cumulables (S4-T06) : toujours « client », puis vendor, catalog, logistics, finance, support, admin"
           },
+          "avatar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{16}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "S7.5-T08 : version de la photo de profil (change à chaque nouvelle photo) ; null : pas de photo, initiales"
+          },
           "status": {
             "type": "string",
             "enum": ["pending", "active", "disabled"]
@@ -12483,6 +12723,7 @@
           "email",
           "phone",
           "roles",
+          "avatar",
           "status",
           "createdAt"
         ],
@@ -16232,6 +16473,8 @@
               "COMPTE_PROTEGE",
               "MOTIF_INVALIDE",
               "ALERTE_INVALIDE",
+              "PHOTO_INVALIDE",
+              "PHOTO_ABSENTE",
               "PANIER_PLEIN",
               "PRODUIT_INDISPONIBLE",
               "VARIANTE_INCONNUE",
@@ -17773,6 +18016,18 @@
             },
             "description": "Rôles cumulables (S4-T06) : toujours « client », puis vendor, catalog, logistics, finance, support, admin"
           },
+          "avatar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{16}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "S7.5-T08 : version de la photo de profil (change à chaque nouvelle photo) ; null : pas de photo, initiales"
+          },
           "status": {
             "type": "string",
             "enum": ["pending", "active", "disabled"]
@@ -17800,6 +18055,7 @@
           "email",
           "phone",
           "roles",
+          "avatar",
           "status",
           "createdAt",
           "secondFactorEnabled",
@@ -17875,6 +18131,18 @@
             },
             "description": "Rôles cumulables (S4-T06) : toujours « client », puis vendor, catalog, logistics, finance, support, admin"
           },
+          "avatar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{16}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "S7.5-T08 : version de la photo de profil (change à chaque nouvelle photo) ; null : pas de photo, initiales"
+          },
           "status": {
             "type": "string",
             "enum": ["pending", "active", "disabled"]
@@ -17903,6 +18171,7 @@
           "email",
           "phone",
           "roles",
+          "avatar",
           "status",
           "createdAt",
           "lastActiveAt",

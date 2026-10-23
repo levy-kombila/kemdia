@@ -59,6 +59,7 @@ function contextFor(
           email: null,
           phone: null,
           roles,
+          avatar: null,
         },
       }
     : undefined;

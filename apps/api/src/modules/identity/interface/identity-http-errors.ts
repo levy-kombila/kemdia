@@ -36,6 +36,8 @@ const STATUS: Record<IdentityErrorCode, number> = {
   COMPTE_PROTEGE: HttpStatus.FORBIDDEN,
   MOTIF_INVALIDE: HttpStatus.UNPROCESSABLE_ENTITY,
   ALERTE_INVALIDE: HttpStatus.GONE,
+  PHOTO_INVALIDE: HttpStatus.UNPROCESSABLE_ENTITY,
+  PHOTO_ABSENTE: HttpStatus.NOT_FOUND,
 };
 
 /** Exécute un cas d'utilisation ; une erreur métier devient une réponse HTTP avec son code. */

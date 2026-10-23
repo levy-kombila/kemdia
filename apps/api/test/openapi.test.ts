@@ -81,6 +81,7 @@ describe("Description OpenAPI", () => {
       "/api/v1/auth/2fa/recovery-codes",
       "/api/v1/auth/2fa/setup",
       "/api/v1/auth/2fa/verify",
+      "/api/v1/auth/avatar",
       "/api/v1/auth/devices/not-me",
       "/api/v1/auth/login",
       "/api/v1/auth/logout",

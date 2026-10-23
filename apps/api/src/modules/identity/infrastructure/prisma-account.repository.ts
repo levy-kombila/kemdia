@@ -51,6 +51,7 @@ export function toDomain(row: AccountRow & { roles: Pick<AccountRoleRow, "role">
     phoneVerifiedAt: row.phoneVerifiedAt,
     roles: row.roles.map((r) => ROLE_FROM_DB[r.role]),
     createdAt: row.createdAt,
+    avatarVersion: row.avatarVersion,
   });
 }
 

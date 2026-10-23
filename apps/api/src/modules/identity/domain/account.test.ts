@@ -71,6 +71,7 @@ describe("Compte (FR-001)", () => {
       email: "awa@exemple.ga",
       phone: null,
       roles: ["client"],
+      avatar: null,
     });
     expect(JSON.stringify(account.view())).not.toContain("argon2");
   });

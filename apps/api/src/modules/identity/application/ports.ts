@@ -1,4 +1,5 @@
 import type { Account } from "../domain/account.js";
+import type { ProcessedAvatar } from "../domain/avatar.js";
 import type { Identifier, OtpChannel } from "../domain/identifier.js";
 import type { OtpChallenge, OtpPurpose } from "../domain/otp.js";
 import type { LoginGuardState } from "../domain/login-guard.js";
@@ -359,4 +360,26 @@ export interface SecretBox {
   readonly available: boolean;
   seal(plain: Uint8Array, accountId: string): Uint8Array;
   open(box: Uint8Array, accountId: string): Uint8Array;
+}
+
+// --- Photo de profil (S7.5-T08, ADR-0055) ---
+
+export const AVATAR_PROCESSOR = Symbol("AVATAR_PROCESSOR");
+export const AVATAR_STORE = Symbol("AVATAR_STORE");
+
+/**
+ * Recadre un fichier reçu (déjà reconnu par `checkAvatarUpload`) en carré de 256 px, WebP sans métadonnées. Lève une
+ * `IdentityError` (`PHOTO_INVALIDE`) si l'image est illisible ou hors limites.
+ */
+export interface AvatarProcessor {
+  process(bytes: Uint8Array): Promise<ProcessedAvatar>;
+}
+
+/** Rangement des photos de profil ; les écritures rejoignent la transaction en cours. */
+export interface AvatarStore {
+  /** Range la photo ET note sa version sur le compte. */
+  save(accountId: string, avatar: ProcessedAvatar, now: Date): Promise<void>;
+  read(accountId: string): Promise<{ image: Uint8Array; sha256: string } | null>;
+  /** Retire la photo et la version du compte ; `false` s'il n'y en avait pas. */
+  remove(accountId: string): Promise<boolean>;
 }

@@ -97,3 +97,11 @@ describe("Site et API alignés (identité)", () => {
     expect(password.normalizeName(input)).toBe(site.normalizeName(input));
   });
 });
+
+describe("photo de profil (S7.5-T08) : règles de l'API = contrat", () => {
+  it("mêmes limites", async () => {
+    const { AVATAR_RULES } = await import("../src/modules/identity/domain/avatar.js");
+    const { AVATAR_LIMITS } = await import("@kemdia/contracts/constants");
+    expect(AVATAR_RULES).toEqual(AVATAR_LIMITS);
+  });
+});

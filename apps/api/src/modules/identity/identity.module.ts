@@ -1,4 +1,8 @@
 import { Logger, Module } from "@nestjs/common";
+import { AvatarService } from "./application/avatar.service.js";
+import { AvatarController } from "./interface/avatar.controller.js";
+import { PrismaAvatarStore } from "./infrastructure/prisma-avatar.store.js";
+import { SharpAvatarProcessor } from "./infrastructure/sharp-avatar-processor.js";
 import { APP_CONFIG } from "../../config/config.module.js";
 import { AuditModule } from "../audit/index.js";
 import type { AppConfig } from "../../config/env.js";
@@ -14,6 +18,8 @@ import { SignupService } from "./application/signup.service.js";
 import {
   ACCOUNT_REPOSITORY,
   IDENTITY_CLOCK,
+  AVATAR_PROCESSOR,
+  AVATAR_STORE,
   IDENTITY_MAINTENANCE,
   LOGIN_GUARD_REPOSITORY,
   IDENTITY_OPTIONS,
@@ -71,11 +77,21 @@ import { SupportController } from "./interface/support.controller.js";
 @Module({
   // Journal d'audit : mot de passe réinitialisé, « tous mes appareils », rôles (S4-T06)
   imports: [AuditModule],
-  controllers: [IdentityController, AdminController, SecondFactorController, SupportController],
+  controllers: [
+    IdentityController,
+    AdminController,
+    SecondFactorController,
+    SupportController,
+    AvatarController,
+  ],
   providers: [
     // Données personnelles (S7-T08) : copie, effacement — utilisé par le module privacy
     IdentityPersonalData,
     RoleService,
+    // Photo de profil (S7.5-T08, ADR-0055)
+    AvatarService,
+    { provide: AVATAR_PROCESSOR, useClass: SharpAvatarProcessor },
+    { provide: AVATAR_STORE, useClass: PrismaAvatarStore },
     RoleGuard,
     // Équipe, service client et appareils (S7.5-T04, ADR-0051)
     StaffAccountService,

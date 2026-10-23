@@ -12,12 +12,17 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
+import { Avatar } from "@/components/account/Avatar";
 import { clearStaleSessionAction, logoutAction } from "@/lib/auth/actions";
 
 /** `"loading"` : l'en-tête attend encore l'API (S4-T08, démo qui se réveille) — emplacement réservé, rien de cliquable. */
 export type HeaderAccount =
   | {
       firstName: string;
+      /** Pour les initiales et leur couleur (S7.5-T08) */
+      lastName: string;
+      /** Version de la photo de profil (S7.5-T08) ; `null` : initiales */
+      avatar: string | null;
       /** Espaces ouverts à ce compte (S6-T08) : seulement deux oui/non, jamais la liste des rôles */
       vendor?: boolean;
       staff?: boolean;
@@ -47,10 +52,14 @@ function SignInLink() {
 /** Menu du client connecté : « Bonjour, Awa » → Mon compte, Se déconnecter. */
 function SignedInMenu({
   firstName,
+  lastName,
+  avatar,
   vendor = false,
   staff = false,
 }: {
   firstName: string;
+  lastName: string;
+  avatar: string | null;
   vendor?: boolean;
   staff?: boolean;
 }) {
@@ -103,7 +112,7 @@ function SignedInMenu({
         onClick={() => (open ? close() : setOpenedOn(pathname))}
         className="hover:bg-ink-50 flex items-center gap-2 rounded-lg px-2 py-1 text-left"
       >
-        <CircleUser className="text-brand-600 size-6" aria-hidden />
+        <Avatar firstName={firstName} lastName={lastName} version={avatar} size={26} />
         <span className="hidden leading-tight lg:block">
           <span className="text-ink-500 block text-[0.7rem]">Bonjour,</span>
           <span className="flex items-center text-sm font-semibold">
@@ -196,7 +205,13 @@ function AccountPlaceholder() {
 export function AccountMenu({ account }: { account: HeaderAccount }) {
   if (account === "loading") return <AccountPlaceholder />;
   return account ? (
-    <SignedInMenu firstName={account.firstName} vendor={account.vendor} staff={account.staff} />
+    <SignedInMenu
+      firstName={account.firstName}
+      lastName={account.lastName}
+      avatar={account.avatar}
+      vendor={account.vendor}
+      staff={account.staff}
+    />
   ) : (
     <SignInLink />
   );

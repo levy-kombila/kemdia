@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import sharp from "sharp";
 import { MAILPIT_URL, lastCode, lastEmail } from "./mailpit";
 
 /**
@@ -50,6 +51,49 @@ test.describe("compte client", () => {
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("link", { name: "Se connecter" }).first()).toBeVisible();
     expect((await context.cookies()).some((c) => c.name.endsWith("kemdia_session"))).toBe(false);
+  });
+
+  test("S7.5-T08 : photo de profil — initiales, envoi recadré, en-tête, retrait", async ({
+    page,
+    isMobile,
+  }) => {
+    // Compte partagé : une seule configuration modifie sa photo
+    test.skip(!isMobile, "parcours avec état : profil mobile seulement");
+    await page.goto("/connexion?retour=/compte");
+    await page.getByLabel("Adresse e-mail").fill(ACCOUNT.email);
+    await page.getByLabel("Mot de passe", { exact: true }).fill(ACCOUNT.password);
+    await page.getByRole("button", { name: "Se connecter" }).click();
+    await expect(page).toHaveURL(/\/compte$/);
+    await expect(page.getByText("Visible seulement par vous.")).toBeVisible();
+
+    const photo = await sharp({
+      create: { width: 1200, height: 900, channels: 3, background: { r: 20, g: 90, b: 160 } },
+    })
+      .jpeg()
+      .toBuffer();
+    await page.getByLabel(/Ajouter une photo|Changer la photo/).setInputFiles({
+      name: "moi.jpg",
+      mimeType: "image/jpeg",
+      buffer: photo,
+    });
+    await expect(page.getByText("Photo de profil enregistrée.")).toBeVisible();
+    // La photo est servie par le site, au titulaire seulement, en carré de 256 px
+    const img = page.locator("img[src^='/compte/photo?v=']").first();
+    await expect(img).toBeVisible();
+    const src = await img.getAttribute("src");
+    const served = await page.request.get(src!);
+    expect(served.status()).toBe(200);
+    expect(served.headers()["content-type"]).toBe("image/webp");
+    expect(served.headers()["cache-control"]).toContain("private");
+    expect((await sharp(await served.body()).metadata()).width).toBe(256);
+    const a11y = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(
+      a11y.violations.filter((v) => v.impact === "critical" || v.impact === "serious"),
+    ).toEqual([]);
+
+    await page.getByRole("button", { name: "Retirer" }).click();
+    await expect(page.getByText(/vos initiales s'affichent/)).toBeVisible();
+    await expect(page.locator("img[src^='/compte/photo?v=']")).toHaveCount(0);
   });
 
   test("déjà connecté : la page de connexion renvoie à la page demandée", async ({ page }) => {

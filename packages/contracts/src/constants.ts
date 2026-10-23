@@ -101,6 +101,9 @@ export const IDENTITY_ERROR_CODES = [
   "COMPTE_PROTEGE",
   "MOTIF_INVALIDE",
   "ALERTE_INVALIDE",
+  // Photo de profil (S7.5-T08)
+  "PHOTO_INVALIDE",
+  "PHOTO_ABSENTE",
 ] as const;
 export type IdentityErrorCode = (typeof IDENTITY_ERROR_CODES)[number];
 
@@ -793,3 +796,15 @@ export const DEMO_COUPON = {
   maxDiscount: 10_000,
   perAccountLimit: 1,
 } as const;
+
+/**
+ * Photo de profil (S7.5-T08, ADR-0055) : JPEG, PNG ou WebP de 5 Mo au plus, 200 px au moins de chaque côté ; gardée en
+ * carré de 256 px (WebP, sans métadonnées). Visible seulement par le titulaire du compte.
+ */
+export const AVATAR_LIMITS = {
+  maxUploadBytes: 5 * 1024 * 1024,
+  minSide: 200,
+  side: 256,
+  maxStoredBytes: 256 * 1024,
+} as const;
+export const AVATAR_VERSION_PATTERN = /^[0-9a-f]{16}$/;

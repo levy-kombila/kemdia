@@ -31,7 +31,7 @@ describe("menu du compte (en-tête)", () => {
 
   it("connecté : « Bonjour, Awa » ; le menu s'ouvre et se ferme avec Échap", async () => {
     const user = userEvent.setup();
-    render(<AccountMenu account={{ firstName: "Awa" }} />);
+    render(<AccountMenu account={{ firstName: "Awa", lastName: "Ndong", avatar: null }} />);
     const button = screen.getByRole("button", { name: /Awa/ });
     expect(button).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByText("Bonjour,")).toBeInTheDocument();
@@ -51,7 +51,7 @@ describe("menu du compte (en-tête)", () => {
     const user = userEvent.setup();
     render(
       <>
-        <AccountMenu account={{ firstName: "Awa" }} />
+        <AccountMenu account={{ firstName: "Awa", lastName: "Ndong", avatar: null }} />
         <a href="/suite">Lien suivant</a>
       </>,
     );
@@ -77,12 +77,18 @@ describe("menu du compte : en-tête de réserve (S4-T08)", () => {
 
   it("liens des espaces selon les rôles : vendeur (espace, commandes), équipe ; rien pour un client", async () => {
     const user = userEvent.setup();
-    const { unmount } = render(<AccountMenu account={{ firstName: "Awa" }} />);
+    const { unmount } = render(
+      <AccountMenu account={{ firstName: "Awa", lastName: "Ndong", avatar: null }} />,
+    );
     await user.click(screen.getByRole("button", { name: /Awa/ }));
     expect(screen.queryByRole("link", { name: "Espace vendeur" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /équipe/ })).not.toBeInTheDocument();
     unmount();
-    render(<AccountMenu account={{ firstName: "Fatou", vendor: true, staff: true }} />);
+    render(
+      <AccountMenu
+        account={{ firstName: "Fatou", lastName: "Ndong", avatar: null, vendor: true, staff: true }}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: /Fatou/ }));
     expect(screen.getByRole("link", { name: "Espace vendeur" })).toHaveAttribute(
       "href",

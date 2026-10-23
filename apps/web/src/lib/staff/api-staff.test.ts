@@ -355,6 +355,7 @@ describe("équipe et service client (S7.5-T04)", () => {
     email: "awa@exemple.ga",
     phone: null,
     roles: ["client", "support"],
+    avatar: null,
     status: "active",
     createdAt: NOW,
   };

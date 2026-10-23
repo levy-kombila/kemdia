@@ -32,4 +32,6 @@ export type AccountSummary = {
   phone: string | null;
   /** Rôles cumulables (S4-T06) : toujours « client », puis vendeur, modérateur, administrateur */
   roles: readonly Role[];
+  /** Version de la photo de profil (S7.5-T08) ; `null` : initiales */
+  avatar: string | null;
 };

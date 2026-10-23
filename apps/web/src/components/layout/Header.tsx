@@ -70,13 +70,15 @@ export function HeaderFallback() {
 
 export async function Header() {
   // Seuls les champs utiles au menu sont envoyés au navigateur (3 niveaux)
-  // Menu et compte lus en parallèle ; seuls le prénom et deux oui/non (espaces vendeur, équipe) vont au navigateur
+  // Menu et compte lus en parallèle ; seuls le prénom, le nom (initiales), la version de la photo et deux oui/non (espaces vendeur, équipe) vont au navigateur
   const [tree, current] = await Promise.all([navigationTree(), getCurrentAccount()]);
   const roles = current.status === "signed-in" ? current.account.roles : [];
   const account: HeaderAccount =
     current.status === "signed-in"
       ? {
           firstName: current.account.firstName,
+          lastName: current.account.lastName,
+          avatar: current.account.avatar,
           vendor: roles.includes("vendor"),
           staff: isStaffRoles(roles),
         }
