@@ -76,6 +76,12 @@ file et décisions réservées au rôle Catalogue avec double authentification ;
 (10 écritures par minute et par compte) ; contraintes de la base qui doublent les règles du domaine ; effacement
 complet avec le compte.
 
+### Correction après la première CI
+
+| Problème relevé                                                                                        | Correction                                                                        |
+| ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Bout en bout : la page « Avis clients » ajoutée après le journal, alors que la suite filtre le journal | Page « Avis clients » visitée avant le journal ; le parcours finit sur le journal |
+
 ## 5. Qualité
 
 - Format et lint sur tout le dépôt, typecheck et build : ✓.
