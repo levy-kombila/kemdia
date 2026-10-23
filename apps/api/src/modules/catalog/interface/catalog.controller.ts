@@ -92,12 +92,12 @@ export class CatalogController {
   }
 
   /**
-   * Suggestions pendant la frappe (S7.5-T06) : appelée à chaque pause de la frappe, d'où une limite par adresse IP
-   * plus large que les écritures mais bornée (60 par minute).
+   * Suggestions pendant la frappe (S7.5-T06) : appelée à chaque pause de la frappe. 20 par minute et par adresse,
+   * soit 60 par visiteur passant par le site (limite × SITE_VISITOR_FACTOR, relecture de sécurité).
    */
   @Get("products/suggestions")
   @Header("Cache-Control", CACHE_PUBLIC)
-  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   async suggestions(@Query("q") q?: unknown) {
     return presentSuggestions(await this.catalog.suggest(first(q)));
   }

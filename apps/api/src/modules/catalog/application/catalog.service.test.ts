@@ -3,7 +3,13 @@ import { createCategory } from "../domain/category.js";
 import { Product } from "../domain/product.js";
 import { InMemoryCategories, InMemoryProducts } from "../../../../test/catalog/in-memory.js";
 import { ids, productProps, variantProps } from "../../../../test/catalog/fixtures.js";
-import { CATEGORY_CACHE_MS, CatalogService, MAX_AVAILABILITY_LINES } from "./catalog.service.js";
+import {
+  CATEGORY_CACHE_MS,
+  CORRECTION_BUDGET_PER_MINUTE,
+  CORRECTION_CACHE_MS,
+  CatalogService,
+  MAX_AVAILABILITY_LINES,
+} from "./catalog.service.js";
 
 const category = (id: string, slug: string, parentId: string | null) =>
   createCategory({ id, slug, name: slug, parentId, icon: "tag", image: null, position: 0 });
@@ -264,5 +270,25 @@ describe("CatalogService", () => {
     expect((await service.suggest("kemdai")).correctedQuery).toBe("kemdia");
     expect(await service.suggest("t")).toEqual({ products: [], categories: [], brands: [] });
     expect(await service.suggest(42)).toEqual({ products: [], categories: [], brands: [] });
+  });
+
+  it("S7.5-T06 : correction gardée 30 s et budget commun par minute (relecture de sécurité)", async () => {
+    let time = 0;
+    service.clock = () => time;
+    await service.searchProducts({ q: "telpehone" });
+    await service.getFacets({ q: "telpehone" });
+    expect(products.similarWordsCalls).toBe(1);
+    time = CORRECTION_CACHE_MS + 1;
+    await service.searchProducts({ q: "telpehone" });
+    expect(products.similarWordsCalls).toBe(2);
+    // Budget épuisé : recherche telle quelle, sans appel à la base
+    for (let i = 0; i < CORRECTION_BUDGET_PER_MINUTE; i++)
+      await service.searchProducts({ q: `telpehone x${i}` });
+    const calls = products.similarWordsCalls;
+    const over = await service.searchProducts({ q: "kemdai" });
+    expect(over.correctedQuery).toBeUndefined();
+    expect(products.similarWordsCalls).toBe(calls);
+    time += 60_000;
+    expect((await service.searchProducts({ q: "kemdai" })).correctedQuery).toBe("kemdia");
   });
 });

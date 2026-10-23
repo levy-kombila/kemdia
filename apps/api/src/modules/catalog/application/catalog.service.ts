@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { MAX_AVAILABILITY_LINES } from "@kemdia/contracts/constants";
+import { MAX_AVAILABILITY_LINES, MAX_QUERY_LENGTH } from "@kemdia/contracts/constants";
 import { CategoryTree, type Category, type CategoryNode } from "../domain/category.js";
 import { ListingOffers } from "../domain/listing.js";
 import { closestWord } from "../domain/spelling.js";
@@ -34,6 +34,14 @@ export const SUGGESTION_LIMITS = { products: 4, categories: 2, brands: 2 } as co
 export const MIN_SUGGESTION_LENGTH = 2;
 /** Mots proches demandés à la base pour corriger un mot. */
 const SIMILAR_WORDS = 30;
+/** Une correction est gardée 30 s (la liste et ses compteurs ne la paient qu'une fois). */
+export const CORRECTION_CACHE_MS = 30_000;
+const MAX_CORRECTIONS_KEPT = 500;
+/**
+ * Corrections cherchées en base par minute, tous visiteurs confondus (relecture de sécurité S7.5-T06) : la page de
+ * résultats est relayée par le site sans limite par visiteur ; au-delà, la recherche se fait telle quelle.
+ */
+export const CORRECTION_BUDGET_PER_MINUTE = 120;
 
 export interface SearchSuggestions {
   /** Mots corrigés (« iphone » pour « ipohne ») ; absent si rien n'a été corrigé. */
@@ -84,6 +92,9 @@ export type DescribedLine = AvailabilityResult & { variant: VariantSnapshot | nu
 @Injectable()
 export class CatalogService {
   private tree: { value: CategoryTree; loadedAt: number } | null = null;
+  /** Corrections récentes (S7.5-T06), en mémoire : une seule instance au MVP. */
+  private readonly corrections = new Map<string, { terms: readonly string[]; expires: number }>();
+  private correctionWindow = { start: 0, used: 0 };
   /** Horloge (remplaçable dans les tests). */
   clock: () => number = Date.now;
 
@@ -235,15 +246,42 @@ export class CatalogService {
       onlyDeals: search.promotionsOnly,
       ...(criteria.badge ? { badge: criteria.badge } : {}),
     };
-    if ((await this.products.count(base)) > 0) return search.terms;
-    const replacements = await Promise.all(
-      search.terms.map(async (term) =>
-        closestWord(term, await this.products.similarWords(term, SIMILAR_WORDS)),
-      ),
-    );
-    if (replacements.some((r) => r === null)) return search.terms;
+    // Même recherche il y a moins de 30 s (la liste puis ses compteurs, une page suivante…) : même réponse
+    const key = JSON.stringify([base.categoryIds ?? null, base.terms, base.onlyDeals, base.badge]);
+    const now = this.clock();
+    const known = this.corrections.get(key);
+    if (known && known.expires > now) return known.terms;
+    const terms = await this.correct(base, now);
+    if (this.corrections.size >= MAX_CORRECTIONS_KEPT) {
+      for (const [k, v] of this.corrections) if (v.expires <= now) this.corrections.delete(k);
+      if (this.corrections.size >= MAX_CORRECTIONS_KEPT)
+        this.corrections.delete(this.corrections.keys().next().value as string);
+    }
+    this.corrections.set(key, { terms, expires: now + CORRECTION_CACHE_MS });
+    return terms;
+  }
+
+  private async correct(base: ProductCriteria, now: number): Promise<readonly string[]> {
+    const typed = base.terms;
+    if ((await this.products.count(base)) > 0) return typed;
+    // Budget commun à tous les visiteurs (relecture de sécurité) : au-delà, recherche telle quelle
+    if (now - this.correctionWindow.start >= 60_000)
+      this.correctionWindow = { start: now, used: 0 };
+    if (this.correctionWindow.used >= CORRECTION_BUDGET_PER_MINUTE) return typed;
+    this.correctionWindow.used++;
+    const found = await this.products.similarWords(typed, SIMILAR_WORDS);
+    const replacements = typed.map((term) => {
+      const info = found.get(term);
+      // Mot déjà présent dans le catalogue : jamais « corrigé » vers un autre
+      if (info?.present) return term;
+      return info ? closestWord(term, info.words) : null;
+    });
+    if (replacements.some((r) => r === null)) return typed;
     const terms = [...new Set(replacements as string[])];
-    return terms.join(" ") === search.terms.join(" ") ? search.terms : terms;
+    // Inchangé, ou plus long que le texte qu'on accepte (le contrat le refuserait) : recherche telle quelle
+    if (terms.join(" ") === typed.join(" ") || terms.join(" ").length > MAX_QUERY_LENGTH)
+      return typed;
+    return terms;
   }
 
   /**

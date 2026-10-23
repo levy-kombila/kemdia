@@ -121,10 +121,14 @@ export interface ProductRepository {
   /** Nombre de fiches visibles qui répondent aux critères (S7.5-T06 : faut-il corriger la recherche ?). */
   count(criteria: ProductCriteria): Promise<number>;
   /**
-   * Mots du texte de recherche des fiches visibles qui ressemblent à `term` (trigrammes), du plus au moins
-   * ressemblant, `limit` au plus (S7.5-T06, recherche tolérante aux fautes).
+   * Recherche tolérante aux fautes (S7.5-T06), en UNE requête pour tous les mots : pour chaque mot, s'il figure déjà
+   * dans le texte d'une fiche visible (`present`) et les mots de ces fiches qui lui ressemblent (trigrammes), du plus
+   * au moins ressemblant, `limit` au plus (cherchés seulement pour les mots de 3 à 30 lettres).
    */
-  similarWords(term: string, limit: number): Promise<string[]>;
+  similarWords(
+    terms: readonly string[],
+    limit: number,
+  ): Promise<Map<string, { present: boolean; words: string[] }>>;
   /** Marques des fiches visibles qui répondent aux critères, les plus représentées d'abord (suggestions). */
   brands(criteria: ProductCriteria, limit: number): Promise<string[]>;
   /**

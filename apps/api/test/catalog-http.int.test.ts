@@ -154,6 +154,10 @@ describe("API catalogue sur PostgreSQL (contrat)", () => {
     const none = await list("/api/v1/products?q=xqzwvk");
     expect(none.total).toBe(0);
     expect(none.correctedQuery).toBeUndefined();
+    // Deux mots justes qu'aucune fiche ne réunit : aucun n'est « corrigé » vers un autre mot
+    const both = await list("/api/v1/products?q=beats%20sennheiser");
+    expect(both.total).toBe(0);
+    expect(both.correctedQuery).toBeUndefined();
     // exact=1 : pas de correction
     const asTyped = await list("/api/v1/products?q=sennhieser&exact=1");
     expect(asTyped.total).toBe(0);

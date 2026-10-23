@@ -11,7 +11,7 @@ import { log } from "@/lib/log";
 /**
  * Suggestions pendant la frappe (S7.5-T06) demandées à l'API par le serveur du site. Contrairement au reste du
  * catalogue, PAS de cache partagé : chaque demande part avec l'adresse du visiteur, pour que la limite de l'API
- * (60 par minute) compte par visiteur et non pour tout le site.
+ * (60 par minute par le site) compte par visiteur et non pour tout le site.
  */
 export type SuggestionsResult =
   { status: "ok"; data: SearchSuggestions } | { status: "too-many" } | { status: "unavailable" };

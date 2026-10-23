@@ -556,7 +556,7 @@
       "get": {
         "tags": ["Catalogue"],
         "summary": "Suggestions pendant la frappe : produits, rayons et marques (S7.5-T06)",
-        "description": "8 suggestions au plus (4 produits, 2 rayons, 2 marques) contenant les mots tapés ; le dernier mot peut être incomplet. Moins de 2 lettres : listes vides. Si les mots ne trouvent rien, ils sont corrigés comme dans la liste (`correctedQuery`). Limité à 60 appels par minute.",
+        "description": "8 suggestions au plus (4 produits, 2 rayons, 2 marques) contenant les mots tapés ; le dernier mot peut être incomplet. Moins de 2 lettres : listes vides. Si les mots ne trouvent rien, ils sont corrigés comme dans la liste (`correctedQuery`). Limité à 20 appels par minute par adresse (60 par visiteur quand le site relaie).",
         "operationId": "searchSuggestions",
         "parameters": [
           {

@@ -29,6 +29,7 @@
 | **4.18** | 2026-10-20 | S7.5   | Écrans de la fiche commune (ADR-0050) : §3.24 page produit « Autres vendeurs » et cookie `kemdia_ville`, « Vendre ce produit » (chercher d'abord, photos d'abord), espace de l'équipe « Fiches produits », propositions de correction (`catalog.listing_corrections`, 3 routes, 2 actions d'audit) ; contrat 1.25.0          |
 | **4.19** | 2026-10-22 | S7.5   | Rôles détaillés et écran Utilisateurs (ADR-0051) : §3.25 (nouvelle) rôles Catalogue, Logistique, Finance, Service client, Administrateur, écran Utilisateurs, service client en lecture seule, appareils connus et lien « ce n'est pas moi » ; §2 rôles mis à jour ; contrat 2.0.0                                           |
 | **4.20** | 2026-10-22 | S7.5   | Écrans de la Finance et journal (ADR-0052) : §3.26 (nouvelle) factures (liste, PDF, renvoi), espèces à encaisser, remboursements, codes promo, réglages, journal d'audit à l'écran ; 4 routes ; contrat 2.1.0                                                                                                                |
+| **4.21** | 2026-10-23 | S7.5   | Recherche (ADR-0053) : §3.27 (nouvelle) extension pg_trgm et index trigrammes, correction des fautes de frappe si rien ne correspond (`correctedQuery`, `exact=1`), suggestions pendant la frappe (route `GET /products/suggestions`, relais du site) ; contrat 2.2.0                                                        |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                         |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                               |
 | **3.7**  | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                                                                  |
@@ -1116,6 +1117,23 @@ Les écrans réutilisent les routes existantes : remboursements (`/admin/refunds
 `/admin/settings/cod`), journal (`/admin/audit`). Le relais du PDF (`/equipe/factures/{numéro}`) ne passe qu'un fichier
 commençant par `%PDF-`, de 5 Mo au plus, sans cache, et refuse un lien venu d'un autre site. Index ajoutés sur
 `payments.invoices` (date d'émission décroissante, numéro de commande). Contrat de l'API : **2.1.0**.
+
+### 3.27 Recherche : suggestions et tolérance aux fautes (S7.5-T06)
+
+Décision : [ADR-0053](adr/0053-recherche-suggestions-fautes.md). Extension PostgreSQL `pg_trgm` et index GIN
+trigrammes sur `catalog.listings.search_text` (migration `20261023090000_recherche_approchee`).
+
+| Route (`/api/v1`)                   | Règle                                                                                                                                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /products`, `/products/facets` | Si aucune fiche visible ne contient les mots (filtres du client non compris), chaque mot est remplacé par le plus proche du catalogue ; `correctedQuery` ; `exact=1` l'empêche |
+| `GET /products/suggestions?q=`      | Dès 2 lettres : 4 produits, 2 rayons, 2 marques ; même correction ; 20 appels par minute et par adresse (60 via le site)                                                       |
+
+Correction : mots proches donnés par la base (trigrammes, seuil 0,3 dans la transaction), choix par distance d'édition
+(inversion = 1 faute ; 1 faute jusqu'à 4 lettres, 2 jusqu'à 7, 3 au-delà ; pas de correction sous 3 lettres) ; un mot
+sans remplaçant annule la correction ; un mot présent dans le catalogue n'est jamais corrigé ; une seule requête pour
+tous les mots ; correction gardée 30 s, 120 corrections en base par minute au plus (en mémoire, une instance). Site : champ de recherche en « combobox » accessible (250 ms après la dernière
+frappe), relais `/recherche/suggestions` (clé interne + adresse du visiteur, sans cache partagé), bandeau
+« Résultats pour … / Chercher exactement … ». Contrat de l'API : **2.2.0**.
 
 ## 4. Choix technologiques
 

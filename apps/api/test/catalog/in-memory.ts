@@ -108,9 +108,24 @@ export class InMemoryProducts implements ProductRepository {
   count(criteria: ProductCriteria): Promise<number> {
     return Promise.resolve(new Set(this.matching(criteria).map((p) => p.listingId)).size);
   }
-  similarWords(_term: string, limit: number): Promise<string[]> {
-    const words = this.items.flatMap((p) => this.textOf(p).split(" "));
-    return Promise.resolve([...new Set(words)].slice(0, limit));
+  similarWordsCalls = 0;
+  similarWords(
+    terms: readonly string[],
+    limit: number,
+  ): Promise<Map<string, { present: boolean; words: string[] }>> {
+    this.similarWordsCalls++;
+    const words = [...new Set(this.items.flatMap((p) => this.textOf(p).split(" ")))];
+    return Promise.resolve(
+      new Map(
+        terms.map((t) => [
+          t,
+          {
+            present: this.items.some((p) => this.textOf(p).includes(t)),
+            words: t.length >= 3 && t.length <= 30 ? words.slice(0, limit) : [],
+          },
+        ]),
+      ),
+    );
   }
   brands(criteria: ProductCriteria, limit: number): Promise<string[]> {
     const brands = this.matching(criteria).flatMap((p) => (p.brand ? [p.brand] : []));
