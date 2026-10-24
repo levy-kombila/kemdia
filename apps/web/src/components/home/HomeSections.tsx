@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { CategoryTiles } from "@/components/home/CategoryTiles";
-import { HydrateWhenVisible } from "@/components/home/HydrateWhenVisible";
+import { HydrateWhenVisible } from "@/components/ui/HydrateWhenVisible";
 import { SectionHeader } from "@/components/home/SectionHeader";
 import { ProductCard } from "@/components/product/ProductCard";
 import { ProductRail, RailItem } from "@/components/product/ProductRail";

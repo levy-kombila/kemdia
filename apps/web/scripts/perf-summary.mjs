@@ -22,7 +22,9 @@ if (process.argv.includes("--annotations")) {
   for (const r of results) {
     console.log(
       `::notice title=Performance — ${r.page}::premier affichage ${r.fcp} ms · plus grand élément ${r.lcp} ms · ` +
-        `décalages ${r.cls} · blocage ${r.tbt} ms (budget ${r.budget.tbt}${r.budget.tbtMax ? `, bloquant au-delà de ${r.budget.tbtMax}` : ""}) · JS ${r.jsKb} Ko · total ${r.totalKb} Ko`,
+        `décalages ${r.cls} · blocage ${r.tbt} ms (budget ${r.budget.tbt}${r.budget.tbtMax ? `, bloquant au-delà de ${r.budget.tbtMax}` : ""}` +
+        `${r.tbtRuns ? ` ; chargements ${r.tbtRuns.join(", ")}` : ""}) · JS ${r.jsKb} Ko · total ${r.totalKb} Ko · ` +
+        `processeur ×${r.cpu}${r.calibration ? ` (étalon ${r.calibration.benchMs} ms${r.calibration.clamped ? ", hors bornes" : ""})` : ""}`,
     );
   }
   process.exit(0);
@@ -34,12 +36,21 @@ const tbtCell = (r) =>
   r.budget.tbtMax && r.tbt > r.budget.tbtMax
     ? `**${r.tbt}** / ${r.budget.tbt} (max ${r.budget.tbtMax}) ❌`
     : cell(r.tbt, r.budget.tbt, true) + (r.budget.tbtMax ? ` (max ${r.budget.tbtMax})` : "");
-const { network, cpu } = results[0];
+const { network, cpu, calibration } = results[0];
 console.log(
   [
-    "## Budget de performance (téléphone, 3G, cache vide, médiane de 3 chargements)",
+    "## Budget de performance (téléphone, 3G, cache vide, médiane de 3 chargements, 5 pour l'accueil)",
     "",
-    `Réseau simulé : ${network.downloadKbps} kbit/s, latence ${network.latency} ms · processeur ralenti ×${cpu}`,
+    `Réseau simulé : ${network.downloadKbps} kbit/s, latence ${network.latency} ms · processeur ralenti ×${cpu}` +
+      (calibration
+        ? ` (étalonnage S8-T04 : calcul de référence ${calibration.benchMs} ms sur cette machine` +
+          (calibration.referenceMs
+            ? `, ${calibration.referenceMs} ms sur la machine de référence)`
+            : ", sans référence : ×4 fixe)") +
+          (calibration.clamped
+            ? " — ⚠️ **machine hors des bornes** (×2 à ×8) : mesures moins comparables, relancer la CI si un budget échoue"
+            : "")
+        : ""),
     "",
     "| Page | Premier affichage (ms) | Plus grand élément (ms) | Décalages | Blocage (ms) | JS (Ko) | Total (Ko) |",
     "| --- | --- | --- | --- | --- | --- | --- |",
