@@ -19,10 +19,13 @@ export const CPU_SLOWDOWN = 4;
 export const CALIBRATION_REFERENCE_MS: number | null = null;
 const SLOWDOWN_BOUNDS = [2, 8] as const;
 
-/** Calcul de référence : objets, chaînes et JSON, comme le chargement d'une page. Médiane de 7 passages (ms). */
+/**
+ * Calcul de référence : objets, chaînes et JSON, comme le chargement d'une page. Meilleur de 9 passages (ms) : le bruit
+ * d'une machine partagée ne fait qu'ajouter du temps, le meilleur passage mesure donc le mieux sa vitesse propre.
+ */
 function benchmark(): number {
   const runs: number[] = [];
-  for (let r = 0; r < 7; r++) {
+  for (let r = 0; r < 9; r++) {
     const start = performance.now();
     let acc = 0;
     for (let i = 0; i < 450_000; i++) {
@@ -37,7 +40,7 @@ function benchmark(): number {
     acc += (JSON.parse(JSON.stringify(rows)) as unknown[]).length;
     runs.push(performance.now() - start + (acc < 0 ? 1 : 0));
   }
-  return runs.sort((a, b) => a - b)[3]!;
+  return Math.min(...runs);
 }
 
 type Calibration = { benchMs: number; rate: number };
