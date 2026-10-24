@@ -46,11 +46,14 @@ export function Hero({
   techDeals,
   cheapestTech,
   fashion,
+  account = null,
 }: {
   categories: Category[];
   techDeals: ProductSummary[];
   cheapestTech: number;
   fashion: ProductSummary[];
+  /** Compte connecté (S8-T08) : `null` pour un visiteur */
+  account?: HeroAccount;
 }) {
   const slides = [
     <div key="tech" className={`${slideBase} bg-brand-600 text-white`}>
@@ -202,45 +205,87 @@ export function Hero({
         ]}
       />
 
-      <div className="hidden flex-col gap-3 xl:flex">
-        <div className="flex flex-1 flex-col rounded-xl bg-white p-4">
-          <span className="bg-ink-50 grid size-10 place-items-center rounded-full">
-            <UserRound className="text-ink-700 size-5" aria-hidden />
-          </span>
-          <p className="mt-2 font-bold">Bienvenue sur Kemdia</p>
-          <p className="text-ink-500 text-sm">Suivez vos commandes et retrouvez vos favoris.</p>
-          <div className="mt-auto grid gap-2 pt-3">
-            <Link
-              prefetch={false}
-              href="/connexion"
-              className="bg-brand-600 hover:bg-brand-700 rounded-full py-2 text-center text-sm font-semibold text-white"
-            >
-              Se connecter
-            </Link>
-            <Link
-              prefetch={false}
-              href="/inscription"
-              className="border-ink-200 hover:border-ink-900 rounded-full border py-2 text-center text-sm font-semibold"
-            >
-              Créer un compte
-            </Link>
-          </div>
-        </div>
-        <Link
-          prefetch={false}
-          href="/vendre"
-          className="bg-forest-600 hover:bg-forest-700 group flex flex-col rounded-xl p-4 text-white"
-        >
-          <Store className="size-6" aria-hidden />
-          <span className="mt-2 font-bold">Vendez sur Kemdia</span>
-          <span className="text-sm text-white">
-            Ouvrez votre boutique et touchez tout le Gabon.
-          </span>
-          <span className="mt-2 text-sm font-semibold underline-offset-2 group-hover:underline">
-            Devenir vendeur
-          </span>
-        </Link>
-      </div>
+      <HeroAccountPanel account={account} />
     </section>
+  );
+}
+
+/** Ce que l'encart du compte doit savoir (S8-T08) : prénom, et si le compte a une boutique (rôle vendeur). */
+export type HeroAccount = { firstName: string; vendor: boolean } | null;
+
+const primaryButton =
+  "bg-brand-600 hover:bg-brand-700 rounded-full py-2 text-center text-sm font-semibold text-white";
+const secondaryButton =
+  "border-ink-200 hover:border-ink-900 rounded-full border py-2 text-center text-sm font-semibold";
+
+/**
+ * Raccourcis à droite de la bannière (ordinateur). S8-T08 : selon le visiteur —
+ * - visiteur : « Se connecter » et « Créer un compte » ; client connecté : ses commandes et son compte ;
+ * - vendeur : « Accéder à votre boutique » (espace vendeur) au lieu de « Devenir vendeur ».
+ */
+export function HeroAccountPanel({ account }: { account: HeroAccount }) {
+  return (
+    <div className="hidden flex-col gap-3 xl:flex">
+      <div className="flex flex-1 flex-col rounded-xl bg-white p-4">
+        <span className="bg-ink-50 grid size-10 place-items-center rounded-full">
+          <UserRound className="text-ink-700 size-5" aria-hidden />
+        </span>
+        {account ? (
+          <>
+            <p className="mt-2 truncate font-bold">Bonjour, {account.firstName}</p>
+            <p className="text-ink-500 text-sm">Suivez vos commandes et retrouvez vos favoris.</p>
+            <div className="mt-auto grid gap-2 pt-3">
+              <Link prefetch={false} href="/compte/commandes" className={primaryButton}>
+                Mes commandes
+              </Link>
+              <Link prefetch={false} href="/compte" className={secondaryButton}>
+                Mon compte
+              </Link>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="mt-2 font-bold">Bienvenue sur Kemdia</p>
+            <p className="text-ink-500 text-sm">Suivez vos commandes et retrouvez vos favoris.</p>
+            <div className="mt-auto grid gap-2 pt-3">
+              <Link prefetch={false} href="/connexion" className={primaryButton}>
+                Se connecter
+              </Link>
+              <Link prefetch={false} href="/inscription" className={secondaryButton}>
+                Créer un compte
+              </Link>
+            </div>
+          </>
+        )}
+      </div>
+      <Link
+        prefetch={false}
+        href={account?.vendor ? "/vendeur" : "/vendre"}
+        className="bg-forest-600 hover:bg-forest-700 group flex flex-col rounded-xl p-4 text-white"
+      >
+        <Store className="size-6" aria-hidden />
+        {account?.vendor ? (
+          <>
+            <span className="mt-2 font-bold">Votre boutique Kemdia</span>
+            <span className="text-sm text-white">
+              Gérez vos produits, vos commandes et vos ventes.
+            </span>
+            <span className="mt-2 text-sm font-semibold underline-offset-2 group-hover:underline">
+              Accéder à votre boutique
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="mt-2 font-bold">Vendez sur Kemdia</span>
+            <span className="text-sm text-white">
+              Ouvrez votre boutique et touchez tout le Gabon.
+            </span>
+            <span className="mt-2 text-sm font-semibold underline-offset-2 group-hover:underline">
+              Devenir vendeur
+            </span>
+          </>
+        )}
+      </Link>
+    </div>
   );
 }

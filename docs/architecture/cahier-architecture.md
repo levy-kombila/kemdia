@@ -38,6 +38,7 @@
 | **4.27** | 2026-10-23 | S8     | Bêta fermée et signalements (ADR-0057) : §3.31 (nouvelle) réglage `identity.beta_settings` et invitations `identity.beta_invitations` (inscription réservée aux adresses invitées, vérifiée avant l'existence du compte), module `feedback` (schéma `feedback`) « Signaler un problème » suivi par le service client ; contrat 2.6.0                                          |
 | **4.28** | 2026-10-23 | S8     | Import du vrai catalogue (ADR-0058) : §3.32 (nouvelle) fichier CSV vérifié puis importé tout ou rien par l'équipe Catalogue, produits en attente de modération, colonne `catalog.products.import_reference` unique par boutique ; contrat 2.7.0                                                                                                                               |
 | **4.29** | 2026-10-24 | S8     | Accueil durablement sous 300 ms (ADR-0059) : §3.33 (nouvelle) photos en simple `<img>` (`getImageProps`), pied de page rendu interactif à l'approche, processeur étalonné dans le test de performance, accueil bloquant au-delà de 300 ms ; §5.2 ; §9                                                                                                                         |
+| **4.30** | 2026-10-24 | S8     | Accueil, encart du compte (ADR-0060) : §3.34 (nouvelle) « Se connecter » remplacé par « Mes commandes » / « Mon compte » pour un client connecté, « Accéder à votre boutique » pour un vendeur                                                                                                                                                                                |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                                                                          |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                                                                                |
 | **3.7**  | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                                                                                                                   |
@@ -1239,6 +1240,19 @@ Décision : [ADR-0059](adr/0059-accueil-300ms-etalonnage.md). Aucun changement d
 | Pied de page dans `HydrateWhenVisible`          | Hors écran à l'ouverture : ses liens ne sont rendus interactifs qu'à l'approche (`components/ui/HydrateWhenVisible.tsx`, partagé)          |
 | Processeur étalonné (`e2e/performance.spec.ts`) | Ralentissement `4 × 20 ms / étalon` (×2 à ×8) : même téléphone simulé quelle que soit la machine de CI ; étalon et ralentissement affichés |
 | Budget de l'accueil                             | Médiane de **5** chargements ; blocage **bloquant au-delà de 300 ms** (350 ms au S7-T03)                                                   |
+
+### 3.34 Accueil : encart du compte (S8-T08)
+
+Décision : [ADR-0060](adr/0060-accueil-encart-compte.md). Aucun changement de l'API ni de la base.
+
+| Visiteur        | Encart du compte                                        | Encart vert                                                |
+| --------------- | ------------------------------------------------------- | ---------------------------------------------------------- |
+| Non connecté    | « Bienvenue sur Kemdia », Se connecter, Créer un compte | Vendez sur Kemdia → « Devenir vendeur » (`/vendre`)        |
+| Client connecté | « Bonjour, {prénom} », Mes commandes, Mon compte        | Vendez sur Kemdia → « Devenir vendeur » (`/vendre`)        |
+| Vendeur         | « Bonjour, {prénom} », Mes commandes, Mon compte        | Votre boutique → « Accéder à votre boutique » (`/vendeur`) |
+
+Compte lu par `getCurrentAccount()` (partagé avec l'en-tête, une fois par requête) ; prénom et oui/non vendeur seuls
+transmis à l'encart, rendu par le serveur (`HeroAccountPanel`).
 
 ## 4. Choix technologiques
 
