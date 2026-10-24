@@ -57,10 +57,10 @@ reposées ; elles sont listées ci-dessous et dans la PR.
 - Gain mesuré sur le poste (A/B alternés, médianes) : photos −34 ms, pied de page −26 ms, soit ~12 % du blocage de
   l'accueil ; JavaScript transféré inchangé (172 Ko).
 - Avec l'étalonnage, la CI a mesuré l'accueil à **112 ms** sur une machine lente (étalon 33,1 ms, ×2,42 ; chargements
-  105 à 142 ms), contre 293 ms à ×4 fixe sur une machine semblable. Sur une machine rapide, ~160 ms sont attendus
-  (157 ms mesurés à ×4 pour 18,8 ms). La correction n'est pas parfaitement proportionnelle (le blocage ne compte que
-  la part des tâches au-delà de 50 ms), mais l'écart entre machines passe de 82–358 ms à ~110–160 ms : la limite
-  bloquante de 300 ms garde près du double de marge.
+  105 à 142 ms), contre 293 ms à ×4 fixe sur une machine semblable. Sur une machine rapide, la CI de la PR a mesuré
+  **179 ms** (étalon 17,1 ms, ×4,68 ; chargements 171 à 211 ms). La correction n'est pas parfaitement proportionnelle
+  (le blocage ne compte que la part des tâches au-delà de 50 ms), mais l'écart entre machines passe de 82–358 ms à
+  ~110–180 ms : la limite bloquante de 300 ms garde une marge de 120 ms au moins.
 - Le « téléphone » simulé est désormais constant ; les mesures d'avant le S8-T04 (×4 fixe) ne sont pas directement
   comparables à celles d'après sur une machine lente.
 
