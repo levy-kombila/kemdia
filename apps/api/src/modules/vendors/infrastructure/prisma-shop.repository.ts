@@ -85,6 +85,18 @@ export class PrismaShopRepository implements ShopRepository {
     return row ? toShop(row) : null;
   }
 
+  async tryLockCatalogImport(): Promise<boolean> {
+    // Verrou consultatif propre à la transaction ; espace « vendors.catalog_import »
+    const rows = await this.tx.db.$queryRaw<{ locked: boolean }[]>`
+      SELECT pg_try_advisory_xact_lock(hashtext('vendors.catalog_import'), 0) AS locked`;
+    return rows[0]?.locked === true;
+  }
+
+  async findBySlug(slug: string): Promise<Shop | null> {
+    const row = await this.tx.db.shop.findUnique({ where: { slug } });
+    return row ? toShop(row) : null;
+  }
+
   async lockById(id: string): Promise<Shop | null> {
     const rows = await this.tx.db.$queryRaw<{ id: string }[]>`
       SELECT "id" FROM "vendors"."shops" WHERE "id" = ${id}::uuid FOR UPDATE`;

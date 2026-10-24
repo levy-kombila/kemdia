@@ -25,6 +25,7 @@ export { StockService, StockUnavailableError } from "./application/stock.service
 // Produits des vendeurs et modération (S6-T02)
 export {
   VendorCatalog,
+  type CatalogImportSession,
   type ListingEditInput,
   type OfferLineInput,
   type VendorProductInput,
@@ -42,6 +43,8 @@ export type {
 export type { Seller } from "./domain/listing.js";
 export { CatalogError, type CatalogErrorCode } from "./domain/catalog-error.js";
 export { VENDOR_PRODUCT_RULES, type ModerationDecision } from "./domain/vendor-product.js";
+/** Prix et stock les plus élevés acceptés (import du catalogue, S8-T03) */
+export { MAX_PRICE_FCFA, MAX_STOCK } from "./domain/values.js";
 // Photos (S6-T04)
 export {
   PRODUCT_IMAGE_RULES,

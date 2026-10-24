@@ -16,6 +16,9 @@ const STATUS: Record<VendorsErrorCode, number> = {
   BOUTIQUE_OCCUPEE: HttpStatus.CONFLICT,
   // Produits des vendeurs et modération (S6-T02)
   BOUTIQUE_INACTIVE: HttpStatus.FORBIDDEN,
+  FICHIER_IMPORT_INVALIDE: HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+  IMPORT_EN_COURS: HttpStatus.CONFLICT,
+  IMPORT_TROP_LONG: HttpStatus.UNPROCESSABLE_ENTITY,
   PRODUIT_SUR_SOI_INTERDIT: HttpStatus.FORBIDDEN,
   // Vérification des vendeurs (S6-T08)
   KYC_INVALIDE: HttpStatus.UNPROCESSABLE_ENTITY,

@@ -48,6 +48,8 @@ describe("Description OpenAPI", () => {
       "/api/v1/admin/beta/invitations/{invitationId}/revoke",
       "/api/v1/admin/beta/settings",
       "/api/v1/admin/cash-to-collect",
+      "/api/v1/admin/catalog-import",
+      "/api/v1/admin/catalog-import/check",
       "/api/v1/admin/coupons",
       "/api/v1/admin/coupons/{couponId}",
       "/api/v1/admin/invoices",

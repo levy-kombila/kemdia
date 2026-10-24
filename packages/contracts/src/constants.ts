@@ -310,6 +310,8 @@ export const AUDIT_ACTIONS = [
   "beta.invited",
   "beta.invitation_revoked",
   "problem.updated",
+  // Import du vrai catalogue (S8-T03)
+  "catalog.imported",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** Lignes par page du journal d'audit. */
@@ -705,6 +707,11 @@ export const VENDOR_ERROR_CODES = [
   "STATUT_KYC_INCOMPATIBLE",
   "KYC_INDISPONIBLE",
   "DOCUMENT_INTROUVABLE",
+  // Import du catalogue (S8-T03) : corps qui n'est pas un fichier CSV en texte
+  "FICHIER_IMPORT_INVALIDE",
+  // Un seul import à la fois ; écriture de plus de 2 minutes annulée (fichier à découper)
+  "IMPORT_EN_COURS",
+  "IMPORT_TROP_LONG",
   // Fiches communes et offres (S7.5-T02)
   "FICHE_INTROUVABLE",
   // La fiche est en ligne : seule l'équipe la modifie (le vendeur propose une correction)
@@ -847,6 +854,34 @@ export const PROBLEM_ERROR_CODES = [
   "SIGNALEMENT_MODIFIE",
 ] as const;
 export type ProblemErrorCode = (typeof PROBLEM_ERROR_CODES)[number];
+
+// --- Import du vrai catalogue (S8-T03, ADR-0058) ---
+
+/**
+ * Fichier CSV de l'équipe Catalogue : 2 Mo et 1 000 lignes au plus ; référence de 40 caractères au plus ; 100 erreurs
+ * détaillées au plus dans le compte rendu. Colonnes dans l'ordre du modèle (`prix_barre` et `marque` facultatives).
+ */
+export const CATALOG_IMPORT_LIMITS = {
+  maxBytes: 2 * 1024 * 1024,
+  maxRows: 1000,
+  referenceMax: 40,
+  errorsMax: 100,
+} as const;
+export const CATALOG_IMPORT_COLUMNS = [
+  "boutique",
+  "reference",
+  "titre",
+  "description",
+  "marque",
+  "categorie",
+  "variante",
+  "prix",
+  "prix_barre",
+  "stock",
+] as const;
+export type CatalogImportColumn = (typeof CATALOG_IMPORT_COLUMNS)[number];
+export const CATALOG_IMPORT_MODES = ["check", "import"] as const;
+export type CatalogImportMode = (typeof CATALOG_IMPORT_MODES)[number];
 
 /** Ce qui empêche de supprimer son compte maintenant (409). */
 export const PRIVACY_ERROR_CODES = [

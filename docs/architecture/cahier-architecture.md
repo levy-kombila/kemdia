@@ -36,6 +36,7 @@
 | **4.25** | 2026-10-23 | S7.5   | Clôture du Sprint 7.5 (v0.8.1) : aucun changement d'architecture ; versions des paquets 0.8.1, contrat de l'API 2.4.0 inchangé                                                                                                                                                                                                                                                |
 | **4.26** | 2026-10-23 | S8     | Avis des clients (ADR-0056) : §3.30 (nouvelle) module `reviews` (schéma `reviews`), achat livré vérifié par les ports de catalog et orders, modération des commentaires par l'équipe Catalogue, note des fiches tirée des avis publiés ; contrat 2.5.0                                                                                                                        |
 | **4.27** | 2026-10-23 | S8     | Bêta fermée et signalements (ADR-0057) : §3.31 (nouvelle) réglage `identity.beta_settings` et invitations `identity.beta_invitations` (inscription réservée aux adresses invitées, vérifiée avant l'existence du compte), module `feedback` (schéma `feedback`) « Signaler un problème » suivi par le service client ; contrat 2.6.0                                          |
+| **4.28** | 2026-10-23 | S8     | Import du vrai catalogue (ADR-0058) : §3.32 (nouvelle) fichier CSV vérifié puis importé tout ou rien par l'équipe Catalogue, produits en attente de modération, colonne `catalog.products.import_reference` unique par boutique ; contrat 2.7.0                                                                                                                               |
 | **4.29** | 2026-10-24 | S8     | Accueil durablement sous 300 ms (ADR-0059) : §3.33 (nouvelle) photos en simple `<img>` (`getImageProps`), pied de page rendu interactif à l'approche, processeur étalonné dans le test de performance, accueil bloquant au-delà de 300 ms ; §5.2 ; §9                                                                                                                         |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                                                                          |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                                                                                |
@@ -1192,17 +1193,6 @@ que chaque changement, **fiche verrouillée** d'abord (avis simultanés). Une **
 cible (le plus récent d'un même client reste). Une fiche retirée de la vente laisse son auteur voir et retirer son avis. Avis dans la copie des données et effacés avec le compte. Site : section « Avis clients » de la
 fiche, page `/equipe/avis`. Contrat de l'API : **2.5.0**.
 
-### 3.33 Accueil durablement sous 300 ms (S8-T04)
-
-Décision : [ADR-0059](adr/0059-accueil-300ms-etalonnage.md). Aucun changement de l'API ni de la base.
-
-| Changement                                      | Effet                                                                                                                                      |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ProductImage` en simple `<img>`                | `getImageProps` : mêmes adresses, `srcset` et optimiseur que `<Image>`, sans composant à hydrater (~25 photos à l'ouverture de l'accueil)  |
-| Pied de page dans `HydrateWhenVisible`          | Hors écran à l'ouverture : ses liens ne sont rendus interactifs qu'à l'approche (`components/ui/HydrateWhenVisible.tsx`, partagé)          |
-| Processeur étalonné (`e2e/performance.spec.ts`) | Ralentissement `4 × 20 ms / étalon` (×2 à ×8) : même téléphone simulé quelle que soit la machine de CI ; étalon et ralentissement affichés |
-| Budget de l'accueil                             | Médiane de **5** chargements ; blocage **bloquant au-delà de 300 ms** (350 ms au S7-T03)                                                   |
-
 ### 3.31 Bêta fermée et « Signaler un problème » (S8-T02)
 
 Décision : [ADR-0057](adr/0057-beta-fermee-signalements.md). Migration `20261023230000_beta_fermee` : réglage unique
@@ -1223,6 +1213,32 @@ circulaire). Invitation utilisée et signalements dans la copie des données, ef
 invitations mortes (30 jours) et des signalements résolus (180 jours). Site : annonce sur « Créer un compte », bouton
 « Signaler un problème » dans le pied de page (`/signaler-un-probleme`, connexion exigée), pages `/equipe/beta` et
 `/equipe/signalements`. Contrat de l'API : **2.6.0**.
+
+### 3.32 Import du vrai catalogue (S8-T03)
+
+Décision : [ADR-0058](adr/0058-import-catalogue.md). Migration `20261023233000_import_catalogue` : colonne
+`catalog.products.import_reference` (minuscules, unique par boutique).
+
+| Route (`/api/v1`)                  | Règle                                                                                                                                                   |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /admin/catalog-import/check` | Équipe Catalogue + double authentification ; corps `text/csv` (2 Mo, 1 000 lignes) ; compte rendu de toutes les erreurs, rien n'est écrit               |
+| `POST /admin/catalog-import`       | Même accès ; boutiques verrouillées, fichier revérifié, puis tout écrit dans une transaction ou rien ; produits en attente ; journal `catalog.imported` |
+
+L'analyse du fichier est dans le domaine de `vendors` (pure) ; les produits sont créés par `VendorCatalog.importProduct`
+(même chemin qu'un vendeur, sans limite de file d'attente). Boutiques partenaires actives seulement ; une référence déjà
+importée est ignorée. Site : page `/equipe/import` (modèle, aide, catégories, compte rendu) et relais
+`/equipe/import/fichier` (session avant lecture, UTF-8 ou Windows-1252). Contrat de l'API : **2.7.0**.
+
+### 3.33 Accueil durablement sous 300 ms (S8-T04)
+
+Décision : [ADR-0059](adr/0059-accueil-300ms-etalonnage.md). Aucun changement de l'API ni de la base.
+
+| Changement                                      | Effet                                                                                                                                      |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ProductImage` en simple `<img>`                | `getImageProps` : mêmes adresses, `srcset` et optimiseur que `<Image>`, sans composant à hydrater (~25 photos à l'ouverture de l'accueil)  |
+| Pied de page dans `HydrateWhenVisible`          | Hors écran à l'ouverture : ses liens ne sont rendus interactifs qu'à l'approche (`components/ui/HydrateWhenVisible.tsx`, partagé)          |
+| Processeur étalonné (`e2e/performance.spec.ts`) | Ralentissement `4 × 20 ms / étalon` (×2 à ×8) : même téléphone simulé quelle que soit la machine de CI ; étalon et ralentissement affichés |
+| Budget de l'accueil                             | Médiane de **5** chargements ; blocage **bloquant au-delà de 300 ms** (350 ms au S7-T03)                                                   |
 
 ## 4. Choix technologiques
 
@@ -1318,7 +1334,7 @@ Composants **serveur** par défaut ; seuls les éléments interactifs sont des c
 | Fenêtre « ville » montée à l'ouverture (S7-T03)            | Fermée, elle n'est ni rendue ni hydratée sur chaque page                                                                                                    |
 | Un lien de moins par carte                                 | L'image n'a plus son propre lien : celui du titre couvre déjà toute la carte                                                                                |
 | Photos en simple `<img>` (S8-T04, ADR-0059)                | `ProductImage` utilise `getImageProps` : mêmes adresses et tailles, aucune photo à hydrater ; préchargement par `<link rel="preload">`                      |
-| Pied de page rendu interactif à l'approche (S8-T04)        | `HydrateWhenVisible` autour du pied de page : 11 liens de moins à hydrater à l'ouverture de chaque page                                                     |
+| Pied de page rendu interactif à l'approche (S8-T04)        | `HydrateWhenVisible` autour du pied de page : 11 liens de moins à hydrater à l'ouverture de chaque page ; focus clavier conservé                            |
 
 ### 5.3 Correspondance avec l'ancien projet Django
 

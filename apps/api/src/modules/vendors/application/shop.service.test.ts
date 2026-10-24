@@ -36,6 +36,9 @@ class InMemoryShops implements ShopRepository {
     Promise.resolve(
       [...this.rows.values()].some((s) => s.nameKey === nameKey && s.id !== exceptId),
     );
+  tryLockCatalogImport = () => Promise.resolve(true);
+  findBySlug = (slug: string) =>
+    Promise.resolve([...this.rows.values()].find((s) => s.slug === slug) ?? null);
   isSlugTaken = (slug: string, exceptId?: string) =>
     Promise.resolve([...this.rows.values()].some((s) => s.slug === slug && s.id !== exceptId));
   insert = (shop: Shop) => {
