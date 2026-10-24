@@ -34,7 +34,7 @@ export function Footer() {
     // au moins égale à celle du pied de page sur mobile (74rem depuis le bouton « Signaler un problème », S8-T02) :
     // sinon sa dernière ligne déborde de la place réservée et paraît sans fond (contraste refusé par axe)
     <footer className="bg-ink-900 mt-16 text-white/70 [contain-intrinsic-size:auto_74rem] [content-visibility:auto]">
-      {/* Rendu interactif à l'approche seulement (S8-T04, ADR-0059) : ses liens et son bouton ne sont pas hydratés à
+      {/* Rendu interactif à l'approche seulement (S8-T04, ADR-0059) : ses 11 liens ne sont pas hydratés à
           l'ouverture de la page, où le pied est hors écran ; avant cela, ses liens restent de simples liens */}
       <HydrateWhenVisible>
         <div className="border-b border-white/10">

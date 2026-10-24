@@ -47,7 +47,8 @@ function benchmark(): number {
   return Math.min(...runs);
 }
 
-type Calibration = { benchMs: number; rate: number };
+/** `clamped` : machine hors des bornes (×2 ou ×8 atteint), le téléphone simulé n'est plus tout à fait le même */
+type Calibration = { benchMs: number; rate: number; clamped: boolean };
 let calibration: Calibration | undefined;
 
 async function calibrate(browser: Browser): Promise<Calibration> {
@@ -57,13 +58,12 @@ async function calibrate(browser: Browser): Promise<Calibration> {
   const benchMs = Math.round((await page.evaluate(benchmark)) * 10) / 10;
   await context.close();
   const [min, max] = SLOWDOWN_BOUNDS;
-  const rate =
+  const wanted =
     CALIBRATION_REFERENCE_MS === null
       ? CPU_SLOWDOWN
-      : Math.round(
-          Math.min(max, Math.max(min, (CPU_SLOWDOWN * CALIBRATION_REFERENCE_MS) / benchMs)) * 100,
-        ) / 100;
-  calibration = { benchMs, rate };
+      : (CPU_SLOWDOWN * CALIBRATION_REFERENCE_MS) / benchMs;
+  const rate = Math.round(Math.min(max, Math.max(min, wanted)) * 100) / 100;
+  calibration = { benchMs, rate, clamped: wanted < min || wanted > max };
   return calibration;
 }
 
@@ -225,7 +225,12 @@ for (const { name, path, override, why, runs = RUNS } of PAGES) {
     hasTouch,
   }) => {
     const b: Budget = { ...BUDGET, ...override };
-    const { benchMs, rate } = await calibrate(browser);
+    const { benchMs, rate, clamped } = await calibrate(browser);
+    if (clamped)
+      test.info().annotations.push({
+        type: "avertissement",
+        description: `Étalonnage hors bornes (étalon ${benchMs} ms, processeur ×${rate}) : mesure moins comparable`,
+      });
     const m = await measureMedian(
       browser,
       path,
@@ -245,7 +250,7 @@ for (const { name, path, override, why, runs = RUNS } of PAGES) {
         runs,
         network: NETWORK_3G,
         cpu: rate,
-        calibration: { benchMs, referenceMs: CALIBRATION_REFERENCE_MS },
+        calibration: { benchMs, referenceMs: CALIBRATION_REFERENCE_MS, clamped },
       }),
     );
     console.log(`[perf] ${name} ${JSON.stringify(m)} cpu×${rate} étalon ${benchMs} ms`);

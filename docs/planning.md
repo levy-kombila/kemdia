@@ -263,7 +263,8 @@ Après la bêta : IA « kemdIA » (remplissage depuis la photo, pré-tri des pro
 ## S8 — Bêta fermée, puis lancement 🚧
 
 Décisions : [ADR-0056](architecture/adr/0056-avis-clients.md) (avis des clients),
-[ADR-0057](architecture/adr/0057-beta-fermee-signalements.md) (bêta fermée et signalements).
+[ADR-0057](architecture/adr/0057-beta-fermee-signalements.md) (bêta fermée et signalements),
+[ADR-0059](architecture/adr/0059-accueil-300ms-etalonnage.md) (accueil durablement sous 300 ms).
 Choix du 2026-10-23 (ouverture) : commencer par **ce qui ne dépend pas du client** ; les tâches qui attendent ses
 réponses (transporteur n° 5, informations légales n° 10, commission n° 3, location du serveur) seront ajoutées à leur
 arrivée. Options recommandées retenues sans être reposées (ta demande du 2026-10-23), listées dans chaque PR.
@@ -272,13 +273,19 @@ Choix du 2026-10-23 (S8-T01) : avis **réservés aux clients livrés** ; **note 
 Choix du 2026-10-23 (S8-T02) : bêta fermée par un **interrupteur de l'administrateur** (ouvert au déploiement) ;
 invitation **liée à l'adresse**, 30 jours, une fois ; **création de compte seule** fermée ; signalements par les
 **comptes connectés**, suivis par le **service client**, effacés 180 jours après leur résolution.
+Choix du 2026-10-24 (S8-T04) : photos en **simple `<img>`** (mêmes adresses et tailles), **pied de page** rendu
+interactif à l'approche ; test de performance au **processeur étalonné** (référence 20 ms, ×2 à ×8), accueil sur
+**5 chargements** et **bloquant au-delà de 300 ms**.
 
-| ID     | Tâche                                                                                                                                                                                                                                       | Statut |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| S8-T01 | Avis des clients (FR-020) : un avis par fiche réservé aux clients livrés, note seule publiée, commentaire relu par l'équipe Catalogue, note de la fiche tirée des avis réels ; contrat 2.5.0 — ADR-0056 — Choix du 2026-10-23               | ✅     |
-| S8-T02 | Bêta fermée : inscription réservée aux adresses invitées (interrupteur de l'administrateur, invitation liée à l'adresse, 30 jours) et « Signaler un problème » suivi par le service client ; contrat 2.6.0 — ADR-0057 — Choix du 2026-10-23 | ✅     |
-| S8-T03 | Import du vrai catalogue (fichier des vendeurs partenaires et de l'équipe)                                                                                                                                                                  | ⏳     |
-| S8-T04 | Accueil durablement sous 300 ms (dette S7-T03)                                                                                                                                                                                              | ⏳     |
+| ID     | Tâche                                                                                                                                                                                                                                              | Statut |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| S8-T01 | Avis des clients (FR-020) : un avis par fiche réservé aux clients livrés, note seule publiée, commentaire relu par l'équipe Catalogue, note de la fiche tirée des avis réels ; contrat 2.5.0 — ADR-0056 — Choix du 2026-10-23                      | ✅     |
+| S8-T02 | Bêta fermée : inscription réservée aux adresses invitées (interrupteur de l'administrateur, invitation liée à l'adresse, 30 jours) et « Signaler un problème » suivi par le service client ; contrat 2.6.0 — ADR-0057 — Choix du 2026-10-23        | ✅     |
+| S8-T03 | Import du vrai catalogue (fichier des vendeurs partenaires et de l'équipe)                                                                                                                                                                         | ⏳     |
+| S8-T04 | Accueil durablement sous 300 ms (dette S7-T03) : photos en simple `<img>`, pied de page rendu interactif à l'approche, processeur étalonné sur la vitesse de la machine de CI, accueil bloquant au-delà de 300 ms — ADR-0059 — Choix du 2026-10-24 | ✅     |
+| S8-T05 | Recherche : boutiques dans les suggestions pendant la frappe (dette S7.5)                                                                                                                                                                          | ⏳     |
+| S8-T06 | Page d'une boutique : filtre et tri par prix (dette S7.5)                                                                                                                                                                                          | ⏳     |
+| S8-T07 | Caches et compteurs en mémoire de l'API déplacés en base, avant de lancer plusieurs instances (dette S7.5)                                                                                                                                         | ⏳     |
 
 ## S5 à S8 — grandes lignes
 

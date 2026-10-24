@@ -24,7 +24,7 @@ if (process.argv.includes("--annotations")) {
       `::notice title=Performance — ${r.page}::premier affichage ${r.fcp} ms · plus grand élément ${r.lcp} ms · ` +
         `décalages ${r.cls} · blocage ${r.tbt} ms (budget ${r.budget.tbt}${r.budget.tbtMax ? `, bloquant au-delà de ${r.budget.tbtMax}` : ""}` +
         `${r.tbtRuns ? ` ; chargements ${r.tbtRuns.join(", ")}` : ""}) · JS ${r.jsKb} Ko · total ${r.totalKb} Ko · ` +
-        `processeur ×${r.cpu}${r.calibration ? ` (étalon ${r.calibration.benchMs} ms)` : ""}`,
+        `processeur ×${r.cpu}${r.calibration ? ` (étalon ${r.calibration.benchMs} ms${r.calibration.clamped ? ", hors bornes" : ""})` : ""}`,
     );
   }
   process.exit(0);
@@ -46,7 +46,10 @@ console.log(
         ? ` (étalonnage S8-T04 : calcul de référence ${calibration.benchMs} ms sur cette machine` +
           (calibration.referenceMs
             ? `, ${calibration.referenceMs} ms sur la machine de référence)`
-            : ", sans référence : ×4 fixe)")
+            : ", sans référence : ×4 fixe)") +
+          (calibration.clamped
+            ? " — ⚠️ **machine hors des bornes** (×2 à ×8) : mesures moins comparables, relancer la CI si un budget échoue"
+            : "")
         : ""),
     "",
     "| Page | Premier affichage (ms) | Plus grand élément (ms) | Décalages | Blocage (ms) | JS (Ko) | Total (Ko) |",

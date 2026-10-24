@@ -32,6 +32,8 @@ export function ProductImage({ src, alt, size = "small", unoptimized, ...props }
       as: "image",
       imageSrcSet: img.srcSet,
       imageSizes: img.sizes,
+      ...(img.crossOrigin ? { crossOrigin: img.crossOrigin } : {}),
+      ...(img.referrerPolicy ? { referrerPolicy: img.referrerPolicy } : {}),
       ...(img.fetchPriority ? { fetchPriority: img.fetchPriority } : {}),
     });
   }

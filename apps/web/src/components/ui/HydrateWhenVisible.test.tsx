@@ -55,4 +55,25 @@ describe("<HydrateWhenVisible /> (S3-T08)", () => {
     );
     expect(await screen.findByText("Produits")).toBeInTheDocument();
   });
+
+  it("focus clavier (S8-T04) : le lien atteint avec Tab garde le focus quand la zone devient interactive", async () => {
+    const { HydrateWhenVisible } = await import("./HydrateWhenVisible");
+    // HTML du serveur, comme au premier chargement d'une page
+    const container = document.createElement("div");
+    container.innerHTML = '<div><a href="/a">Lien A</a><a href="/b">Lien B</a></div>';
+    document.body.appendChild(container);
+    render(
+      <HydrateWhenVisible>
+        <a href="/a">Lien A</a>
+        <a href="/b">Lien B</a>
+      </HydrateWhenVisible>,
+      { container, hydrate: true },
+    );
+    const serverLink = container.querySelector<HTMLAnchorElement>('a[href="/b"]')!;
+    await act(async () => serverLink.focus());
+    const focused = document.activeElement as HTMLAnchorElement;
+    expect(focused.isConnected).toBe(true);
+    expect(focused.getAttribute("href")).toBe("/b");
+    container.remove();
+  });
 });
