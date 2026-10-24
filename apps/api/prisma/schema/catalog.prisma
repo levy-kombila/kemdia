@@ -188,7 +188,11 @@ model Product {
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  /// Référence du produit dans le fichier d'import de l'équipe (S8-T03) : un même fichier relancé ne crée rien deux fois
+  importReference String? @map("import_reference") @db.VarChar(40)
+
   @@unique([listingId, shopId])
+  @@unique([shopId, importReference])
   @@index([categoryId])
   @@index([shopId])
   @@index([status, price])

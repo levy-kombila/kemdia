@@ -24,6 +24,12 @@ const ORDER_MESSAGES: Partial<Record<OrderErrorCode, string>> = {
 };
 
 const MESSAGES: Record<VendorErrorCode, string> = {
+  // Import du catalogue (S8-T03)
+  FICHIER_IMPORT_INVALIDE:
+    "Fichier refusé : choisissez le fichier CSV (texte UTF-8, 2 Mo au plus).",
+  IMPORT_EN_COURS: "Un autre import du catalogue est en cours : réessayez dans quelques minutes.",
+  IMPORT_TROP_LONG:
+    "L'import a pris trop de temps : rien n'a été importé. Découpez le fichier en plusieurs parties.",
   BOUTIQUE_INVALIDE: "Vérifiez les champs de votre demande.",
   BOUTIQUE_EXISTE: "Vous avez déjà une boutique (ou une demande en cours).",
   NOM_BOUTIQUE_PRIS: "Ce nom de boutique est déjà pris. Choisissez-en un autre.",

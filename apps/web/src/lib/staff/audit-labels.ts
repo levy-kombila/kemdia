@@ -36,6 +36,8 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<AuditAction, string>> = {
   "beta.invited": "Invitation à la bêta",
   "beta.invitation_revoked": "Invitation annulée",
   "problem.updated": "Signalement suivi",
+  // Import du catalogue (S8-T03)
+  "catalog.imported": "Catalogue importé",
   "product.submitted": "Produit envoyé à la modération",
   "product.approved": "Produit validé",
   "product.rejected": "Produit refusé",

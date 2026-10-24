@@ -26,13 +26,23 @@ function isBusy(error: unknown): boolean {
 export class VendorsTransactionRunner implements VendorsTransaction {
   constructor(private readonly tx: TransactionContext) {}
 
-  async run<T>(work: () => Promise<T>): Promise<T> {
+  async run<T>(work: () => Promise<T>, options?: { timeoutMs?: number }): Promise<T> {
     try {
-      return await this.tx.run(async () => {
-        await this.tx.db.$executeRawUnsafe(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'`);
-        return work();
-      }, OPTIONS);
+      return await this.tx.run(
+        async () => {
+          await this.tx.db.$executeRawUnsafe(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'`);
+          return work();
+        },
+        options?.timeoutMs ? { ...OPTIONS, timeout: options.timeoutMs } : OPTIONS,
+      );
     } catch (error) {
+      // Transaction longue demandée (import du catalogue) et dépassée : ce n'est pas une boutique occupée
+      if (options?.timeoutMs && (error as { code?: unknown } | null)?.code === "P2028") {
+        throw new VendorsError(
+          "IMPORT_TROP_LONG",
+          "l'écriture a dépassé le temps permis : rien n'a été importé, découpez le fichier",
+        );
+      }
       if (isBusy(error)) {
         throw new VendorsError(
           "BOUTIQUE_OCCUPEE",

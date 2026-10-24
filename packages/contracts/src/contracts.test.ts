@@ -156,6 +156,8 @@ describe("schémas", () => {
       "CartQuantityRequest",
       "CashToCollect",
       "CashToCollectList",
+      "CatalogImportIssue",
+      "CatalogImportReport",
       "Category",
       "CategoryNode",
       "CategoryTree",

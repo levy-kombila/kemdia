@@ -249,6 +249,9 @@ export interface VendorProductCursor {
   id: string;
 }
 
+/** Création d'un produit : faite, adresse ou référence déjà prise (l'essai seul est annulé, pas la transaction). */
+export type InsertOutcome = "inserted" | "slug_taken" | "import_reference_taken";
+
 export interface VendorProductRepository {
   findById(id: string): Promise<VendorProductRecord | null>;
   /** Lit le produit et le verrouille (ainsi que ses variantes) jusqu'à la fin de la transaction. */
@@ -257,7 +260,14 @@ export interface VendorProductRepository {
    * Crée l'offre et ses variantes ; si `record.listingId === record.id`, crée aussi sa fiche (contenu, une déclinaison
    * par variante, mêmes identifiants). `false` si l'adresse lisible est déjà prise.
    */
-  insert(record: VendorProductRecord, derived: DerivedFields): Promise<boolean>;
+  /** `importReference` : référence du fichier d'import de l'équipe (S8-T03), unique par boutique. */
+  insert(
+    record: VendorProductRecord,
+    derived: DerivedFields,
+    importReference?: string | null,
+  ): Promise<InsertOutcome>;
+  /** Références d'import déjà présentes dans la boutique (comparées sans tenir compte de la casse). */
+  importedReferences(shopId: string, references: readonly string[]): Promise<Set<string>>;
   /**
    * Écrit le statut, la modération, les prix, le stock et l'activation des variantes. Le contenu (titre, photos…) est
    * écrit sur la fiche seulement si la boutique l'a créée et qu'elle n'est pas publiée (sinon la base garde celui de

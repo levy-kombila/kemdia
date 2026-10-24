@@ -4,6 +4,7 @@ import { TransactionContext } from "../../../database/transaction-context.js";
 import type { Prisma } from "../../../generated/prisma/client.js";
 import type {
   DerivedFields,
+  InsertOutcome,
   VendorProductCursor,
   VendorProductRecord,
   VendorProductRepository,
@@ -80,6 +81,11 @@ function isUniqueViolation(error: unknown): boolean {
   const meta = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown } } } })
     ?.meta;
   return code === "P2002" || meta?.driverAdapterError?.cause?.originalCode === "23505";
+}
+
+/** Index unique en cause (nom de la contrainte ou colonnes), tel que Prisma ou le pilote le rapportent. */
+function violatesImportReference(error: unknown): boolean {
+  return /import_reference|importReference/.test(JSON.stringify(error ?? null) + String(error));
 }
 
 /**
@@ -165,7 +171,19 @@ export class PrismaVendorProductRepository implements VendorProductRepository {
     throw new Error("offre déplacée pendant son verrouillage");
   }
 
-  async insert(record: VendorProductRecord, derived: DerivedFields): Promise<boolean> {
+  async importedReferences(shopId: string, references: readonly string[]): Promise<Set<string>> {
+    if (references.length === 0) return new Set();
+    const rows = await this.tx.db.$queryRaw<{ ref: string }[]>`
+      SELECT lower("import_reference") AS ref FROM "catalog"."products"
+      WHERE "shop_id" = ${shopId}::uuid AND lower("import_reference") = ANY(${references.map((r) => r.toLowerCase())}::text[])`;
+    return new Set(rows.map((r) => r.ref));
+  }
+
+  async insert(
+    record: VendorProductRecord,
+    derived: DerivedFields,
+    importReference: string | null = null,
+  ): Promise<InsertOutcome> {
     if (!this.tx.active) throw new Error("création d'un produit de vendeur hors transaction");
     const db = this.tx.db;
     try {
@@ -199,6 +217,7 @@ export class PrismaVendorProductRepository implements VendorProductRepository {
           shopId: record.shopId,
           listingId: record.listingId,
           slug: record.slug,
+          importReference,
           createdAt: record.createdAt,
           // Recopiés de la fiche par la base ; présents ici parce que les colonnes sont obligatoires
           ...content(record, derived),
@@ -220,11 +239,14 @@ export class PrismaVendorProductRepository implements VendorProductRepository {
         },
       });
       await db.$executeRawUnsafe("RELEASE SAVEPOINT vendor_product_insert");
-      return true;
+      return "inserted";
     } catch (error) {
       if (isUniqueViolation(error)) {
         await db.$executeRawUnsafe("ROLLBACK TO SAVEPOINT vendor_product_insert");
-        return false;
+        // Référence d'import déjà prise : un nouvel essai n'y changerait rien (relecture S8-T03)
+        return importReference !== null && violatesImportReference(error)
+          ? "import_reference_taken"
+          : "slug_taken";
       }
       throw error;
     }

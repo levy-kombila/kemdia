@@ -263,7 +263,8 @@ Après la bêta : IA « kemdIA » (remplissage depuis la photo, pré-tri des pro
 ## S8 — Bêta fermée, puis lancement 🚧
 
 Décisions : [ADR-0056](architecture/adr/0056-avis-clients.md) (avis des clients),
-[ADR-0057](architecture/adr/0057-beta-fermee-signalements.md) (bêta fermée et signalements).
+[ADR-0057](architecture/adr/0057-beta-fermee-signalements.md) (bêta fermée et signalements),
+[ADR-0058](architecture/adr/0058-import-catalogue.md) (import du catalogue).
 Choix du 2026-10-23 (ouverture) : commencer par **ce qui ne dépend pas du client** ; les tâches qui attendent ses
 réponses (transporteur n° 5, informations légales n° 10, commission n° 3, location du serveur) seront ajoutées à leur
 arrivée. Options recommandées retenues sans être reposées (ta demande du 2026-10-23), listées dans chaque PR.
@@ -272,13 +273,17 @@ Choix du 2026-10-23 (S8-T01) : avis **réservés aux clients livrés** ; **note 
 Choix du 2026-10-23 (S8-T02) : bêta fermée par un **interrupteur de l'administrateur** (ouvert au déploiement) ;
 invitation **liée à l'adresse**, 30 jours, une fois ; **création de compte seule** fermée ; signalements par les
 **comptes connectés**, suivis par le **service client**, effacés 180 jours après leur résolution.
+Choix du 2026-10-23 (S8-T03) : import par l'**équipe Catalogue** d'un fichier **CSV** (une ligne par variante,
+2 Mo / 1 000 lignes), **vérifié** puis importé **tout ou rien** ; produits **en attente de modération** (photos par la
+boutique) ; boutiques **partenaires** seulement ; référence déjà importée **ignorée**. Fichiers réels et photos HD :
+**en attente du client**.
 
-| ID     | Tâche                                                                                                                                                                                                                                       | Statut |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| S8-T01 | Avis des clients (FR-020) : un avis par fiche réservé aux clients livrés, note seule publiée, commentaire relu par l'équipe Catalogue, note de la fiche tirée des avis réels ; contrat 2.5.0 — ADR-0056 — Choix du 2026-10-23               | ✅     |
-| S8-T02 | Bêta fermée : inscription réservée aux adresses invitées (interrupteur de l'administrateur, invitation liée à l'adresse, 30 jours) et « Signaler un problème » suivi par le service client ; contrat 2.6.0 — ADR-0057 — Choix du 2026-10-23 | ✅     |
-| S8-T03 | Import du vrai catalogue (fichier des vendeurs partenaires et de l'équipe)                                                                                                                                                                  | ⏳     |
-| S8-T04 | Accueil durablement sous 300 ms (dette S7-T03)                                                                                                                                                                                              | ⏳     |
+| ID     | Tâche                                                                                                                                                                                                                                                                              | Statut |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| S8-T01 | Avis des clients (FR-020) : un avis par fiche réservé aux clients livrés, note seule publiée, commentaire relu par l'équipe Catalogue, note de la fiche tirée des avis réels ; contrat 2.5.0 — ADR-0056 — Choix du 2026-10-23                                                      | ✅     |
+| S8-T02 | Bêta fermée : inscription réservée aux adresses invitées (interrupteur de l'administrateur, invitation liée à l'adresse, 30 jours) et « Signaler un problème » suivi par le service client ; contrat 2.6.0 — ADR-0057 — Choix du 2026-10-23                                        | ✅     |
+| S8-T03 | Import du vrai catalogue : fichier CSV de l'équipe Catalogue vérifié puis importé tout ou rien, produits en attente de modération (photos par la boutique), sans doublon au second import ; contrat 2.7.0 — ADR-0058 — Choix du 2026-10-23 (fichiers réels : en attente du client) | ✅     |
+| S8-T04 | Accueil durablement sous 300 ms (dette S7-T03)                                                                                                                                                                                                                                     | ⏳     |
 
 ## S5 à S8 — grandes lignes
 

@@ -12,6 +12,7 @@ import { privacyPaths } from "../modules/privacy/interface/privacy.openapi.js";
 import { reviewsPaths } from "../modules/reviews/interface/reviews.openapi.js";
 import { betaPaths } from "../modules/identity/interface/beta.openapi.js";
 import { feedbackPaths } from "../modules/feedback/interface/feedback.openapi.js";
+import { catalogImportPaths } from "../modules/vendors/interface/catalog-import.openapi.js";
 import {
   productImagePaths,
   vendorOrderPaths,
@@ -20,7 +21,7 @@ import {
 } from "../modules/vendors/interface/vendors.openapi.js";
 
 /** Version du contrat HTTP (indépendante de la version de l'image) : à augmenter à chaque changement de l'API. */
-export const API_CONTRACT_VERSION = "2.6.0";
+export const API_CONTRACT_VERSION = "2.7.0";
 
 /** Document OpenAPI complet de l'API, généré à partir des schémas réellement utilisés. */
 export function buildOpenApiDocument(): Record<string, unknown> {
@@ -105,6 +106,11 @@ export function buildOpenApiDocument(): Record<string, unknown> {
           "Bêta fermée (S8-T02) : inscription réservée aux adresses invitées par l'administrateur, quand il le décide",
       },
       {
+        name: "Import du catalogue",
+        description:
+          "Vrai catalogue importé par l'équipe Catalogue depuis un fichier CSV (S8-T03) : vérification, puis import tout ou rien",
+      },
+      {
         name: "Signalements",
         description:
           "« Signaler un problème » (module feedback, S8-T02) : envoyé par un compte connecté, suivi par le service client",
@@ -177,6 +183,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       ...reviewsPaths,
       ...betaPaths,
       ...feedbackPaths,
+      ...catalogImportPaths,
     },
     // Schémas du contrat partagé avec le site (@kemdia/contracts)
     components: {

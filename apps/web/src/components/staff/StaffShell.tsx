@@ -18,6 +18,7 @@ import {
   MessageSquare,
   Bug,
   Ticket,
+  Upload,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -33,6 +34,7 @@ export type StaffSection =
   | "moderation"
   | "fiches"
   | "avis"
+  | "import"
   | "clients"
   | "signalements"
   | "beta"
@@ -63,6 +65,14 @@ const LINKS: {
   },
   { id: "fiches", label: "Fiches produits", href: "/equipe/fiches", icon: Layers, role: "catalog" },
   { id: "avis", label: "Avis clients", href: "/equipe/avis", icon: MessageSquare, role: "catalog" },
+  // Import du vrai catalogue (S8-T03, ADR-0058)
+  {
+    id: "import",
+    label: "Import du catalogue",
+    href: "/equipe/import",
+    icon: Upload,
+    role: "catalog",
+  },
   { id: "boutiques", label: "Boutiques", href: "/equipe/boutiques", icon: Store, role: "catalog" },
   {
     id: "verifications",

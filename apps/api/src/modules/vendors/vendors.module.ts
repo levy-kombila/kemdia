@@ -49,6 +49,8 @@ import { VendorProductImageController } from "./interface/vendor-product-image.c
 import { VendorProductController } from "./interface/vendor-product.controller.js";
 import { ShopController } from "./interface/shop.controller.js";
 import { VendorsPersonalData } from "./infrastructure/vendors-personal-data.js";
+import { CatalogImportService } from "./application/catalog-import.service.js";
+import { CatalogImportController } from "./interface/catalog-import.controller.js";
 
 const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -62,6 +64,8 @@ const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 @Module({
   imports: [IdentityModule, AuditModule, CatalogModule, OrdersModule, ReviewsModule],
   controllers: [
+    // Import du vrai catalogue (S8-T03, ADR-0058)
+    CatalogImportController,
     ShopController,
     AdminShopController,
     VendorProductController,
@@ -81,6 +85,7 @@ const SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
     VendorsPersonalData,
     ShopService,
     VendorProductService,
+    CatalogImportService,
     ProductModerationService,
     ListingAdminService,
     // Fusion de fiches : les avis suivent (S8-T01)

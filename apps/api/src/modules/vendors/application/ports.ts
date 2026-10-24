@@ -18,6 +18,13 @@ export interface ShopCursor {
 export interface ShopRepository {
   findById(id: string): Promise<Shop | null>;
   findByOwner(accountId: string): Promise<Shop | null>;
+  /** Boutique par son adresse (import du catalogue, S8-T03). */
+  findBySlug(slug: string): Promise<Shop | null>;
+  /**
+   * Import du catalogue (S8-T03) : verrou unique pour toute l'API jusqu'à la fin de la transaction ; `false` si un
+   * autre import le tient déjà (sans attendre).
+   */
+  tryLockCatalogImport(): Promise<boolean>;
   /** Lit la boutique et la verrouille jusqu'à la fin de la transaction (décisions concurrentes). */
   lockById(id: string): Promise<Shop | null>;
   /**
@@ -69,7 +76,8 @@ export interface ShopListing {
 
 /** Transaction de la base, partagée avec le module identity (rôle) et le journal d'audit. */
 export interface VendorsTransaction {
-  run<T>(work: () => Promise<T>): Promise<T>;
+  /** `timeoutMs` : durée maximale de la transaction (10 s par défaut ; l'import du catalogue en demande plus). */
+  run<T>(work: () => Promise<T>, options?: { timeoutMs?: number }): Promise<T>;
 }
 
 export interface VendorsRandom {
