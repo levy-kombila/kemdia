@@ -14,9 +14,13 @@ export const CPU_SLOWDOWN = 4;
  * ralentissement fixe (×4), le « téléphone » simulé était plus ou moins rapide selon la machine du jour, et le blocage
  * de l'accueil variait de 82 à 351 ms pour le même code. Un petit calcul fixe est chronométré dans le navigateur au
  * début ; le ralentissement est ajusté pour que ce calcul dure toujours autant que sur la machine de référence ralentie
- * ×4 (même principe que l'étalonnage conseillé pour Lighthouse). Bornes : ×2 à ×8. Sans référence : ×4 fixe.
+ * ×4 (même principe que l'étalonnage conseillé pour Lighthouse). Bornes : ×2 à ×8. Sans référence (`null`) : ×4 fixe.
+ *
+ * Référence : 20 ms, la vitesse des serveurs de CI sur lesquels le budget a été fixé et tenu (S2 à S6 : accueil
+ * mesuré 92 à 182 ms). Mesures du S8-T04, même code, ×4 fixe : étalon 18,8 ms → accueil 157 ms ; 33,4 ms → 293 ms ;
+ * ~40 ms → 358 ms (le blocage suit la vitesse de la machine).
  */
-export const CALIBRATION_REFERENCE_MS: number | null = null;
+export const CALIBRATION_REFERENCE_MS: number | null = 20;
 const SLOWDOWN_BOUNDS = [2, 8] as const;
 
 /**
@@ -85,9 +89,9 @@ const PAGES: {
   runs?: number;
 }[] = [
   // Accueil : budget commun depuis le S3-T08 (zones chargées progressivement, mise en page différée hors écran).
-  // S7-T03 (ADR-0042) : blocage BLOQUANT au-delà de 350 ms (avertissement au-delà de 300 ms) — marge pour les
-  // serveurs de CI, partagés et irréguliers (choix du 2026-10-18).
-  { name: "Accueil", path: "/", override: { tbtMax: 350 }, runs: 5 },
+  // S7-T03 (ADR-0042) : blocage bloquant au-delà de 350 ms. S8-T04 (ADR-0059) : processeur étalonné et médiane de
+  // 5 chargements, le blocage est stable d'une machine à l'autre : il fait échouer la PR AU-DELÀ DE 300 MS.
+  { name: "Accueil", path: "/", override: { tbtMax: 300 }, runs: 5 },
   { name: "Catégorie", path: "/categorie/high-tech" },
   { name: "Fiche produit", path: "/produit/apple-google-pixel-modern-blanc" },
   { name: "Recherche", path: "/recherche?q=noir" },
@@ -251,7 +255,8 @@ for (const { name, path, override, why, runs = RUNS } of PAGES) {
       .soft(m.cls, `décalages de mise en page — éléments : ${m.shifts?.join(" | ") || "aucun"}`)
       .toBeLessThanOrEqual(b.cls);
     // Le blocage dépend beaucoup de la machine (les serveurs de CI sont partagés et irréguliers) : au-delà du budget,
-    // il est signalé ; il ne bloque la PR qu'au-delà de `tbtMax` (accueil seulement, S7-T03).
+    // il est signalé ; il ne bloque la PR qu'au-delà de `tbtMax` (accueil seulement : 350 ms au S7-T03, 300 ms depuis le
+    // S8-T04, processeur étalonné).
     if (b.tbtMax > 0)
       expect.soft(m.tbt, "blocage du fil principal (ms)").toBeLessThanOrEqual(b.tbtMax);
     if (m.tbt > b.tbt)
