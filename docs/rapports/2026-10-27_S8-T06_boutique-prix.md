@@ -4,7 +4,7 @@
 | ----------------------------------------------- | -------------------------------------------------------- |
 | **Date**                                        | 2026-10-27                                               |
 | **Sprint / tâches**                             | S8 — S8-T06 (dette S7.5-T07)                             |
-| **Version**                                     | v0.8.1 → (v0.9.x à la clôture du S8) ; contrat **2.7.1** |
+| **Version**                                     | v0.8.1 → (v0.9.x à la clôture du S8) ; contrat **2.8.1** |
 | **Sections du cahier d'architecture modifiées** | §3.37 (nouvelle) — version 4.33                          |
 
 ## 1. Résumé
@@ -26,7 +26,7 @@ Page de la boutique B, « Prix maximum 300 000 » :
 | Filtres   | Prix minimum et maximum, « en promotion » : lus sur l'offre de la boutique                                     | `prisma-product.repository.ts` (`whereOf`)                 |
 | Compteurs | Tranches de prix et « en promotion » : comptées sur l'offre de la boutique                                     | `prisma-product.repository.ts` (`facets`, `onOffer`)       |
 | Tri       | « Prix croissant » / « décroissant » : fiches choisies et ordonnées sur les offres de la boutique              | `prisma-product.repository.ts` (`search`)                  |
-| Contrat   | Paramètre `shop` documenté ; contrat **2.7.1** (aucun champ ne change)                                         | `packages/contracts/src/query.ts`, `docs/api/openapi.json` |
+| Contrat   | Paramètre `shop` documenté ; contrat **2.8.1** (aucun champ ne change)                                         | `packages/contracts/src/query.ts`, `docs/api/openapi.json` |
 | Tests     | 1 test d'intégration : tri dans les deux sens, pages, filtres, promotion, compteurs, hors boutique, suspension | `apps/api/test/listings.int.test.ts`                       |
 
 Aucun changement du site (la page d'une boutique utilisait déjà ces paramètres) ni de la base.

@@ -116,6 +116,13 @@ export function presentSuggestions(s: SearchSuggestions): SearchSuggestionsDto {
     })),
     categories: s.categories.map((c) => ({ slug: c.slug, name: c.name })),
     brands: s.brands,
+    // S8-T05 : de quoi afficher la ligne et construire l'adresse, jamais l'identifiant interne
+    shops: s.shops.map((shop) => ({
+      slug: shop.slug,
+      name: shop.name,
+      city: shop.city,
+      official: shop.official,
+    })),
   };
 }
 

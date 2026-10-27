@@ -1,7 +1,17 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../../database/prisma.service.js";
 import { Prisma } from "../../../generated/prisma/client.js";
-import type { Page, PublicShop, PublicShops } from "../application/ports.js";
+import type { Page, PublicShop, PublicShops, ShopSuggestion } from "../application/ports.js";
+
+/**
+ * Lettres accentuées ramenées à leur lettre de base, comme `searchable` (décomposition NFD) : la conversion se fait
+ * AVANT `lower()`, pour ne pas dépendre de la collation de la base. Une lettre absente d'ici devient une espace, comme
+ * dans `searchable` (« œ » par exemple).
+ */
+const ACCENTED = "ÀÁÂÃÄÅÇÈÉÊËÌÍÎÏÑÒÓÔÕÖÙÚÛÜÝŸàáâãäåçèéêëìíîïñòóôõöùúûüýÿ";
+const PLAIN = "AAAAAACEEEEIIIINOOOOOUUUUYYaaaaaaceeeeiiiinooooouuuuyy";
+/** Un mot venu de `searchable` ne contient que [a-z0-9] : ni `%`, ni `_`, ni `\` à échapper dans LIKE. */
+const SEARCH_TERM = /^[a-z0-9]{1,40}$/;
 
 type SellerRow = {
   shop_id: string;
@@ -62,6 +72,21 @@ export class PrismaPublicShopsRepository implements PublicShops {
       FROM "catalog"."sellers" s
       WHERE s."slug" = ${slug} AND s."active"`;
     return (await this.withCounts(rows))[0] ?? null;
+  }
+
+  async suggest(terms: readonly string[], limit: number): Promise<ShopSuggestion[]> {
+    const words = terms.filter((t) => SEARCH_TERM.test(t));
+    if (!words.length || words.length !== terms.length || limit < 1) return [];
+    // Nom ramené à « mots simples » (comme `searchable`) ; chaque mot doit y figurer, n'importe où.
+    // Table courte (une ligne par boutique validée) : lecture complète acceptée (ADR-0062).
+    const name = Prisma.sql`regexp_replace(lower(translate(s."name", ${ACCENTED}, ${PLAIN})), '[^a-z0-9]+', ' ', 'g')`;
+    const each = words.map((w) => Prisma.sql`${name} LIKE ${`%${w}%`}`);
+    return this.prisma.$queryRaw<ShopSuggestion[]>`
+      SELECT s."slug", s."name", s."city", s."official"
+      FROM "catalog"."sellers" s
+      WHERE s."active" AND ${Prisma.join(each, " AND ")}
+      ORDER BY s."official" DESC, lower(s."name"), s."shop_id"
+      LIMIT ${Math.min(limit, 10)}`;
   }
 
   /** Nombre de fiches visibles (publiées, non fusionnées) où chaque boutique a une offre visible. */

@@ -23,7 +23,7 @@ boutique vendait moins cher, la liste était mal triée et mal filtrée (dette n
 3. Une offre doit avoir **au moins une déclinaison active** pour être comptée sur la page de sa boutique (sinon la
    fiche entrerait dans le total sans carte).
 4. Hors page de boutique (rayons, recherche, promotions), rien ne change.
-5. Contrat **2.7.1** (version corrective : aucun champ ne change, la règle des paramètres est précisée).
+5. Contrat **2.8.1** (version corrective : aucun champ ne change, la règle des paramètres est précisée).
 
 Choix du 2026-10-27 : options recommandées retenues sans être reposées (ta demande du 2026-10-23).
 

@@ -18,6 +18,7 @@ import {
   type ProductSummary,
   type PublicShop,
   type PublicShops,
+  type ShopSuggestion,
   PUBLIC_SHOPS,
 } from "./ports.js";
 import {
@@ -44,8 +45,8 @@ function parsePlaceName(value: unknown): string | undefined {
   return /^[\p{L}0-9][\p{L}0-9 '’.()-]{1,79}$/u.test(text) ? text : undefined;
 }
 
-/** Suggestions pendant la frappe (S7.5-T06) : 8 au plus en tout. */
-export const SUGGESTION_LIMITS = { products: 4, categories: 2, brands: 2 } as const;
+/** Suggestions pendant la frappe (S7.5-T06) : 8 au plus en tout ; 10 avec les boutiques (S8-T05). */
+export const SUGGESTION_LIMITS = { products: 4, categories: 2, brands: 2, shops: 2 } as const;
 /** Il faut au moins 2 lettres ou chiffres pour proposer des suggestions. */
 export const MIN_SUGGESTION_LENGTH = 2;
 /** Mots proches demandés à la base pour corriger un mot. */
@@ -65,6 +66,8 @@ export interface SearchSuggestions {
   products: ProductSummary[];
   categories: Category[];
   brands: string[];
+  /** Boutiques actives dont le nom contient les mots TAPÉS (S8-T05). */
+  shops: ShopSuggestion[];
 }
 
 /** Un panier ne dépasse pas ce nombre de lignes (protection contre les requêtes démesurées). */
@@ -243,17 +246,18 @@ export class CatalogService {
   async suggest(q: unknown): Promise<SearchSuggestions> {
     const typed = searchTerms(q);
     if (typed.join("").length < MIN_SUGGESTION_LENGTH)
-      return { products: [], categories: [], brands: [] };
+      return { products: [], categories: [], brands: [], shops: [] };
     const base: ProductCriteria = { terms: typed, brands: [], inStock: false, onlyDeals: false };
     const terms = await this.resolveTerms(
       { terms: typed, exact: false, promotionsOnly: false },
       base,
     );
     const criteria = { ...base, terms };
-    const [page, brands, tree] = await Promise.all([
+    const [page, brands, tree, shops] = await Promise.all([
       this.products.search(criteria, "pertinence", 1, SUGGESTION_LIMITS.products),
       this.products.brands(criteria, 20),
       this.categoryTree(),
+      this.suggestShops(typed, terms),
     ]);
     const matches = (text: string) => {
       const words = searchable(text);
@@ -267,7 +271,23 @@ export class CatalogService {
       brands: brands
         .filter((b) => terms.some((t) => searchable(b).includes(t)))
         .slice(0, SUGGESTION_LIMITS.brands),
+      shops,
     };
+  }
+
+  /**
+   * Boutiques des suggestions (S8-T05) : cherchées sur les mots TAPÉS, car la correction des fautes remplace les mots
+   * par ceux des fiches (« mbolo » deviendrait un mot de produit) ; les mots corrigés ne servent que si les mots tapés
+   * ne trouvent aucune boutique.
+   */
+  private async suggestShops(
+    typed: readonly string[],
+    terms: readonly string[],
+  ): Promise<ShopSuggestion[]> {
+    if (!this.shops) return [];
+    const found = await this.shops.suggest(typed, SUGGESTION_LIMITS.shops);
+    if (found.length || terms.join(" ") === typed.join(" ")) return found;
+    return this.shops.suggest(terms, SUGGESTION_LIMITS.shops);
   }
 
   /**
