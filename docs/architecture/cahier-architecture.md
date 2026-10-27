@@ -39,6 +39,7 @@
 | **4.28** | 2026-10-23 | S8     | Import du vrai catalogue (ADR-0058) : §3.32 (nouvelle) fichier CSV vérifié puis importé tout ou rien par l'équipe Catalogue, produits en attente de modération, colonne `catalog.products.import_reference` unique par boutique ; contrat 2.7.0                                                                                                                               |
 | **4.29** | 2026-10-24 | S8     | Accueil durablement sous 300 ms (ADR-0059) : §3.33 (nouvelle) photos en simple `<img>` (`getImageProps`), pied de page rendu interactif à l'approche, processeur étalonné dans le test de performance, accueil bloquant au-delà de 300 ms ; §5.2 ; §9                                                                                                                         |
 | **4.30** | 2026-10-24 | S8     | Accueil, encart du compte (ADR-0060) : §3.34 (nouvelle) « Se connecter » remplacé par « Mes commandes » / « Mon compte » pour un client connecté, « Accéder à votre boutique » pour un vendeur                                                                                                                                                                                |
+| **4.33** | 2026-10-27 | S8     | Page d'une boutique, prix de SON offre (ADR-0063) : §3.37 (nouvelle) filtre, « en promotion », compteurs de prix et tri par prix lus sur l'offre de la boutique ; contrat 2.7.1                                                                                                                                                                                               |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                                                                          |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                                                                                |
 | **3.7**  | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                                                                                                                   |
@@ -1253,6 +1254,19 @@ Décision : [ADR-0060](adr/0060-accueil-encart-compte.md). Aucun changement de l
 
 Compte lu par `getCurrentAccount()` (partagé avec l'en-tête, une fois par requête) ; prénom et oui/non vendeur seuls
 transmis à l'encart, rendu par le serveur (`HeroAccountPanel`).
+
+### 3.37 Page d'une boutique : prix de SON offre (S8-T06)
+
+Décision : [ADR-0063](adr/0063-boutique-prix-offre.md). Contrat **2.7.1** ; aucune migration.
+
+| `GET /products?shop=` et `/products/facets?shop=` | Lu sur                                                                         |
+| ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `priceMin`, `priceMax`, compteurs des tranches    | `catalog.products.price` de l'offre de la boutique (une au plus par fiche)     |
+| `onlyDeals`, compteur « en promotion »            | `catalog.products.compare_at_price` de son offre                               |
+| `sort=prix-asc` / `prix-desc`                     | Fiches de la page choisies et ordonnées sur la table des offres, puis relues   |
+| Autres filtres et tris                            | Inchangés (fiche) ; une offre compte si elle a au moins une déclinaison active |
+
+Hors page de boutique : prix « à partir de » de la fiche, comme avant.
 
 ## 4. Choix technologiques
 

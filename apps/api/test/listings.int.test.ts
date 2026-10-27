@@ -16,6 +16,7 @@ import {
   ModerationProductSchema,
   ProblemDetailsSchema,
   ProductDetailSchema,
+  FacetsSchema,
   ProductPageSchema,
   ShopSchema,
   VendorListingPageSchema,
@@ -145,7 +146,7 @@ describe("Fiches communes et offres (PostgreSQL, HTTP)", () => {
   const offer = async (
     vendor: Vendor,
     listingId: string,
-    lines: { listingVariantId: string; price: number; stock: number }[],
+    lines: { listingVariantId: string; price: number; compareAtPrice?: number; stock: number }[],
     status = 201,
   ) => {
     const res = await call(
@@ -1023,5 +1024,74 @@ describe("Fiches communes et offres (PostgreSQL, HTTP)", () => {
     await expect(
       prisma.$executeRaw`UPDATE "catalog"."product_variants" SET "listing_variant_id" = ${other.variants[0]!.listingVariantId}::uuid WHERE "id" = ${product.variants[0]!.id}::uuid`,
     ).rejects.toThrow();
+  });
+  it("page d'une boutique : filtre, tri et compteurs de prix sur SON offre, pas sur le prix de la fiche (S8-T06)", async () => {
+    const owner = await openVendor();
+    const shop = await openVendor();
+    // Fiche A : la boutique propriétaire la vend 300 000 ; « shop » la vend 500 000 (prix de la fiche : 300 000)
+    const a = await publishedListing(owner);
+    await offer(shop, a.listing.id, [
+      {
+        listingVariantId: a.variants[0]!.listingVariantId,
+        price: 500_000,
+        compareAtPrice: 600_000,
+        stock: 2,
+      },
+    ]);
+    // Fiche B : créée par « shop », 300 000 (prix de la fiche : 300 000)
+    const b = await publishedListing(shop);
+    const { slug } = await prisma.seller.findUniqueOrThrow({ where: { shopId: shop.shopId } });
+    const list = async (query: string) =>
+      matches(
+        ProductPageSchema,
+        (await call("get", `/api/v1/products?shop=${slug}&${query}`).expect(200)).body,
+      );
+    const slugsOf = (page: { items: { slug: string }[] }) => page.items.map((p) => p.slug);
+
+    // Tri par SON prix (les deux fiches ont le même prix « à partir de » : seul le prix de l'offre les départage)
+    expect(slugsOf(await list("sort=prix-asc"))).toEqual([b.slug, a.listing.slug]);
+    expect(slugsOf(await list("sort=prix-desc"))).toEqual([a.listing.slug, b.slug]);
+    // Pages : même ordre, une fiche par page
+    const first = await list("sort=prix-asc&pageSize=1&page=1");
+    expect([first.total, first.totalPages, slugsOf(first)]).toEqual([2, 2, [b.slug]]);
+    expect(slugsOf(await list("sort=prix-asc&pageSize=1&page=2"))).toEqual([a.listing.slug]);
+    // Carte : SON prix
+    expect((await list("sort=prix-desc")).items[0]!.price).toBe(500_000);
+    // Filtre par SON prix
+    expect(slugsOf(await list("priceMin=300001"))).toEqual([a.listing.slug]);
+    expect(slugsOf(await list("priceMax=300000&sort=prix-asc"))).toEqual([b.slug]);
+    // Compteurs des tranches de prix : SON prix
+    const facets = matches(
+      FacetsSchema,
+      (await call("get", `/api/v1/products/facets?shop=${slug}`).expect(200)).body,
+    );
+    const count = (key: string) => facets.prices.find((p) => p.key === key)?.count;
+    expect([count("150000-300000"), count("plus-300000")]).toEqual([1, 1]);
+    // « En promotion » : SON prix barré (la fiche, elle, reprend l'offre la moins chère, sans prix barré)
+    expect(slugsOf(await list("onlyDeals=1"))).toEqual([a.listing.slug]);
+    expect(facets.deals).toBe(1);
+
+    // Hors page de boutique : inchangé, prix « à partir de » de la fiche (300 000)
+    const everywhere = async (query: string) =>
+      slugsOf(
+        matches(
+          ProductPageSchema,
+          (
+            await call(
+              "get",
+              `/api/v1/products?q=${encodeURIComponent(a.title)}&exact=1&${query}`,
+            ).expect(200)
+          ).body,
+        ),
+      );
+    expect(await everywhere("priceMax=300000")).toEqual([a.listing.slug]);
+    expect(await everywhere("priceMin=300001")).toEqual([]);
+    expect(await everywhere("onlyDeals=1")).toEqual([]);
+
+    // Boutique suspendue : plus rien, même trié par prix
+    await call("post", `/api/v1/admin/shops/${shop.shopId}/suspend`, admin.token)
+      .send({ reason: "Articles contrefaits signalés" })
+      .expect(200);
+    expect((await list("sort=prix-asc")).total).toBe(0);
   });
 });
