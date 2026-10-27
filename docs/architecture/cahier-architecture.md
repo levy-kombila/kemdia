@@ -39,6 +39,7 @@
 | **4.28** | 2026-10-23 | S8     | Import du vrai catalogue (ADR-0058) : §3.32 (nouvelle) fichier CSV vérifié puis importé tout ou rien par l'équipe Catalogue, produits en attente de modération, colonne `catalog.products.import_reference` unique par boutique ; contrat 2.7.0                                                                                                                               |
 | **4.29** | 2026-10-24 | S8     | Accueil durablement sous 300 ms (ADR-0059) : §3.33 (nouvelle) photos en simple `<img>` (`getImageProps`), pied de page rendu interactif à l'approche, processeur étalonné dans le test de performance, accueil bloquant au-delà de 300 ms ; §5.2 ; §9                                                                                                                         |
 | **4.30** | 2026-10-24 | S8     | Accueil, encart du compte (ADR-0060) : §3.34 (nouvelle) « Se connecter » remplacé par « Mes commandes » / « Mon compte » pour un client connecté, « Accéder à votre boutique » pour un vendeur                                                                                                                                                                                |
+| **4.34** | 2026-10-27 | S8     | Compteurs partagés en base (ADR-0064) : §3.38 (nouvelle) table `platform.rate_counters` pour les limites de débit, les coupons refusés, les renvois de factures et le budget de la recherche ; repli en mémoire ; `RATE_LIMIT_STORE` ; §3.7 « Limitation de débit » mise à jour                                                                                               |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                                                                          |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                                                                                |
 | **3.7**  | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                                                                                                                   |
@@ -499,7 +500,7 @@ liste `IDENTITY_ERROR_CODES` du contrat) et en-tête `Retry-After` pour les limi
 Connexion et sessions : contrat 1.3.0 (S4-T03) ; mot de passe oublié : contrat 1.4.0 (S4-T04) ;
 rôles (`roles` dans `AccountView`), administration et journal : contrat 1.5.0 (S4-T06).
 
-**Limitation de débit** (mise à jour au S4-T07, [ADR-0021](adr/0021-csrf-csp-limites.md)) — compteurs en mémoire de l'API :
+**Limitation de débit** (mise à jour au S4-T07, [ADR-0021](adr/0021-csrf-csp-limites.md)) — compteurs partagés par toutes les instances de l'API depuis S8-T07 (§3.38) :
 
 | Qui appelle                                                       | Compté par                                                                            | Limites                                       |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------- |
@@ -1253,6 +1254,24 @@ Décision : [ADR-0060](adr/0060-accueil-encart-compte.md). Aucun changement de l
 
 Compte lu par `getCurrentAccount()` (partagé avec l'en-tête, une fois par requête) ; prénom et oui/non vendeur seuls
 transmis à l'encart, rendu par le serveur (`HeroAccountPanel`).
+
+### 3.38 Compteurs partagés en base (S8-T07)
+
+Décision : [ADR-0064](adr/0064-compteurs-partages-en-base.md). Migration `20261027120000_compteurs_partages` (schéma
+`platform`) ; aucun changement de l'API.
+
+| Compteur (clé)                                                | Fenêtre et limite                                              | Utilisé par               |
+| ------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------- |
+| `limite:default:<empreinte>` (adresse)                        | 1 min, `RATE_LIMIT_PER_MINUTE` (×3 via le site), blocage 1 min | `KemdiaThrottlerGuard`    |
+| `limite:compte:compte:<compte>:<route>`                       | selon la route (`SessionGuard`), blocage                       | module identity           |
+| `coupon:<compte>`                                             | 15 min, 10 refus (essai réservé avant la vérification)         | module orders             |
+| `facture-renvoi:<facture>`, `facture-renvois-client:<compte>` | 10 min, 1 ; 1 h, 5                                             | module payments (Finance) |
+| `recherche:corrections`                                       | 1 min, 120                                                     | module catalog            |
+
+`src/database/rate-counters.ts` : `PostgresRateCounters` (une requête `INSERT … ON CONFLICT DO UPDATE` par comptage),
+`FallbackRateCounters` (repli en mémoire si la base échoue ou dépasse 500 ms ; clés bloquées plus écrites), ménage
+toutes les 10 minutes. `RATE_LIMIT_STORE` : `database` (par défaut hors tests, seul permis en production) ou `memory`.
+Restent en mémoire de chaque instance : arborescence des rayons (60 s), corrections calculées (30 s), opérateur simulé.
 
 ## 4. Choix technologiques
 
