@@ -268,8 +268,47 @@ describe("CatalogService", () => {
     expect(s.brands).toEqual([]);
     expect((await service.suggest("kemd")).brands).toEqual(["Kemdia"]);
     expect((await service.suggest("kemdai")).correctedQuery).toBe("kemdia");
-    expect(await service.suggest("t")).toEqual({ products: [], categories: [], brands: [] });
-    expect(await service.suggest(42)).toEqual({ products: [], categories: [], brands: [] });
+    expect(await service.suggest("t")).toEqual({
+      products: [],
+      categories: [],
+      brands: [],
+      shops: [],
+    });
+    expect(await service.suggest(42)).toEqual({
+      products: [],
+      categories: [],
+      brands: [],
+      shops: [],
+    });
+  });
+
+  it("S8-T05 : boutiques cherchées sur les mots tapés, puis sur les mots corrigés", async () => {
+    const asked: string[][] = [];
+    const shops = {
+      list: () => Promise.reject(new Error("inutile")),
+      findActiveBySlug: () => Promise.resolve(null),
+      suggest: (terms: readonly string[], limit: number) => {
+        asked.push([...terms, String(limit)]);
+        return Promise.resolve(
+          terms.includes("mbolo")
+            ? [{ slug: "mbolo", name: "Mbolo", city: "Libreville", official: false }]
+            : [],
+        );
+      },
+    };
+    const withShops = new CatalogService(categories, products, shops);
+    // Aucun produit ne contient « mbolo » : la correction ne doit pas empêcher de trouver la boutique
+    expect((await withShops.suggest("Mbolo")).shops.map((s) => s.slug)).toEqual(["mbolo"]);
+    expect(asked[0]).toEqual(["mbolo", "2"]);
+    // Faute de frappe sur un mot du catalogue : mots tapés d'abord, puis mots corrigés
+    asked.length = 0;
+    expect((await withShops.suggest("kemdai")).shops).toEqual([]);
+    expect(asked).toEqual([
+      ["kemdai", "2"],
+      ["kemdia", "2"],
+    ]);
+    // Sans annuaire (tests) : aucune boutique
+    expect((await service.suggest("mbolo")).shops).toEqual([]);
   });
 
   it("S7.5-T06 : correction gardée 30 s et budget commun par minute (relecture de sécurité)", async () => {

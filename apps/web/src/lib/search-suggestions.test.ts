@@ -17,12 +17,21 @@ describe("suggestions pendant la frappe (S7.5-T06)", () => {
       ],
       categories: [{ slug: "audio", name: "Audio" }],
       brands: ["L'Oréal & Co"],
+      shops: [
+        { slug: "atelier-mbolo", name: "Atelier Mbolo", city: "Libreville", official: false },
+        { slug: "../vendeur", name: "Piège", city: "Oyem", official: false },
+      ],
     });
     expect(options.map((o) => [o.kind, o.href])).toEqual([
       ["rayon", "/categorie/audio"],
       ["marque", "/recherche?q=L%27Or%C3%A9al+%26+Co"],
+      ["boutique", "/boutique/atelier-mbolo"],
       ["produit", "/produit/casque-pro"],
     ]);
+    expect(options.find((o) => o.kind === "boutique")).toMatchObject({
+      label: "Atelier Mbolo",
+      city: "Libreville",
+    });
   });
 
   it("réponse inattendue : pas de suggestions", () => {
@@ -39,6 +48,22 @@ describe("suggestions pendant la frappe (S7.5-T06)", () => {
         brands: ["Beats"],
         correctedQuery: "beats",
       }),
-    ).toEqual({ products: [], categories: [], brands: ["Beats"], correctedQuery: "beats" });
+    ).toEqual({
+      products: [],
+      categories: [],
+      brands: ["Beats"],
+      shops: [],
+      correctedQuery: "beats",
+    });
+    // S8-T05 : boutique mal formée → rien ; boutiques gardées (2 au plus)
+    expect(
+      parseSuggestions({ products: [], categories: [], brands: [], shops: [{ slug: "a" }] }),
+    ).toBeNull();
+    expect(parseSuggestions({ products: [], categories: [], brands: [], shops: "x" })).toBeNull();
+    const shop = { slug: "kemdia", name: "Kemdia", city: "Libreville", official: true };
+    expect(
+      parseSuggestions({ products: [], categories: [], brands: [], shops: [shop, shop, shop] })
+        ?.shops,
+    ).toHaveLength(2);
   });
 });

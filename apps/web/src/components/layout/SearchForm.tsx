@@ -1,6 +1,6 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Search, Store } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
@@ -16,12 +16,17 @@ import {
   type SuggestionOption,
 } from "@/lib/search-suggestions";
 
-const KIND_LABEL = { rayon: "Rayon", marque: "Marque", produit: "Produit" } as const;
+const KIND_LABEL = {
+  rayon: "Rayon",
+  marque: "Marque",
+  boutique: "Boutique",
+  produit: "Produit",
+} as const;
 
 /**
  * Champ de recherche. Formulaire GET natif : fonctionne même si le JavaScript n'est pas encore chargé (réseau lent).
- * S7.5-T06 : une fois le JavaScript chargé, suggestions pendant la frappe (rayons, marques, produits), en « combobox »
- * accessible (flèches, Entrée, Échap ; lecteur d'écran informé du nombre de suggestions).
+ * S7.5-T06 : une fois le JavaScript chargé, suggestions pendant la frappe (rayons, marques, boutiques depuis S8-T05,
+ * produits), en « combobox » accessible (flèches, Entrée, Échap ; lecteur d'écran informé du nombre de suggestions).
  */
 export function SearchForm({
   defaultValue = "",
@@ -182,12 +187,21 @@ export function SearchForm({
                       />
                     )}
                   </span>
+                ) : o.kind === "boutique" ? (
+                  // Icône de boutique à la place de la photo ; le mot reste lu par les lecteurs d'écran
+                  <span className="bg-brand-50 text-brand-700 grid size-9 shrink-0 place-items-center rounded-lg">
+                    <Store className="size-4.5" aria-hidden />
+                    <span className="sr-only">{KIND_LABEL.boutique}</span>
+                  </span>
                 ) : (
                   <span className="text-ink-400 w-9 shrink-0 text-[11px] font-semibold uppercase">
                     {KIND_LABEL[o.kind]}
                   </span>
                 )}
                 <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                {o.city !== undefined && (
+                  <span className="text-ink-500 shrink-0 text-xs">{o.city}</span>
+                )}
                 {o.price !== undefined && (
                   <span className="text-ink-700 shrink-0 font-semibold">{formatFCFA(o.price)}</span>
                 )}
