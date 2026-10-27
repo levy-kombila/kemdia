@@ -39,6 +39,7 @@
 | **4.28** | 2026-10-23 | S8     | Import du vrai catalogue (ADR-0058) : §3.32 (nouvelle) fichier CSV vérifié puis importé tout ou rien par l'équipe Catalogue, produits en attente de modération, colonne `catalog.products.import_reference` unique par boutique ; contrat 2.7.0                                                                                                                               |
 | **4.29** | 2026-10-24 | S8     | Accueil durablement sous 300 ms (ADR-0059) : §3.33 (nouvelle) photos en simple `<img>` (`getImageProps`), pied de page rendu interactif à l'approche, processeur étalonné dans le test de performance, accueil bloquant au-delà de 300 ms ; §5.2 ; §9                                                                                                                         |
 | **4.30** | 2026-10-24 | S8     | Accueil, encart du compte (ADR-0060) : §3.34 (nouvelle) « Se connecter » remplacé par « Mes commandes » / « Mon compte » pour un client connecté, « Accéder à votre boutique » pour un vendeur                                                                                                                                                                                |
+| **4.31** | 2026-10-27 | S8     | Machines de la CI fixées (ADR-0061) : §3.35 (nouvelle) tous les jobs sur `ubuntu-24.04` au lieu de `ubuntu-latest` (Chromium de Playwright ne s'installait plus sur Ubuntu 26)                                                                                                                                                                                                |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                                                                          |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                                                                                |
 | **3.7**  | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                                                                                                                   |
@@ -1253,6 +1254,15 @@ Décision : [ADR-0060](adr/0060-accueil-encart-compte.md). Aucun changement de l
 
 Compte lu par `getCurrentAccount()` (partagé avec l'en-tête, une fois par requête) ; prénom et oui/non vendeur seuls
 transmis à l'encart, rendu par le serveur (`HeroAccountPanel`).
+
+### 3.35 Machines de la CI fixées (S8-T09)
+
+Décision : [ADR-0061](adr/0061-ci-ubuntu-2404.md). Aucun changement de l'API, du site ni de la base.
+
+Tous les jobs des workflows (`ci`, `_deploy`, `release`, `security`, `zap`) tournent sur `ubuntu-24.04` au lieu de
+`ubuntu-latest`. GitHub fait passer `ubuntu-latest` à Ubuntu 26 depuis le 2026-10-19 ; sur cette image,
+`playwright install --with-deps chromium` échoue et bloque le job « Bout en bout et performance ». Le passage à une
+version plus récente se fera par une tâche dédiée, quand Playwright la prendra en charge.
 
 ## 4. Choix technologiques
 
