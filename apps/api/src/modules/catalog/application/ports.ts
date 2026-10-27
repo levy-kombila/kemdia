@@ -414,6 +414,14 @@ export interface PublicShop extends SellerProfile {
   productCount: number;
 }
 
+/** Boutique proposée pendant la frappe (S8-T05) : de quoi afficher la ligne, rien de plus. */
+export interface ShopSuggestion {
+  slug: string;
+  name: string;
+  city: string;
+  official: boolean;
+}
+
 /** Annuaire et pages publiques des boutiques (S7.5-T07), lus dans la copie du catalogue. */
 export interface PublicShops {
   /**
@@ -428,6 +436,11 @@ export interface PublicShops {
   }): Promise<Page<PublicShop>>;
   /** Boutique ACTIVE par son adresse ; `null` sinon (inconnue, en attente, suspendue). */
   findActiveBySlug(slug: string): Promise<PublicShop | null>;
+  /**
+   * Suggestions (S8-T05) : boutiques ACTIVES dont le nom, sans accents ni ponctuation, contient chaque mot (déjà
+   * passé par `searchable` : lettres a-z et chiffres seulement). Boutique officielle d'abord, puis par nom.
+   */
+  suggest(terms: readonly string[], limit: number): Promise<ShopSuggestion[]>;
 }
 
 /** Champs calculés à partir du domaine : prix « à partir de » et texte de recherche. */

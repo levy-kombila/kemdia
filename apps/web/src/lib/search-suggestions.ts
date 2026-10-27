@@ -7,7 +7,7 @@ import type { SearchSuggestions } from "@kemdia/contracts";
 export const SUGGESTION_MIN_LENGTH = 2;
 export const SUGGESTION_DELAY_MS = 250;
 
-export type SuggestionKind = "produit" | "rayon" | "marque";
+export type SuggestionKind = "produit" | "rayon" | "marque" | "boutique";
 
 export interface SuggestionOption {
   key: string;
@@ -16,6 +16,8 @@ export interface SuggestionOption {
   href: string;
   image?: string | null;
   price?: number;
+  /** Ville d'une boutique (S8-T05), affichée à droite de la ligne. */
+  city?: string;
 }
 
 /** Faut-il demander des suggestions pour ce texte ? (assez de lettres, pas trop long) */
@@ -25,8 +27,9 @@ export function wantsSuggestions(q: string, maxLength: number): boolean {
 }
 
 /**
- * Lignes affichées, dans l'ordre : rayons, marques, puis produits. Les adresses sont construites ici (jamais reprises
- * telles quelles de la réponse) : une adresse de rayon ou de produit n'accepte que [a-z0-9-].
+ * Lignes affichées, dans l'ordre : rayons, marques, boutiques (S8-T05), puis produits. Les adresses sont construites
+ * ici (jamais reprises telles quelles de la réponse) : une adresse de rayon, de boutique ou de produit n'accepte que
+ * [a-z0-9-].
  */
 export function suggestionOptions(data: SearchSuggestions): SuggestionOption[] {
   const slug = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -45,6 +48,15 @@ export function suggestionOptions(data: SearchSuggestions): SuggestionOption[] {
       label: b,
       href: `/recherche?${new URLSearchParams({ q: b }).toString()}`,
     })),
+    ...(data.shops ?? [])
+      .filter((s) => slug.test(s.slug))
+      .map((s) => ({
+        key: `boutique-${s.slug}`,
+        kind: "boutique" as const,
+        label: s.name,
+        href: `/boutique/${s.slug}`,
+        city: s.city,
+      })),
     ...data.products
       .filter((p) => slug.test(p.slug))
       .map((p) => ({
@@ -69,6 +81,9 @@ const isString = (v: unknown): v is string => typeof v === "string";
 export function parseSuggestions(body: unknown): SearchSuggestions | null {
   if (!isRecord(body)) return null;
   const { products, categories, brands, correctedQuery } = body;
+  // S8-T05 : absent d'une réponse d'avant 2.8.0 → aucune boutique (jamais un refus de toute la réponse)
+  const shops = body.shops === undefined ? [] : body.shops;
+  if (!Array.isArray(shops)) return null;
   if (!Array.isArray(products) || !Array.isArray(categories) || !Array.isArray(brands)) return null;
   if (correctedQuery !== undefined && !isString(correctedQuery)) return null;
   const okProducts = products.every(
@@ -80,11 +95,20 @@ export function parseSuggestions(body: unknown): SearchSuggestions | null {
       typeof p.price === "number",
   );
   const okCategories = categories.every((c) => isRecord(c) && isString(c.slug) && isString(c.name));
-  if (!okProducts || !okCategories || !brands.every(isString)) return null;
+  const okShops = shops.every(
+    (s) =>
+      isRecord(s) &&
+      isString(s.slug) &&
+      isString(s.name) &&
+      isString(s.city) &&
+      typeof s.official === "boolean",
+  );
+  if (!okProducts || !okCategories || !okShops || !brands.every(isString)) return null;
   return {
     ...(correctedQuery !== undefined ? { correctedQuery } : {}),
     products: products.slice(0, 4),
     categories: categories.slice(0, 2),
     brands: brands.slice(0, 2),
+    shops: shops.slice(0, 2),
   } as SearchSuggestions;
 }
