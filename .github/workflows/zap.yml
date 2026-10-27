@@ -34,7 +34,7 @@ env:
 jobs:
   zap:
     name: ZAP ${{ (github.event_name == 'pull_request' || inputs.mode == 'passif') && 'passif' || 'actif' }} — ${{ matrix.cible }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 150
     strategy:
       fail-fast: false
