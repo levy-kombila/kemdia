@@ -27,6 +27,7 @@ import {
   ORDER_STOCK,
   ORDERS_TRANSACTION,
 } from "./application/ports.js";
+import { sharedCountersProvider } from "./infrastructure/shared-counters.js";
 import { OrdersTransactionRunner } from "./infrastructure/orders-transaction.js";
 import { OverdueOrdersScheduler } from "./infrastructure/overdue-orders.js";
 import { PrismaCodSettingsRepository } from "./infrastructure/prisma-cod-settings.repository.js";
@@ -82,6 +83,8 @@ import { SupportOrderController } from "./interface/support-order.controller.js"
     { provide: ORDERS_TRANSACTION, useClass: OrdersTransactionRunner },
     { provide: ORDER_STOCK, useExisting: StockService },
     { provide: ORDER_RANDOM, useValue: (size: number) => new Uint8Array(randomBytes(size)) },
+    // Compteurs partagés par les instances (S8-T07) : essais de coupons
+    sharedCountersProvider,
     // Même règle que le fournisseur du module payments (S5-T07, ADR-0029)
     {
       provide: MOBILE_MONEY,

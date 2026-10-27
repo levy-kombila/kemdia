@@ -27,6 +27,7 @@ describe("loadConfig", () => {
       DATABASE_POOL_MAX: 10,
       DATABASE_STATEMENT_TIMEOUT_MS: 10_000,
       RATE_LIMIT_PER_MINUTE: 120,
+      RATE_LIMIT_STORE: "database",
       API_DOCS: true,
       SMS_ENABLED: false,
       EMAIL_TRANSPORT: "console",
@@ -229,5 +230,18 @@ describe("outil Prisma (prisma.config.ts)", () => {
       loadConfig({ KYC_ENCRYPTION_KEY: key, TOTP_ENCRYPTION_KEY: "B".repeat(43) })
         .KYC_ENCRYPTION_KEY,
     ).toBe(key);
+  });
+  it("S8-T07 : compteurs en base par défaut hors tests, « memory » refusé en production", () => {
+    expect(loadConfig({ NODE_ENV: "test" }).RATE_LIMIT_STORE).toBe("memory");
+    expect(loadConfig({ NODE_ENV: "development" }).RATE_LIMIT_STORE).toBe("database");
+    const prod = {
+      NODE_ENV: "production",
+      APP_VERSION: "v1",
+      DATABASE_URL: "postgresql://a:b@db/k",
+    };
+    expect(loadConfig(prod).RATE_LIMIT_STORE).toBe("database");
+    expect(problems({ ...prod, RATE_LIMIT_STORE: "memory" })).toEqual([
+      expect.stringMatching(/^RATE_LIMIT_STORE : « memory » refusé en production/),
+    ]);
   });
 });

@@ -303,3 +303,14 @@ export interface MobileMoneyAvailability {
   readonly available: boolean;
 }
 export const MOBILE_MONEY = Symbol("MOBILE_MONEY");
+
+/**
+ * Compteurs partagés par toutes les instances de l'API (S8-T07, ADR-0064) : fenêtre fixe ouverte par le premier appel.
+ * Branché sur `platform.rate_counters` (ou sur la mémoire dans les tests).
+ */
+export interface SharedCounters {
+  hit(key: string, windowMs: number, now: Date): Promise<{ hits: number; resetAt: Date }>;
+  read(key: string, now: Date): Promise<{ hits: number; resetAt: Date } | null>;
+  undo(key: string, now: Date): Promise<void>;
+}
+export const ORDER_COUNTERS = Symbol("ORDER_COUNTERS");

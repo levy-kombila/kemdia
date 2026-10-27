@@ -10,6 +10,28 @@ import {
   CatalogService,
   MAX_AVAILABILITY_LINES,
 } from "./catalog.service.js";
+import type { SharedCounters } from "./ports.js";
+
+/** Compteurs partagés (S8-T07) : fenêtre fixe, en mémoire. */
+class FixedWindowCounters implements SharedCounters {
+  private readonly entries = new Map<string, { hits: number; resetAt: Date }>();
+  hit(key: string, windowMs: number, now: Date) {
+    const entry = this.entries.get(key);
+    const next =
+      entry && entry.resetAt > now
+        ? { hits: entry.hits + 1, resetAt: entry.resetAt }
+        : { hits: 1, resetAt: new Date(now.getTime() + windowMs) };
+    this.entries.set(key, next);
+    return Promise.resolve(next);
+  }
+  read(key: string, now: Date) {
+    const entry = this.entries.get(key);
+    return Promise.resolve(entry && entry.resetAt > now ? entry : null);
+  }
+  undo() {
+    return Promise.resolve();
+  }
+}
 
 const category = (id: string, slug: string, parentId: string | null) =>
   createCategory({ id, slug, name: slug, parentId, icon: "tag", image: null, position: 0 });
@@ -35,7 +57,7 @@ describe("CatalogService", () => {
         }),
       ),
     ]);
-    service = new CatalogService(categories, products);
+    service = new CatalogService(categories, products, new FixedWindowCounters());
   });
 
   it("catégorie : fil d'Ariane et sous-catégories", async () => {

@@ -8,7 +8,7 @@ import { DatabaseModule } from "./database/database.module.js";
 import { DocsModule } from "./docs/docs.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { loggerParams } from "./http/logging.js";
-import { KemdiaThrottlerGuard, throttlerOptions } from "./http/rate-limit.js";
+import { KemdiaThrottlerGuard, throttlerModuleOptions } from "./http/rate-limit.js";
 import { CatalogModule } from "./modules/catalog/index.js";
 import { IdentityModule } from "./modules/identity/index.js";
 import { OrdersModule } from "./modules/orders/index.js";
@@ -31,7 +31,7 @@ export class AppModule {
       imports: [
         ConfigModule.forRoot(config),
         LoggerModule.forRoot(loggerParams(config)),
-        ThrottlerModule.forRoot(throttlerOptions(config)),
+        ThrottlerModule.forRootAsync(throttlerModuleOptions),
         DatabaseModule,
         HealthModule,
         CatalogModule,

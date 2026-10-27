@@ -28,6 +28,7 @@ import { PrismaCategoryRepository } from "./infrastructure/prisma-category.repos
 import { PrismaProductRepository } from "./infrastructure/prisma-product.repository.js";
 import { CatalogController } from "./interface/catalog.controller.js";
 import { ProductImageController } from "./interface/product-image.controller.js";
+import { sharedCountersProvider } from "./infrastructure/shared-counters.js";
 
 /** `size` caractères tirés au hasard (cryptographiquement) dans `alphabet`. */
 function pick(alphabet: string, size: number): string {
@@ -51,6 +52,8 @@ function pick(alphabet: string, size: number): string {
     { provide: PRODUCT_REPOSITORY, useClass: PrismaProductRepository },
     // Annuaire et pages publiques des boutiques (S7.5-T07)
     { provide: PUBLIC_SHOPS, useClass: PrismaPublicShopsRepository },
+    // Compteurs partagés par les instances (S8-T07) : budget des corrections de la recherche
+    sharedCountersProvider,
     // Produits des vendeurs et modération (S6-T02) : utilisé par le module vendors, qui décide des droits
     VendorCatalog,
     // Photos des produits (S6-T04) : réencodage sharp, rangement PostgreSQL (port remplaçable)
