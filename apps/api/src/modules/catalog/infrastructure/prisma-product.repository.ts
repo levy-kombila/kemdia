@@ -110,12 +110,26 @@ export class PrismaProductRepository implements ProductRepository {
     const total = await this.prisma.listing.count({ where });
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const current = Math.min(page, totalPages);
-    const rows = await this.prisma.listing.findMany({
-      where,
+    // Page d'une boutique triée par prix (S8-T06) : ordre donné par SON offre (une au plus par fiche), pas par le prix
+    // « à partir de » de la fiche (toutes boutiques)
+    const byShopPrice =
+      criteria.shopId && (sort === "prix-asc" || sort === "prix-desc")
+        ? await this.prisma.product.findMany({
+            where: { ...VISIBLE_OFFER, shopId: criteria.shopId, listing: where },
+            orderBy: [{ price: sort === "prix-asc" ? "asc" : "desc" }, { listingId: "asc" }],
+            skip: (current - 1) * pageSize,
+            take: pageSize,
+            select: { listingId: true },
+          })
+        : null;
+    const found = await this.prisma.listing.findMany({
+      // Mêmes conditions que le tri : une fiche dépubliée entre les deux requêtes ne passe pas (relecture S8-T06)
+      where: byShopPrice
+        ? { AND: [where, { id: { in: byShopPrice.map((o) => o.listingId) } }] }
+        : where,
       // L'identifiant départage les égalités : une même page renvoie toujours les mêmes fiches
       orderBy: [...ORDER[sort], { id: "asc" }],
-      skip: (current - 1) * pageSize,
-      take: pageSize,
+      ...(byShopPrice ? {} : { skip: (current - 1) * pageSize, take: pageSize }),
       select: {
         id: true,
         slug: true,
@@ -131,6 +145,10 @@ export class PrismaProductRepository implements ProductRepository {
         isNew: true,
       },
     });
+    const position = new Map(byShopPrice?.map((o, i) => [o.listingId, i]));
+    const rows = byShopPrice
+      ? found.sort((a, b) => (position.get(a.id) ?? 0) - (position.get(b.id) ?? 0))
+      : found;
     // Offres visibles des fiches de la page, en une requête : l'offre mise en avant de chaque carte. Page d'une
     // boutique (S7.5-T07) : seulement SON offre (son prix, son stock).
     const offers = rows.length
@@ -264,10 +282,14 @@ export class PrismaProductRepository implements ProductRepository {
             : IN_STOCK,
         ),
       }),
-      this.prisma.listing.count({ where: and({ compareAtPrice: { not: null } }) }),
+      this.prisma.listing.count({
+        where: and(onOffer(criteria, { compareAtPrice: { not: null } })),
+      }),
       this.prisma.listing.count({ where: and({ rating: { gte: 4 } }) }),
       ...priceRanges.map((range) =>
-        this.prisma.listing.count({ where: and({ price: { gte: range.min, lte: range.max } }) }),
+        this.prisma.listing.count({
+          where: and(onOffer(criteria, { price: { gte: range.min, lte: range.max } })),
+        }),
       ),
     ]);
     return {
@@ -381,7 +403,31 @@ const IN_STOCK = {
   offers: { some: { ...VISIBLE_OFFER, variants: { some: AVAILABLE_VARIANT } } },
 } satisfies Prisma.ListingWhereInput;
 
+/**
+ * Condition de prix ou de promotion (S8-T06) : sur la fiche (prix « à partir de », toutes boutiques), ou, sur la page
+ * d'une boutique, sur SON offre (une au plus par fiche : prix de sa variante active la moins chère).
+ */
+function onOffer(
+  c: ProductCriteria,
+  condition: Pick<Prisma.ProductWhereInput, "price" | "compareAtPrice">,
+): Prisma.ListingWhereInput {
+  return c.shopId
+    ? { offers: { some: { ...VISIBLE_OFFER, shopId: c.shopId, ...condition } } }
+    : (condition as Prisma.ListingWhereInput);
+}
+
 function whereOf(c: ProductCriteria): Prisma.ListingWhereInput {
+  const priceRange =
+    c.priceMin !== undefined || c.priceMax !== undefined
+      ? {
+          price: {
+            ...(c.priceMin !== undefined ? { gte: c.priceMin } : {}),
+            ...(c.priceMax !== undefined ? { lte: c.priceMax } : {}),
+          },
+        }
+      : {};
+  // Le prix barré est toujours supérieur au prix (contrainte SQL) : « en promotion » = prix barré présent
+  const deals = c.onlyDeals ? { compareAtPrice: { not: null } } : {};
   return {
     // Fiche publiée, non fusionnée, avec au moins une offre visible (publiée, boutique non suspendue)
     status: "PUBLISHED",
@@ -390,19 +436,11 @@ function whereOf(c: ProductCriteria): Prisma.ListingWhereInput {
     ...(c.categoryIds ? { categoryId: { in: [...c.categoryIds] } } : {}),
     // Les mots ne contiennent que [a-z0-9] (searchable) : aucun joker SQL possible
     ...(c.terms.length ? { AND: c.terms.map((term) => ({ searchText: { contains: term } })) } : {}),
-    ...(c.priceMin !== undefined || c.priceMax !== undefined
-      ? {
-          price: {
-            ...(c.priceMin !== undefined ? { gte: c.priceMin } : {}),
-            ...(c.priceMax !== undefined ? { lte: c.priceMax } : {}),
-          },
-        }
-      : {}),
+    // Prix et promotion : sur la fiche, ou sur l'offre de la boutique (plus bas) pour la page d'une boutique
+    ...(c.shopId ? {} : { ...priceRange, ...deals }),
     ...(c.brands.length ? { brand: { in: [...c.brands] } } : {}),
     // Page d'une boutique (S7.5-T07) : « en stock » se lit sur SON offre
     ...(c.inStock && !c.shopId ? IN_STOCK : {}),
-    // Le prix barré est toujours supérieur au prix (contrainte SQL) : « en promotion » = prix barré présent
-    ...(c.onlyDeals ? { compareAtPrice: { not: null } } : {}),
     ...(c.minRating !== undefined ? { rating: { gte: c.minRating } } : {}),
     ...(c.badge ? BADGE_FILTERS[c.badge] : {}),
     ...(c.shopId
@@ -411,7 +449,10 @@ function whereOf(c: ProductCriteria): Prisma.ListingWhereInput {
             some: {
               ...VISIBLE_OFFER,
               shopId: c.shopId,
-              ...(c.inStock ? { variants: { some: AVAILABLE_VARIANT } } : {}),
+              // Au moins une déclinaison active : sinon la fiche compterait sans avoir de carte (relecture S8-T06)
+              variants: { some: c.inStock ? AVAILABLE_VARIANT : { isActive: true } },
+              ...priceRange,
+              ...deals,
             },
           },
         }

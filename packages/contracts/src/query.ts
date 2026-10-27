@@ -123,7 +123,7 @@ export const PRODUCT_QUERY_PARAMETERS = [
   {
     name: "shop",
     description:
-      "S7.5-T07 : adresse d'une boutique active ; seulement ses produits, avec le prix et le stock de SON offre",
+      "S7.5-T07 : adresse d'une boutique active ; seulement ses produits, avec le prix et le stock de SON offre. S8-T06 : filtre et tri par prix, « en promotion » et compteurs des tranches de prix lus sur SON offre",
     schema: { type: "string", maxLength: 80 },
   },
 ] as const;
