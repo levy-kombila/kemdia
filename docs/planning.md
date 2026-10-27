@@ -267,6 +267,7 @@ Décisions : [ADR-0056](architecture/adr/0056-avis-clients.md) (avis des clients
 [ADR-0058](architecture/adr/0058-import-catalogue.md) (import du catalogue),
 [ADR-0059](architecture/adr/0059-accueil-300ms-etalonnage.md) (accueil durablement sous 300 ms),
 [ADR-0060](architecture/adr/0060-accueil-encart-compte.md) (encart du compte de l'accueil),
+[ADR-0061](architecture/adr/0061-ci-ubuntu-2404.md) (machines de la CI fixées),
 [ADR-0062](architecture/adr/0062-suggestions-boutiques.md) (boutiques dans les suggestions).
 Choix du 2026-10-23 (ouverture) : commencer par **ce qui ne dépend pas du client** ; les tâches qui attendent ses
 réponses (transporteur n° 5, informations légales n° 10, commission n° 3, location du serveur) seront ajoutées à leur
@@ -285,6 +286,8 @@ interactif à l'approche ; test de performance au **processeur étalonné** (ré
 **5 chargements** et **bloquant au-delà de 300 ms**.
 Choix du 2026-10-24 (S8-T08) : encart de l'accueil selon la connexion (« Mes commandes », « Mon compte ») et le rôle
 vendeur (« Accéder à votre boutique » vers l'espace vendeur), lu comme l'en-tête, rendu par le serveur.
+Choix du 2026-10-27 (S8-T09) : machines de la CI **fixées sur `ubuntu-24.04`** pour tous les jobs (Ubuntu 26 casse
+l'installation de Chromium) ; passage à une version plus récente par une tâche dédiée.
 Choix du 2026-10-27 (S8-T05) : **2 boutiques actives** au plus dans les suggestions, trouvées sur les **mots tapés**
 (sans accents, dernier mot incomplet), boutique officielle d'abord ; comparaison dans la requête SQL, **sans migration**.
 
@@ -298,6 +301,7 @@ Choix du 2026-10-27 (S8-T05) : **2 boutiques actives** au plus dans les suggesti
 | S8-T06 | Page d'une boutique : filtre et tri par prix (dette S7.5)                                                                                                                                                                                                                          | ⏳     |
 | S8-T07 | Caches et compteurs en mémoire de l'API déplacés en base, avant de lancer plusieurs instances (dette S7.5)                                                                                                                                                                         | ⏳     |
 | S8-T08 | Accueil : encart du compte selon la connexion (« Mes commandes », « Mon compte » au lieu de « Se connecter ») et le rôle vendeur (« Accéder à votre boutique » au lieu de « Devenir vendeur ») — ADR-0060 — Choix du 2026-10-24                                                    | ✅     |
+| S8-T09 | CI : machines fixées sur Ubuntu 24.04 (le passage de `ubuntu-latest` à Ubuntu 26 empêchait d'installer Chromium et bloquait toutes les PR) — ADR-0061 — Choix du 2026-10-27                                                                                                        | ✅     |
 
 ## S5 à S8 — grandes lignes
 

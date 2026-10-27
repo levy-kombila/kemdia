@@ -27,7 +27,7 @@ jobs:
   # obligatoire sautée compte comme réussie. Les pushes sur main et les lancements manuels font toujours tout.
   changes:
     name: Ce qui a changé
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 3
     permissions:
       contents: read
@@ -68,7 +68,7 @@ jobs:
 
   quality:
     name: Lint · Types · Tests · Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -107,7 +107,7 @@ jobs:
 
   database:
     name: API — migrations et intégration (PostgreSQL)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: changes
     if: needs.changes.outputs.code == 'true'
     timeout-minutes: 10
@@ -157,7 +157,7 @@ jobs:
 
   e2e:
     name: Bout en bout et performance (site + API + PostgreSQL)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # S7.5-T01 : démarre tout de suite, sans attendre « Lint · Types · Tests · Build » (gain ~5 min)
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -288,7 +288,7 @@ jobs:
 
   image:
     name: Image Docker (build · scan · publication)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # S7.5-T01 : construite et scannée EN MÊME TEMPS que les tests ; rien n'est DÉPLOYÉ (staging, démo) si un job est
     # rouge (needs des déploiements), et la production refuse un commit dont la CI n'est pas verte (release.yml)
     needs: changes
@@ -431,7 +431,7 @@ jobs:
 
   image-api:
     name: Image Docker de l'API (build · scan · migrations · publication)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: changes # S7.5-T01 : en même temps que les tests (voir le job « image »)
     if: needs.changes.outputs.code == 'true'
     timeout-minutes: 25
@@ -661,7 +661,7 @@ jobs:
   # compose.yml, Caddyfile) et des images construites à partir du cache de la CI, servies par un registre local.
   server-stack:
     name: Pile serveur (Caddy · site · API · PostgreSQL)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: changes # S7.5-T01 : sans attendre « Lint · Types · Tests · Build »
     if: needs.changes.outputs.code == 'true'
     timeout-minutes: 30
@@ -943,7 +943,7 @@ jobs:
     name: Étiquettes main et latest (après validation)
     needs: [quality, database, e2e, server-stack, image, image-api]
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -1014,7 +1014,7 @@ jobs:
     # S7.5-T01 : déployé seulement si TOUT est vert (qualité, base, bout en bout, pile serveur, images)
     needs: [quality, database, e2e, server-stack, image, image-api]
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     concurrency:
       group: deploy-demo
