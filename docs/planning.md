@@ -320,17 +320,22 @@ Choix du 2026-10-28 : mettre en production **bientôt**, paiement **à la livrai
 Money **grisés « Bientôt disponible »** tant qu'aucun contrat n'est signé (déjà le cas hors démo : aucun fournisseur
 réel). Le détail des tâches sera établi à l'ouverture du S9.
 Décisions : [ADR-0065](architecture/adr/0065-2fa-mot-de-passe-explique.md) (étape du mot de passe de la double
-authentification). Choix du 2026-10-28 (S9-T01) : champ vide → **message sous le champ** plutôt qu'un bouton désactivé.
+authentification),
+[ADR-0066](architecture/adr/0066-vignettes-listes-equipe.md) (vignettes des listes de l'équipe).
+Choix du 2026-10-28 (S9-T01) : champ vide → **message sous le champ** plutôt qu'un bouton désactivé.
+Choix du 2026-10-28 (S9-T02) : vignette **publique (480 px)** pour une fiche publiée, **relais de l'équipe** sinon.
 
-| ID     | Tâche                                                                                                                                          | Statut                   |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| S9-T01 | Double authentification : « Afficher le QR code » sans mot de passe ne faisait rien ; message et aide ajoutés — ADR-0065 — Choix du 2026-10-28 | ✅                       |
-| S9-??  | Hébergement payant (serveur ou offre payante de Render), nom de domaine, e-mails depuis le domaine                                             | ⏳ décision du client    |
-| S9-??  | Déploiement : un environnement GitHub par cible (staging, production), secrets séparés, production protégée                                    | à faire avant le serveur |
-| S9-??  | Informations légales : mentions, CGV, confidentialité, responsable des traitements (n° 10)                                                     | ⏳ en attente du client  |
-| S9-??  | Transporteur (n° 5), commission des vendeurs (n° 3), règles du paiement à la livraison (n° 1)                                                  | ⏳ en attente du client  |
-| S9-??  | Vrai catalogue et photos HD, comptes de l'équipe, vendeurs partenaires                                                                         | ⏳ en attente du client  |
-| S9-??  | Mobile Money réel (Airtel Money, Moov Money) : contrat avec les opérateurs ou un agrégateur (n° 7)                                             | ⏳ en attente du client  |
+| ID     | Tâche                                                                                                                                                         | Statut                   |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| S9-T01 | Double authentification : « Afficher le QR code » sans mot de passe ne faisait rien ; message et aide ajoutés — ADR-0065 — Choix du 2026-10-28                | ✅                       |
+| S9-T02 | Vignette (première photo) dans les listes Fiches produits et Avis clients de l'équipe ; contrat 2.9.0 — ADR-0066 — Choix du 2026-10-28                        | ✅                       |
+| S9-T03 | Espace de l'équipe et des vendeurs au niveau des back-offices de référence (Seller Central, Jumia Vendor Center) : mise en page dédiée, tableaux, indicateurs | ⏳ recommandé            |
+| S9-??  | Hébergement payant (serveur ou offre payante de Render), nom de domaine, e-mails depuis le domaine                                                            | ⏳ décision du client    |
+| S9-??  | Déploiement : un environnement GitHub par cible (staging, production), secrets séparés, production protégée                                                   | à faire avant le serveur |
+| S9-??  | Informations légales : mentions, CGV, confidentialité, responsable des traitements (n° 10)                                                                    | ⏳ en attente du client  |
+| S9-??  | Transporteur (n° 5), commission des vendeurs (n° 3), règles du paiement à la livraison (n° 1)                                                                 | ⏳ en attente du client  |
+| S9-??  | Vrai catalogue et photos HD, comptes de l'équipe, vendeurs partenaires                                                                                        | ⏳ en attente du client  |
+| S9-??  | Mobile Money réel (Airtel Money, Moov Money) : contrat avec les opérateurs ou un agrégateur (n° 7)                                                            | ⏳ en attente du client  |
 
 ## S5 à S8 — grandes lignes
 

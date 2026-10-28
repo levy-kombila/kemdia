@@ -2720,7 +2720,13 @@ export const AdminReviewSchema = z
     authorName: z.string(),
     status: reviewStatus,
     rejectReason: z.string().nullable(),
-    listing: z.object({ title: z.string(), slug }).nullable(),
+    listing: z
+      .object({
+        title: z.string(),
+        slug,
+        image: z.string().nullable().describe("Première photo de la fiche (S9-T02)"),
+      })
+      .nullable(),
     date: z.iso.datetime(),
   })
   .meta({ id: "AdminReview" });

@@ -241,6 +241,9 @@ describe("Avis des clients (PostgreSQL, HTTP)", () => {
     );
     const pending = queue.items.find((r) => r.comment === "Arrivé abîmé, emballage déchiré.")!;
     expect(pending).toMatchObject({ status: "pending", listing: { slug } });
+    // S9-T02 : première photo de la fiche, pour la vignette de la file
+    const photo = (await prisma.listing.findFirstOrThrow({ where: { slug } })).images[0] ?? null;
+    expect(pending.listing?.image).toBe(photo);
 
     // Refus sans motif : refusé ; avec motif : refusé et tracé
     await call("post", `/api/v1/admin/reviews/${pending.id}/reject`, staff.token)

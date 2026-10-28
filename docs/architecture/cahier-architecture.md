@@ -45,6 +45,7 @@
 | **4.34** | 2026-10-27 | S8     | Compteurs partagés en base (ADR-0064) : §3.38 (nouvelle) table `platform.rate_counters` pour les limites de débit, les coupons refusés, les renvois de factures et le budget de la recherche ; repli en mémoire ; `RATE_LIMIT_STORE` ; §3.7 « Limitation de débit » mise à jour                                                                                               |
 | **4.35** | 2026-10-28 | S8     | Clôture du Sprint 8 (v0.9.0) : aucun changement d'architecture ; versions des paquets 0.9.0, contrat de l'API 2.8.1 inchangé                                                                                                                                                                                                                                                  |
 | **4.36** | 2026-10-28 | S9     | Double authentification, étape du mot de passe expliquée (ADR-0065) : §3.39 (nouvelle) message si le champ est vide, aide permanente                                                                                                                                                                                                                                          |
+| **4.37** | 2026-10-28 | S9     | Vignettes des produits dans les listes de l'équipe (ADR-0066) : §3.40 (nouvelle) Fiches produits et Avis clients ; `AdminReview.listing.image`, contrat 2.9.0                                                                                                                                                                                                                 |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                                                                          |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                                                                                |
 | **3.7**  | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                                                                                                                   |
@@ -1318,6 +1319,16 @@ Décision : [ADR-0065](adr/0065-2fa-mot-de-passe-explique.md). Aucun changement 
 
 Page « Sécurité » de l'équipe (`SecondFactorSetup`) : champ vide → message sous le champ et aucune demande envoyée ;
 aide permanente rappelant que c'est le mot de passe du compte (aucun n'est envoyé par e-mail).
+
+### 3.40 Vignettes des produits dans les listes de l'équipe (S9-T02)
+
+Décision : [ADR-0066](adr/0066-vignettes-listes-equipe.md). Contrat **2.9.0** ; aucune migration.
+
+| Liste                    | Vignette                                                                                              |
+| ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Fiches produits          | Fiche publiée : vignette publique 480 px ; sinon relais de l'équipe (`/equipe/moderation/…/photos/…`) |
+| Avis clients             | `AdminReview.listing.image` (première photo de la fiche), vignette publique                           |
+| Modération, mes produits | Déjà en place (S6)                                                                                    |
 
 ## 4. Choix technologiques
 

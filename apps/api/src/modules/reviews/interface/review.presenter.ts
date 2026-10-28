@@ -24,7 +24,7 @@ export function presentOwnReview(r: Review): OwnReview {
 
 export function presentAdminReview(
   r: Review,
-  listing: { title: string; slug: string } | null,
+  listing: { title: string; slug: string; image: string | null } | null,
 ): AdminReview {
   return {
     id: r.id,
