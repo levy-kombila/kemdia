@@ -36,6 +36,21 @@ test("les filtres réduisent la liste et restent dans l'adresse (partageable)", 
   await expect(page).not.toHaveURL(/promo=1/);
 });
 
+test("suggestions : la boutique officielle est proposée pendant la frappe (S8-T05)", async ({
+  page,
+}) => {
+  await page.goto("/");
+  // Seul le champ visible (en-tête du téléphone ou de l'ordinateur) est retenu par getByRole
+  await page
+    .getByRole("combobox", { name: /Rechercher/ })
+    .first()
+    .fill("kemdi");
+  const shop = page.getByRole("option", { name: /Boutique.*Kemdia/ });
+  await expect(shop).toBeVisible();
+  await shop.getByRole("link").click();
+  await expect(page).toHaveURL(/\/boutique\/kemdia$/);
+});
+
 test("une recherche sans résultat propose des alternatives", async ({ page }) => {
   await page.goto("/recherche?q=zzzzintrouvable");
   await expect(

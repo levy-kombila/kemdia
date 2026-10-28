@@ -189,7 +189,7 @@ describe("API catalogue sur PostgreSQL (contrat)", () => {
     // Avec une faute
     expect((await suggest("sennhieser")).correctedQuery).toBe("sennheiser");
     // Moins de 2 lettres : rien
-    expect(await suggest("s")).toEqual({ products: [], categories: [], brands: [] });
+    expect(await suggest("s")).toEqual({ products: [], categories: [], brands: [], shops: [] });
     // Jamais plus de 8 suggestions
     const many = await suggest("e");
     expect(many.products.length + many.categories.length + many.brands.length).toBe(0);

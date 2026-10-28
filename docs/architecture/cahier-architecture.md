@@ -39,6 +39,9 @@
 | **4.28** | 2026-10-23 | S8     | Import du vrai catalogue (ADR-0058) : §3.32 (nouvelle) fichier CSV vérifié puis importé tout ou rien par l'équipe Catalogue, produits en attente de modération, colonne `catalog.products.import_reference` unique par boutique ; contrat 2.7.0                                                                                                                               |
 | **4.29** | 2026-10-24 | S8     | Accueil durablement sous 300 ms (ADR-0059) : §3.33 (nouvelle) photos en simple `<img>` (`getImageProps`), pied de page rendu interactif à l'approche, processeur étalonné dans le test de performance, accueil bloquant au-delà de 300 ms ; §5.2 ; §9                                                                                                                         |
 | **4.30** | 2026-10-24 | S8     | Accueil, encart du compte (ADR-0060) : §3.34 (nouvelle) « Se connecter » remplacé par « Mes commandes » / « Mon compte » pour un client connecté, « Accéder à votre boutique » pour un vendeur                                                                                                                                                                                |
+| **4.31** | 2026-10-27 | S8     | Machines de la CI fixées (ADR-0061) : §3.35 (nouvelle) tous les jobs sur `ubuntu-24.04` au lieu de `ubuntu-latest` (Chromium de Playwright ne s'installait plus sur Ubuntu 26)                                                                                                                                                                                                |
+| **4.32** | 2026-10-27 | S8     | Boutiques dans les suggestions (ADR-0062) : §3.36 (nouvelle) 2 boutiques actives au plus, trouvées sur les mots tapés, sans accents ; contrat 2.8.0 ; §3.27 renvoie à §3.36                                                                                                                                                                                                   |
+| **4.33** | 2026-10-27 | S8     | Page d'une boutique, prix de SON offre (ADR-0063) : §3.37 (nouvelle) filtre, « en promotion », compteurs de prix et tri par prix lus sur l'offre de la boutique ; contrat 2.8.1                                                                                                                                                                                               |
 | **4.34** | 2026-10-27 | S8     | Compteurs partagés en base (ADR-0064) : §3.38 (nouvelle) table `platform.rate_counters` pour les limites de débit, les coupons refusés, les renvois de factures et le budget de la recherche ; repli en mémoire ; `RATE_LIMIT_STORE` ; §3.7 « Limitation de débit » mise à jour                                                                                               |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                                                                          |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                                                                                |
@@ -1136,7 +1139,7 @@ trigrammes sur `catalog.listings.search_text` (migration `20261023090000_recherc
 | Route (`/api/v1`)                   | Règle                                                                                                                                                                          |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `GET /products`, `/products/facets` | Si aucune fiche visible ne contient les mots (filtres du client non compris), chaque mot est remplacé par le plus proche du catalogue ; `correctedQuery` ; `exact=1` l'empêche |
-| `GET /products/suggestions?q=`      | Dès 2 lettres : 4 produits, 2 rayons, 2 marques ; même correction ; 20 appels par minute et par adresse (60 via le site)                                                       |
+| `GET /products/suggestions?q=`      | Dès 2 lettres : 4 produits, 2 rayons, 2 marques (+ 2 boutiques depuis S8-T05, §3.36) ; même correction ; 20 appels par minute et par adresse (60 via le site)                  |
 
 Correction : mots proches donnés par la base (trigrammes, seuil 0,3 dans la transaction), choix par distance d'édition
 (inversion = 1 faute ; 1 faute jusqu'à 4 lettres, 2 jusqu'à 7, 3 au-delà ; pas de correction sous 3 lettres) ; un mot
@@ -1254,6 +1257,40 @@ Décision : [ADR-0060](adr/0060-accueil-encart-compte.md). Aucun changement de l
 
 Compte lu par `getCurrentAccount()` (partagé avec l'en-tête, une fois par requête) ; prénom et oui/non vendeur seuls
 transmis à l'encart, rendu par le serveur (`HeroAccountPanel`).
+
+### 3.35 Machines de la CI fixées (S8-T09)
+
+Décision : [ADR-0061](adr/0061-ci-ubuntu-2404.md). Aucun changement de l'API, du site ni de la base.
+
+Tous les jobs des workflows (`ci`, `_deploy`, `release`, `security`, `zap`) tournent sur `ubuntu-24.04` au lieu de
+`ubuntu-latest`. GitHub fait passer `ubuntu-latest` à Ubuntu 26 depuis le 2026-10-19 ; sur cette image,
+`playwright install --with-deps chromium` échoue et bloque le job « Bout en bout et performance ». Le passage à une
+version plus récente se fera par une tâche dédiée, quand Playwright la prendra en charge.
+
+### 3.36 Recherche : boutiques dans les suggestions (S8-T05)
+
+Décision : [ADR-0062](adr/0062-suggestions-boutiques.md). Contrat **2.8.0** ; aucune migration.
+
+| Étape     | Ce qui se passe                                                                                                                  |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Mots      | Mots **tapés** (`searchTerms`) ; mots corrigés seulement si les mots tapés ne trouvent aucune boutique                           |
+| Recherche | `PublicShops.suggest` : boutiques **actives** de `catalog.sellers` dont le nom (sans accents ni ponctuation) contient chaque mot |
+| Ordre     | Boutique officielle d'abord, puis par nom ; **2 au plus**                                                                        |
+| Réponse   | `shops: [{ slug, name, city, official }]` (jamais l'identifiant interne, le téléphone ni le propriétaire)                        |
+| Site      | Ligne « boutique » (icône, nom, ville) entre marques et produits, vers `/boutique/<adresse>` construite par le site              |
+
+### 3.37 Page d'une boutique : prix de SON offre (S8-T06)
+
+Décision : [ADR-0063](adr/0063-boutique-prix-offre.md). Contrat **2.8.1** ; aucune migration.
+
+| `GET /products?shop=` et `/products/facets?shop=` | Lu sur                                                                         |
+| ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `priceMin`, `priceMax`, compteurs des tranches    | `catalog.products.price` de l'offre de la boutique (une au plus par fiche)     |
+| `onlyDeals`, compteur « en promotion »            | `catalog.products.compare_at_price` de son offre                               |
+| `sort=prix-asc` / `prix-desc`                     | Fiches de la page choisies et ordonnées sur la table des offres, puis relues   |
+| Autres filtres et tris                            | Inchangés (fiche) ; une offre compte si elle a au moins une déclinaison active |
+
+Hors page de boutique : prix « à partir de » de la fiche, comme avant.
 
 ### 3.38 Compteurs partagés en base (S8-T07)
 

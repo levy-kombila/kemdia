@@ -232,7 +232,9 @@ export const ProductPageSchema = z
   .meta({ id: "ProductPage" });
 export type ProductPage = z.infer<typeof ProductPageSchema>;
 
-/** Suggestions pendant la frappe (S7.5-T06) : 4 produits, 2 rayons et 2 marques au plus. */
+/**
+ * Suggestions pendant la frappe (S7.5-T06) : 4 produits, 2 rayons, 2 marques et (S8-T05) 2 boutiques au plus.
+ */
 export const SearchSuggestionsSchema = z
   .object({
     correctedQuery: z
@@ -252,10 +254,24 @@ export const SearchSuggestionsSchema = z
       .max(4),
     categories: z.array(z.object({ slug: z.string(), name: z.string() })).max(2),
     brands: z.array(z.string()).max(2),
+    shops: z
+      .array(
+        z.object({
+          slug: z
+            .string()
+            .max(80)
+            .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+          name: z.string().max(60),
+          city: z.string().max(60),
+          official: z.boolean().describe("Boutique Kemdia"),
+        }),
+      )
+      .max(2)
+      .describe("Boutiques actives dont le nom contient les mots tapés (S8-T05)"),
   })
   .meta({
     id: "SearchSuggestions",
-    description: "Suggestions pendant la frappe : produits, rayons et marques",
+    description: "Suggestions pendant la frappe : produits, rayons, marques et boutiques",
   });
 export type SearchSuggestions = z.infer<typeof SearchSuggestionsSchema>;
 

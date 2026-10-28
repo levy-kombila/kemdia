@@ -3,7 +3,12 @@ import { fetchSuggestions } from "./api-suggestions";
 
 vi.mock("server-only", () => ({}));
 
-const body = { products: [], categories: [{ slug: "audio", name: "Audio" }], brands: [] };
+const body = {
+  products: [],
+  categories: [{ slug: "audio", name: "Audio" }],
+  brands: [],
+  shops: [],
+};
 const options = (fetch: typeof globalThis.fetch, visitorIp: string | null = "203.0.113.7") => ({
   url: "https://api.test",
   key: "cle-interne",

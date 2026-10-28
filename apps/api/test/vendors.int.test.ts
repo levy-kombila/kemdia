@@ -15,6 +15,7 @@ import {
   ProductPageSchema,
   PublicShopPageSchema,
   PublicShopSchema,
+  SearchSuggestionsSchema,
   ShopSchema,
 } from "@kemdia/contracts";
 import { AppModule } from "../src/app.module.js";
@@ -443,5 +444,42 @@ describe("Boutiques (PostgreSQL, HTTP)", () => {
       (await pub("/api/v1/shops?ville=Libreville").expect(200)).body,
     );
     expect(after.items.map((s) => s.slug)).not.toContain(shop.slug);
+  });
+  it("S8-T05 : boutiques actives dans les suggestions, sans accents ni identifiant interne", async () => {
+    const pub = (url: string) =>
+      request(app.getHttpServer()).get(url).set("X-Kemdia-Internal-Key", INTERNAL_KEY);
+    const shopsFor = async (q: string) =>
+      matches(
+        SearchSuggestionsSchema,
+        (await pub(`/api/v1/products/suggestions?q=${encodeURIComponent(q)}`).expect(200)).body,
+      ).shops;
+    const tag = randomBytes(3).toString("hex");
+    const shop = matches(
+      ShopSchema,
+      (await apply(application(`Atelier Élégance ${tag}`)).expect(201)).body,
+    );
+    // En attente : jamais proposée
+    expect(await shopsFor(`elegance ${tag}`)).toEqual([]);
+    await decide(shop.id, "approve").expect(200);
+
+    // Mots sans accents, dernier mot incomplet, majuscules : trouvée
+    const found = await shopsFor(`ELEGANCE ${tag.slice(0, 4)}`);
+    expect(found).toEqual([
+      { slug: shop.slug, name: shop.name, city: "Libreville", official: false },
+    ]);
+    // Accents tapés aussi, et nom d'une boutique qu'aucun produit ne contient (pas de correction appliquée)
+    expect((await shopsFor(`atelier élég ${tag}`)).map((s) => s.slug)).toEqual([shop.slug]);
+    // Tous les mots doivent figurer dans le nom
+    expect(await shopsFor(`elegance ${tag} parfum`)).toEqual([]);
+    // Boutique officielle proposée d'abord ; jamais plus de 2 boutiques
+    const kemdia = await shopsFor("kemdia");
+    expect(kemdia[0]).toMatchObject({ slug: "kemdia", official: true });
+    expect((await shopsFor("atelier")).length).toBeLessThanOrEqual(2);
+    // Caractères de LIKE tapés : traités comme des espaces, aucune boutique « joker »
+    expect(await shopsFor("%_")).toEqual([]);
+
+    // Suspendue : plus proposée
+    await decide(shop.id, "suspend", "Articles contrefaits signalés").expect(200);
+    expect(await shopsFor(`elegance ${tag}`)).toEqual([]);
   });
 });

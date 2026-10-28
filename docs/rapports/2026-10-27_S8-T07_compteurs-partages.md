@@ -4,7 +4,7 @@
 | ----------------------------------------------- | --------------------------------------------------------------- |
 | **Date**                                        | 2026-10-27                                                      |
 | **Sprint / tâches**                             | S8 — S8-T07 (dette S7.5)                                        |
-| **Version**                                     | v0.8.1 → (v0.9.x à la clôture du S8) ; contrat 2.7.0 (inchangé) |
+| **Version**                                     | v0.8.1 → (v0.9.x à la clôture du S8) ; contrat 2.8.1 (inchangé) |
 | **Sections du cahier d'architecture modifiées** | §3.38 (nouvelle), §3.7 « Limitation de débit » — version 4.34   |
 
 ## 1. Résumé
