@@ -15,6 +15,9 @@ type Step =
   { name: "password" } | { name: "scan"; setup: Shown } | { name: "codes"; codes: string[] };
 
 const UNAVAILABLE = "Service momentanément indisponible. Réessayez dans quelques instants.";
+/** S9-T01 : un clic sans mot de passe ne restait pas sans réponse. */
+const PASSWORD_MISSING =
+  "Saisissez le mot de passe de votre compte Kemdia (celui choisi à l'inscription).";
 
 /** Secret découpé par groupes de 4 : plus facile à recopier à la main. */
 const grouped = (secret: string) => secret.match(/.{1,4}/g)?.join(" ") ?? secret;
@@ -30,11 +33,19 @@ export function SecondFactorSetup() {
   const [code, setCode] = useState("");
   const [alert, setAlert] = useState<{ message: string; signedOut?: boolean } | null>(null);
   const [pending, setPending] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const codeRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
 
   const showSecret = async (e: FormEvent) => {
     e.preventDefault();
-    if (pending || !password) return;
+    if (pending) return;
+    if (!password) {
+      // Focus sur le champ : le lecteur d'écran lit le message qui le décrit (relecture S9-T01)
+      setPasswordError(PASSWORD_MISSING);
+      return passwordRef.current?.focus();
+    }
+    setPasswordError(null);
     setPending(true);
     setAlert(null);
     const result = await setupSecondFactorAction(password).catch(() => null);
@@ -147,17 +158,23 @@ export function SecondFactorSetup() {
         1. Confirmez votre mot de passe
       </h2>
       <p className="text-ink-700 text-sm">
-        Avant d&apos;afficher le QR code, nous vérifions que c&apos;est bien vous. Un e-mail vous
-        préviendra.
+        Avant d&apos;afficher le QR code, nous vérifions que c&apos;est bien vous avec le mot de
+        passe de votre compte. Un e-mail vous préviendra.
       </p>
       <form onSubmit={showSecret} noValidate className="space-y-4">
         {alertBox}
         <PasswordField
+          ref={passwordRef}
           label="Mot de passe"
           name="password"
           autoComplete="current-password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            setPasswordError(null);
+          }}
+          error={passwordError}
+          hint="Celui de votre compte Kemdia, choisi à l'inscription : aucun mot de passe n'est envoyé par e-mail."
           maxLength={128}
           required
         />

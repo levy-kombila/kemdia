@@ -44,6 +44,7 @@
 | **4.33** | 2026-10-27 | S8     | Page d'une boutique, prix de SON offre (ADR-0063) : §3.37 (nouvelle) filtre, « en promotion », compteurs de prix et tri par prix lus sur l'offre de la boutique ; contrat 2.8.1                                                                                                                                                                                               |
 | **4.34** | 2026-10-27 | S8     | Compteurs partagés en base (ADR-0064) : §3.38 (nouvelle) table `platform.rate_counters` pour les limites de débit, les coupons refusés, les renvois de factures et le budget de la recherche ; repli en mémoire ; `RATE_LIMIT_STORE` ; §3.7 « Limitation de débit » mise à jour                                                                                               |
 | **4.35** | 2026-10-28 | S8     | Clôture du Sprint 8 (v0.9.0) : aucun changement d'architecture ; versions des paquets 0.9.0, contrat de l'API 2.8.1 inchangé                                                                                                                                                                                                                                                  |
+| **4.36** | 2026-10-28 | S9     | Double authentification, étape du mot de passe expliquée (ADR-0065) : §3.39 (nouvelle) message si le champ est vide, aide permanente                                                                                                                                                                                                                                          |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                                                                          |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                                                                                |
 | **3.7**  | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                                                                                                                   |
@@ -1310,6 +1311,13 @@ Décision : [ADR-0064](adr/0064-compteurs-partages-en-base.md). Migration `20261
 `FallbackRateCounters` (repli en mémoire si la base échoue ou dépasse 500 ms ; clés bloquées plus écrites), ménage
 toutes les 10 minutes. `RATE_LIMIT_STORE` : `database` (par défaut hors tests, seul permis en production) ou `memory`.
 Restent en mémoire de chaque instance : arborescence des rayons (60 s), corrections calculées (30 s), opérateur simulé.
+
+### 3.39 Double authentification : étape du mot de passe expliquée (S9-T01)
+
+Décision : [ADR-0065](adr/0065-2fa-mot-de-passe-explique.md). Aucun changement de l'API ni de la base.
+
+Page « Sécurité » de l'équipe (`SecondFactorSetup`) : champ vide → message sous le champ et aucune demande envoyée ;
+aide permanente rappelant que c'est le mot de passe du compte (aucun n'est envoyé par e-mail).
 
 ## 4. Choix technologiques
 
