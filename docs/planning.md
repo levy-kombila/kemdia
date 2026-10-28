@@ -25,17 +25,18 @@ Mobile Money (Moov, Airtel) et paiement à la livraison, lancement visé **fin 2
 
 ### Jalons
 
-| Jalon  | Contenu                                                                                                               | Visé                       |
-| ------ | --------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| v0.1.0 | Site vitrine + CI/CD + démo publique                                                                                  | ✅ S1                      |
-| v0.2.0 | Parcours client complet en démonstration : compte, commande, favoris, partage, tests de bout en bout                  | ✅ S2                      |
-| v0.3.0 | Catalogue servi par l'API et PostgreSQL                                                                               | ✅ S3                      |
-| v0.4.0 | Comptes clients sécurisés : inscription par code, sessions, rôles, journal d'audit, CSRF/CSP/limites                  | ✅ S4                      |
-| v0.5.0 | Premier achat de bout en bout en environnement de test (Mobile Money _sandbox_)                                       | ✅ S5                      |
-| v0.7.0 | Vendeurs partenaires opérationnels                                                                                    | ✅ S6                      |
-| v0.8.0 | Préproduction prête : livraisons, serveur, sauvegardes, surveillance, test d'intrusion, APDPVP                        | ✅ S7                      |
-| v0.8.1 | Sprint correctif : CI rapide, fiche commune et offres, rôles d'équipe, Finance, recherche, boutiques, photo de profil | ✅ S7.5                    |
-| v1.0.0 | Lancement public                                                                                                      | S8 (fin 2027 au plus tard) |
+| Jalon  | Contenu                                                                                                                               | Visé                       |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| v0.1.0 | Site vitrine + CI/CD + démo publique                                                                                                  | ✅ S1                      |
+| v0.2.0 | Parcours client complet en démonstration : compte, commande, favoris, partage, tests de bout en bout                                  | ✅ S2                      |
+| v0.3.0 | Catalogue servi par l'API et PostgreSQL                                                                                               | ✅ S3                      |
+| v0.4.0 | Comptes clients sécurisés : inscription par code, sessions, rôles, journal d'audit, CSRF/CSP/limites                                  | ✅ S4                      |
+| v0.5.0 | Premier achat de bout en bout en environnement de test (Mobile Money _sandbox_)                                                       | ✅ S5                      |
+| v0.7.0 | Vendeurs partenaires opérationnels                                                                                                    | ✅ S6                      |
+| v0.8.0 | Préproduction prête : livraisons, serveur, sauvegardes, surveillance, test d'intrusion, APDPVP                                        | ✅ S7                      |
+| v0.8.1 | Sprint correctif : CI rapide, fiche commune et offres, rôles d'équipe, Finance, recherche, boutiques, photo de profil                 | ✅ S7.5                    |
+| v0.9.0 | Bêta fermée prête : avis, invitations, signalements, import du catalogue, accueil rapide, recherche des boutiques, compteurs partagés | ✅ S8                      |
+| v1.0.0 | Lancement public                                                                                                                      | S9 (fin 2027 au plus tard) |
 
 ### Actions hors code (équipe Kemdia) — à lancer tôt
 
@@ -260,7 +261,7 @@ Clôture (2026-10-23) : [rapport](rapports/2026-10-23_S7.5_cloture.md), version 
 
 Après la bêta : IA « kemdIA » (remplissage depuis la photo, pré-tri des produits), connexion avec Google, distance GPS.
 
-## S8 — Bêta fermée, puis lancement 🚧
+## S8 — Bêta fermée ✅
 
 Décisions : [ADR-0056](architecture/adr/0056-avis-clients.md) (avis des clients),
 [ADR-0057](architecture/adr/0057-beta-fermee-signalements.md) (bêta fermée et signalements),
@@ -304,13 +305,29 @@ mémoire** si la base ne répond pas ; caches de lecture (rayons, corrections) *
 | S8-T03 | Import du vrai catalogue : fichier CSV de l'équipe Catalogue vérifié puis importé tout ou rien, produits en attente de modération (photos par la boutique), sans doublon au second import ; contrat 2.7.0 — ADR-0058 — Choix du 2026-10-23 (fichiers réels : en attente du client) | ✅     |
 | S8-T04 | Accueil durablement sous 300 ms (dette S7-T03) : photos en simple `<img>`, pied de page rendu interactif à l'approche, processeur étalonné sur la vitesse de la machine de CI, accueil bloquant au-delà de 300 ms — ADR-0059 — Choix du 2026-10-24                                 | ✅     |
 | S8-T05 | Recherche : boutiques dans les suggestions pendant la frappe (dette S7.5) : 2 boutiques actives au plus, trouvées sur les mots tapés sans accents, vers leur page publique ; contrat 2.8.0 — ADR-0062 — Choix du 2026-10-27                                                        | ✅     |
-| S8-T06 | Page d'une boutique : filtre et tri par prix (dette S7.5)                                                                                                                                                                                                                          | ⏳     |
-| S8-T05 | Recherche : boutiques dans les suggestions pendant la frappe (dette S7.5)                                                                                                                                                                                                          | ⏳     |
 | S8-T06 | Page d'une boutique : filtre et tri par prix (dette S7.5) lus sur le prix de SON offre, « en promotion » et compteurs de prix compris ; contrat 2.8.1 — ADR-0063 — Choix du 2026-10-27                                                                                             | ✅     |
-| S8-T07 | Caches et compteurs en mémoire de l'API déplacés en base, avant de lancer plusieurs instances (dette S7.5)                                                                                                                                                                         | ⏳     |
 | S8-T07 | Compteurs en mémoire de l'API déplacés en base avant plusieurs instances (dette S7.5) : limites de débit, coupons refusés, renvois de factures, budget de la recherche dans `platform.rate_counters`, repli en mémoire — ADR-0064 — Choix du 2026-10-27                            | ✅     |
 | S8-T08 | Accueil : encart du compte selon la connexion (« Mes commandes », « Mon compte » au lieu de « Se connecter ») et le rôle vendeur (« Accéder à votre boutique » au lieu de « Devenir vendeur ») — ADR-0060 — Choix du 2026-10-24                                                    | ✅     |
 | S8-T09 | CI : machines fixées sur Ubuntu 24.04 (le passage de `ubuntu-latest` à Ubuntu 26 empêchait d'installer Chromium et bloquait toutes les PR) — ADR-0061 — Choix du 2026-10-27                                                                                                        | ✅     |
+
+Clôture (2026-10-28) : [rapport](rapports/2026-10-28_S8_cloture.md), version **v0.9.0** (contrat de l'API 2.8.1).
+Choix du 2026-10-28 : clôturer **sans attendre** les réponses du client ; ce qui en dépend passe au S9, marqué « en
+attente du client ».
+
+## S9 — Mise en production (lancement v1.0.0) 🚧
+
+Choix du 2026-10-28 : mettre en production **bientôt**, paiement **à la livraison seulement** ; Airtel Money et Moov
+Money **grisés « Bientôt disponible »** tant qu'aucun contrat n'est signé (déjà le cas hors démo : aucun fournisseur
+réel). Le détail des tâches sera établi à l'ouverture du S9.
+
+| ID    | Tâche                                                                                                       | Statut                   |
+| ----- | ----------------------------------------------------------------------------------------------------------- | ------------------------ |
+| S9-?? | Hébergement payant (serveur ou offre payante de Render), nom de domaine, e-mails depuis le domaine          | ⏳ décision du client    |
+| S9-?? | Déploiement : un environnement GitHub par cible (staging, production), secrets séparés, production protégée | à faire avant le serveur |
+| S9-?? | Informations légales : mentions, CGV, confidentialité, responsable des traitements (n° 10)                  | ⏳ en attente du client  |
+| S9-?? | Transporteur (n° 5), commission des vendeurs (n° 3), règles du paiement à la livraison (n° 1)               | ⏳ en attente du client  |
+| S9-?? | Vrai catalogue et photos HD, comptes de l'équipe, vendeurs partenaires                                      | ⏳ en attente du client  |
+| S9-?? | Mobile Money réel (Airtel Money, Moov Money) : contrat avec les opérateurs ou un agrégateur (n° 7)          | ⏳ en attente du client  |
 
 ## S5 à S8 — grandes lignes
 
