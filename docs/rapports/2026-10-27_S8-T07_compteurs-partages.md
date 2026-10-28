@@ -80,6 +80,9 @@ valeur par défaut `database` hors tests ; règles d'architecture respectées.
 - `pnpm audit --audit-level high --prod` : aucune faille haute ou critique (1 moyenne, sous le seuil) ; Gitleaks
   v8.30.1 ✓ ; `db:check`, bout en bout, performance, Semgrep, CodeQL et ZAP : par la CI.
 
+- Test stabilisé : `second-factor.int.test.ts` lisait le journal d'audit sans ordre (`findMany` sans `orderBy`) et
+  a échoué une fois dans la CI (ordre inversé) ; ordre explicite ajouté (date puis identifiant).
+
 ## 6. Captures d'écran
 
 Sans objet (aucun changement visible) ; la preuve est le test d'intégration « deux instances de l'API ».
