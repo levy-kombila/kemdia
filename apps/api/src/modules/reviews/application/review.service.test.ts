@@ -76,7 +76,8 @@ function setup(bought = true) {
       findAny: (slug) =>
         Promise.resolve(slug === "pagne" ? { listingId: LISTING, published: true } : null),
       lock: (id) => Promise.resolve(void locks.push(id)),
-      describe: () => Promise.resolve(new Map([[LISTING, { title: "Pagne", slug: "pagne" }]])),
+      describe: () =>
+        Promise.resolve(new Map([[LISTING, { title: "Pagne", slug: "pagne", image: null }]])),
       setRating: (id, avg, count) => Promise.resolve(void ratings.push([id, avg, count])),
     },
     { hasDelivered: () => Promise.resolve(bought) },

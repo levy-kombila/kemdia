@@ -56,13 +56,16 @@ export class ListingRatings {
 
   async describe(
     listingIds: readonly string[],
-  ): Promise<Map<string, { title: string; slug: string }>> {
+  ): Promise<Map<string, { title: string; slug: string; image: string | null }>> {
     if (!listingIds.length) return new Map();
     const rows = await this.tx.db.listing.findMany({
       where: { id: { in: [...listingIds] } },
-      select: { id: true, title: true, slug: true },
+      select: { id: true, title: true, slug: true, images: true },
     });
-    return new Map(rows.map((r) => [r.id, { title: r.title, slug: r.slug }]));
+    // S9-T02 : première photo de la fiche, pour la vignette de la file des avis
+    return new Map(
+      rows.map((r) => [r.id, { title: r.title, slug: r.slug, image: r.images[0] ?? null }]),
+    );
   }
 
   async setRating(listingId: string, average: number, count: number): Promise<void> {

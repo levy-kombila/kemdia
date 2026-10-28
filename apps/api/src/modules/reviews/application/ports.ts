@@ -52,7 +52,9 @@ export interface ReviewListings {
   /** Verrouille la fiche jusqu'à la fin de la transaction (changements d'avis simultanés). */
   lock(listingId: string): Promise<void>;
   /** Titre et adresse de fiches (file de l'équipe), même non publiées. */
-  describe(listingIds: readonly string[]): Promise<Map<string, { title: string; slug: string }>>;
+  describe(
+    listingIds: readonly string[],
+  ): Promise<Map<string, { title: string; slug: string; image: string | null }>>;
   /** Note moyenne et nombre d'avis publiés, montrés sur les cartes et la fiche. */
   setRating(listingId: string, average: number, count: number): Promise<void>;
 }

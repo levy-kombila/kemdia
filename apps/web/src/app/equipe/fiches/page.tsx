@@ -1,12 +1,14 @@
 import { ChevronRight, Layers, Search } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ProductThumb, staffThumbSrc } from "@/components/staff/ProductThumb";
 import { StaffShell, StatusBadge } from "@/components/staff/StaffShell";
 import { FormAlert } from "@/components/ui/Field";
 import { formatDateTime, formatFCFA } from "@/lib/format";
 import { first } from "@/lib/search-params";
 import { closeCorrectionAction } from "@/lib/staff/actions";
 import { CURSOR, PRODUCT_STATUS } from "@/lib/staff/labels";
+import { staffImageSrc } from "@/lib/staff/moderation-view";
 import { staffErrorFromParam, staffErrorMessage, staffNotice } from "@/lib/staff/messages";
 import { requireVerifiedStaff, staffApi } from "@/lib/staff/staff";
 
@@ -129,6 +131,13 @@ export default async function ListingsPage({
                   href={`/equipe/fiches/${listing.id}`}
                   className="hover:ring-brand-100 flex items-center gap-3 rounded-xl bg-white p-3 transition hover:ring-4"
                 >
+                  {/* S9-T02 : première photo, sans ouvrir la fiche */}
+                  <ProductThumb
+                    src={staffThumbSrc(listing.images[0], {
+                      published: listing.status === "published" && !listing.mergedIntoId,
+                      relay: (path) => staffImageSrc(listing.id, path),
+                    })}
+                  />
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="truncate font-bold">{listing.title}</span>

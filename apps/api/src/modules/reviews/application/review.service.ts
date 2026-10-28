@@ -143,7 +143,10 @@ export class ReviewService {
     limit: number;
     after?: ReviewCursor | undefined;
   }): Promise<{
-    items: { review: Review; listing: { title: string; slug: string } | null }[];
+    items: {
+      review: Review;
+      listing: { title: string; slug: string; image: string | null } | null;
+    }[];
     next: ReviewCursor | null;
   }> {
     const page = await this.reviews.list(query);

@@ -1,6 +1,7 @@
 import { Star } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ProductThumb, staffThumbSrc } from "@/components/staff/ProductThumb";
 import { StaffShell } from "@/components/staff/StaffShell";
 import { FormAlert } from "@/components/ui/Field";
 import { formatDateTime } from "@/lib/format";
@@ -51,68 +52,79 @@ export default async function ReviewsPage({
       ) : (
         <ul className="space-y-3">
           {queue.data.items.map((r) => (
-            <li key={r.id} className="space-y-3 rounded-xl bg-white p-5">
-              <p className="text-sm">
-                {r.listing ? (
-                  <Link
-                    href={`/produit/${r.listing.slug}`}
-                    className="text-brand-700 font-semibold underline"
+            <li key={r.id} className="flex gap-4 rounded-xl bg-white p-5">
+              {/* S9-T02 : photo du produit noté (fiche publiée : chemin public du catalogue) */}
+              <ProductThumb
+                src={staffThumbSrc(r.listing?.image, { published: true, relay: () => null })}
+              />
+              <div className="min-w-0 flex-1 space-y-3">
+                <p className="text-sm">
+                  {r.listing ? (
+                    <Link
+                      href={`/produit/${r.listing.slug}`}
+                      className="text-brand-700 font-semibold underline"
+                    >
+                      {r.listing.title}
+                    </Link>
+                  ) : (
+                    <span className="font-semibold">Fiche retirée</span>
+                  )}{" "}
+                  <span className="text-ink-500">
+                    · {r.authorName} · {formatDateTime(r.date)}
+                  </span>
+                </p>
+                <p className="flex items-center gap-0.5" aria-label={`${r.rating} étoiles sur 5`}>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <Star
+                      key={n}
+                      aria-hidden
+                      className={
+                        n <= r.rating
+                          ? "size-4 fill-amber-400 text-amber-500"
+                          : "text-ink-300 size-4"
+                      }
+                    />
+                  ))}
+                </p>
+                {/* Texte du client affiché par React : échappé automatiquement */}
+                <p className="bg-ink-50 whitespace-pre-line rounded-lg p-3 text-sm">{r.comment}</p>
+                <div className="flex flex-wrap items-start gap-3">
+                  <form action={publishReviewAction}>
+                    <input type="hidden" name="reviewId" value={r.id} />
+                    <input type="hidden" name="version" value={r.date} />
+                    <button
+                      type="submit"
+                      className="bg-brand-600 hover:bg-brand-700 rounded-full px-4 py-2 text-sm font-semibold text-white"
+                    >
+                      Publier
+                    </button>
+                  </form>
+                  <form
+                    action={rejectReviewAction}
+                    className="flex min-w-64 flex-1 flex-wrap gap-2"
                   >
-                    {r.listing.title}
-                  </Link>
-                ) : (
-                  <span className="font-semibold">Fiche retirée</span>
-                )}{" "}
-                <span className="text-ink-500">
-                  · {r.authorName} · {formatDateTime(r.date)}
-                </span>
-              </p>
-              <p className="flex items-center gap-0.5" aria-label={`${r.rating} étoiles sur 5`}>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <Star
-                    key={n}
-                    aria-hidden
-                    className={
-                      n <= r.rating ? "size-4 fill-amber-400 text-amber-500" : "text-ink-300 size-4"
-                    }
-                  />
-                ))}
-              </p>
-              {/* Texte du client affiché par React : échappé automatiquement */}
-              <p className="bg-ink-50 whitespace-pre-line rounded-lg p-3 text-sm">{r.comment}</p>
-              <div className="flex flex-wrap items-start gap-3">
-                <form action={publishReviewAction}>
-                  <input type="hidden" name="reviewId" value={r.id} />
-                  <input type="hidden" name="version" value={r.date} />
-                  <button
-                    type="submit"
-                    className="bg-brand-600 hover:bg-brand-700 rounded-full px-4 py-2 text-sm font-semibold text-white"
-                  >
-                    Publier
-                  </button>
-                </form>
-                <form action={rejectReviewAction} className="flex min-w-64 flex-1 flex-wrap gap-2">
-                  <input type="hidden" name="reviewId" value={r.id} />
-                  <input type="hidden" name="version" value={r.date} />
-                  <label className="sr-only" htmlFor={`motif-${r.id}`}>
-                    Motif du refus
-                  </label>
-                  <input
-                    id={`motif-${r.id}`}
-                    name="reason"
-                    required
-                    minLength={5}
-                    maxLength={300}
-                    placeholder="Motif montré au client (5 à 300 caractères, sans donnée personnelle)"
-                    className={inputClass + " min-w-48 flex-1"}
-                  />
-                  <button
-                    type="submit"
-                    className="border-ink-300 hover:bg-ink-50 rounded-full border px-4 py-2 text-sm font-semibold"
-                  >
-                    Refuser
-                  </button>
-                </form>
+                    <input type="hidden" name="reviewId" value={r.id} />
+                    <input type="hidden" name="version" value={r.date} />
+                    <label className="sr-only" htmlFor={`motif-${r.id}`}>
+                      Motif du refus
+                    </label>
+                    <input
+                      id={`motif-${r.id}`}
+                      name="reason"
+                      required
+                      minLength={5}
+                      maxLength={300}
+                      placeholder="Motif montré au client (5 à 300 caractères, sans donnée personnelle)"
+                      className={inputClass + " min-w-48 flex-1"}
+                    />
+                    <button
+                      type="submit"
+                      className="border-ink-300 hover:bg-ink-50 rounded-full border px-4 py-2 text-sm font-semibold"
+                    >
+                      Refuser
+                    </button>
+                  </form>
+                </div>
               </div>
             </li>
           ))}
