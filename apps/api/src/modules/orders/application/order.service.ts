@@ -28,6 +28,7 @@ import {
   COD_SETTINGS_REPOSITORY,
   COUPON_REPOSITORY,
   MOBILE_MONEY,
+  ORDER_COUNTERS,
   ORDER_RANDOM,
   ORDER_REPOSITORY,
   ORDER_STOCK,
@@ -42,6 +43,7 @@ import {
   type OrdersTransaction,
   type OrderSummaryRecord,
   type RandomBytes,
+  type SharedCounters,
 } from "./ports.js";
 
 export interface OrderQuoteView {
@@ -75,19 +77,27 @@ export interface CreateOrderInput {
 
 /**
  * Codes coupons refusés par compte : au-delà de 10 en 15 minutes, `COUPON_TROP_D_ESSAIS` (on n'essaie pas des codes au
- * hasard — relecture de sécurité du S5-T03). Compteurs en mémoire, comme les autres limites (une instance au MVP).
+ * hasard — relecture de sécurité du S5-T03). Compteurs partagés par toutes les instances depuis S8-T07 (ADR-0064) :
+ * fenêtre fixe de 15 minutes ouverte par le premier refus.
  */
 export const COUPON_FAILURES_MAX = 10;
 export const COUPON_FAILURES_WINDOW_MS = 15 * 60_000;
 
 export class CouponAttempts {
-  private readonly failures = new Map<string, number[]>();
+  constructor(private readonly counters: SharedCounters) {}
 
-  /** Lève `COUPON_TROP_D_ESSAIS` si le compte a déjà trop d'échecs récents. */
-  check(accountId: string, now: number): void {
-    const recent = this.recent(accountId, now);
-    if (recent.length >= COUPON_FAILURES_MAX) {
-      const retry = Math.max(1, Math.ceil((recent[0]! + COUPON_FAILURES_WINDOW_MS - now) / 1000));
+  private key(accountId: string) {
+    return `coupon:${accountId}`;
+  }
+
+  /**
+   * Réserve un essai AVANT de vérifier le code (relecture S8-T07) : des essais envoyés en même temps, même à plusieurs
+   * instances, sont tous comptés. Lève `COUPON_TROP_D_ESSAIS` si le compte a déjà trop d'échecs récents.
+   */
+  async reserve(accountId: string, now: Date): Promise<void> {
+    const state = await this.counters.hit(this.key(accountId), COUPON_FAILURES_WINDOW_MS, now);
+    if (state.hits > COUPON_FAILURES_MAX) {
+      const retry = Math.max(1, Math.ceil((state.resetAt.getTime() - now.getTime()) / 1000));
       throw new OrdersError(
         "COUPON_TROP_D_ESSAIS",
         "trop de codes coupons refusés : réessayez plus tard",
@@ -96,20 +106,9 @@ export class CouponAttempts {
     }
   }
 
-  fail(accountId: string, now: number): void {
-    const recent = this.recent(accountId, now);
-    recent.push(now);
-    this.failures.set(accountId, recent);
-    // Ménage : la carte ne grossit pas sans fin
-    if (this.failures.size > 10_000) {
-      for (const [key, times] of this.failures) {
-        if (times.every((t) => now - t >= COUPON_FAILURES_WINDOW_MS)) this.failures.delete(key);
-      }
-    }
-  }
-
-  private recent(accountId: string, now: number): number[] {
-    return (this.failures.get(accountId) ?? []).filter((t) => now - t < COUPON_FAILURES_WINDOW_MS);
+  /** L'essai n'était pas un échec de coupon (code accepté, ou autre erreur) : il ne compte pas. */
+  async release(accountId: string, now: Date): Promise<void> {
+    await this.counters.undo(this.key(accountId), now);
   }
 }
 
@@ -139,7 +138,7 @@ function cityRule(cityId: string) {
 export class OrderService {
   private readonly logger = new Logger("Commandes");
   /** Codes coupons refusés, par compte (limite contre la recherche de codes au hasard). */
-  readonly couponAttempts = new CouponAttempts();
+  readonly couponAttempts: CouponAttempts;
   /** Horloge (remplaçable dans les tests). */
   clock: () => Date = () => new Date();
 
@@ -154,7 +153,10 @@ export class OrderService {
     @Inject(MOBILE_MONEY) private readonly mobileMoney: MobileMoneyAvailability,
     private readonly cancelHooks: OrderCancelHooks,
     private readonly tariffs: DeliveryTariffs,
-  ) {}
+    @Inject(ORDER_COUNTERS) counters: SharedCounters,
+  ) {
+    this.couponAttempts = new CouponAttempts(counters);
+  }
 
   /**
    * Réduction d'un coupon pour ce compte (BR-030) ; `lock` : le coupon est verrouillé (création de commande), ainsi le
@@ -167,17 +169,20 @@ export class OrderService {
     now: Date,
     lock: boolean,
   ): Promise<{ coupon: Coupon; discount: number }> {
-    this.couponAttempts.check(accountId, now.getTime());
+    await this.couponAttempts.reserve(accountId, now);
     try {
       const coupon = lock
         ? await this.coupons.lockByCode(code)
         : await this.coupons.findByCode(code);
       if (!coupon) throw new OrdersError("COUPON_INVALIDE", "ce code coupon n'est pas valable");
       assertUsable(coupon, now, await this.coupons.countUses(coupon.id, accountId));
-      return { coupon, discount: computeDiscount(coupon, lines) };
+      const result = { coupon, discount: computeDiscount(coupon, lines) };
+      await this.couponAttempts.release(accountId, now);
+      return result;
     } catch (error) {
-      if (error instanceof OrdersError && error.code.startsWith("COUPON_")) {
-        this.couponAttempts.fail(accountId, now.getTime());
+      // Seul un code refusé reste compté
+      if (!(error instanceof OrdersError && error.code.startsWith("COUPON_"))) {
+        await this.couponAttempts.release(accountId, now);
       }
       throw error;
     }

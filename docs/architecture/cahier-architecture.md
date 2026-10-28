@@ -42,6 +42,7 @@
 | **4.31** | 2026-10-27 | S8     | Machines de la CI fixées (ADR-0061) : §3.35 (nouvelle) tous les jobs sur `ubuntu-24.04` au lieu de `ubuntu-latest` (Chromium de Playwright ne s'installait plus sur Ubuntu 26)                                                                                                                                                                                                |
 | **4.32** | 2026-10-27 | S8     | Boutiques dans les suggestions (ADR-0062) : §3.36 (nouvelle) 2 boutiques actives au plus, trouvées sur les mots tapés, sans accents ; contrat 2.8.0 ; §3.27 renvoie à §3.36                                                                                                                                                                                                   |
 | **4.33** | 2026-10-27 | S8     | Page d'une boutique, prix de SON offre (ADR-0063) : §3.37 (nouvelle) filtre, « en promotion », compteurs de prix et tri par prix lus sur l'offre de la boutique ; contrat 2.8.1                                                                                                                                                                                               |
+| **4.34** | 2026-10-27 | S8     | Compteurs partagés en base (ADR-0064) : §3.38 (nouvelle) table `platform.rate_counters` pour les limites de débit, les coupons refusés, les renvois de factures et le budget de la recherche ; repli en mémoire ; `RATE_LIMIT_STORE` ; §3.7 « Limitation de débit » mise à jour                                                                                               |
 | **3.9**  | 2026-10-16 | S6     | Produits des vendeurs et modération (ADR-0033) : §3.3, §3.6 visibilité, §3.7 routes et contrat 1.15.0, §3.10 actions d'audit, §3.17 (nouvelle), §6.4                                                                                                                                                                                                                          |
 | **3.8**  | 2026-10-15 | S6     | Boutiques des vendeurs (ADR-0032) : §3.3 module `vendors`, §3.5 schéma `vendors`, §3.7 routes et contrat 1.14.0, §3.10 actions d'audit, §3.16 (nouvelle), §6.4                                                                                                                                                                                                                |
 | **3.7**  | 2026-10-15 | S6     | Kemdia en ligne depuis Docker Desktop par un tunnel Cloudflare (ADR-0031) : §8.1 (nouvelle)                                                                                                                                                                                                                                                                                   |
@@ -502,7 +503,7 @@ liste `IDENTITY_ERROR_CODES` du contrat) et en-tête `Retry-After` pour les limi
 Connexion et sessions : contrat 1.3.0 (S4-T03) ; mot de passe oublié : contrat 1.4.0 (S4-T04) ;
 rôles (`roles` dans `AccountView`), administration et journal : contrat 1.5.0 (S4-T06).
 
-**Limitation de débit** (mise à jour au S4-T07, [ADR-0021](adr/0021-csrf-csp-limites.md)) — compteurs en mémoire de l'API :
+**Limitation de débit** (mise à jour au S4-T07, [ADR-0021](adr/0021-csrf-csp-limites.md)) — compteurs partagés par toutes les instances de l'API depuis S8-T07 (§3.38) :
 
 | Qui appelle                                                       | Compté par                                                                            | Limites                                       |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------- |
@@ -1290,6 +1291,24 @@ Décision : [ADR-0063](adr/0063-boutique-prix-offre.md). Contrat **2.8.1** ; auc
 | Autres filtres et tris                            | Inchangés (fiche) ; une offre compte si elle a au moins une déclinaison active |
 
 Hors page de boutique : prix « à partir de » de la fiche, comme avant.
+
+### 3.38 Compteurs partagés en base (S8-T07)
+
+Décision : [ADR-0064](adr/0064-compteurs-partages-en-base.md). Migration `20261027120000_compteurs_partages` (schéma
+`platform`) ; aucun changement de l'API.
+
+| Compteur (clé)                                                | Fenêtre et limite                                              | Utilisé par               |
+| ------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------- |
+| `limite:default:<empreinte>` (adresse)                        | 1 min, `RATE_LIMIT_PER_MINUTE` (×3 via le site), blocage 1 min | `KemdiaThrottlerGuard`    |
+| `limite:compte:compte:<compte>:<route>`                       | selon la route (`SessionGuard`), blocage                       | module identity           |
+| `coupon:<compte>`                                             | 15 min, 10 refus (essai réservé avant la vérification)         | module orders             |
+| `facture-renvoi:<facture>`, `facture-renvois-client:<compte>` | 10 min, 1 ; 1 h, 5                                             | module payments (Finance) |
+| `recherche:corrections`                                       | 1 min, 120                                                     | module catalog            |
+
+`src/database/rate-counters.ts` : `PostgresRateCounters` (une requête `INSERT … ON CONFLICT DO UPDATE` par comptage),
+`FallbackRateCounters` (repli en mémoire si la base échoue ou dépasse 500 ms ; clés bloquées plus écrites), ménage
+toutes les 10 minutes. `RATE_LIMIT_STORE` : `database` (par défaut hors tests, seul permis en production) ou `memory`.
+Restent en mémoire de chaque instance : arborescence des rayons (60 s), corrections calculées (30 s), opérateur simulé.
 
 ## 4. Choix technologiques
 

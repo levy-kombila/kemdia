@@ -1,6 +1,7 @@
 // Schéma Prisma de l'API, découpé en un fichier par module (ADR-0006, ADR-0008).
 // - main.prisma : générateur et connexion ;
-// - <module>.prisma : modèles du module, tous dans le schéma PostgreSQL du même nom (@@schema("<module>")).
+// - <module>.prisma : modèles du module, tous dans le schéma PostgreSQL du même nom (@@schema("<module>")) ;
+// - platform.prisma : état partagé par les instances de l'API, hors modules métier (S8-T07, ADR-0064).
 // Les relations entre modules sont interdites (test/prisma-schema.test.ts) : on échange des UUID.
 
 generator client {
@@ -12,5 +13,5 @@ generator client {
 datasource db {
   provider = "postgresql"
   // Un schéma PostgreSQL par module : ajouter ici le schéma de chaque nouveau module
-  schemas  = ["audit", "catalog", "feedback", "identity", "orders", "payments", "reviews", "shipping", "vendors"]
+  schemas  = ["audit", "catalog", "feedback", "identity", "orders", "payments", "platform", "reviews", "shipping", "vendors"]
 }

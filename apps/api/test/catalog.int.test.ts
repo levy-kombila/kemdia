@@ -12,6 +12,7 @@ import {
 import { PrismaCategoryRepository } from "../src/modules/catalog/infrastructure/prisma-category.repository.js";
 import { PrismaProductRepository } from "../src/modules/catalog/infrastructure/prisma-product.repository.js";
 import { testDatabaseUrl } from "./integration-db.js";
+import { MemoryRateCounters } from "../src/database/rate-counters.js";
 
 /**
  * Module catalog sur une VRAIE base : SQL de recherche, filtres, tri, pagination, compteurs, BR-001,
@@ -28,7 +29,7 @@ const config = loadConfig({
 const prisma = new PrismaService(config);
 const categories = new PrismaCategoryRepository(prisma);
 const products = new PrismaProductRepository(prisma);
-const service = new CatalogService(categories, products);
+const service = new CatalogService(categories, products, new MemoryRateCounters());
 /** Offre mise en avant d'une fiche visible (S7.5-T02 : une fiche par produit de démonstration, une offre chacune). */
 const getProduct = async (slug: string) => (await service.getListing(slug))?.main.offer ?? null;
 

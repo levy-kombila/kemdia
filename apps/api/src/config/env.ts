@@ -56,6 +56,11 @@ const envSchema = z
     /** Requêtes par minute et par adresse IP (limitation de débit). */
     RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(10).max(10_000).default(120),
     /**
+     * Où vivent les compteurs (limites de débit, essais de coupons, renvois de factures…), S8-T07 : `database` (partagés
+     * par toutes les instances) ou `memory` (une seule instance). Absent : `memory` pour les tests, `database` sinon.
+     */
+    RATE_LIMIT_STORE: z.enum(["database", "memory"]).optional(),
+    /**
      * Clé secrète du site Kemdia (en-tête `X-Kemdia-Internal-Key`) : le serveur du site appelle l'API pour
      * tous les visiteurs depuis une seule adresse, il est donc exempté de la limite par adresse. Facultative.
      */
@@ -119,6 +124,14 @@ const envSchema = z
       .default("Kemdia"),
   })
   .superRefine((env, ctx) => {
+    // Relecture S8-T07 : en production, les limites doivent être communes à toutes les instances
+    if (env.NODE_ENV === "production" && env.RATE_LIMIT_STORE === "memory") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["RATE_LIMIT_STORE"],
+        message: "« memory » refusé en production : les limites doivent être partagées (database)",
+      });
+    }
     // Deux clés différentes (relecture S6-T08) : la fuite de l'une ne livre pas les données de l'autre
     if (env.KYC_ENCRYPTION_KEY && env.KYC_ENCRYPTION_KEY === env.TOTP_ENCRYPTION_KEY) {
       ctx.addIssue({
@@ -203,8 +216,12 @@ type ParsedEnv = z.output<typeof envSchema>;
 export type EmailTransport = NonNullable<ParsedEnv["EMAIL_TRANSPORT"]>;
 
 export type AppConfig = Readonly<
-  Omit<ParsedEnv, "API_DOCS" | "SMS_ENABLED" | "EMAIL_TRANSPORT" | "EMAIL_FROM"> & {
+  Omit<
+    ParsedEnv,
+    "API_DOCS" | "SMS_ENABLED" | "EMAIL_TRANSPORT" | "EMAIL_FROM" | "RATE_LIMIT_STORE"
+  > & {
     API_DOCS: boolean;
+    RATE_LIMIT_STORE: "database" | "memory";
     SMS_ENABLED: boolean;
     EMAIL_TRANSPORT: EmailTransport;
     EMAIL_FROM: string;
@@ -247,7 +264,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     });
     throw new ConfigError(problems);
   }
-  const { API_DOCS, SMS_ENABLED, EMAIL_TRANSPORT, EMAIL_FROM, ...rest } = result.data;
+  const { API_DOCS, SMS_ENABLED, EMAIL_TRANSPORT, EMAIL_FROM, RATE_LIMIT_STORE, ...rest } =
+    result.data;
   const onDevMachine = rest.APP_ENV === "local" && rest.NODE_ENV !== "production";
   return Object.freeze({
     ...rest,
@@ -255,5 +273,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     EMAIL_TRANSPORT: EMAIL_TRANSPORT ?? (onDevMachine ? "console" : "none"),
     EMAIL_FROM: EMAIL_FROM ?? DEFAULT_EMAIL_FROM,
     API_DOCS: API_DOCS === undefined ? rest.NODE_ENV !== "production" : API_DOCS === "true",
+    RATE_LIMIT_STORE: RATE_LIMIT_STORE ?? (rest.NODE_ENV === "test" ? "memory" : "database"),
   });
 }

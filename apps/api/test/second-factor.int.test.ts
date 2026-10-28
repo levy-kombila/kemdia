@@ -155,6 +155,8 @@ describe("Double authentification de l'équipe (PostgreSQL, HTTP)", () => {
     await call("get", "/api/v1/admin/shops", admin.token).expect(200);
     const events = await prisma.auditEvent.findMany({
       where: { targetId: admin.accountId, action: { startsWith: "mfa." } },
+      // Ordre explicite (S8-T07) : sans lui, PostgreSQL peut rendre les lignes dans n'importe quel ordre
+      orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
     });
     // Le mauvais mot de passe du début est journalisé (relecture S6-T03)
     expect(events.map((e) => e.action)).toEqual(["mfa.failed", "mfa.enabled"]);

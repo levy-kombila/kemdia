@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { ExecutionContext, HttpStatus, Inject, Injectable } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import {
@@ -11,6 +12,11 @@ import {
 import type { Request } from "express";
 import { APP_CONFIG } from "../config/config.module.js";
 import type { AppConfig } from "../config/env.js";
+import {
+  MAX_COUNTER_KEY_LENGTH,
+  RATE_COUNTERS,
+  type RateCounters,
+} from "../database/rate-counters.js";
 import { BusinessException } from "./business-exception.js";
 import { clientOf, rateKey, resolveClient } from "./client.js";
 
@@ -27,8 +33,67 @@ export function throttlerOptions(config: AppConfig): ThrottlerModuleOptions {
   return { throttlers: [{ name: "default", ttl: 60_000, limit: config.RATE_LIMIT_PER_MINUTE }] };
 }
 
+type ThrottlerStorageRecord = Awaited<ReturnType<ThrottlerStorage["increment"]>>;
+
+const secondsUntil = (date: Date | null, now: Date) =>
+  date ? Math.max(0, Math.ceil((date.getTime() - now.getTime()) / 1000)) : 0;
+
 /**
- * Limitation de débit par adresse IP (mémoire du processus, ADR-0021 ; Redis quand il y aura plusieurs instances).
+ * Stockage des limites (S8-T07, ADR-0064) : les compteurs partagés (`platform.rate_counters`) au lieu de la mémoire
+ * du processus, pour que plusieurs instances de l'API appliquent ENSEMBLE la même limite (adresse et compte). Fenêtre
+ * fixe ; au-delà de la limite, la clé est bloquée `blockDuration` (la durée de la fenêtre, par défaut).
+ */
+export class CountersThrottlerStorage implements ThrottlerStorage {
+  constructor(
+    private readonly counters: RateCounters,
+    private readonly clock: () => Date = () => new Date(),
+  ) {}
+
+  async increment(
+    key: string,
+    ttl: number,
+    limit: number,
+    blockDuration: number,
+    throttlerName: string,
+  ): Promise<ThrottlerStorageRecord> {
+    const now = this.clock();
+    const raw = `limite:${throttlerName}:${key}`;
+    // Clé trop longue pour la colonne (nom de route très long) : remplacée par son empreinte, toujours unique
+    const counterKey =
+      raw.length <= MAX_COUNTER_KEY_LENGTH
+        ? raw
+        : `limite:${throttlerName}:${createHash("sha256").update(key).digest("hex")}`;
+    const state = await this.counters.hit(counterKey, ttl, now, {
+      limit,
+      ms: blockDuration > 0 ? blockDuration : 0,
+    });
+    const timeToExpire = secondsUntil(state.resetAt, now);
+    const isBlocked =
+      blockDuration > 0
+        ? state.blockedUntil !== null && state.blockedUntil > now
+        : state.hits > limit;
+    return {
+      totalHits: state.hits,
+      timeToExpire,
+      isBlocked,
+      timeToBlockExpire: isBlocked
+        ? Math.max(1, blockDuration > 0 ? secondsUntil(state.blockedUntil, now) : timeToExpire)
+        : 0,
+    };
+  }
+}
+
+/** Module des limites : options de la configuration, compteurs partagés (S8-T07). */
+export const throttlerModuleOptions = {
+  inject: [APP_CONFIG, RATE_COUNTERS],
+  useFactory: (config: AppConfig, counters: RateCounters): ThrottlerModuleOptions => ({
+    ...throttlerOptions(config),
+    storage: new CountersThrottlerStorage(counters),
+  }),
+};
+
+/**
+ * Limitation de débit par adresse IP (ADR-0021) ; compteurs partagés par toutes les instances depuis S8-T07 (ADR-0064).
  * - Appel direct : l'adresse vient de `req.ip`, qui ne lit `X-Forwarded-For` que si TRUST_PROXY le permet.
  * - Appel du site pour un visiteur (clé interne + `X-Kemdia-Client-IP`, S4-T07) : limité par visiteur.
  * - Appel du site sans visiteur (lecture du catalogue) : pas limité (le site sert tout le monde depuis une adresse).

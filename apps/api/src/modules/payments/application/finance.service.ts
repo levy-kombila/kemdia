@@ -8,9 +8,11 @@ import {
   INVOICE_MAILER,
   INVOICE_RENDERER,
   INVOICE_REPOSITORY,
+  PAYMENT_COUNTERS,
   type InvoiceMailer,
   type InvoiceRenderer,
   type InvoiceRepository,
+  type SharedCounters,
 } from "./ports.js";
 
 /** Factures listées par page. */
@@ -37,8 +39,9 @@ const notFound = () => new PaymentsError("FACTURE_INTROUVABLE", "facture introuv
  * espèces à encaisser. Les routes exigent le rôle « finance » et la double authentification ; un téléchargement et un
  * renvoi sont inscrits au journal d'audit (données personnelles du client sur le PDF).
  *
- * Les délais (10 minutes par facture, 5 renvois par client et par heure) sont gardés en mémoire : une seule instance
- * de l'API au MVP ; à revoir (table à part ou Redis) avant d'en lancer plusieurs.
+ * Les délais (10 minutes par facture, 5 renvois par client et par heure) sont des compteurs partagés par toutes les
+ * instances de l'API (S8-T07, ADR-0064) : deux clics simultanés, même reçus par deux instances, ne passent pas tous
+ * les deux.
  *
  * Une facture est figée par la base (obligation légale), y compris le suivi de son envoi automatique : un renvoi part
  * donc tout de suite, à part, sans toucher à ce suivi.
@@ -47,10 +50,6 @@ const notFound = () => new PaymentsError("FACTURE_INTROUVABLE", "facture introuv
 export class FinanceService {
   /** Horloge (remplaçable dans les tests). */
   clock: () => Date = () => new Date();
-  /** Dernier renvoi par facture (une seule instance de l'API au MVP). */
-  private readonly lastResent = new Map<string, number>();
-  /** Renvois de la dernière heure par client (toutes ses factures confondues). */
-  private readonly perClient = new Map<string, number[]>();
 
   constructor(
     private readonly orders: OrderPayments,
@@ -59,6 +58,7 @@ export class FinanceService {
     @Inject(INVOICE_RENDERER) private readonly renderer: InvoiceRenderer,
     @Inject(INVOICE_MAILER) private readonly mailer: InvoiceMailer,
     @Inject(AuditLog) private readonly audit: Pick<AuditLog, "record">,
+    @Inject(PAYMENT_COUNTERS) private readonly counters: SharedCounters,
   ) {}
 
   /** `query` : numéro de facture ou d'avoir, ou numéro de commande (déjà vérifié par le contrat). */
@@ -107,37 +107,33 @@ export class FinanceService {
         "aucun envoi d'e-mail n'est configuré sur le serveur",
       );
     }
-    // Réservation AVANT toute attente : deux clics simultanés ne passent pas tous les deux (relecture)
-    const now = this.clock().getTime();
-    this.forgetOld(now);
-    const last = this.lastResent.get(invoice.id);
-    if (last !== undefined && now - last < RESEND_COOLDOWN_MS) {
+    // Réservation AVANT toute attente, en une opération atomique par compteur : deux clics simultanés ne passent pas
+    // tous les deux, même reçus par deux instances (relecture S7.5-T05, S8-T07)
+    const now = this.clock();
+    const invoiceKey = `facture-renvoi:${invoice.id}`;
+    const clientKey = `facture-renvois-client:${invoice.accountId}`;
+    if ((await this.counters.hit(invoiceKey, RESEND_COOLDOWN_MS, now)).hits > 1) {
+      // Fenêtre inchangée : seul le premier renvoi de la période compte
       throw new PaymentsError(
         "ENVOI_IMPOSSIBLE",
         "cette facture vient d'être renvoyée : patientez 10 minutes avant de recommencer",
       );
     }
-    const recent = (this.perClient.get(invoice.accountId) ?? []).filter(
-      (at) => now - at < CLIENT_WINDOW_MS,
-    );
-    if (recent.length >= CLIENT_RESEND_MAX) {
+    if ((await this.counters.hit(clientKey, CLIENT_WINDOW_MS, now)).hits > CLIENT_RESEND_MAX) {
+      await this.counters.undo(clientKey, now);
+      await this.counters.undo(invoiceKey, now);
       throw new PaymentsError(
         "ENVOI_IMPOSSIBLE",
         `déjà ${CLIENT_RESEND_MAX} renvois à ce client dans l'heure : réessayez plus tard`,
       );
     }
-    this.lastResent.set(invoice.id, now);
-    this.perClient.set(invoice.accountId, [...recent, now]);
-    const release = () => {
-      this.lastResent.delete(invoice.id);
-      this.perClient.set(
-        invoice.accountId,
-        (this.perClient.get(invoice.accountId) ?? []).filter((at) => at !== now),
-      );
+    const release = async () => {
+      await this.counters.undo(invoiceKey, now);
+      await this.counters.undo(clientKey, now);
     };
     const contact = await this.directory.contactOf(invoice.accountId);
     if (!contact?.email) {
-      release();
+      await release();
       throw new PaymentsError("ENVOI_IMPOSSIBLE", "le client n'a pas d'adresse e-mail vérifiée");
     }
     try {
@@ -148,7 +144,7 @@ export class FinanceService {
         await this.renderer.render(invoice),
       );
     } catch {
-      release();
+      await release();
       throw new PaymentsError(
         "ENVOI_IMPOSSIBLE",
         "l'e-mail n'a pas pu partir : réessayez dans un instant",
@@ -162,18 +158,6 @@ export class FinanceService {
       context,
     });
     return invoice;
-  }
-
-  /** Oublie les renvois de plus d'une heure : les tables en mémoire restent petites. */
-  private forgetOld(now: number): void {
-    for (const [id, at] of this.lastResent) {
-      if (now - at >= RESEND_COOLDOWN_MS) this.lastResent.delete(id);
-    }
-    for (const [account, times] of this.perClient) {
-      const kept = times.filter((at) => now - at < CLIENT_WINDOW_MS);
-      if (kept.length === 0) this.perClient.delete(account);
-      else this.perClient.set(account, kept);
-    }
   }
 
   /** Commandes payées en espèces à la livraison, expédiées ou livrées, pas encore encaissées. */

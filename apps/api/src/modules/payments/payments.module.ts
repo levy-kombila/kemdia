@@ -24,6 +24,7 @@ import {
   WEBHOOK_KEY,
   type WebhookKey,
 } from "./application/ports.js";
+import { sharedCountersProvider } from "./infrastructure/shared-counters.js";
 import { sandboxEnabled, UnavailablePaymentProvider } from "./infrastructure/payment-providers.js";
 import {
   PrismaPaymentRepository,
@@ -74,6 +75,8 @@ import { PaymentsPersonalData } from "./infrastructure/payments-personal-data.js
     PaymentAdminService,
     // Écrans de la Finance (S7.5-T05)
     FinanceService,
+    // Compteurs partagés par les instances (S8-T07) : renvois de factures
+    sharedCountersProvider,
     StalePaymentsScheduler,
     { provide: PAYMENT_REPOSITORY, useClass: PrismaPaymentRepository },
     { provide: REFUND_REPOSITORY, useClass: PrismaRefundRepository },

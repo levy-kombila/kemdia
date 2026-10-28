@@ -18,6 +18,8 @@ import {
   type ProductSummary,
   type PublicShop,
   type PublicShops,
+  type SharedCounters,
+  CATALOG_COUNTERS,
   type ShopSuggestion,
   PUBLIC_SHOPS,
 } from "./ports.js";
@@ -55,8 +57,9 @@ const SIMILAR_WORDS = 30;
 export const CORRECTION_CACHE_MS = 30_000;
 const MAX_CORRECTIONS_KEPT = 500;
 /**
- * Corrections cherchées en base par minute, tous visiteurs confondus (relecture de sécurité S7.5-T06) : la page de
- * résultats est relayée par le site sans limite par visiteur ; au-delà, la recherche se fait telle quelle.
+ * Corrections cherchées en base par minute, tous visiteurs et toutes instances confondus (relecture de sécurité
+ * S7.5-T06, compteur partagé depuis S8-T07) : la page de résultats est relayée par le site sans limite par visiteur ;
+ * au-delà, la recherche se fait telle quelle.
  */
 export const CORRECTION_BUDGET_PER_MINUTE = 120;
 
@@ -111,15 +114,19 @@ export type DescribedLine = AvailabilityResult & { variant: VariantSnapshot | nu
 @Injectable()
 export class CatalogService {
   private tree: { value: CategoryTree; loadedAt: number } | null = null;
-  /** Corrections récentes (S7.5-T06), en mémoire : une seule instance au MVP. */
+  /**
+   * Corrections récentes (S7.5-T06), 30 s en mémoire de chaque instance : simple gain de temps (une correction ne
+   * dépend que du catalogue), le budget, lui, est commun (S8-T07).
+   */
   private readonly corrections = new Map<string, { terms: readonly string[]; expires: number }>();
-  private correctionWindow = { start: 0, used: 0 };
   /** Horloge (remplaçable dans les tests). */
   clock: () => number = Date.now;
 
   constructor(
     @Inject(CATEGORY_REPOSITORY) private readonly categories: CategoryRepository,
     @Inject(PRODUCT_REPOSITORY) private readonly products: ProductRepository,
+    // Budget des corrections, commun à toutes les instances (S8-T07, ADR-0064)
+    @Inject(CATALOG_COUNTERS) private readonly counters: SharedCounters,
     // Boutiques publiques (S7.5-T07) ; facultatif dans les tests qui ne s'en servent pas
     @Optional() @Inject(PUBLIC_SHOPS) private readonly shops: PublicShops | null = null,
   ) {}
@@ -334,11 +341,10 @@ export class CatalogService {
   private async correct(base: ProductCriteria, now: number): Promise<readonly string[]> {
     const typed = base.terms;
     if ((await this.products.count(base)) > 0) return typed;
-    // Budget commun à tous les visiteurs (relecture de sécurité) : au-delà, recherche telle quelle
-    if (now - this.correctionWindow.start >= 60_000)
-      this.correctionWindow = { start: now, used: 0 };
-    if (this.correctionWindow.used >= CORRECTION_BUDGET_PER_MINUTE) return typed;
-    this.correctionWindow.used++;
+    // Budget commun à tous les visiteurs et à toutes les instances (relecture S7.5-T06, S8-T07) : au-delà, recherche
+    // telle quelle
+    const budget = await this.counters.hit("recherche:corrections", 60_000, new Date(now));
+    if (budget.hits > CORRECTION_BUDGET_PER_MINUTE) return typed;
     const found = await this.products.similarWords(typed, SIMILAR_WORDS);
     const replacements = typed.map((term) => {
       const info = found.get(term);

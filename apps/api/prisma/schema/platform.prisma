@@ -1,0 +1,19 @@
+// Infrastructure partagée (S8-T07, ADR-0064) : état commun à toutes les instances de l'API, qui n'appartient à aucun
+// module métier. Chaque modèle de ce fichier porte @@schema("platform"). Lu et écrit uniquement par
+// src/database/rate-counters.ts.
+
+/// Compteur à fenêtre fixe (limites de débit, essais de coupons, renvois de factures, budget de la recherche) : une
+/// ligne par clé, partagée par toutes les instances. Effacé peu après la fin de sa fenêtre et de son blocage.
+model RateCounter {
+  /// Clé préfixée par son usage (ex. « coupon:<compte> ») ; jamais d'adresse e-mail ni de donnée en clair
+  key          String    @id @db.VarChar(200)
+  hits         Int
+  /// Fin de la fenêtre en cours : au-delà, le prochain appel repart de 1
+  windowEndsAt DateTime  @map("window_ends_at") @db.Timestamptz(3)
+  /// Blocage en cours (limite dépassée) : aucun appel compté avant cette date
+  blockedUntil DateTime? @map("blocked_until") @db.Timestamptz(3)
+
+  @@index([windowEndsAt])
+  @@map("rate_counters")
+  @@schema("platform")
+}

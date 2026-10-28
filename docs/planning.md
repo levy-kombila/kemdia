@@ -269,7 +269,8 @@ Décisions : [ADR-0056](architecture/adr/0056-avis-clients.md) (avis des clients
 [ADR-0060](architecture/adr/0060-accueil-encart-compte.md) (encart du compte de l'accueil),
 [ADR-0061](architecture/adr/0061-ci-ubuntu-2404.md) (machines de la CI fixées),
 [ADR-0062](architecture/adr/0062-suggestions-boutiques.md) (boutiques dans les suggestions),
-[ADR-0063](architecture/adr/0063-boutique-prix-offre.md) (prix de l'offre sur la page d'une boutique).
+[ADR-0063](architecture/adr/0063-boutique-prix-offre.md) (prix de l'offre sur la page d'une boutique),
+[ADR-0064](architecture/adr/0064-compteurs-partages-en-base.md) (compteurs partagés en base).
 Choix du 2026-10-23 (ouverture) : commencer par **ce qui ne dépend pas du client** ; les tâches qui attendent ses
 réponses (transporteur n° 5, informations légales n° 10, commission n° 3, location du serveur) seront ajoutées à leur
 arrivée. Options recommandées retenues sans être reposées (ta demande du 2026-10-23), listées dans chaque PR.
@@ -293,6 +294,8 @@ Choix du 2026-10-27 (S8-T05) : **2 boutiques actives** au plus dans les suggesti
 (sans accents, dernier mot incomplet), boutique officielle d'abord ; comparaison dans la requête SQL, **sans migration**.
 Choix du 2026-10-27 (S8-T06) : sur la page d'une boutique, filtre et tri par prix, « en promotion » et compteurs lus sur
 **son offre** ; même règle de prix que le reste du catalogue (déclinaison active la moins chère), **sans migration**.
+Choix du 2026-10-27 (S8-T07) : compteurs dans une **table PostgreSQL partagée** (pas de Redis), fenêtre fixe, **repli en
+mémoire** si la base ne répond pas ; caches de lecture (rayons, corrections) **gardés en mémoire**.
 
 | ID     | Tâche                                                                                                                                                                                                                                                                              | Statut |
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -305,6 +308,7 @@ Choix du 2026-10-27 (S8-T06) : sur la page d'une boutique, filtre et tri par pri
 | S8-T05 | Recherche : boutiques dans les suggestions pendant la frappe (dette S7.5)                                                                                                                                                                                                          | ⏳     |
 | S8-T06 | Page d'une boutique : filtre et tri par prix (dette S7.5) lus sur le prix de SON offre, « en promotion » et compteurs de prix compris ; contrat 2.8.1 — ADR-0063 — Choix du 2026-10-27                                                                                             | ✅     |
 | S8-T07 | Caches et compteurs en mémoire de l'API déplacés en base, avant de lancer plusieurs instances (dette S7.5)                                                                                                                                                                         | ⏳     |
+| S8-T07 | Compteurs en mémoire de l'API déplacés en base avant plusieurs instances (dette S7.5) : limites de débit, coupons refusés, renvois de factures, budget de la recherche dans `platform.rate_counters`, repli en mémoire — ADR-0064 — Choix du 2026-10-27                            | ✅     |
 | S8-T08 | Accueil : encart du compte selon la connexion (« Mes commandes », « Mon compte » au lieu de « Se connecter ») et le rôle vendeur (« Accéder à votre boutique » au lieu de « Devenir vendeur ») — ADR-0060 — Choix du 2026-10-24                                                    | ✅     |
 | S8-T09 | CI : machines fixées sur Ubuntu 24.04 (le passage de `ubuntu-latest` à Ubuntu 26 empêchait d'installer Chromium et bloquait toutes les PR) — ADR-0061 — Choix du 2026-10-27                                                                                                        | ✅     |
 
